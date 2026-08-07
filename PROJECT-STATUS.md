@@ -4,7 +4,7 @@
 
 ## 一句话结论
 
-Cosmos 已建立本地 Git 仓库和 v0.9 Phase 0 架构基线，并确认个人本地优先、Agent 内部自主维护与外部副作用显式配置、第一版后置复杂权限、RSS/RSSHub + fixture 首条实现切片；此前的信息模型、推荐和 Workspace 状态边界继续成立。本次 grilling 已结束，项目仍没有运行时代码、依赖、数据库、前端或远端仓库。
+Cosmos 已建立公开 GitHub 仓库和 v0.9 Phase 0 架构基线，并确认个人本地优先、Agent 内部自主维护与外部副作用显式配置、第一版后置复杂权限、RSS/RSSHub + fixture 首条实现切片；此前的信息模型、推荐和 Workspace 状态边界继续成立。本次 grilling 已结束，项目仍没有运行时代码、依赖、数据库、前端或发布物。
 
 ## 已完成
 
@@ -117,6 +117,6 @@ Cosmos 已建立本地 Git 仓库和 v0.9 Phase 0 架构基线，并确认个人
 - Entry、Story、Topic、Relation、Workspace、Artifact、Timeline 与 Spotlight 的关键边界均存在。
 - 产品需求包含 125 个唯一需求编号，并新增个人本地边界、Agent 外部副作用授权、可信扩展和 RSS/RSSHub 首条切片要求。
 - 远端研究文件与本地归档 SHA-256 一致：`bcec8d2698d65d6217ed067fbb8625888e7e1dfab7b65aa0096f0790d9aa930d`。
-- Git 仍为 `No commits yet on master`；29 个文件未跟踪，未 stage、未 commit、未配置远端。
+- Git 状态为 `master...origin/master` 且工作区干净；首个公开提交为 `1eff6c7`，远端为 `https://github.com/notnotype/cosmos`。
 
 没有可运行代码，因此未运行类型检查、测试、构建、浏览器或真实来源验收。

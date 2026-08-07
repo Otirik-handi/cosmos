@@ -136,7 +136,7 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 | Phase 4：推荐与广度 | 接入推荐页、关注账号和搜索来源，建立非 LLM 默认排序与反馈 |
 | Phase 5：摘要与推送 | 生成一致的网页/图片摘要，可靠投递到 Telegram、Email、QQ 等渠道 |
 
-当前只完成 Phase 0 的仓库和设计文档。Phase 1 的首条端到端切片已确定为 RSS/RSSHub + fixture；尚未安装依赖，也没有数据库、前端、Connector、Agent Runtime、远端仓库或发布物。
+当前只完成 Phase 0 的仓库和设计文档。Phase 1 的首条端到端切片已确定为 RSS/RSSHub + fixture；尚未安装依赖，也没有数据库、前端、Connector、Agent Runtime 或发布物。公开仓库已建立于 [notnotype/cosmos](https://github.com/notnotype/cosmos)。
 
 ## 文档入口
 

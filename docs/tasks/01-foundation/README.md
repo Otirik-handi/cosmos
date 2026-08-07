@@ -27,7 +27,7 @@
 
 - 不实现运行时代码。
 - 不安装依赖。
-- 不创建 GitHub 远端、commit、push、PR 或发布。
+- 不创建额外 GitHub 远端、PR 或发布；本 Task 的后续公开基线允许创建 `notnotype/cosmos`、提交初始文档并 push `master`。
 - 不验证真实平台 API、登录态、反爬限制或服务条款。
 
 ## Current State
@@ -74,7 +74,7 @@
 - `CONTEXT.md` 不再预先盘点 Definition、Run、Job、Lease 等实现对象；这些概念只在真实设计和开发需要时进入架构、ADR 或代码文档。
 - v0.2 中保留 Source / Trigger / Flow / Action 的产品级关系，更细的身份和运行时边界暂不冻结。
 - 从 neuro-book 迁移协作机制时，只保留可跨项目复用的审计、worktree、Issue/PR、标签和验证合同；去除小说、Novel IDE、桌面产品、发布命令和子仓库专属内容；许可证按用户决定采用 AGPL-3.0-only。
-- Cosmos 尚无运行时代码、依赖、远端仓库或可复用的 CI 脚本，因此只迁移 GitHub 协作配置，不复制 neuro-book 的应用构建、桌面、产品运行时和发布 workflow。
+- Cosmos 尚无运行时代码、依赖或可复用的 CI 脚本，因此只迁移 GitHub 协作配置，不复制 neuro-book 的应用构建、桌面、产品运行时和发布 workflow；公开远端已建立但 workflow 仍保持不变。
 
 ## Verification
 
@@ -92,7 +92,12 @@
 - `ProductRequirementIds=PASS (125 unique IDs)`。
 - `RelatedContentScenario=PASS (UC-07)`。
 - 远端研究文件与本地归档的 SHA-256 均为 `bcec8d2698d65d6217ed067fbb8625888e7e1dfab7b65aa0096f0790d9aa930d`。
-- Git 状态为 `No commits yet on master`；29 个仓库文件全部未跟踪，未 stage、未 commit、未配置远端。
+- Git 状态为 `master...origin/master` 且工作区干净；首个公开提交为 `1eff6c7`，远端为 `https://github.com/notnotype/cosmos`。
+- `PublicRepository=PASS`：仓库可见性为 `PUBLIC`，默认分支为 `master`，Issues 和 Discussions 已开启，Wiki 已关闭。
+- `PrivateVulnerabilityReporting=PASS`：GitHub API 返回 `enabled: true`。
+- `BranchProtection=PASS`：`master` 未配置保护规则，符合当前阶段决定。
+- `RemoteTree=PASS (29 files)`：远端 `master` 与本地首个提交一致。
+- `RemoteLabels=PASS (33 expected, 6 extra retained)`：本地清单标签已同步，GitHub 默认额外标签未删除。
 - 未运行类型检查、测试、构建、浏览器或真实来源验收：当前没有运行时代码和依赖。
 
 ## Follow-ups
