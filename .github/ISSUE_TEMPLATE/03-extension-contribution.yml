@@ -1,0 +1,105 @@
+name: "扩展与 Agent 资产 / Extension and Agent asset"
+description: "改进或贡献 Source、Flow、Action、Agent、Board Block、SDK 或其它扩展资产 / Improve or contribute an extension or Agent asset"
+title: "[Extension] "
+labels:
+  - "type: feature"
+  - "area: sdk"
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请从真实使用场景和可观察结果出发，不需要先设计完整实现。扩展必须遵守公开能力、幂等、失败和数据范围合同，不能直接写核心数据库表。
+
+        Start with a real use case and observable outcomes. Extensions must respect public capability, idempotency, failure, and data-scope contracts and must not write core database tables directly.
+  - type: dropdown
+    id: contribution-kind
+    attributes:
+      label: "改动类型 / Change type"
+      options:
+        - "优化现有资产 / Improve an existing asset"
+        - "贡献新的资产 / Contribute a new asset"
+    validations:
+      required: true
+  - type: dropdown
+    id: asset-kind
+    attributes:
+      label: "资产类型 / Asset type"
+      options:
+        - "Source 或 Connector"
+        - "Trigger"
+        - "Flow"
+        - "Action"
+        - "Agent 或提示词 / Agent or prompt"
+        - "Board Block"
+        - "SDK 或其它扩展 / SDK or other extension"
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: "目标名称或路径 / Target name or path"
+      description: "现有资产填写路径或名称；新资产填写建议名称和位置 / For an existing asset, provide its path or name; for a new asset, provide a proposed name and location"
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: "实际使用场景 / Real use case"
+      description: "谁在什么情况下使用它？目前遇到了什么具体阻碍？ / Who uses it, in what situation, and what concrete problem exists today?"
+    validations:
+      required: true
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: "期望行为 / Desired behavior"
+      description: "说明改进后应产生什么可观察结果，以及哪些合同不能被破坏 / Describe the observable outcome and the contracts that must remain intact"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "方案或草案 / Proposal or draft"
+      description: "可选。只提交你有权公开贡献的内容 / Optional. Include only material you have the right to publish"
+  - type: textarea
+    id: evaluation
+    attributes:
+      label: "脱敏评测样例 / Redacted evaluation examples"
+      description: "可选。提供最小输入、当前结果、期望结果和判断标准 / Optional. Provide minimal inputs, current and expected outputs, and evaluation criteria"
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: "补充材料 / Additional context"
+      description: "可选。添加相关 Issue、架构、截图或公开资料 / Optional. Add related issues, architecture notes, screenshots, or public material"
+  - type: dropdown
+    id: pr-intent
+    attributes:
+      label: "是否愿意整理成 PR？ / Do you plan to prepare a PR?"
+      description: "选择“愿意”后，请等待维护者授权再开始整理，避免重复工作。 / If you plan to do so, wait for maintainer authorization before preparing it."
+      options:
+        - "愿意，会等待维护者授权 / Yes, I'll wait for maintainer authorization"
+        - "愿意，但需要维护者引导 / Willing, but need maintainer guidance"
+        - "仅反馈，不计划整理 / Reporting only, no PR planned"
+    validations:
+      required: true
+  - type: checkboxes
+    id: content-authorization
+    attributes:
+      label: "内容与授权 / Content and rights"
+      options:
+        - label: "我确认提交的代码、提示词、样例和资产内容由我原创，或我有权公开贡献；其中不含私有或未授权的第三方内容。 / I created the submitted code, prompts, examples, and assets, or have the right to publish them; they contain no private or unauthorized third-party content."
+          required: true
+  - type: checkboxes
+    id: privacy-confirmation
+    attributes:
+      label: "隐私确认 / Privacy confirmation"
+      options:
+        - label: "我已删除 API Key、Token、私人信息、完整会话和不属于本次公开贡献的私有提示词。 / I removed API keys, tokens, private data, complete sessions, and private prompts not part of this public contribution."
+          required: true
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: "重复建议 / Duplicate check"
+      options:
+        - label: "我搜索过现有 Issue，没有找到相同的扩展或 Agent 资产建议。 / I searched existing issues and did not find the same extension or Agent asset request."
+          required: true

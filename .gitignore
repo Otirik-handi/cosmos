@@ -1,0 +1,27 @@
+# Dependencies and build output
+node_modules/
+.nuxt/
+.output/
+dist/
+coverage/
+
+# Local runtime data
+.cosmos/
+.agent/
+var/
+cache/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+config.local.*
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

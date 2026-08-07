@@ -1,0 +1,113 @@
+name: "错误报告 / Bug report"
+description: "报告可以复现的故障、回归或异常行为 / Report a reproducible defect, regression, or unexpected behavior"
+title: "[Bug] "
+labels:
+  - "type: bug"
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你帮助改进 Cosmos。请尽量提供最小复现，并在上传日志或截图前删除 API Key、Token、真实私有信息和未经授权的外部内容。
+
+        Thank you for helping improve Cosmos. Please provide the smallest reproduction you can and remove API keys, tokens, real private data, and unlicensed external content before uploading logs or screenshots.
+  - type: input
+    id: version
+    attributes:
+      label: "版本、commit 或本地状态 / Version, commit, or local state"
+      description: "Release 版本、commit SHA，或说明当前仍是源码开发状态 / Release version, commit SHA, or state that this is source development"
+      placeholder: "例如 / e.g. source development at <commit>"
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: "运行方式 / Runtime method"
+      options:
+        - "源码开发 / Source development"
+        - "容器 / Docker or Podman"
+        - "桌面或打包产物 / Desktop or packaged artifact"
+        - "其它 / Other"
+    validations:
+      required: true
+  - type: input
+    id: operating-system
+    attributes:
+      label: "操作系统 / Operating system"
+      placeholder: "例如 Windows 11 24H2、macOS 15、Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: architecture
+    attributes:
+      label: "CPU 架构 / CPU architecture"
+      placeholder: "例如 x64、ARM64 / aarch64"
+    validations:
+      required: true
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: "复现概率 / Reproducibility"
+      options:
+        - "每次都能复现 / Every time"
+        - "经常复现 / Often"
+        - "偶尔复现 / Sometimes"
+        - "只发生过一次 / Once"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "复现步骤 / Steps to reproduce"
+      description: "从启动方式开始，写出最短、可重复的步骤 / Start with how Cosmos was launched and provide the shortest repeatable sequence"
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual-result
+    attributes:
+      label: "实际结果 / Actual result"
+      description: "发生了什么，包含完整错误文字 / What happened, including the complete error message"
+    validations:
+      required: true
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: "预期结果 / Expected result"
+      description: "你原本预期发生什么 / What you expected to happen"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: "日志、截图或最小样例 / Logs, screenshots, or minimal sample"
+      description: "可选。只上传定位问题需要的最小材料，并先脱敏 / Optional. Upload only the minimum material needed and redact it first"
+      render: shell
+  - type: dropdown
+    id: pr-intent
+    attributes:
+      label: "是否愿意实现并提交 PR？ / Do you plan to implement and submit a PR?"
+      description: "选择“愿意”后，请等待维护者授权（添加 status: claimed 标签）再开始，避免重复实现。 / If you plan to implement, wait for maintainer authorization (the status: claimed label) before starting."
+      options:
+        - "愿意，会等待维护者授权 / Yes, I'll wait for maintainer authorization"
+        - "愿意，但需要维护者引导 / Willing, but need maintainer guidance"
+        - "仅报告，不计划实现 / Reporting only, no implementation planned"
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy-confirmation
+    attributes:
+      label: "隐私确认 / Privacy confirmation"
+      options:
+        - label: "我已删除 API Key、Token、私人信息、完整提示词和未经授权的外部内容。 / I removed API keys, tokens, private data, full prompts, and unlicensed external content."
+          required: true
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: "重复问题 / Duplicate check"
+      options:
+        - label: "我搜索过现有 Issue，没有找到相同报告。 / I searched existing issues and did not find the same report."
+          required: true

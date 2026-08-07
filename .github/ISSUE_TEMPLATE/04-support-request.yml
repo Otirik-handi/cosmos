@@ -1,0 +1,80 @@
+name: "使用与安装问题 / Usage and installation question"
+description: "询问安装、启动、配置或使用方法 / Ask about installation, startup, configuration, or usage"
+title: "[Support] "
+labels:
+  - "type: support"
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub Issue 是公开页面。请只提供解决问题需要的最小信息，并先删除密钥、私人信息和真实数据。
+
+        GitHub issues are public. Share only the minimum information needed and remove secrets, private data, and real user content first.
+  - type: textarea
+    id: question
+    attributes:
+      label: "你想完成什么？ / What are you trying to do?"
+      description: "说明目标和卡住的位置 / Describe the goal and where you are blocked"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: "版本、commit 或本地状态 / Version, commit, or local state"
+      description: "Release 版本、commit SHA，或说明尚处于源码开发阶段 / Release version, commit SHA, or source-development state"
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: "安装或运行方式 / Installation or runtime method"
+      options:
+        - "源码开发 / Source development"
+        - "容器 / Docker or Podman"
+        - "桌面或打包产物 / Desktop or packaged artifact"
+        - "尚未安装 / Not installed yet"
+        - "其它 / Other"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: "平台与环境 / Platform and environment"
+      placeholder: "例如 Windows 11 x64、macOS ARM64、Ubuntu 24.04 Docker"
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: "已经尝试过什么？ / What have you tried?"
+      description: "列出运行过的命令、查过的文档和观察到的结果 / List commands, documentation, and outcomes"
+    validations:
+      required: true
+  - type: textarea
+    id: current-result
+    attributes:
+      label: "当前现象 / Current result"
+      description: "粘贴完整错误文字，或说明为什么现有结果无法继续 / Include the complete error or explain why you cannot continue"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: "脱敏日志或截图 / Redacted logs or screenshots"
+      description: "可选。不要上传整个数据目录、配置文件、Session 或 Trace / Optional. Do not upload a whole data directory, configuration file, session, or trace"
+      render: shell
+  - type: checkboxes
+    id: privacy-confirmation
+    attributes:
+      label: "隐私确认 / Privacy confirmation"
+      options:
+        - label: "我已删除 API Key、Token、私人信息、完整提示词和真实用户内容。 / I removed API keys, tokens, private data, full prompts, and real user content."
+          required: true
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: "已有答案 / Existing answers"
+      options:
+        - label: "我搜索过文档和现有 Issue，仍未找到答案。 / I searched the documentation and existing issues and still could not find an answer."
+          required: true

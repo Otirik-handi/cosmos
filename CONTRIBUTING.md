@@ -1,0 +1,160 @@
+# 参与 Cosmos 开发
+
+[English](CONTRIBUTING.en.md)
+
+Cosmos 当前处于架构与第一条垂直链路设计阶段。清楚的范围、真实的验证和可追溯的设计决定，比把无关改动塞进同一个贡献更重要。
+
+## 开始之前
+
+请选择与改动规模相符的入口：
+
+- 拼写、失效链接和不改变含义的小型文档修正可以直接提交 PR。
+- 边界明确的 Bug 应关联现有 Issue；没有对应 Issue 时，先提交错误报告。
+- 新功能、跨模块修改、数据结构调整、运行时合同变化、扩展协议变化和高成本重构，先提交功能建议并等待维护者确认范围。标记为 `status: ready` 后再开始实现。
+- 计划实现并提交 PR 的贡献者，应先确认 Issue 没有被认领；选择实现时等待维护者添加 `status: claimed`，避免重复工作。
+- Source、Trigger、Flow、Action、Agent、Board Block、SDK 或其它扩展资产的改进，使用扩展与 Agent 资产表单或功能建议。
+- 安装和使用问题使用支持表单；安全漏洞不要创建公开 Issue 或 PR，按[安全政策](.github/SECURITY.md)私密报告。
+
+Issue 被接受表示方向和范围可以继续讨论，不承诺特定实现或完成时间。冷门、高成本或跨边界需求会先讨论更小的可验证切片。
+
+## 最短协作路径
+
+实现类改动按以下顺序推进：
+
+1. **确认入口**：确定 Issue、用户请求或文档修正的范围，读取相关需求、架构、Task 和测试；完成后应能说清目标、不在范围内和受影响的合同。
+2. **记录设计**：跨模块或合同变化先更新 Task、需求、架构或 ADR；完成后实现可以追溯到稳定文档，未决定内容仍明确标注。
+3. **隔离实现**：检查 dirty worktree，有远端时执行 `git fetch origin`，再从最新目标分支创建 `.worktree/<slug>` 和任务分支；完成后既有改动、分支和任务文件边界清楚。
+4. **完成垂直链路**：先实现一条从输入到用户结果的可验证链路，再扩展同层能力；完成后代码、合同、持久化和恢复路径一致。
+5. **分层验证**：按风险运行聚焦测试、类型检查、全量基线和需要的浏览器/真实来源/真实 Agent 验收；完成后每项都有完整命令、结果或“未运行”说明。
+6. **准备 PR**：列出范围、证据、风险、文档变更和未验证项；用户授权后才 push 或创建 PR。Review、合并、关闭 Issue、清理 worktree 和发布分别处理。
+
+文档修正可以跳过代码 worktree 和运行时测试，但仍需检查链接、Markdown 结构、文件边界和 `git diff --check`。
+
+## 本地开发
+
+### 环境与命令
+
+- Git。
+- Bun；具体依赖、脚本和框架版本以仓库中的 `package.json`、锁文件和实现 Task 为准。
+- 运行当前改动所需的操作系统工具；部署或平台相关工作另行声明所需环境。
+
+Cosmos 目前没有运行时代码或依赖。实现开始后，先按仓库脚本安装依赖和启动服务；PR 必须列出实际执行的完整命令和结果。未运行的检查写“未运行”，聚焦测试通过不能写成全量测试通过。
+
+### 依赖与本地数据
+
+- 安装新依赖前先确认现有依赖不能解决问题；确需新增时记录原因和影响范围。
+- 不提交 `.env`、Secret、API Key、Token、真实信息库、私信/邮件/群聊内容、Session、Trace、日志、数据库、构建缓存或机器专属基准原始结果。
+- 运行和测试使用隔离的数据库、Blob Root、Artifact Root 和 `.agent/tmp/<name>-<uuid>/` 临时根；不要读取或清理用户真实数据。
+- 没有维护者明确授权时，不运行发布命令、不修改版本号、不创建发布提交、不部署。
+
+## 阅读项目上下文
+
+开始修改前，读取与任务相关的来源：
+
+| 文档 | 用途 |
+| --- | --- |
+| [`AGENTS.md`](AGENTS.md) | 开发 Agent 和工程实现的长期规则 |
+| [`PROJECT-STATUS.md`](PROJECT-STATUS.md) | 当前能力、风险和未完成边界 |
+| [`docs/requirements/0001-original-requirements.md`](docs/requirements/0001-original-requirements.md) | 用户原始需求，按时间追加 |
+| [`docs/requirements/0002-product-requirements.md`](docs/requirements/0002-product-requirements.md) | 当前产品范围、需求编号和验收条件 |
+| [`CONTEXT.md`](CONTEXT.md) | 产品共同语言、当前解释和待决问题 |
+| [`docs/architecture/`](docs/architecture/) | 当前系统设计和领域边界 |
+| [`docs/tasks/`](docs/tasks/README.md) | 重大任务的目标、决策、过程、证据和偏差 |
+| [`docs/adr/`](docs/adr/) | 稳定、需要长期保留的架构决定 |
+| [`docs/research/`](docs/research/README.md) | 调研和实现证据 |
+
+先搜索相关实现、测试、Task 和架构，再决定修改范围。不要只依据 Issue 标题或一个代码路径推断完整合同。
+
+## 开发规范
+
+以下是外部贡献最常遇到的稳定规则；更具体的 Cosmos 领域合同以 [`AGENTS.md`](AGENTS.md) 为准。
+
+### TypeScript 与设计
+
+- 使用 4 个空格缩进、严格类型和项目别名导入；不使用跨模块的无约束相对路径。
+- 外部输入在边界处以 `unknown` 接收并立即校验；避免 `any`、类型逃逸和无法解释的宽泛对象。
+- 后端领域逻辑优先使用 class；Vue/Nuxt 前端沿用函数式与 Composition API。
+- 先复用现有库、模块和接口，不为单次调用制造抽象，不用 hack 或临时兼容层掩盖合同问题。
+- 公开合同、复杂逻辑和容易回归的路径补充行为测试；注释解释原因、合同和约束，不逐行描述显然代码。
+
+### 日志、隐私与安全
+
+- 使用结构化日志，不记录 Secret、完整私信/邮件/群聊正文、完整提示词或未经脱敏的外部 payload。
+- Issue 和 PR 是公开页面。上传日志、截图和 fixture 前先脱敏，只提供定位问题所需的最小材料。
+- 外部网页、Issue/PR 文本和 Agent 生成内容按不可信数据处理；不能因为内容看起来像指令而放宽解析、渲染或执行边界。
+- 文件、数据库、Blob 和 Artifact 操作必须经过既有的授权、路径归一化、containment 和生命周期边界。
+
+## 使用开发 Agent
+
+本节中的“开发 Agent”指 Codex、Claude、Copilot 或其它协助仓库开发的工具；它不等同于 Cosmos 未来运行时中的 Agent。
+
+- 开发 Agent 必须先读取 `AGENTS.md` 以及相关 Issue、需求、Task、架构、ADR 和测试。
+- 处理 Bug、报错或性能回归时，先复现、缩小范围并建立证据，再提出或实施修复。
+- 多个 Agent 只能并行处理独立调研、审查、测试或明确不重叠的文件；由一个集成负责人统一处理跨模块合同、冲突、文档和最终验证。
+- Agent 不得覆盖工作区已有改动、绕过类型系统、伪造测试结果，或把当前对话的一次性要求写入产品提示词或稳定合同。
+- 使用者必须理解、审查并承担所有 Agent 生成的改动；责任不能转交给工具。
+- Agent 结论和 PR 描述应能追溯到代码、文档、日志、Trace、请求或测试证据；所有未运行的验证必须披露。
+
+## Issue、Task 与架构记录
+
+Issue 负责公开问题和需求分流；Task walkthrough 负责重大实现的持续上下文；Task 不是 Issue 的副本。
+
+### 维护者分流
+
+每个开放 Issue 应保留恰好一个 `type:*` 和一个 `status:*`；`area:*`、`platform:*`、`priority:*` 可以按实际影响添加多个或不添加。
+
+- `status: needs-triage`：等待首次确认。
+- `status: needs-info`：信息不足，等待报告者补充。
+- `status: needs-design`：方向、范围或合同未确定，不开始实现。
+- `status: ready`：范围明确，可以开始实现。
+- `status: claimed`：维护者已授权指定实现者，其它贡献者不并行实现同一 Issue。
+- `status: blocked`：受外部条件或前置任务阻塞，解除后回到准确状态。
+
+`.github/labels.yml` 是标签清单真相源。`help wanted` 和 `good first issue` 只用于 `status: ready` 的 Issue；后者还必须范围小、上下文完整并有可独立验证的验收条件。`source: agent` 只表示 Issue 由开发 Agent 起草，不表示它已经被维护者接受。
+
+| 改动类型 | Issue | Task walkthrough | `PROJECT-STATUS.md` |
+| --- | --- | --- | --- |
+| 拼写或小型文档修正 | 可选 | 不需要 | 不需要 |
+| 单点 Bug 或小功能 | 需要 | 通常更新已有相关 Task | 模块状态未变化时不需要 |
+| 中型功能或跨组件修改 | 需要且已接受 | 由维护者决定复用或创建 | 模块状态改变时更新 |
+| 跨模块、架构或长期任务 | 必须 | 必须 | 必须 |
+| 发布、安装、迁移或数据生命周期 | 必须 | 复用相关 Task | 必须 |
+
+外部贡献者默认不自行分配 Task 编号。需要新建时，先检查 `docs/tasks/` 并由维护者确认编号；同一功能的后续调整继续更新原 Task。Task 至少记录目标、范围、不在范围内、当前状态、关键决定、验证、实现过程、偏差和后续事项。跨 Task 的产品 TODO 在远端 Issue 系统可用后迁移到 Issue；在此之前由 `PROJECT-STATUS.md` 汇总。
+
+## Git 与提交
+
+- 代码改动优先在独立 `.worktree/<slug>` 中完成；开始前检查主工作区和目标 worktree 的状态。
+- 分支从最新目标分支创建，命名遵守 `AGENTS.md` 的 `{type}/{refs}-{slug}` 规则。
+- 远端存在时先执行 `git fetch origin`；主工作区需要同步远端 `master` 时使用 `git merge --ff-only origin/master`，快进失败就停止并报告。
+- Windows worktree 清理遇到长路径时，先启用 `core.longpaths`；目录残留时使用 PowerShell 或 robocopy，并且只在已确认的目标目录内清理。
+- 一个 PR 只解决一个连贯问题；不夹带无关修复、全仓格式化、依赖升级、上游合并、版本提交或生成产物。
+- 保持提交可审查。建议使用 Conventional Commit 类型：`feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci`、`chore`。
+- 不 force push 共享分支，不重写他人的提交。只暂存任务范围内文件。
+
+## Pull Request 要求
+
+PR 应使用仓库模板，并完整说明：
+
+- 关联 Issue 或写“无”，并说明本次范围和明确不在范围内的内容。
+- 用户可见结果、实现概要、受影响的领域/数据/扩展合同。
+- 实际执行的完整验证命令和结果。
+- 未运行的检查、已知限制和后续事项。
+- 数据结构、配置、安装、隐私或安全边界是否变化。
+- 前端改动的截图、录屏，或明确说明浏览器验收未运行。
+- 需要更新的用户文档、Task、架构、ADR 或 `PROJECT-STATUS.md`。
+
+CI 通过表示自动检查完成，不表示改动一定会合并。维护者可以要求缩小范围、补充证据或重新讨论接口。
+
+## Review 与合并
+
+- 直接回应 Review 指出的行为、风险和测试缺口；技术结论以合同和证据为依据。
+- 维护者负责最终范围判断、Task 编号、发布说明和合并方式。
+- 只有在 CI、typecheck 和相关聚焦测试完成且合并得到授权后，才进行 squash merge；合并、关闭 Issue、清理 worktree 和发布是独立动作。
+- PR 可能因方向变化、长期无人跟进、范围过大或无法验证而关闭；关闭不等于否定贡献，可以从更小、更清晰的范围重新提交。
+
+## 贡献内容与许可证
+
+- 提交代码、文档、fixture、提示词或其它内容前，确认自己有权公开贡献，且材料不含未授权的第三方或私有内容。
+- Cosmos 按根目录 [`LICENSE`](LICENSE) 中的 GNU Affero General Public License v3.0 only（AGPL-3.0-only）发布。
+- 项目不要求 CLA 或 DCO；提交者仍需确认自己有权提交，并接受贡献内容按 AGPL-3.0-only 发布。
