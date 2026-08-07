@@ -67,7 +67,7 @@ Search the related implementation, tests, tasks, and architecture first. Do not 
 
 ## Development Conventions
 
-The following are the stable conventions most contributors need. See [`AGENTS.md`](AGENTS.md) for Cosmos-specific domain contracts.
+The following are the stable conventions most contributors need. Product behavior and domain contracts live in the requirements and architecture docs; coding-agent execution rules live in [`AGENTS.md`](AGENTS.md).
 
 ### TypeScript and design
 
