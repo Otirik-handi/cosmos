@@ -1,14 +1,16 @@
 # Cosmos 信息模型、相关推荐与持续工作区
 
-> 状态：Draft v0.9
+> 状态：Draft v0.10
 >
-> 最后更新：2026-08-07
+> 最后更新：2026-08-08
 >
 > 产品共同语言：[`../../CONTEXT.md`](../../CONTEXT.md)
 >
 > 总体架构：[`0001-cosmos-foundation.md`](0001-cosmos-foundation.md)
 >
 > 原始需求：[`../requirements/0001-original-requirements.md`](../requirements/0001-original-requirements.md)
+>
+> Workflow Runtime：[`../tasks/04-workflow-runtime/README.md`](../tasks/04-workflow-runtime/README.md)
 
 本文专门回答四个问题：
 
@@ -38,7 +40,7 @@
 5. `Timeline` 是视图；`Spotlight` 是展示决定；“精华”是策展区域，三者都不是新的内容实体。
 6. `Artifact` 是一次版本化输出。
 7. 原 `Feature` 正式改名为 `Workspace`，表示长期、可更新、可交互的体验容器。
-8. Workspace 不直接吞入消息；它引用 Topic、Story、Saved View 或 Collection，并通过 Flow/Agent 维护。
+8. Workspace 不直接吞入消息；它引用 Topic、Story、Saved View 或 Collection，并通过 Workflow/Agent 维护。
 9. 每个 Entry 默认属于一个主 Story，单 Entry Story 是合法状态；Topic、Workspace、Spotlight 和 Feed 等上层概念以 Story 为内容单位。
 10. Agent 只有在至少两个不同 Story 构成持续问题，或命中用户明确跟踪规则时，才默认自动创建 Topic。
 11. 第一版聚类与相关推荐不使用 embedding。
@@ -60,7 +62,7 @@
 27. merge 将当前用户状态解析到 canonical Story；split 不把收藏、隐藏、反馈或 Topic membership 自动复制给全部后继。
 28. Spotlight 人工固定/排除绑定到具体 target placement，直到用户解除；不同 kind 共用 policy 合同，只调整权重和阈值。
 29. v1 和默认产品合同面向单个本地用户；actor/revision 为未来协作保留扩展位，但不建设多人同步和多租户。
-30. Agent 可以在用户配置范围内自主维护内部对象；创建外部 Source、扩大数据范围和外部发送需要显式配置或批准。
+30. 当前单用户阶段按最大产品权限运行，Agent 可以代替用户执行 GUI 中可执行的操作；不建设审批 UI 或细粒度权限模型。未来多人、远端或不可信扩展再增加独立权限策略。
 31. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行用户明确安装的本地可信扩展。
 32. Phase 1 首条真实 Connector 采用 RSS/RSSHub，并配套 fixture Connector。
 
@@ -70,7 +72,7 @@
 
 | 层 | 概念 | 当前定位 | 本轮状态 |
 | --- | --- | --- | --- |
-| 自动化 | Source、Trigger、Flow、Action、Agent | 采集和加工如何启动与执行 | 保留 |
+| 自动化 | Source、Trigger、Workflow、Action、Agent | 采集和加工如何启动与执行 | 保留 |
 | 采集证据 | Observation、Origin、Discovery Context | 某次从哪里、为何、实际看到了什么 | 保留 |
 | 基础内容 | Entry、Entry Revision、Asset | 稳定可读内容、来源修订和本地媒体 | 保留 |
 | 内容身份 | Exact Duplicate、Near Duplicate | 同一外部对象或近似转载 | 补充边界 |
@@ -87,6 +89,44 @@
 | 用户状态 | Interaction State | 进度、回答、完成和偏好 | 保留并归 Workspace |
 | 展示 | Timeline View、Spotlight、Feed、Board | 如何呈现和排序已有对象 | 明确为展示层 |
 | 发布投递 | Publication、Delivery | 冻结快照并发送到外部渠道 | 保留 |
+
+## 2.1 信息模型与运行时边界
+
+本文只定义 Entry、Story、Topic、Workspace、Artifact、关系、来源证据和用户状态等信息模型，不重复定义完整 Workflow Runtime。Workflow、Run、Step、Job、Trigger、Action、Connection、Secret、State、Outbox 和恢复语义以 [`0001-cosmos-foundation.md`](0001-cosmos-foundation.md) 为总体架构合同，并由 [`04-workflow-runtime`](../tasks/04-workflow-runtime/README.md) 持续实施。
+
+当前已实现的是固定 Source Ingest/Probe Job 和一个最小 Story projection；通用 Workflow Runtime、Knowledge Workflow、Research Workflow、Connection/Secret/State 仍未实现。这里描述的关系应被理解为领域投影边界，而不是已经存在的同名 Prisma 表。
+
+信息处理分为三条边界：
+
+```text
+Ingest Workflow
+    -> Observation / Entry / EntryRevision / Asset / 最小 Story projection
+
+Knowledge Workflow
+    -> KnowledgeSignal / Proposal / Story 或关系更新
+
+ResearchRequest
+    -> Research Workflow
+    -> Observation / Entry
+```
+
+- Ingest 先保存外部来源事实，不等待 LLM；旧 Observation 永远不覆盖。
+- 最小 Story projection 只保证每个 Entry 有可阅读的主 Story，不等于完成跨来源聚类。
+- Knowledge Workflow 可以由用户或 Agent 选择脚本策略、模型策略或 Agent 策略；它产生的是派生判断或 Proposal。
+- `KnowledgeSignal` 表示判断，不等于 `ResearchRequest`；后者表示一次需要执行的研究行动。
+- Research Workflow 的外部发现必须重新进入 Observation → Entry，并保留 ResearchRequest、查询目标、来源和 Run provenance。
+
+信息来源链保持可追溯但不把派生对象当作事实：
+
+```text
+Observation
+  -> Entry
+      -> EntryRevision
+          -> primary Story / StoryRevision projection
+              -> KnowledgeSignal / Proposal / Relation / Artifact provenance
+```
+
+Observation 保存实际采集到的外部证据；Entry 保存稳定的来源对象身份；EntryRevision 保存来源内容在某个时点的表示；Story/StoryRevision 只是上层规范投影。任何知识判断、关系、推荐或 Artifact 都必须引用输入 Revision、producer/version、证据和关联 Run，不能反向覆盖 Observation。
 
 ## 3. 基础信息层
 
@@ -420,7 +460,7 @@ Topic 不自动过期。人工归档能力后置且当前优先级较低。
 - operation 与目标对象；
 - base revision 与结果 revision；
 - 时间、理由和可选 evidence；
-- 对应 Run / Flow / Agent profile；
+- 对应 Run / Workflow / Agent profile；
 - 可逆操作或补偿记录。
 
 第一版保持本地单用户和简单能力边界：保留 actor/revision/理由/Run 记录，细粒度权限、并发冲突 UI、ChangeRequest 和复杂撤销后置。
@@ -627,7 +667,7 @@ Workspace
 │  ├─ Saved View / Collection / Query（结果单位为 Story）
 │  └─ optional primary anchor
 ├─ view specification
-├─ maintenance binding -> Trigger / Flow / Agent profile
+├─ maintenance binding -> Trigger / Workflow / Agent profile
 ├─ update projection -> active Workspace Update / Run
 ├─ current Artifact Revision refs
 └─ Interaction State schema
@@ -638,7 +678,7 @@ Workspace 的稳定字段应包括：
 - 标题、说明、kind 和生命周期元数据；
 - 输入 binding 与可选的主要锚点；
 - 视图模板与配置；
-- 维护 Flow、刷新条件和预算；
+- 维护 Workflow、刷新条件和预算；
 - 当前与历史 Artifact；
 - 交互 schema 版本；
 - 看板展示配置的引用；
@@ -655,7 +695,7 @@ Workspace 不应只有一个同时表示“启用、可见、正在生成、失�
 3. **内容新鲜度**：当前已发布内容是否仍覆盖最新输入；
 4. **用户交互状态**：学习进度、回答、批注和偏好。
 
-“Agent 正在更新 Workspace”属于第二个维度。每次 Workspace Update 应链接 Trigger、Flow、Agent Run、base Workspace Revision、输入快照和候选 Artifact，并记录 actor、开始时间、当前步骤、进度、预算和错误。UI 可以从活动 Update 派生 `queued`、`running` 或 `waiting`，并单独展示最近一次完成结果。
+“Agent 正在更新 Workspace”属于第二个维度。每次 Workspace Update 应链接 Trigger、Workflow、Agent Run、base Workspace Revision、输入快照和候选 Artifact，并记录 actor、开始时间、当前步骤、进度、预算和错误。UI 可以从活动 Update 派生 `queued`、`running` 或 `waiting`，并单独展示最近一次完成结果。
 
 Workspace Update 的状态为 `queued`、`running`、`waiting`、`succeeded`、`failed` 或 `cancelled`。更新过程中继续展示最近一次成功发布的 Workspace/Artifact Revision；新内容先暂存，只有成功时才原子发布，失败或取消不能把半成品替换为当前内容。并发更新、重复触发合并和取消/接管的细节仍需后续确认。
 
@@ -675,11 +715,11 @@ Workspace Update 的状态为 `queued`、`running`、`waiting`、`succeeded`、`
 
 ### 8.5 Agent 作为协作者参与维护
 
-Workspace 不由某一个 Agent 独占。Agent 通过 Flow 以协作者身份参与维护：
+Workspace 不由某一个 Agent 独占。Agent 通过 Workflow 以协作者身份参与维护：
 
 ```text
 Trigger
-  -> Flow
+  -> Workflow
       -> query Topic / Story / feedback
       -> agent.run
       -> propose Topic membership / analysis
@@ -687,7 +727,7 @@ Trigger
       -> publish Workspace update
 ```
 
-更换模型、Agent Profile 或维护 Flow 不改变 Workspace 身份。人类和 Agent 对 Topic 成员、关系、Workspace 和摘要的修改都通过 Command 提交，保存 actor、base revision、结果 revision、理由与依据。
+更换模型、Agent Profile 或维护 Workflow 不改变 Workspace 身份。人类和 Agent 对 Topic 成员、关系、Workspace 和摘要的修改都通过 Command 提交，保存 actor、base revision、结果 revision、理由与依据。
 
 ### 8.6 Workspace 与 Artifact
 
@@ -872,11 +912,11 @@ Topic 的成员和 Workspace 的用户状态不会因为生成 v2 而丢失。
 | split 后把状态复制给所有后继 | 状态留在历史壳，由显式 migration command 选择继承对象 |
 | Spotlight 排除全局生效或自动立即恢复 | 覆盖绑定具体 Placement，直到用户解除 |
 | 长期多人平台是 v1 前提 | v1 和默认产品合同是个人本地优先，未来协作不改变 actor/revision |
-| Agent 可以无提示扩大系统范围 | 内部对象可在已配置范围内维护；新来源、数据范围和外部发送需要显式配置/批准 |
+| Agent 可以无提示扩大系统范围 | 当前单用户阶段按最大产品权限运行；Agent 仍必须通过 Service/Workflow/Capability/Application Command 合同执行，未来权限策略再独立增加 |
 | 第一版必须先做完整插件权限/沙箱 | 第一版只运行本地可信扩展，复杂权限和不可信沙箱后置 |
 | 第一条 Connector 直接选择最复杂的平台推荐页 | 先 RSS/RSSHub + fixture 验证通用端到端合同 |
 
-当前尚无运行时代码和数据库，因此这是低成本重命名窗口，不需要兼容迁移层。
+当前已经存在 Phase 1/1B 的运行时代码、数据库和固定 Ingest/Probe Job；本文件的 v0.10 更新只同步信息模型与运行时边界，不把未来 Workflow/Knowledge/Research 合同伪装成已实现表或能力。
 
 ## 13. 后置压力测试问题
 
@@ -888,6 +928,14 @@ Topic 的成员和 Workspace 的用户状态不会因为生成 v2 而丢失。
 这些问题已明确标为后置，不阻塞本次 Phase 0 基线，也不继续作为本次 grilling 的问题。
 
 ## 14. 变更记录
+
+### v0.10 - 2026-08-08
+
+- 同步当前 Phase 1/1B 已存在的运行时代码、数据库、固定 Ingest/Probe Job 和最小 Story projection。
+- 正式使用 Workflow，移除现行模型中的旧 Flow 术语。
+- 明确最小 Story projection 与后续 Knowledge Workflow 的区别。
+- 分离 KnowledgeSignal 与 ResearchRequest，明确研究结果重新经过 Observation → Entry。
+- 同步当前单用户最大产品权限，不把旧的审批表述作为现行合同。
 
 ### v0.9 - 2026-08-07
 

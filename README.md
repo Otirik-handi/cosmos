@@ -2,7 +2,7 @@
 
 Cosmos 是一个面向单个本地用户、可编排的信息聚合与个人情报工作台。它持续从用户配置的渠道收集信息，把已录入的正文、图片、附件和来源关系保存在本地，再通过可配置看板、Agent 深入研究和后续消息推送，把“到处浏览”变成“集中理解和行动”。
 
-项目已进入 Phase 1 脚手架阶段，已建立 Web、API、Worker、公共包和服务器部署入口；RSS 录入、持久任务和离线查询功能仍在实现中。
+项目已完成 Phase 1 最小服务器闭环，已建立 Web、API、Worker、公共包和服务器部署入口；完整 Phase 1 产品需求、通用 Workflow Runtime、更多来源和扩展平台仍在持续实现与验收。
 
 Cosmos 按 [GNU Affero General Public License v3.0 only](LICENSE) 发布；贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -24,7 +24,7 @@ Cosmos 希望承担这部分机械工作：
 ```mermaid
 flowchart LR
     Sources["信息渠道<br/>推荐流、关注账号、邮件、公告、搜索"]
-    Automation["自动化<br/>Trigger → Flow → Action / Agent"]
+    Automation["自动化<br/>Trigger → Workflow → Action / Agent"]
     Library["本地信息库<br/>原始证据、正文、媒体、关系、检索"]
     Understanding["理解与策展<br/>Story、Topic、关系与推荐"]
     Experience["用户体验<br/>Workspace、热点、精华、信息流与推送"]
@@ -38,8 +38,8 @@ flowchart LR
 
 一次典型的信息处理过程是：
 
-1. 用户手动、定时任务、轮询变化、Webhook 或内部事件触发一个 Flow。
-2. Flow 调用 Connector、清洗、去重、信息库、Agent 或渲染 Action。
+1. 用户手动、定时任务、轮询变化、Webhook 或内部事件触发一个 Workflow。
+2. Workflow 调用 Connector、清洗、去重、信息库、Agent 或渲染 Action。
 3. 外部内容先作为不可变采集证据保存，再形成可查询的信息条目和版本。
 4. 系统通过全文、结构化、实体和关系检索组织内容，并区分“是否录入”与“是否展示”。
 5. 看板按用户配置展示热点、Agent 精选体验和普通推荐信息流。
@@ -49,7 +49,7 @@ flowchart LR
 
 ### 可编排的信息采集
 
-`Source`、`Trigger`、`Flow` 和 `Action` 相互独立。相同来源既可以手动抓取，也可以定时运行；自定义 Trigger 可以检测邮箱或网站变化；Action 可以运行 Connector、自定义代码或受控 Agent。
+`Source`、`Trigger`、`Workflow` 和 `Action` 相互独立。相同来源既可以手动抓取，也可以定时运行；自定义 Trigger 可以检测邮箱或网站变化；Action 可以运行 Connector、自定义代码或受控 Agent。当前实现是固定 Ingest/Probe Job；通用 Workflow Runtime 仍是后续设计合同。
 
 ### 不依赖 URL 的本地信息库
 
@@ -66,9 +66,9 @@ flowchart LR
 
 ### Agent、持续工作区与产物
 
-Agent 是 Flow 中受用户配置范围和预算约束的一种 Action。它可以读取范围内的信息、继续调研并生成可保存、可追溯的产物，例如报告、批注、图表、附件包或可视化网页。
+Agent 是 Workflow 中受配置范围和预算约束的一种 Action。它可以读取范围内的信息、继续调研并生成可保存、可追溯的产物，例如报告、批注、图表、附件包或可视化网页。
 
-第一版不建设细粒度权限系统。Agent 可以维护用户已经配置范围内的 Topic、Workspace 和 Artifact；增加新外部 Source、扩大数据范围或发送外部消息，需要用户显式配置或批准。
+当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限系统；所有操作仍通过 Service、Workflow、Capability 和 Application Command 合同，未来多人、远端或不可信扩展再增加独立权限策略。
 
 Workspace 是长期存在、可更新、可交互的体验容器。它可以通过多对多 binding 组合多个 Topic、Story 或查询，并设置一个可选主要锚点。内部统一使用 `Workspace`，界面按 kind 显示“栏目”“专题”“学习计划”或“工作区”。例如“每天五个单词”“Jeff Dean 离职专题”或“每日竞品分析”。
 
@@ -163,5 +163,7 @@ bun run dev
 - [项目状态](PROJECT-STATUS.md)：已完成能力、当前边界、风险和下一步。
 - [Foundation Task](docs/tasks/01-foundation/README.md)：本轮建立仓库与设计基线的过程和验证。
 - [Phase 1 Task](docs/tasks/02-rss-ingestion/README.md)：RSS/RSSHub + fixture 录入、离线查询和最小 Story projection 的实现 walkthrough。
+- [Durable Workflow Runtime ADR](docs/adr/0001-durable-workflow-runtime.md)：Job + Workflow、脚本优先执行语义和恢复边界。
+- [Workflow Runtime Task](docs/tasks/04-workflow-runtime/README.md)：后续 Workflow、Connection、Research 和 Adapter 基础建设的持续 walkthrough。
 - [初始调研](docs/research/2026-08-06-daily-digest-research.md)：从远端研究项目归档的参考材料。
 - [贡献指南](CONTRIBUTING.md) 与 [Agent 约定](AGENTS.md)：后续开发和文档演进流程。

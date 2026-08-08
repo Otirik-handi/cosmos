@@ -228,3 +228,25 @@
 > 决策点4：目前阶段不考虑
 >
 > 上一轮讨论另一个 agent 已经同步了。这一轮的可以同步到文档中了。
+
+## 2026-08-08：Workflow 核心、脚本优先与 Ingest/Research 解耦
+
+> 1. 我觉得脚本模式才是 workflow 最底层最灵活的形态，IR 和 comfy 这类graph模式的都可以转换成脚本（temporal）模式，nb-workflow 底层就是基于脚本模式的
+>
+> 关于Ingest，确实混合了许多东西。
+>
+> 1. 外部来源事实不需要等 LLM 后才入库
+> 2. 同意，旧 Observation 永远不覆盖
+> 3. Entry 如何变成 Story。我觉得这里也比较适合做成自定义流程（用户 和  Agent 都可以配置）。例如：
+>    - 策略1：所有 Entry 都分批走 Agent 过一遍
+>    - 策略2：先用脚本策略过一遍，难以决策的，强相关的，重要的过 Agent
+> 4. 研究任务如何派发（我觉得这里不要和 ingest 耦合）：研究任务我觉得也可以做成 workflow。ingest 标记为紧急。Trigger 触发，workflow 开始执行研究任务。（这个架构如何，还有更好的吗？）
+
+## 2026-08-08：Workflow 收敛为核心运行时
+
+> 所以说，目前很多东西都可以收敛到 workflow 了。workflow 变成了核心，所以在实施的时候要注意 workflow api 的灵活。
+>
+> 1. 信息入库（workflow 编排）
+> 2. 研究型任务：既要访问信息库又要主动访问渠道信息
+> 3. ingest 也是一种 workflow
+> 4. 要不要为 workflow 分类？

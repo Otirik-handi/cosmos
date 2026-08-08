@@ -5,7 +5,11 @@ ADR 只记录已经稳定、需要长期保留的决定。仍在探索或会随�
 文件名使用四位编号，例如：
 
 ```text
-0001-durable-flow-runtime.md
+0001-durable-workflow-runtime.md
 ```
 
 每份 ADR 至少包含 Context、Decision、Consequences 和 Revisit Gate。
+
+## 当前 ADR
+
+- [0001 Durable Workflow Runtime](0001-durable-workflow-runtime.md)：固定 `Job + Workflow`、脚本优先执行语义、Cosmos/Harness durable truth 边界和 lease fencing。

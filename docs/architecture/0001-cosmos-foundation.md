@@ -1,6 +1,6 @@
 # Cosmos 总体架构设计
 
-> 状态：Draft v0.13
+> 状态：Draft v0.15
 >
 > 最后更新：2026-08-08
 >
@@ -15,17 +15,19 @@
 > 信息领域模型：[`0002-information-model.md`](0002-information-model.md)
 
 本文是可持续调整的总体设计，不是不可修改的最终合同。用户的新需求先逐字追加到 requirements，再在本文中解释、建模和调整；稳定且改回成本高的决定再提炼为 ADR。
+本文正式使用 `Workflow`。旧文档中的 `Flow` 只作为原始需求措辞或历史迁移说明保留，不再作为现行架构合同。
 
 ## 1. 结论
 
 Cosmos 应采用“服务器优先的本地优先模块化单体 + 持久化事件/任务流水线 + 稳定 Transport + 可插拔扩展 SDK”：
 
-- Source、Trigger、Flow、Action 分开建模，提供类似 GitHub Actions 的可编排体验。
+- Source、Trigger、Workflow、Action 分开建模，提供类似 GitHub Actions 的可编排体验。
 - 所有渠道先进入不可变的采集层，再形成可查询的信息库；网页 URL 只是可选来源属性。
 - 信息库不只保存文章，而是保存来源记录、修订、媒体、实体、长期关注对象、具体事件、标签、批注和关联。
 - Story 是每个 Entry 的上层规范内容单元，通过稳定核心 kind 和受管理、可扩展 subtype 区分形态；Topic 表示围绕问题或目标的长期、主观关注范围。
-- Agent 作为 Flow 中的一种受控 Action，可以查询信息库、继续调研并生成版本化 Artifact。
+- Agent 作为 Workflow 中的一种受控 Action，可以查询信息库、继续调研并生成版本化 Artifact。
 - 知识管理者是共享长期记忆之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作。
+- Workflow 是 Cosmos 的主动行为核心；Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 都使用同一脚本优先的 Workflow Runtime。
 - Workspace 表示长期、可更新、可交互的体验容器；Artifact 表示一次版本化输出。
 - 看板是查询与编排层，不拥有底层内容。热点、精华、普通信息流和 Workspace 可以引用同一批领域对象。
 - 逻辑上保持模块化单体，物理上从第一条切片起分为 Next.js Web、NestJS API 和 Worker 进程；这不是微服务拆分，而是明确的宿主边界。
@@ -44,7 +46,7 @@ flowchart LR
 
     subgraph Automation["自动化运行时"]
         Trigger["Trigger"]
-        Flow["Flow"]
+        Workflow["Workflow"]
         Action["Action / Agent Action"]
         Runtime["Durable Run Runtime"]
     end
@@ -70,8 +72,8 @@ flowchart LR
     end
 
     External --> Trigger
-    Trigger --> Flow
-    Flow --> Action
+    Trigger --> Workflow
+    Workflow --> Action
     Action --> Runtime
     Runtime --> Observation
     Observation --> Entry
@@ -97,7 +99,7 @@ flowchart LR
 2. 让已采集的正文、元数据和尽可能多的图片/附件在本地离线可访问。
 3. 把多个平台中的碎片信息组织成可检索、可关联、可持续更新的信息库。
 4. 把“录入什么”与“现在展示什么”分开，支持广采集、窄展示。
-5. 允许用户和系统通过自定义 Trigger、Flow、Action、Agent、查询和看板区块扩展行为。
+5. 允许用户和系统通过自定义 Trigger、Workflow、Action、Agent、查询和看板区块扩展行为。
 6. 让所有摘要、聚类、推荐和 Agent 报告都能追溯到原始来源。
 7. 先完成高自定义看板，再实现紧急推送和定时摘要。
 8. 以个人本地优先作为 v1 和默认产品合同，保留未来协作所需的 actor/revision 扩展位。
@@ -110,6 +112,21 @@ flowchart LR
 - 不让 LLM 直接成为原始事实、权限或外部副作用的最终裁决者。
 - 不把第三方平台推荐结果视为客观质量；系统需要记录其发现来源并建立自己的展示排序。
 - 第一版不建设细粒度权限 UI 或不可信插件沙箱。
+
+### 2.3 当前实现与设计合同
+
+当前代码已经完成 Phase 1/1B 的固定采集切片：fixture/RSS 与受管 AI HOT/Bilibili Connector 通过持久 Ingest/Probe Job 写入 Observation、Entry/Revision、Asset 和最小 Story projection，并由 API、Worker、FTS、SSE 和 Web 提供查询闭环。
+
+以下内容是本架构确认的设计合同，但不是当前已经交付的能力：
+
+- 通用脚本式 Workflow Runtime、WorkflowContext、Child Workflow 和通用自定义 Workflow；
+- Connection、SecretStore、ConnectorStateStore、多个采集计划和 Source Operation 的完整持久模型；
+- lease fencing 覆盖中途事实写入、FTS、checkpoint 和旧 Worker 拒绝中途提交；
+- Knowledge Workflow、KnowledgeSignal、ResearchRequest、Research Workflow、Trigger Consumer 和循环保护；
+- Outbox 的完整投递/消费恢复链路；
+- `neuro-agent-harness`/`nb-memory` Adapter、Knowledge Manager Web/CLI 和个性化配置生成。
+
+已发现但尚未在本轮修复的实现缺口包括：无 URL fallback key 尚未使用 `sourceLocator`，`discoveryContext` 当前被硬编码为 `manual`，Run 尚未保存完整的定义/配置/输入快照，Source 删除与历史事实保留的语义仍需单独收口。实现这些合同前，必须以 focused 行为测试验证，而不能以文档或构建通过替代验收。
 
 ## 3. 架构原则
 
@@ -157,7 +174,7 @@ Cosmos 需要兼容三种运行形态：
 
 Desktop Shell 的具体技术（Tauri、Electron 或其它实现）、安装生命周期、远端认证和公网暴露策略都保持在宿主层，不进入领域模型。
 
-## 4. Source、Trigger、Flow 与 Action
+## 4. Source、Trigger、Workflow 与 Action
 
 用户体验可以类似 GitHub Actions，但底层需要拆开四个概念。
 
@@ -165,10 +182,10 @@ Desktop Shell 的具体技术（Tauri、Electron 或其它实现）、安装生�
 | --- | --- | --- |
 | `SourceDefinition` | 描述一种来源类型及其配置 schema | RSS、IMAP、Telegram、BiliBili 首页推荐 |
 | `SourceInstance` | 用户配置好的一个具体来源 | 用户 A 的 BiliBili 首页、某个邮箱收件箱 |
-| `Trigger` | 判断何时启动一个 Flow | 手动、cron、轮询发现变化、webhook、内部事件 |
-| `FlowDefinition` | 编排一组有顺序和分支的步骤 | 拉取 → 标准化 → 去重 → 入库 → 触发分析 |
+| `TriggerBinding` | 判断何时启动一个 Workflow，并绑定输入和定义版本 | 手动、cron、轮询发现变化、webhook、内部事件 |
+| `WorkflowDefinition` | 编排一组有顺序和分支的步骤 | 拉取 → 标准化 → 去重 → 入库 → 触发分析 |
 | `ActionDefinition` | 可复用执行能力 | `rss.poll`、`http.fetch`、`agent.run`、`artifact.publish` |
-| `Run` / `StepRun` | 一次 Flow 和步骤的持久执行记录 | 2026-08-06 08:00 的日报 Run |
+| `WorkflowRun` / `StepRun` | 一次 Workflow 和步骤的持久执行记录 | 2026-08-06 08:00 的日报 Run |
 
 ### 4.1 Trigger 类型
 
@@ -180,16 +197,16 @@ Desktop Shell 的具体技术（Tauri、Electron 或其它实现）、安装生�
 - `webhook`：外部平台主动通知。
 - `event`：订阅 Cosmos 内部领域事件，例如 `entry.created`、`story.materially_updated`。
 - `condition`：基于查询结果、状态或阈值触发，例如“DeepSeek 状态由 available 变为 degraded”。
-- `dependency`：另一个 Flow 或 Step 成功、失败或产出特定结果后触发。
+- `dependency`：另一个 Workflow 或 Step 成功、失败或产出特定结果后触发。
 
 “轮询邮箱，有新邮件则触发”应建模为：
 
 1. `schedule` 唤醒 IMAP Poll Trigger；
 2. Trigger 使用持久 checkpoint 检查 UID / ModSeq；
 3. 有变化时发出 `source.change_detected`；
-4. Flow 调用 IMAP Action 获取并录入新邮件。
+4. Workflow 调用 IMAP Action 获取并录入新邮件。
 
-Trigger 只负责发现“应该开始”，不承担完整抓取、LLM 和写库逻辑。这样同一套 IMAP Action 可以被手动触发、定时触发或其它 Flow 调用。
+Trigger 只负责发现“应该开始”，不承担完整抓取、LLM 和写库逻辑。这样同一套 IMAP Action 可以被手动触发、定时触发或其它 Workflow 调用。
 
 ### 4.2 Action 类型
 
@@ -206,9 +223,9 @@ Trigger 只负责发现“应该开始”，不承担完整抓取、LLM 和写�
 
 `ActionDefinition` 是能力合同，不是任务实例。它声明版本化的输入/输出 schema、Capability、幂等、超时、取消、重试和恢复语义；一次实际调用仍然要由 Workflow 创建 Run/Step，并落成可领取的 Job。
 
-### 4.3 Flow 定义
+### 4.3 Workflow 定义
 
-Flow 使用版本化定义描述触发器、输入、步骤、能力范围和预算。Cosmos 同时支持脚本式 Workflow 和可序列化的 Workflow IR；两者不是两套运行时，而是同一执行合同的两种表示。
+Workflow 使用版本化定义描述 Trigger Binding、输入、步骤、能力范围和预算。脚本式 Workflow 是最底层、最灵活的执行形态；Graph、IR 和 Comfy 类表达属于上层编排格式，可以转换为脚本式 Workflow 语义，不建立第二套执行 Runtime。
 
 ```yaml
 id: important-mail-intake
@@ -219,7 +236,7 @@ triggers:
       every: 2m
     - kind: manual
 
-permissions:
+capabilities:
     - source:mail.personal.read
     - library:entry.write
     - agent:classify.run
@@ -244,24 +261,59 @@ steps:
 
 上例只表达合同方向，具体 DSL 在实现 Task 中通过 schema 和行为测试确定。
 
-#### 脚本式 Workflow 与 Workflow IR
+Workflow Definition、Action Definition、Trigger Binding 与 Workflow Run 的关系是：
 
-- 脚本式 Workflow 适合开发者表达复杂控制流、复用 TypeScript 函数和组合 Action。
-- Workflow IR 适合持久化、版本化、检查、可视化、重放、恢复以及未来由用户/知识管理者生成。
-- 脚本式 Workflow 不能绕过 Runtime；执行时必须产生可追踪的定义版本、Run、Step、Job、输入/输出引用和 DomainEvent。是否在创建 Run 时完整编译为 IR，或采用可恢复的脚本 journal，由实现 Task 决定。
-- IR 也不能直接执行任意网络、文件或进程操作；所有副作用必须映射到已注册的 ActionDefinition 和 Capability。
-- 本地 `nb-workflow` 可作为脚本式 Conductor 的语义参考，复用 Activity journal、`path + seq + fingerprint` 重放、`wf.map`/`wf.all`、`wf.ask`/resume、cancel signal、显式游标和持久 Agent 复用等思想；其当前内存 Run/journal 和 TypeScript 函数定义不直接替代 Cosmos 的持久 Job、Service Endpoint、权限和领域数据库。
+```text
+TriggerBinding
+  -> WorkflowDefinition@version
+      -> WorkflowRun(inputSnapshot, definitionSnapshot)
+          -> StepRun[]
+              -> Job[]
+                  -> ActionDefinition@version
+```
+
+- `WorkflowDefinition` 描述可执行流程；它可以由脚本注册，也可以由 Graph/IR 转换生成。
+- `ActionDefinition` 描述可复用能力；它不代表某一次执行。
+- `TriggerBinding` 只负责触发时机、绑定的来源/输入、并发与计划策略，不拥有执行状态。
+- `WorkflowRun` 保存触发原因、定义版本、输入快照、预算、父子关系和最终收口，是一次实际执行的 durable truth。
+
+#### 脚本式 Workflow 与上层编排格式
+
+- 脚本式 Workflow 适合开发者表达复杂控制流、复用 TypeScript 函数和组合 Action，是 Runtime 的底层执行语义。
+- Workflow IR/Graph 适合持久化、版本化、检查、可视化和由用户/知识管理者生成；它们转换成脚本式 Workflow 语义，而不是拥有独立的执行器。
+- 脚本式 Workflow 不能绕过 Runtime；执行时必须产生可追踪的定义版本、Run、Step、Job、输入/输出引用和 DomainEvent。
+- Graph/IR 不能直接执行任意网络、文件或进程操作；转换后的副作用仍必须映射到已注册的 ActionDefinition 和 Capability。
+- 不是所有脚本都需要或能够反向转换成 Graph；支持从 Graph/IR 到脚本语义的单向转换即可。
+- 本地 `nb-workflow` 可作为脚本式 Conductor 的语义参考，复用 Activity journal、`path + seq + fingerprint` 重放、`wf.map`/`wf.all`、`wf.ask`/resume、cancel signal、显式游标和持久 Agent 复用等思想；其当前内存 Run/journal 和 TypeScript 函数定义不直接替代 Cosmos 的持久 Job、Service Endpoint、能力边界和领域数据库。
+
+#### Workflow 类型
+
+Workflow 使用轻量 `kind + tags` 分类，不为每类 Workflow 复制一套 Runtime：
+
+- `ingest`：把外部来源事实编排进入 Cosmos。
+- `knowledge`：对 Entry 做规则、模型或 Agent 分析，生成 Story/Topic/关系 Proposal。
+- `research`：查询 Cosmos 信息库并主动访问已配置的外部渠道。
+- `maintenance`：重建索引、清理、对账和修复。
+- `delivery`：生成、渲染和发送用户可见结果。
+- `interaction`：处理用户/Agent 交互、等待输入和恢复。
+- `custom`：用户或插件定义的其它流程。
+
+分类只影响展示、默认优先级/预算和运维统计，不改变 Workflow 的执行语义。
 
 ### 4.4 自定义代码与插件
 
 扩展包使用 manifest 声明：
 
 - 唯一 ID、版本和兼容的 Cosmos SDK 版本；
-- 提供的 Source、Trigger、Action 或 Board Block；
+- 提供的 Source、Source Operation、Trigger、Action 或 Board Block；
 - 配置 schema 与 Secret 引用；
 - 网络、文件、模型、库查询、库写入和外部投递能力声明；
 - 幂等、超时、取消和恢复能力；
 - 运行入口和资源预算。
+
+`SourceOperation` 是 Adapter 对外部来源提供的一项可调用操作，例如 `bilibili.dynamic`、`bilibili.recommendation` 或 `rss.poll`。它声明输入配置、输出的标准化 `NormalizedIngestItem`、稳定 external key、`originLocator`、`discoveryContext`、媒体状态、checkpoint 读写范围和错误语义；它不是 Workflow，也不直接写 Cosmos 数据库。
+
+Workflow 通过 `ActionDefinition` 调用 Source Operation。Adapter manifest 只注册能力和 schema，用户的 Connection、SourceInstance 和采集计划再把某个 operation 绑定到具体凭证、范围、Trigger、Workflow 版本和 StateStore 命名空间。
 
 执行策略分两级：
 
@@ -272,21 +324,21 @@ steps:
 
 ### 4.5 Agent 是 Action，不是特殊旁路
 
-`agent.run` 与其它 Action 使用相同的 Run、配置能力范围、超时、取消、日志、产出和重试合同。Agent 可以：
+`agent.run` 与其它 Action 使用相同的 Run、配置能力范围、超时、取消、日志、产出和重试合同。当前单用户阶段按最大产品权限运行，不建设审批 UI；Capability/Service 边界主要用于可靠执行、数据隔离和未来扩展。Agent 可以：
 
 - 查询 Entry、Story、Topic、Annotation 和 Saved View；
-- 调用被授权的外部搜索/抓取 Action；
+- 调用已注册并可用的外部搜索/抓取 Action；
 - 创建 Annotation、关系建议和 Artifact Revision；
-- 请求用户确认；
-- 发出后续 Flow Event。
+- 请求用户输入或补充信息；
+- 发出后续 Workflow Event。
 
-在用户已经配置的内部范围内，Agent 可以创建或维护 Topic、Workspace 和 Artifact。创建新的外部 Source、扩大数据范围或执行 Telegram/Email 等外部发送，必须经过用户显式配置或批准；这是一条产品边界，不要求第一版先建设复杂权限系统。
+Agent 可以创建或维护 Topic、Workspace、Artifact、Source 和其它内部对象。当前不强制新外部 Source、数据范围扩大或外部发送经过审批；未来多人、远端或不可信扩展再增加独立权限策略，不能改变 Workflow/Service 合同。
 
 Agent 不能：
 
 - 改写 Observation；
 - 绕过 Connector 或 Library Command 直接写表；
-- 未经授权扩大来源、读取 Secret 或发送外部消息；
+- 绕过已注册的 Adapter/Action、Capability、SecretRef 或 Application Command；
 - 把自己的结论伪装成来源原文。
 
 ### 4.6 Connection、State 与采集计划
@@ -300,9 +352,9 @@ Agent 不能：
 | `ConnectionInstance` | 用户登录或授权后可复用的连接 | “我的 Bilibili 主账号” |
 | `SourceInstance` | 用户配置的具体采集目标 | 动态、推荐流、某个 RSS |
 | `Trigger` | 何时或因何启动 | 每 30 分钟、每 2 小时、内部事件 |
-| `FlowBinding` | 该采集目标使用哪一版 Flow | `bilibili.dynamic@1` |
+| `WorkflowBinding` | 该采集目标使用哪一版 Workflow | `bilibili.dynamic@1` |
 
-同一个 `ConnectionInstance` 可以被多个独立采集计划引用。计划分别保留自己的频率、checkpoint、发现上下文、预算、错误和重试边界。用户界面可以把 `SourceInstance + Trigger + FlowBinding` 组合展示为“采集计划”，不要求用户直接配置 Worker。
+同一个 `ConnectionInstance` 可以被多个独立采集计划引用。计划分别保留自己的频率、checkpoint、发现上下文、预算、错误和重试边界。用户界面可以把 `SourceInstance + Trigger + WorkflowBinding` 组合展示为“采集计划”，不要求用户直接配置 Worker。
 
 凭证和普通 Adapter 状态分离：
 
@@ -324,6 +376,8 @@ Cosmos 的生产者/消费者特征集中在运行时，而不是把整个产品
 | `OutboxIntent` | 准备调用外部系统的副作用 |
 
 Command 在一个数据库事务中修改领域状态并写入 Event/Outbox。Dispatcher 在提交后投递任务，避免“数据库已写但事件丢失”。
+
+这是目标运行时合同；当前 Phase 1/1B 已有持久 DomainEvent/SSE 和固定 Job，但尚未交付完整 Outbox Dispatcher、Consumer cursor 和通用 Trigger Consumer。
 
 ### 5.2 Job 状态
 
@@ -349,6 +403,9 @@ leased
 - Worker 领取任务时取得 `lease_token` 和 `lease_expires_at`。
 - 心跳只能延长当前 token 的 lease。
 - lease 过期后新 Worker 可以接管；旧 Worker 不能用旧 token 提交成功。
+- lease fencing 必须保护整个 Job 的写入窗口，而不只是最终把 Job 标记为成功：Observation、Entry/Revision、Asset、FTS、DomainEvent、checkpoint 和 Job terminal close 都必须验证当前 lease token。
+- 失去 lease 的 Worker 必须在下一次受保护写入前停止；旧 Worker 不能继续追加事实、推进 checkpoint 或覆盖接管者的结果。
+- Ingest 需要把“事实写入”和“checkpoint 提交”纳入同一可验证的收口边界；checkpoint 只能在本次 Run 的所有受保护写入成功后推进。
 - 超时和取消必须先收口受 Cosmos 所有的子进程，再释放 lease。
 - 重试使用有上限的指数退避，终态失败进入可查询的失败队列。
 
@@ -386,7 +443,7 @@ uncertain
 LLM、规则处理和外部调研都必须复用同一持久运行时：
 
 ```text
-FlowDefinition@version
+WorkflowDefinition@version
   -> Run
   -> StepRun
   -> Job
@@ -394,14 +451,49 @@ FlowDefinition@version
   -> DomainEvent
 ```
 
-Action 或 Agent 可以请求子任务，但请求必须经过 Runtime 校验能力范围、已配置来源、预算、递归深度、并发和审批状态。子任务保存父 Run/Step、因果 Event、输入/输出引用和最终收口原因，不能只存在于进程内内存。
+Action 或 Agent 可以请求子任务，但请求必须经过 Runtime 校验可用 Action/Source、预算、递归深度和并发。当前单用户阶段按最大产品权限运行，不建设审批状态；未来权限策略可以在同一入口上增加。子任务保存父 Run/Step、因果 Event、输入/输出引用和最终收口原因，不能只存在于进程内内存。
 
-Entry → Story 建议保留两条路径：
+Ingest、Knowledge 和 Research 使用同一 Runtime，但职责分开：
 
-1. 同步确定性路径：标准化、去重、证据保存和最小 Story projection，不依赖 LLM。
-2. 异步知识路径：代码召回候选，规则、模型或 LLM 产生分类、聚类、实体、关系、重要性和紧急性 Proposal。
+1. `Ingest Workflow` 负责外部事实进入 Cosmos。Observation、Entry/Revision、Asset 和最小 Story 的事实事务不等待 LLM。
+2. `Knowledge Workflow` 负责对 Entry 做规则、模型或 Agent 分析；用户和 Agent 可以配置“全量 Agent”或“脚本优先、困难/强相关/重要内容升级 Agent”等策略。
+3. `Research Workflow` 负责查询 Cosmos 信息库并主动访问外部渠道。Knowledge Workflow 可以产生紧急、需要研究或来源冲突信号，再创建持久 `ResearchRequest`（名称待定），由 Trigger 启动 Research Workflow。
+4. Research Workflow 的新发现重新经过 Observation → Entry，而不是直接写入 Story；研究失败不能丢失原始 Entry。
+
+Entry → Story 的知识路径建议保留两条实现策略：
+
+1. 全量 Agent：Entry 批次统一交给 Agent 处理。
+2. 脚本优先：先用确定性规则处理，难以决策、强相关或重要的内容再升级给 Agent。
 
 LLM Proposal 不能直接改写 Observation 或绕过 Library Command。每个派生结果需要记录输入 Revision、producer、版本、置信度、evidence 和关联 Run；由 Policy 决定自动接受、进入候选或请求用户确认。
+
+### 5.7 KnowledgeSignal 与 ResearchRequest
+
+`KnowledgeSignal` 和 `ResearchRequest` 是两个不同对象：
+
+| 对象 | 责任 | 是否直接执行 |
+| --- | --- | --- |
+| `KnowledgeSignal` | 表示系统对某个 Entry/Revision/Story 的判断，例如紧急、需要研究、来源冲突或高重要性 | 否，只记录判断及证据 |
+| `ResearchRequest` | 表示一次需要执行的研究行动，绑定目标、范围、优先级、幂等键和结果 | 是，由 Trigger 启动 Research Workflow |
+
+`KnowledgeSignal` 的最小合同包括 `targetType`、`targetId`、`targetRevisionId`、`kind`、`reason`、`evidenceRefs`、`producer`、`producerVersion`、`confidence`、`runId` 和 `createdAt`。新判断追加记录，不覆盖旧判断。
+
+`ResearchRequest` 的最小合同包括：
+
+- `signalIds`、`goal`、`scope`、`priority`、`idempotencyKey`；
+- `parentRunId`、`parentStepId`、`workflowRef`、`workflowVersion`；
+- `status`、`createdAt`、`startedAt`、`finishedAt`、`resultRefs` 和 `error`。
+
+其状态为：
+
+```text
+queued -> running -> succeeded
+                  -> failed
+                  -> cancelled
+                  -> expired
+```
+
+Research Trigger 必须保存触发原因、输入快照、预算和循环深度。研究结果不直接写 Story；外部发现必须通过统一 Ingest Command 重新进入 `Observation -> Entry`，并携带 ResearchRequest、查询目标和发现来源。
 
 ## 6. 采集层：Observation 没有 URL 假设
 
@@ -422,7 +514,7 @@ Observation
 ├─ payloadRef              原始 payload 或 Blob 引用
 ├─ contentFingerprint?
 ├─ webUrl?                 可选网页链接
-└─ runId                   哪次 Flow 产生
+└─ runId                   哪次 Workflow 产生
 ```
 
 `RawObservation.url` 不作为必需字段。`webUrl` 只在来源提供稳定网页入口时存在。
@@ -475,8 +567,8 @@ Connector Run
   -> EntryRevision(1)
 
 Later poll
-  -> Observation(update)
-  -> EntryRevision(2)
+   -> Observation(update)
+   -> EntryRevision(2)
 ```
 
 例如 Telegram 消息被编辑时，旧 Observation 和 Revision 保留，新版本追加。来源删除时追加 delete Observation，并在 Entry 上投影当前可见状态；本地是否保留已采集内容由用户保留策略决定。
@@ -597,7 +689,7 @@ Topic 可以绑定：
 - SourceInstance；
 - 关注实体和标签；
 - Story；
-- 定时 Flow；
+- 定时 Workflow；
 - 告警规则；
 - Saved View；
 - Workspace。
@@ -771,7 +863,7 @@ artifacts/
 `artifact.json` 至少声明：
 
 - kind、title、entrypoint 和 media type；
-- producer、Flow Run、Agent Run 和模型；
+- producer、Workflow Run、Agent Run 和模型；
 - 依赖的 Entry/Story/Topic/Artifact 及精确 revision；
 - 生成时间和刷新策略；
 - 交互能力与所需宿主能力；
@@ -787,7 +879,7 @@ Workspace 是一个长期存在、可更新、可交互的用户体验单元。�
 - 一个或多个 Topic；
 - 一个或多个 Artifact；
 - Saved View、Collection 或 Query；
-- 刷新 Flow；
+- 刷新 Workflow；
 - 用户 Interaction State。
 
 这些输入通过多对多 `WorkspaceInputBinding` 表达，并可设置一个可选主要锚点用于标题、导航和默认上下文。主要锚点不表示所有权；Learning Workspace 等对象可以没有 Topic。
@@ -819,14 +911,14 @@ Artifact 文件与用户交互状态分开保存：
 
 Workspace 的生命周期、维护执行、内容新鲜度、Board 可见性和 Interaction State 分开建模。“Agent 正在更新”由持久 `WorkspaceUpdate`/Run 及其投影表达，不写成一个混合所有含义的 Workspace `status`。
 
-用户至少应看到 `queued`、`running`、`waiting`、`failed` 等更新状态，以及关联 Agent/Flow Run、操作者、当前步骤、开始时间、预算和最近完成结果。Workspace Update 完成状态还包括 `succeeded` 和 `cancelled`；更新期间继续展示最近一次成功发布的内容，新 Artifact 先暂存并在成功后原子切换。并发更新、重复触发合并和取消/接管的细节仍待确认。
+用户至少应看到 `queued`、`running`、`waiting`、`failed` 等更新状态，以及关联 Agent/Workflow Run、操作者、当前步骤、开始时间、预算和最近完成结果。Workspace Update 完成状态还包括 `succeeded` 和 `cancelled`；更新期间继续展示最近一次成功发布的内容，新 Artifact 先暂存并在成功后原子切换。并发更新、重复触发合并和取消/接管的细节仍待确认。
 
 ### 10.5 Agent 自主调研
 
 Agent 可以由以下条件触发：
 
 - 用户手动要求；
-- Topic 的定时研究 Flow；
+- Topic 的定时研究 Workflow；
 - 新 Story 达到重要性阈值；
 - 信息库发现新的竞品 Entity；
 - Workspace 到达刷新时间；
@@ -839,8 +931,7 @@ Agent 可以由以下条件触发：
 - 可调用 Connector/Action；
 - token、时间、网络和文件预算；
 - 最大递归/子任务数；
-- 是否允许创建新 Source/Trigger；
-- 是否需要用户审批；
+- 可创建或调用的 Source/Trigger/Workflow；
 - 完整 provenance。
 
 Agent 的观点应以 Annotation 或 Artifact 保存，并引用依据；不能改写 Entry 正文。
@@ -855,7 +946,7 @@ Agent 的观点应以 Annotation 或 Artifact 保存，并引用依据；不能�
 - `cosmos cli`；
 - ingest、research 和其它 Workflow 中由系统触发的 Agent 调用。
 
-这些入口都通过同一组 Service Endpoint、Command、Query、Workflow、Capability、Run/Step/Job 和 Event 合同。知识管理者可以代替用户执行 GUI 中可执行的操作，也可以请求创建来源、搜索或研究任务；但外部范围、Secret、网络调用、写入和发送仍由 Cosmos 的 Capability、用户配置、预算和审批边界裁决。
+这些入口都通过同一组 Service Endpoint、Command、Query、Workflow、Capability、Run/Step/Job 和 Event 合同。当前单用户阶段知识管理者按最大产品权限运行，可以代替用户执行 GUI 中可执行的操作，也可以请求创建来源、搜索或研究任务；Capability、预算和运行记录仍然是执行合同，未来再叠加权限/审批策略。
 
 知识管理者与 `nb-memory` 的职责分工：
 
@@ -930,7 +1021,7 @@ Block 可以绑定：
 - Saved View；
 - 动态 Query；
 - Recommendation Policy；
-- Flow 输出；
+- Workflow 输出；
 - 插件提供的数据和 Renderer。
 
 布局配置不复制内容。删除一个 Block 不删除 Story、Entry、Artifact 或用户批注。
@@ -1056,7 +1147,7 @@ cosmos/
 ├─ apps/
 │  ├─ web/                    Next.js App Router 看板
 │  ├─ api/                    NestJS HTTP API、Command、Query、SSE
-│  └─ worker/                 Scheduler、Flow、Job Worker
+│  └─ worker/                 Scheduler、Workflow、Job Worker
 ├─ packages/
 │  ├─ contracts/              DTO、事件和版本化公共 schema
 │  ├─ logging/                运行日志、上下文、脱敏和本地 JSONL sink
@@ -1146,6 +1237,31 @@ Service Endpoint 是三种宿主模式共用的应用边界。第一阶段至少
 
 HTTP、JSON 和 SSE 是当前初步 Transport 实现；它们可以在客户端模式中连接本机服务，也可以在分离模式中连接远端服务。Transport 错误需要保留稳定的错误码、可读消息、重试建议和关联 request/command ID。
 
+### 15.5 Workflow Runtime / SDK
+
+Workflow API 必须保持通用，不把 RSS、Bilibili、LLM 或某一个 UI 直接写进 Runtime。脚本式 Workflow 的概念签名可以接近：
+
+```ts
+type Workflow<I, O> = (
+    context: WorkflowContext,
+    input: I,
+) => Promise<O>;
+```
+
+`WorkflowContext` 至少提供以下稳定能力：
+
+- `callAction(actionRef, input, options)`：调用版本化 ActionDefinition，处理输入/输出、幂等、超时、重试和 Job。
+- `query(queryRef, input)`：读取授权的 Cosmos Query DTO。
+- `startChildWorkflow(workflowRef, input, options)`：创建有父子关系的子 Workflow。
+- `waitForSignal(signalRef)`：等待用户、内部事件、外部通知或定时条件。
+- `emit(event)`：发布版本化 Domain Event 或 Workflow Event。
+- `checkpoint(value)`：保存可恢复的 Workflow 进度，不直接写 Adapter 状态。
+- `isCancelled()` / `getBudget()`：读取取消和预算状态。
+
+Workflow 脚本不能直接导入 Prisma、SQLite、Blob Root、任意 HTTP Client 或任意进程 API。所有外部访问都必须映射到 Action/Connector，所有领域写入都必须通过 Command/Application Service。
+
+Graph/IR Adapter 的职责是把结构化流程转换为上述脚本语义；它不直接实现另一套 lease、retry、cancel、journal 或恢复逻辑。具体的 `WorkflowContext` schema、脚本 journal、Action invocation 和 Graph/IR 转换规则留待独立 Workflow Runtime Task 通过行为测试确定。
+
 ## 16. 安全、隐私和平台边界
 
 - Source Secret 与普通配置分开，日志只记录 Secret 引用。
@@ -1232,7 +1348,7 @@ Saved View / recommendation policy
 
 ### Phase 1：信息录入与离线查询垂直切片
 
-- Source/Trigger/Flow/Action 最小合同。
+- Source/Trigger/Workflow/Action 最小合同，以及脚本优先的 Workflow API。
 - manual + schedule Trigger。
 - RSS/RSSHub 真实 Connector 和一个 fixture Connector，先验证通用合同，再扩展到其它平台。
 - Next.js App Router Web、NestJS API 和独立 Worker 的最小宿主边界。
@@ -1241,7 +1357,7 @@ Saved View / recommendation policy
 - 版本化 Service Endpoint、Command、Query、Event、SSE 和健康检查。
 - 最小搜索页和以 Story 为入口的 Feed Board Block。
 
-完成标准：定时录入真实信息，重启后不重复，断网后仍可搜索正文和已保存图片；用户可以从 Feed 打开 Story → Entry → Source/Revision；本阶段不要求跨来源聚类、Story merge/split、Topic 维护或完整推荐。
+完成标准：定时录入真实信息，重启后不重复，断网后仍可搜索正文和已保存图片；用户可以从 Feed 打开 Story → Entry → Source/Revision；本阶段只实现固定 Ingest Workflow，不要求通用用户自定义 Workflow、跨来源聚类、Story merge/split、Topic 维护或完整推荐。
 
 ### Phase 1B：受管 Collector Runtime
 
@@ -1271,6 +1387,7 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 
 - `agent.run` Action。
 - Knowledge Manager 的 Web Chat、`cosmos cli` 和共享 `nb-memory` 记忆 Adapter。
+- Knowledge Workflow、Research Workflow，以及 Research Request/Trigger 与 Ingest 的解耦边界。
 - Artifact Workspace、Revision、provenance 和沙箱渲染。
 - Recurring Workspace 和 Interaction State。
 - 技术博客批注、竞品分析和学习 Workspace。
@@ -1297,9 +1414,9 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 
 ## 19. 当前决定
 
-以下决定进入 v0.10 基线，但后续需求仍可通过记录理由调整：
+以下决定进入 v0.15 基线，但后续需求仍可通过记录理由调整：
 
-1. Source、Trigger、Flow、Action 分离。
+1. Source、Trigger、Workflow、Action 分离。
 2. URL 为可选字段；结构化 origin locator 承担来源定位。
 3. Observation 不可变，Entry 通过 Revision 表达来源变化。
 4. Story 与 Topic 分开；Story 是带 kind 的规范内容单元，Topic 表示目的驱动的长期范围。
@@ -1337,7 +1454,7 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 36. merge 将当前用户状态解析到 canonical；split 不自动将用户状态和 Topic membership 扇出到全部后继。
 37. Spotlight 人工固定/排除绑定具体 target placement，直到用户解除；不同 kind 共用 policy 合同。
 38. v1 和默认产品合同面向单个本地用户；未来协作不破坏 actor/revision 合同，但当前不建设多人同步和多租户。
-39. Agent 可在用户配置范围内自主维护内部对象；创建外部 Source、扩大数据范围或外部发送需要显式配置/批准。
+39. 当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限模型；未来再叠加远端/多人/不可信扩展的权限策略。
 40. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行用户明确安装的本地可信扩展。
 41. Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
 42. 初步技术基线为 React + Next.js App Router、Tailwind、shadcn/ui、React Hook Form、Zod、NestJS、Prisma + SQLite；开发使用 Bun，生产使用 Node。
@@ -1350,10 +1467,14 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 49. API 不执行外部采集；Probe 和 Ingest 都先创建持久 Job，由 Worker 负责执行、租约、重试和恢复。
 50. Probe 是 dry-run，不写 Observation、Entry、Asset，不推进 checkpoint；Probe 结果通过 Job Snapshot 查询。
 51. OpenCLI 的浏览器登录态由 OpenCLI/Browser Bridge 管理，Cosmos 只保存 profile 引用，不保存 Cookie、Token 或密码。
-52. 运行控制采用 `Job + Workflow` 组合；Workflow 同时保留脚本式和 Workflow IR 表示，最终落到同一持久 Runtime。
+52. 运行控制采用 `Job + Workflow` 组合；脚本式 Workflow 是底层执行形态，Graph/IR/Comfy 类表达转换为脚本语义并落到同一持久 Runtime。
 53. 知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作；它不是单一 Session。
 54. 个性化配置由 Agent 记忆、Cosmos 观察到的用户行为和未来其它信号共同生成；当前不要求逐字段 provenance，也不独立建模平台推荐偏好信号。
 55. `nb-memory` 作为共享记忆/知识库通过 Adapter/Port 接入 Cosmos；它不替代 Cosmos 的 Observation、Entry、Run、Job 或 Workflow Runtime。
+56. Workflow 是 Cosmos 的主动行为核心；Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 都使用同一脚本优先 Runtime，并通过 `kind + tags` 做轻量分类。
+57. Ingest 本身是一种 Workflow；外部来源事实先完成 Observation/Entry/Revision/Asset 入库，不等待 LLM。
+58. Entry → Story 是可由用户或 Agent 配置的 Knowledge Workflow；Research 不直接耦合 Ingest，而是由分析信号产生 Research Request，再由 Trigger 启动独立 Research Workflow。
+59. Research Workflow 可以查询 Cosmos 信息库并访问外部渠道；研究结果重新经过 Observation → Entry，不直接写入 Story。
 
 ## 20. 核心边界结论与后置决定
 
@@ -1402,24 +1523,35 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 
 1. 数据库是事实、状态、历史和用户真相的持久中心；DomainEvent 是持久事实日志，FTS、分类、关系、推荐特征和 LLM 结果是带 producer/version/evidence 的可重建 Projection。
 2. `Domain`、`Run`、`Step`、`Job` 和 `DomainEvent` 的职责分开：Run 是一次完整流程，Step 是阶段，Job 是 Worker 执行单元，DomainEvent 是已发生事实。
-3. Provider、Adapter、ConnectionInstance、SourceInstance、Trigger 和 FlowBinding 分开；一个连接可以被多个独立采集计划复用。
+3. Provider、Adapter、ConnectionInstance、SourceInstance、Trigger 和 WorkflowBinding 分开；一个连接可以被多个独立采集计划复用。
 4. 凭证建议由 Cosmos `SecretStore` 统一管理，Adapter 只负责认证协议；非秘密 cursor、ETag、分页 token 和限流状态通过命名空间化 `ConnectorStateStore` 管理。
-5. 用户配置的是采集计划，不是 Worker。类似“动态每 30 分钟、推荐流每 2 小时”的场景应有独立 Trigger、Flow、checkpoint、预算和错误边界。
-6. Entry → Story 采用同步确定性入库和异步知识 Pipeline 两条路径；LLM 以受 Capability、预算和审批约束的 Agent/Action 生成 Proposal，可以请求持久子 Job，但不能直接改写 Observation 或最终用户真相。
+5. 用户配置的是采集计划，不是 Worker。类似“动态每 30 分钟、推荐流每 2 小时”的场景应有独立 Trigger、Workflow、checkpoint、预算和错误边界。
+6. Ingest 本身是一种 Workflow；Entry → Story 采用同步确定性事实入库和异步可配置 Knowledge Workflow 两条路径。LLM 以受 Runtime、Capability 和预算约束的 Agent/Action 生成 Proposal，可以请求持久子 Job，但不能直接改写 Observation 或最终用户真相。
 7. Story 跨来源聚类需要 StoryMembership、候选、merge/split 历史和 evidence；当前单 Entry Story projection 只作为 Phase 1 保守实现。
 8. 推荐区分外部候选、Admission 和 Cosmos Ranking；代码负责硬约束和模型不可用时的降级，LLM 只提供可追溯的异步特征或受限 rerank。
 
-以上是架构方向，不代表本轮已经完成对应数据库迁移、UI 或 Agent 实现。SecretStore 后端、Flow DSL、Proposal 自动接受门槛和推荐预算仍需在实现 Task 中单独验证。
+以上是架构方向，不代表本轮已经完成对应数据库迁移、UI 或 Agent 实现。SecretStore 后端、Workflow DSL、Proposal 自动接受门槛和推荐预算仍需在实现 Task 中单独验证。
 
 ### 20.6 2026-08-08：知识管理者与 `nb-memory` 修正
 
 本轮进一步确认：
 
 1. `nb-memory` 是知识管理者共享的长期记忆/知识库候选，Cosmos 通过 Adapter/Port 使用，不直接共享内部文件或把它改造成 Cosmos Runtime。
-2. 知识管理者是高权限交互角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 代替用户执行已授权操作；它可以有多个分身，但共享同一长期记忆。
+2. 知识管理者是高权限交互角色；当前单用户阶段按最大产品权限运行，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 代替用户执行 GUI 操作；它可以有多个分身，但共享同一长期记忆。
 3. 个性化配置由“Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号”生成程序可读配置；当前不要求每个配置字段单独保留 producer/version/evidence。
 4. 平台自身的推荐信号当前不建立独立偏好模型；平台推荐流仍可作为候选来源，但不能直接推断为用户偏好。
 5. 以上是草案和方向确认，不代表 Phase 1 已完成 `nb-memory` 接入、Knowledge Manager UI/CLI、行为观察或个性化配置生成。
+
+### 20.7 2026-08-08：Workflow 核心与 Ingest/Research 解耦
+
+本轮进一步明确：
+
+1. Workflow 是 Cosmos 的主动行为核心，但不是领域事实本身；Observation、Entry、Story、Source 和用户状态仍由领域/Application Layer 持久化。
+2. 脚本式 Workflow 是底层执行形态。Graph、IR 和 Comfy 类表达是上层编排格式，转换为脚本语义，不建立第二套 Runtime。
+3. Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 是同一 Runtime 下的用途分类；分类只影响默认展示、预算、优先级和运维统计。
+4. Ingest Workflow 先保存外部事实，不等待 LLM。Entry → Story 的处理策略可以由用户或 Agent 配置为全量 Agent，或脚本优先后升级 Agent。
+5. Research 不直接嵌入 Ingest。分析 Workflow 产生紧急、需要研究或来源冲突等信号，创建 `ResearchRequest`（名称待定），再由 Trigger 启动 Research Workflow。
+6. Research Workflow 既可以查询 Cosmos 信息库，也可以访问已配置的外部渠道；研究发现重新经过 Observation → Entry，不直接写入 Story。
 
 ## 21. 架构不变量
 
@@ -1449,7 +1581,7 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 22. split 不会把收藏、隐藏、反馈或 Topic membership 无提示地复制到所有后继。
 23. Spotlight 人工覆盖在具体 Placement 上生效，不会意外改变其它 Board 的展示。
 24. 第一版不会因为未来多人协作设想而引入多租户、同步或复杂权限系统。
-25. Agent 不会在没有用户显式配置/批准时增加外部来源、扩大数据范围或发送消息。
+25. 当前单用户阶段不建设审批拦截；未来权限策略不得绕过既有 Service/Workflow/Capability 合同。
 26. 本地可信扩展仍不能直接依赖核心数据库表，未来隔离升级不需要重写扩展合同。
 27. UI 和扩展不直接访问 Prisma、SQLite、Data Root 或 Blob/Artifact Root；跨宿主访问统一经过版本化 Transport。
 28. Phase 1 的 Story 是最小 projection，不把跨来源聚类、merge、split 和 Topic 维护误报为已完成能力。
@@ -1458,17 +1590,40 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 31. Connector 不接受任意 OpenCLI command、任意 HTTP endpoint、Header 或认证信息作为用户配置。
 32. Probe 不写入 Observation、Entry、Asset 或 checkpoint。
 33. Adapter 不直接持久化 Secret；凭证通过 SecretRef/SecretStore 访问，非秘密运行状态通过命名空间化 StateStore 访问。
-34. 一个 Connection 可以复用多个 SourceInstance，但每个采集计划的 Trigger、Flow、checkpoint、预算和错误状态必须可区分。
+34. 一个 Connection 可以复用多个 SourceInstance，但每个采集计划的 Trigger、Workflow、checkpoint、预算和错误状态必须可区分。
 35. LLM 或其它 Action 请求的子任务必须持久化父子关系、因果 Event、能力范围、预算和收口状态，不能只依赖进程内内存。
 36. LLM 生成的分类、Story 聚类、关系、推荐特征和 Artifact 结果必须保留 producer/version/evidence，并不能伪装成来源事实。
 37. 外部平台推荐流是候选发现来源，不等于 Cosmos 的最终 Ranking；普通 Feed 在 LLM 不可用时仍能工作。
-38. Job 与 Workflow 必须共享同一持久 Runtime；脚本式 Workflow 和 Workflow IR 不能形成绕过租约、重试和恢复的第二执行路径。
-39. 知识管理者可以代替用户执行已授权操作，但不能绕过 Service/Capability/Workflow/Job 边界或直接访问核心数据库。
+38. Job 与 Workflow 必须共享同一持久 Runtime；脚本式 Workflow 是底层执行形态，Graph/IR/Comfy 类表达不能形成绕过租约、重试和恢复的第二执行路径。
+39. 当前单用户阶段知识管理者可以代替用户执行 GUI 操作，但不能绕过 Service/Capability/Workflow/Job 边界或直接访问核心数据库。
 40. 多个知识管理者分身共享 `nb-memory` 长期记忆；`nb-memory` 不替代 Cosmos 的 Observation、Entry、Run、Job 和外部来源证据。
 41. 个性化程序配置可以由记忆和行为观察重新生成，不要求每个配置字段都复制一般派生结果的 producer/version/evidence 账本。
 42. 平台推荐信号当前不作为独立的 Cosmos 用户偏好模型输入；平台推荐流仍不能直接等同于用户偏好。
+43. Ingest Workflow 保存外部来源事实时不等待 LLM；LLM 或 Knowledge Workflow 失败不能丢失已提交的 Observation/Entry。
+44. Entry → Story 的处理策略可以由用户或 Agent 配置为不同 Knowledge Workflow，但任何策略都不能覆盖旧 Observation。
+45. Research 不直接嵌入 Ingest；研究请求、触发原因和 Research Workflow Run 必须可追踪、可重试和可恢复。
+46. Research Workflow 发现的新来源内容重新经过 Observation → Entry，不直接把未经入库的外部结果写入 Story。
 
 ## 22. 变更记录
+
+### v0.15 - 2026-08-08
+
+- 正式统一使用 `Workflow`；`Flow` 仅保留为原始需求或历史迁移说明中的旧称。
+- 补充 Workflow Definition、Action Definition、Trigger Binding、Workflow Run 和 `WorkflowContext` 的关系。
+- 固定脚本式 Workflow 为最低层执行语义，Graph/IR/Comfy 只转换为脚本语义，不建立第二套 Runtime。
+- 补充 Job/Workflow 的 durable truth、lease fencing、checkpoint 收口和旧 Worker 拒绝中途写入的不变量。
+- 补充 Connection、SourceInstance、采集计划、SecretStore、ConnectorStateStore、Adapter manifest 和 Source Operation 的边界。
+- 分离 `KnowledgeSignal` 与 `ResearchRequest`，明确 Research Workflow 的触发、预算、优先级、幂等和结果重新入库路径。
+- 明确上述通用 Runtime、Connection/Secret/State、Knowledge/Research、Outbox/Trigger Consumer 和 Harness Adapter 仍是设计合同，不是当前实现能力。
+
+### v0.14 - 2026-08-08
+
+- 将 Workflow 明确为 Cosmos 的主动行为核心，脚本式 Workflow 作为底层执行形态。
+- 明确 Graph/IR/Comfy 类表达转换为脚本语义，不建立第二套执行 Runtime。
+- 将 Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 定义为同一 Runtime 下的轻量 Workflow 分类。
+- 将 Entry → Story 明确为可由用户或 Agent 配置的 Knowledge Workflow。
+- 将 Research 与 Ingest 解耦：研究信号创建 Research Request，再由 Trigger 启动独立 Research Workflow；研究结果重新经过 Observation → Entry。
+- 记录当前单用户阶段按最大产品权限运行，不建设审批 UI 或细粒度权限模型。
 
 ### v0.13 - 2026-08-08
 

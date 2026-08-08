@@ -1,4 +1,6 @@
-# Cosmos Foundation
+# Cosmos Foundation（历史基线）
+
+> 本 Task 记录仓库初始化和 Phase 0 文档基线。它不是当前实现状态真相源；当前状态以 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)、总体架构和后续持续 Task 为准。
 
 ## User Request / Topic
 
@@ -7,12 +9,12 @@
 ### Follow-up User Request
 
 1. public 一下，和 NeuroBook 一样的 AGPL
-2. workflow 先不动
+2. workflow 先不动（已被后续 Workflow Runtime 设计合同修正）
 3. 协作流程补足
 
 ## Goal
 
-建立一套能指导后续实现的仓库与架构真相源。它需要覆盖可编程触发和 Flow、离线信息库、跨渠道来源、Story/Topic 与分类、Agent 生成的 Workspace/Artifact、可配置看板和后续推送，同时明确哪些设计已经确定、哪些仍可调整。
+建立一套能指导后续实现的仓库与架构真相源。它需要覆盖可编程触发和 Workflow、离线信息库、跨渠道来源、Story/Topic 与分类、Agent 生成的 Workspace/Artifact、可配置看板和后续推送，同时明确哪些设计已经确定、哪些仍可调整。
 
 ## Scope
 
@@ -33,7 +35,7 @@
 ## Current State
 
 - 仓库已在本机初始化。
-- v0.9 Phase 0 架构基线已形成，本次 grilling 已结束。
+- v0.9 Phase 0 架构基线已形成，本次 grilling 已结束；该版本已被总体架构 v0.15 和信息模型 v0.10 修正。
 - 原始需求、产品需求、项目介绍和架构文档已建立。
 - `CONTEXT.md` 已精简为产品共同语言，作为核心概念、关系和真实歧义的讨论入口。
 - `docs/architecture/0002-information-model.md` 已建立，集中维护 Entry、Story、Topic、相关推荐、Workspace、Artifact、Timeline 和 Spotlight 边界。
@@ -66,7 +68,7 @@
 - 人类接受字段优先于 Agent 候选 Revision；Read State 使用 `last_seen_revision_id`。
 - merge/split 用户状态迁移采用 canonical 解析与显式 migration，不自动扇出。
 - v1 和默认产品合同面向单个本地用户，未来协作保留 actor/revision 扩展位。
-- Agent 可维护用户配置范围内的内部对象；新外部 Source、扩大数据范围和外部发送需要显式配置/批准。
+- 当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限模型；未来多人、远端或不可信扩展再增加独立权限策略。
 - 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行本地可信扩展。
 - Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
 - 本次 grilling 已结束，实现级问题转入后置清单。
@@ -74,7 +76,7 @@
 - `CONTEXT.md` 不再预先盘点 Definition、Run、Job、Lease 等实现对象；这些概念只在真实设计和开发需要时进入架构、ADR 或代码文档。
 - v0.2 中保留 Source / Trigger / Flow / Action 的产品级关系，更细的身份和运行时边界暂不冻结。
 - 从 neuro-book 迁移协作机制时，只保留可跨项目复用的审计、worktree、Issue/PR、标签和验证合同；去除小说、Novel IDE、桌面产品、发布命令和子仓库专属内容；许可证按用户决定采用 AGPL-3.0-only。
-- Cosmos 尚无运行时代码、依赖或可复用的 CI 脚本，因此只迁移 GitHub 协作配置，不复制 neuro-book 的应用构建、桌面、产品运行时和发布 workflow；公开远端已建立但 workflow 仍保持不变。
+- 当时 Cosmos 尚无运行时代码、依赖或可复用的 CI 脚本，因此只迁移 GitHub 协作配置；该历史状态已被后续 Phase 1/1B 实现取代。Foundation Task 仍不复制 neuro-book 的应用构建、桌面、产品运行时和发布 Workflow。
 
 ## Verification
 
@@ -98,12 +100,12 @@
 - `BranchProtection=PASS`：`master` 未配置保护规则，符合当前阶段决定。
 - `RemoteTree=PASS (29 files)`：远端 `master` 与本地首个提交一致。
 - `RemoteLabels=PASS (33 expected, 6 extra retained)`：本地清单标签已同步，GitHub 默认额外标签未删除。
-- 未运行类型检查、测试、构建、浏览器或真实来源验收：当前没有运行时代码和依赖。
+- 当时未运行类型检查、测试、构建、浏览器或真实来源验收；这只描述 Foundation Task 当时的状态，不代表当前仓库。当前验证边界见 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)。
 
 ## Follow-ups
 
 - 用户继续提出需求后，追加原始需求并更新当前架构。
 - Workspace 并发/取消/接管、候选 Revision 界面、跨 surface“有更新”投影和 state migration command 边界后置。
-- 根据首个实现切片定义必要的 Source / Trigger / Flow / Action 细节。
-- 架构边界稳定后，建立第一批 ADR。
-- 规划并实现 RSS/RSSHub + fixture 的首条端到端切片。
+- 根据首个实现切片定义必要的 Source / Trigger / Workflow / Action 细节（已在后续 Task 推进）。
+- 架构边界稳定后，建立第一批 ADR（当前 Workflow Runtime ADR 已建立）。
+- 规划并实现 RSS/RSSHub + fixture 的首条端到端切片（已在 [`02-rss-ingestion`](../02-rss-ingestion/README.md) 完成最小闭环）。

@@ -68,7 +68,7 @@ v1 不建立 Topic 的父子层级。需要表达 Topic 之间的联系时，使
 
 `Workspace` 是一个长期存在、可更新、可交互的用户体验单元，已经替代此前的 `Feature`。`Feature` 在软件开发中通常表示“功能”，同时又被拿来表示话题、页面和精华，歧义过大。
 
-Workspace 可以引用多个 Story、Topic、查询或集合，绑定视图模板和可选的 Flow/Agent，并保存产物引用与用户交互状态；可以有一个可选的主要锚点，但不要求只能围绕一个 Topic。它不直接拥有或复制信息条目；更换 Agent、模板或报告版本后，身份、看板位置和进度仍然存在。
+Workspace 可以引用多个 Story、Topic、查询或集合，绑定视图模板和可选的 Workflow/Agent，并保存产物引用与用户交互状态；可以有一个可选的主要锚点，但不要求只能围绕一个 Topic。它不直接拥有或复制信息条目；更换 Agent、模板或报告版本后，身份、看板位置和进度仍然存在。
 
 “每天五个单词”“Jeff Dean 离职专题”“每日 AI 写作竞品分析”都可以是 Workspace。
 
@@ -136,11 +136,12 @@ Story --Ranking--> Feed --> Board
 
 - `Source`：从哪里获取什么信息。
 - `Trigger`：何时或因何开始。
-- `Flow`：要完成的过程。
-- `Action`：Flow 调用的一项可复用能力。
+- `Workflow`：要完成的过程，负责流程、分支、等待、子任务和收口。
+- `Action`：Workflow 调用的一项可复用能力。
 - `Agent`：受用户配置范围和预算约束的一种 Action；它可以像协作者一样维护 Topic 或 Workspace，但不能改写来源原文。
 - 人类、Agent 和系统的每次修改都记录 actor、时间、操作、基础 revision、理由和关联 Run。第一版是个人本地优先，不建设细粒度权限系统。
-- Agent 可以维护已配置范围内的内部对象；创建外部 Source、扩大数据范围和外部发送需要用户显式配置或批准。
+- 当前单用户阶段按最大产品权限运行，不建设审批 UI 或细粒度权限模型；Service/Capability 边界首先是执行、恢复和未来隔离合同，不是当前阶段的权限拦截。
+- 未来需要多人、远端或不可信扩展时，再将外部 Source、数据范围、Secret 和外部发送纳入独立权限/审批策略。
 - 第一版只运行用户明确安装的本地可信扩展，复杂权限 UI 和不可信插件沙箱后置。
 
 ## 2026-08-08：从用户角度的架构审查
@@ -150,11 +151,11 @@ Story --Ranking--> Feed --> Board
 ### Run、Step、Job、Domain 与 DomainEvent
 
 - `Domain` 是业务领域层，不是数据库表；负责稳定身份、业务规则和可重建的领域计算，不依赖 Prisma、Nest 或 Next。
-- `Run` 是一次完整 Flow 的执行记录，例如“每 30 分钟抓取一次 Bilibili 动态”。
+- `Run` 是一次完整 Workflow 的执行记录，例如“每 30 分钟抓取一次 Bilibili 动态”。
 - `Step` 是 Run 内的逻辑阶段，例如拉取、标准化、入库、分类或研究。
 - `Job` 是 Worker 可以领取、租约、重试和完成的持久任务单。一个 Step 可以拆成多个 Job。
-- `DomainEvent` 是已经发生的事实，例如 `entry.created`、`run.succeeded` 或 `job.failed_terminal`，用于审计、SSE 和后续 Flow 触发；它不代替领域状态，也不是完整 Event Sourcing。
-- 当前 Phase 1 代码只实现了 Source Ingest/Probe 的最小 Run、单个 Ingest Step 和有限 Job 类型；通用 Flow Runtime 仍未落地。
+- `DomainEvent` 是已经发生的事实，例如 `entry.created`、`run.succeeded` 或 `job.failed_terminal`，用于审计、SSE 和后续 Workflow 触发；它不代替领域状态，也不是完整 Event Sourcing。
+- 当前 Phase 1 代码只实现了 Source Ingest/Probe 的最小 Run、单个 Ingest Step 和有限 Job 类型；通用 Workflow Runtime 尚未落地。
 
 ### 数据库与扩展边界
 
@@ -168,7 +169,7 @@ Story --Ranking--> Feed --> Board
 - “Producer/Provider”表示外部平台或数据提供者，例如 Bilibili、RSS、AI HOT。
 - “Adapter/Connector”表示把某个 Provider 接入 Cosmos 的代码；它负责认证协议、外部读取、标准化和平台特有错误处理。
 - `SourceDefinition` 描述一种可用来源或操作；`SourceInstance` 表示用户配置好的具体采集目标。
-- 用户界面可以把 `SourceInstance + Trigger + FlowBinding` 组合展示为“采集计划”，但不应让用户直接配置 Worker。
+- 用户界面可以把 `SourceInstance + Trigger + WorkflowBinding` 组合展示为“采集计划”，但不应让用户直接配置 Worker。
 - 一个连接可以复用多个采集计划。例如同一个 Bilibili 账号可以有“动态每 30 分钟”和“推荐流每 2 小时”两个独立计划；它们分别拥有游标、错误、预算、发现上下文和重试边界。
 
 ### 凭证与适配器状态
@@ -179,15 +180,15 @@ Story --Ranking--> Feed --> Board
 - Cosmos 同时提供命名空间化、版本化的 `ConnectorStateStore`，保存 cursor、ETag、分页 token、速率状态等非秘密状态；Adapter 可以定义状态 schema，但 Cosmos 负责生命周期、备份、并发和恢复。
 - OpenCLI/Browser Bridge 当前可以作为外部登录态管理例外，Cosmos 只保存 profile 引用；长期仍需要将其映射到统一 Connection 合同。
 
-### Trigger、Flow 与 Worker
+### Trigger、Workflow 与 Worker
 
-- `Trigger` 负责判断何时或因何启动，`Flow` 负责组织过程，`Action` 负责提供单项能力，`Worker` 只负责可靠执行持久 Job。
+- `Trigger` 负责判断何时或因何启动，`Workflow` 负责组织过程，`Action` 负责提供单项能力，`Worker` 只负责可靠执行持久 Job。
 - 推荐的执行关系为：
 
 ```text
 Connection / SourceInstance
   -> Trigger
-  -> FlowDefinition@version
+  -> WorkflowDefinition@version
   -> Run
   -> StepRun
   -> Job
@@ -195,20 +196,27 @@ Connection / SourceInstance
   -> Adapter / Action
 ```
 
-- 未来 Flow 需要支持顺序、条件、foreach、fan-out/fan-in、等待审批、取消、重试、预算和子 Run；LLM 派发的研究任务也必须通过同一运行时创建子 Job，而不是绕过 Worker 进入内存队列。
+- 未来 Workflow 需要支持顺序、条件、foreach、fan-out/fan-in、等待输入、取消、重试、预算和子 Run；LLM 派发的研究任务也必须通过同一运行时创建子 Job，而不是绕过 Worker 进入内存队列。
 - 当前 `scheduleIntervalMs` 放在 Source 配置中只是 Phase 1 简化实现；长期应由持久 Trigger 表达频率、时区、错过执行策略、并发策略和限流。
+- Workflow 是 Cosmos 的主动行为核心，但不是领域事实本身。Run、Step、Job、Action、Trigger 和持久事件都围绕 Workflow Runtime 协作。
 - 运行控制采用 `Job + Workflow` 组合：Job 是持久执行单元，Workflow 负责组织步骤、分支、等待、子任务和收口。
-- Workflow 同时保留脚本式和 Workflow IR 两种表示。脚本式适合开发者表达复杂逻辑，IR 适合版本化、持久化、检查、重放和未来由用户/Agent 生成；两者必须落到同一 Run/Step/Job Runtime。
+- 脚本式 Workflow 是最底层、最灵活的执行形态；Graph/IR/Comfy 类表达属于上层编排格式，可以转换为脚本式 Workflow 语义。它们不建立第二套执行 Runtime。
+- `nb-workflow` 是脚本式 Conductor 的重要语义参考；Cosmos 需要在其上补齐持久化、Service Endpoint、领域状态、Connector、Job 和生产恢复边界。
+- Workflow 可以使用轻量 `kind + tags` 分类，但所有分类共用同一 Runtime。当前建议的 kind 包括 `ingest`、`knowledge`、`research`、`maintenance`、`delivery`、`interaction` 和 `custom`。
 
 ### Entry、Story 与知识 Pipeline
 
 - 当前 Entry → Story 是保守的单 Entry Story projection，用于先保证可阅读，不代表完成了跨来源事件聚类。
+- Ingest 本身是一种 Workflow，但事实入库的核心事务由 Cosmos Application Layer 保证；外部来源事实不等待 LLM。
+- Entry → Story 是可由用户或 Agent 配置的 `knowledge` Workflow。可以“所有 Entry 分批走 Agent”，也可以“脚本策略先处理，难以决策、强相关或重要内容再升级给 Agent”。
 - 推荐保留两条路径：
-  - 同步入库路径：代码完成标准化、去重、证据保存和最小 Story 创建，不依赖 LLM。
-  - 异步知识路径：代码召回候选，规则/模型/LLM 生成分类、聚类、实体、关系、重要性和紧急性建议。
+  - 同步事实路径：Workflow/代码完成标准化、去重、证据保存、Revision 和最小 Story 创建，不依赖 LLM。
+  - 异步知识路径：可配置 Workflow 召回候选，规则/模型/LLM 生成分类、聚类、实体、关系、重要性和紧急性建议。
 - LLM 不直接改写 Observation 或最终用户真相；它生成带输入 Revision、模型/版本、置信度、Evidence 和 Run 的 `AnalysisResult/Proposal`，再由 Policy 自动接受、进入候选或请求用户确认。
-- LLM 可以担任“知识管理员”或研究规划者，但数据库、Runtime、Capability、预算和审批规则仍是权威。LLM 请求多个平台搜索时，只能调用用户已配置并授权的 Adapter/Action。
+- LLM 可以担任“知识管理员”或研究规划者，但数据库、Runtime、Capability 和预算仍是权威；当前单用户阶段不建设审批 UI。LLM 请求多个平台搜索时，只能调用已注册且可用的 Adapter/Action。
 - 未来跨来源 Story 需要 `StoryMembership`、候选聚类、merge/split 历史和可审计的证据引用；不能只依赖当前 `Entry.storyId`。
+- Research 不直接耦合到 Ingest。知识分析可以产生紧急、需要研究或来源冲突等信号，再创建持久的 `ResearchRequest`（名称待定），由 Trigger 启动独立的 `research` Workflow。
+- Research Workflow 可以同时查询 Cosmos 信息库并访问已配置的外部渠道；新发现仍重新经过 Observation → Entry，而不是直接写入 Story。
 
 ### 知识管理者与个性化配置（草案）
 
@@ -216,7 +224,7 @@ Connection / SourceInstance
 - 用户入口包括 Web GUI 内的直接聊天，以及 `cosmos cli`。两者调用同一组版本化 Command、Query、Workflow 和 Event 合同。
 - 知识管理者不是一个 Session。系统可以有多个聊天、ingest、研究或其它专业分身，它们共享同一个 `nb-memory` 长期记忆与知识库。
 - `nb-memory` 适合作为知识管理者的共享记忆/知识库；Cosmos 负责信息库、行为观察、运行时和外部能力。对应调研记录见 [`docs/research/2026-08-08-nb-memory-research.md`](docs/research/2026-08-08-nb-memory-research.md)。
-- ingest 过程中可以调用知识管理者进行知识点细究、补充研究或生成 Proposal；需要外部平台搜索时，知识管理者必须通过已配置的 Adapter/Action 创建持久子 Job。
+- ingest 过程中可以调用知识管理者进行知识点细究、补充研究或生成 Proposal；需要外部平台搜索时，知识管理者必须通过已注册且可用的 Adapter/Action 创建持久子 Job。
 - 个性化配置的当前方向是：`Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号 -> 程序可读的配置`。当前不设计逐字段 producer/version/evidence，也不把平台自身推荐信号作为独立偏好模型。
 
 ### 推荐系统
@@ -232,9 +240,15 @@ Connection / SourceInstance
 ### 当前完整性判断
 
 - Phase 1 的采集、持久化、搜索和离线阅读基础已经足够继续验证。
-- 面向高扩展产品的连接管理、通用 Flow Runtime、知识处理、Story 多成员关系和推荐反馈闭环尚未完整实现。
-- 在继续增加大量平台 Adapter 前，优先补齐 `Connection/Secret/State`、`Trigger/Flow/Action`、通用 Job/子任务和 Proposal/Provenance 合同。
+- 面向高扩展产品的连接管理、通用 Workflow Runtime、知识处理、Story 多成员关系和推荐反馈闭环尚未完整实现。
+- 在继续增加大量平台 Adapter 前，优先补齐 `Connection/Secret/State`、脚本优先的 Workflow API、通用 Job/子任务和 Proposal/Provenance 合同。
 - 知识管理者与 `nb-memory` 的共享记忆接入方向已确认，但 Adapter、行为观察到程序配置的转换和 Web/CLI 入口尚未实现。
+- 当前已发现的实现风险需要在进入通用运行时前收口：
+  - lease fencing 目前只覆盖最终 Job 收口，尚未保护 Ingest 中途写入、FTS 更新和 checkpoint 推进；旧 Worker 失效后仍可能写入。
+  - 无 URL 的 fallback key 当前未纳入 `sourceLocator`，可能把不同来源位置但标题和时间相同的内容错误合并。
+  - `discoveryContext` 当前在存储层硬编码为 `manual`，尚不能表达关注账号、推荐流、搜索、公告监控、Agent 调研和 Research 结果。
+  - Connection、SourceInstance、采集计划、Trigger/Workflow binding 和 StateStore 尚未真正进入当前 Prisma 模型；目前 checkpoint 仍主要按 SourceInstance 维护。
+  - Run 尚未完整保存执行时的定义版本、Source 配置和输入快照；排队后修改配置可能改变旧 Run 的实际行为。
 
 ## 当前命名结论
 
@@ -268,18 +282,22 @@ Connection / SourceInstance
 28. merge 解析当前状态到 canonical；split 通过显式 migration，不自动扇出状态。
 29. Spotlight 人工覆盖绑定具体 Placement，直到用户解除。
 30. v1 和默认产品合同面向单个本地用户；未来协作保留 actor/revision 扩展位。
-31. Agent 可自主维护已配置范围内的内部对象，新外部范围和外部副作用需要显式配置/批准。
+31. 当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限模型；未来再叠加远端/多人/不可信扩展的权限策略。
 32. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行本地可信扩展。
 33. Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
-34. 运行控制采用 `Job + Workflow` 组合；Workflow 同时保留脚本式和 Workflow IR 表示，最终落到同一持久 Runtime。
+34. 运行控制采用 `Job + Workflow` 组合；脚本式 Workflow 是底层执行形态，Graph/IR/Comfy 类表达转换为脚本语义并落到同一持久 Runtime。
 35. 知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作；它不是单一 Session。
 36. 个性化配置由 Agent 记忆、Cosmos 观察到的用户行为和未来其它信号共同生成；当前不要求逐字段 provenance，也不独立建模平台推荐偏好信号。
+37. Workflow 是 Cosmos 的主动行为核心；Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 使用同一 Runtime，并通过 `kind + tags` 做轻量分类。
+38. Ingest 本身是一种 Workflow；事实入库不等待 LLM。Entry → Story 是可由用户或 Agent 配置的 Knowledge Workflow。
+39. Research 不直接耦合 Ingest；分析信号创建 `ResearchRequest`（名称待定），由 Trigger 启动独立 Research Workflow。
+40. Research Workflow 可以查询 Cosmos 信息库并访问外部渠道；研究结果重新经过 Observation → Entry，不直接写入 Story。
 
 ## 技术与运行形态（初步）
 
 > 2026-08-07。本节记录已经确认、但明确允许在真实实现后调整的技术方向。
 
-- Web 使用 React + Next.js App Router；API 使用 NestJS；Scheduler、Flow 和 Job 由独立 Worker 运行。开发使用 Bun，生产使用 Node，面向生产的共享代码保持 Node-compatible，不把 Bun-only API 变成领域或公共合同。
+- Web 使用 React + Next.js App Router；API 使用 NestJS；脚本优先的 Workflow 和 Job 由独立 Worker 运行。开发使用 Bun，生产使用 Node，面向生产的共享代码保持 Node-compatible，不把 Bun-only API 变成领域或公共合同。
 - 初始数据层使用 Prisma + SQLite；FTS5/BM25、虚拟表、触发器和其它 SQLite 专用查询可以通过受控 SQL Adapter 实现。Prisma、SQLite 和搜索实现都不是不可替换的领域合同。
 - 服务器部署是第一优先级；产品同时保留客户端模式和客户端与服务分离模式。三种模式共用 versioned Command、Query、Event 和 Service Endpoint 合同，客户端不直接访问 Prisma、SQLite 或 Data Root。
 - Desktop Shell 只负责承载 UI、连接本地或远程服务并管理必要的本地生命周期；具体选择 Tauri、Electron 或其它壳后置，不让壳概念进入领域模型。
@@ -300,11 +318,12 @@ Connection / SourceInstance
 9. `pi-ai` 直接接入到 Harness `ModelRuntime` 的迁移门槛，以及 NeuroBook Harness 与独立 Harness 的行为差异。
 10. SecretStore 第一版后端，以及 Adapter 访问 SecretRef/StateStore 的公共接口。
 11. 一个 Connection 下多个 SourceInstance/采集计划的 UI 和持久模型。
-12. 通用 Flow Runtime 的有限 DAG、fan-out/fan-in、等待审批、子 Run 和取消/接管语义。
-13. Entry → Story Proposal 的自动接受门槛、用户确认界面和 StoryMembership 迁移。
+12. 脚本优先 Workflow Runtime 的 Context、Action 调用、fan-out/fan-in、等待、Child Workflow、Journal、Graph/IR 转换和取消/接管语义。
+13. Entry → Story Knowledge Workflow 的绑定、批处理、脚本/Agent 升级策略、Proposal 自动接受门槛和 StoryMembership 迁移。
 14. Admission、Ranking、Impression、Feedback 和 LLM 异步特征的第一版预算。
 15. `nb-memory` Adapter/Port、共享记忆目录、Node 生产兼容性以及 Cosmos Observation/Behavior 到 memory 的映射。
-16. 知识管理者 Web Chat、`cosmos cli`、ingest 参与方式和高权限操作的最小 Capability 合同。
+16. 知识管理者 Web Chat、`cosmos cli`、ingest 参与方式和高权限操作的最小运行合同；当前不建设审批 UI。
 17. Agent 记忆与行为观察生成程序可读个性化配置的 schema、更新频率和人工覆盖边界。
+18. Research Request、Trigger、Research Workflow、外部渠道访问、结果重新入库和失败恢复语义。
 
 这些事项不阻塞 Phase 0，且本次 grilling 不继续展开。

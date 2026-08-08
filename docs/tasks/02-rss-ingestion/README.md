@@ -10,7 +10,7 @@
 
 ```text
 RSS/RSSHub 或 fixture
-  -> Source / Trigger / Flow / Action
+  -> Source / Trigger / Workflow / Action
   -> Observation / EntryRevision / Asset
   -> 最小 Story projection
   -> Prisma + SQLite / FTS5
@@ -26,7 +26,7 @@ RSS/RSSHub 或 fixture
 - Bun 开发脚本、Node 生产启动路径，以及共享代码的 Node-compatible 约束。
 - Next.js App Router Web、NestJS API 和独立 Worker 的最小宿主。
 - 版本化 `contracts`：Command、Query、Event、错误、健康检查和 SSE 事件 payload。
-- 最小 `domain` 与 `application`：Source、Trigger、Flow、Action、Run、Step、Job、Observation、Entry、EntryRevision、Asset 和 Story projection。
+- 最小 `domain` 与 `application`：Source、Trigger、脚本优先的 Workflow、Action、Run、Step、Job、Observation、Entry、EntryRevision、Asset 和 Story projection。
 - Prisma + SQLite 持久化；SQLite FTS5/BM25、虚拟表和触发器通过受控 SQL Adapter 使用。
 - Blob/Artifact/Cache Root 的最小本地文件存储边界。
 - RSS/RSSHub Connector 与 fixture Connector。fixture 必须覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态。
@@ -40,6 +40,7 @@ RSS/RSSHub 或 fixture
 - Topic、Entity、相关推荐、Spotlight、完整推荐排序和 embedding。
 - 完整 Board/Section/Block 编辑器、Label、Annotation、Collection、Saved View。
 - `agent.run`、Artifact/Workspace 生成和 `neuro-agent-harness` 接入。
+- 通用用户自定义 Workflow 编辑器、Graph/Comfy UI、Research Workflow 和完整 Knowledge Workflow；Phase 1 只验证固定 Ingest Workflow 的公共边界。
 - Desktop Shell 的具体技术、安装升级卸载和 Node sidecar 生命周期。
 - 多用户、租户、云端同步、细粒度权限 UI 和不可信插件沙箱。
 - 原始 RSS Phase 1 切片不包含真实 BiliBili、X、Telegram、公众号、IMAP 或 QQ 接入；BiliBili/AI HOT 仅在下方 Phase 1B 范围内推进。
@@ -100,6 +101,8 @@ Phase 1B 是在 RSS 最小闭环之上的后端扩展切片。它只扩展 API�
 - UI 使用 React、Next.js App Router、Tailwind、shadcn/ui、React Hook Form 和 Zod。shadcn 组件代码归项目源码所有，skill/CLI 是开发辅助。
 - Agent 当前直接使用 `pi-ai` 的能力边界；`neuro-agent-harness` 继续在独立仓库演进，未来通过 ModelRuntime、SessionStore、Profile 和 Capability Adapter 迁移。
 - Harness Core 去领域化，可逐步吸收 TSX Profile、常用工具和 SSE；NeuroBook 专属上下文、路径、配置、watcher 和 sidecar 不进入 Harness Core。
+- Workflow 是主动行为核心；脚本式 Workflow 是底层执行形态，Graph/IR/Comfy 类表达后续转换为脚本语义，不建立第二套 Runtime。
+- Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 使用同一 Runtime 的轻量 kind/tags 分类。
 - 任何自动结果、Run、Job、Revision、SSE 恢复和错误都必须有可追踪的 ID、版本或关联记录。
 
 ## Implementation Walkthrough
@@ -148,7 +151,7 @@ fixtures/
 ```text
 SourceInstance
   -> Trigger
-  -> Flow Run / Step / Job
+  -> Workflow Run / Step / Job
   -> Observation
   -> Entry + EntryRevision
   -> Asset
@@ -223,16 +226,18 @@ SourceInstance
 
 - Run 表示一次完整流程，Step 表示流程阶段，Job 表示 Worker 执行单元，DomainEvent 表示已经发生的持久事实。
 - 数据库是事实、状态、历史和用户真相的持久中心；插件和 Agent 通过版本化合同访问数据库，不直接依赖 Prisma 表。
-- Provider、Adapter、ConnectionInstance、SourceInstance、Trigger 和 FlowBinding 分开；一个连接可以复用多个采集计划。
+- Provider、Adapter、ConnectionInstance、SourceInstance、Trigger 和 WorkflowBinding 分开；一个连接可以复用多个采集计划。
 - 凭证建议由 Cosmos SecretStore 统一管理，非秘密 cursor、ETag、分页 token 和限流状态由命名空间化 ConnectorStateStore 管理。
-- “动态每 30 分钟、推荐流每 2 小时”应建模为同一连接下的两个独立采集计划，各自拥有 Trigger、Flow、checkpoint、预算、错误和重试边界。
-- Entry → Story 保留“同步确定性入库 + 异步知识 Pipeline”两条路径；LLM 通过 Proposal、Evidence、Capability、预算和审批约束参与，不直接改写 Observation。
+- “动态每 30 分钟、推荐流每 2 小时”应建模为同一连接下的两个独立采集计划，各自拥有 Trigger、Workflow、checkpoint、预算、错误和重试边界。
+- Ingest 本身是一种 Workflow；外部来源事实先完成 Observation/Entry/Revision/Asset 入库，不等待 LLM。
+- Entry → Story 是可由用户或 Agent 配置的 Knowledge Workflow，支持“批量全量 Agent”和“脚本优先、困难/强相关/重要内容升级 Agent”两类策略。
+- Research 不直接耦合 Ingest；分析信号产生 Research Request，再由 Trigger 启动独立 Research Workflow；研究结果重新经过 Observation → Entry。
 - 后续 Story 跨来源聚类需要 StoryMembership；推荐需要区分外部候选、Admission 和 Cosmos Ranking，普通 Feed 不能依赖在线 LLM。
 - 本轮确认知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与；它不是单一 Session。
 - 个性化配置方向是“Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号 → 程序可读配置”，当前不要求逐字段 provenance，也不把平台推荐信号独立建模为用户偏好。
 - `nb-memory` 调研已记录在 [`docs/research/2026-08-08-nb-memory-research.md`](../../research/2026-08-08-nb-memory-research.md)；接入、Node 生产兼容性和行为映射均后置，不扩大本 Task。
 
-这些方向暂不扩大本 Task 的实现范围。继续增加平台 Adapter 前，应先单独建立 Connection/Secret/State、Job + Workflow Runtime、持久子任务、Proposal/Provenance 和 `nb-memory` Adapter 的实现 Task。
+这些方向暂不扩大本 Task 的实现范围。继续增加平台 Adapter 前，应先单独建立 Connection/Secret/State、脚本优先的 Workflow API、持久子任务、Knowledge Workflow、Research Request/Trigger 和 `nb-memory` Adapter 的实现 Task。
 
 ## Verification
 
@@ -267,8 +272,10 @@ SourceInstance
 - 为 Prisma/SQLite 的 FTS5 migration、触发器和 Raw SQL Adapter 创建实现 Task/ADR。
 - 细化 Service Endpoint 的认证、Blob/Artifact 访问、SSE 恢复和版本协商。
 - 在 Phase 1 完成后再决定 Story 聚类、Topic、Board 编辑器和推荐的切片顺序。
-- 在增加更多平台 Adapter 前，先验证 Connection/Secret/State、多个采集计划和通用 Trigger/Flow/Action Runtime 的边界。
+- 在增加更多平台 Adapter 前，先验证 Connection/Secret/State、多个采集计划和通用 Trigger/Workflow/Action Runtime 的边界。
 - 为 Entry → Story 的异步知识 Pipeline 建立独立 Task，先用确定性规则和 fake LLM 验证 Proposal、Evidence、用户确认和重算。
+- 为脚本优先的 Workflow Runtime 建立独立 Task，定义 Workflow Context、Action 调用、Child Workflow、Journal、Graph/IR 转换和 kind/tags。
+- 为 Research Workflow 建立独立 Task，定义 Research Request、触发原因、外部渠道访问、结果重新入库和失败恢复。
 - 为推荐系统建立独立 Task，区分外部候选、Admission、Ranking、Impression、Feedback 和 LLM 异步特征。
 - 为 Knowledge Manager 建立独立 Task，定义 Web Chat、`cosmos cli`、ingest 调用和共享 `nb-memory` 的 Service/Capability 边界。
 - 为个性化配置建立独立 Task，先验证自然语言记忆、行为观察到程序配置的转换，不引入逐字段 provenance 账本。

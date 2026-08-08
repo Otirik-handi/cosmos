@@ -4,7 +4,7 @@
 
 ## 一句话结论
 
-Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 服务器模式闭环以及 Phase 1B 后端采集切片：fixture RSS → 持久 Ingest Job → Observation/Revision/Asset/Story → Prisma/SQLite/FTS5 → Nest API/Worker；AI HOT 已完成真实端到端保存，Bilibili 受管 Connector 已完成但本机 Browser Bridge 扩展未连接。Docker 容器验收、真实 RSS/RSSHub 和 Bilibili 实际保存仍待环境条件。
+Cosmos 的 Phase 1 最小服务器闭环已完成，完整 Phase 1/扩展平台仍未完成。当前已验证 fixture RSS → 持久 Ingest Job → Observation/Revision/Asset/最小 Story → Prisma/SQLite/FTS5 → Nest API/Worker；Phase 1B 的 AI HOT 真实保存已通过，Bilibili 受管 Connector 已完成但本机 Browser Bridge 未连接。Docker、真实 RSS/RSSHub、Bilibili 实际保存、长时间恢复和通用 Workflow/Connection/Knowledge/Research 能力仍待分别验收或实现。
 
 ## 已完成
 
@@ -13,7 +13,7 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - 逐字保存项目初始需求与本轮需求。
 - 整理完整产品需求文档，建立需求编号、阶段范围、验收条件、主要界面和原始需求追踪。
 - 完善根目录 README，作为项目介绍、能力概览、使用场景和路线入口。
-- 形成 Source / Trigger / Flow / Action、信息库、Story、Topic、Workspace、Artifact、看板和后续投递的架构草案。
+- 形成 Source / Trigger / Workflow / Action、信息库、Story、Topic、Workspace、Artifact、看板和后续投递的架构草案。
 - 新增独立信息领域模型，拆开同一事件聚类、宽泛相关推荐、Topic 组织和 Workspace 持续体验。
 - 明确 Timeline 是视图、Spotlight 是展示决定、“精华”是 Board 策展角色。
 - 整理本地单用户阶段的混合召回、可解释排序和多样性推荐基线。
@@ -45,7 +45,7 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - 确认 merge 将当前用户状态解析到 canonical；split 不自动扇出状态和 Topic membership。
 - 确认 Spotlight 人工覆盖绑定具体 Placement，直到用户解除；不同 kind 共用 policy 合同。
 - 确认 v1 和默认产品合同面向单个本地用户，未来协作只保留 actor/revision 扩展位。
-- 确认 Agent 可维护用户配置范围内的内部对象；创建外部 Source、扩大数据范围和外部发送需要显式配置/批准。
+- 确认当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限模型；未来再叠加远端/多人/不可信扩展的权限策略。
 - 确认第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行本地可信扩展。
 - 确认 Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
 - 初步确认 React + Next.js App Router、Tailwind、shadcn/ui、React Hook Form、Zod、NestJS、Prisma + SQLite、Docker；技术选择允许在实现验证后调整。
@@ -77,7 +77,9 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - 完成 `nb-memory` 本地调研：确认其适合作为知识管理者共享长期记忆/知识库，不替代 Cosmos 的 Workflow、Job 或来源事实运行时。
 - 确认知识管理者是共享 `nb-memory` 之上的高权限系统角色，可通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与；它不是单一 Session。
 - 修正个性化配置方向为“Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号 → 程序可读配置”，暂不要求逐字段 provenance，也不独立建模平台推荐偏好信号。
-- 确认运行控制采用 `Job + Workflow` 组合，Workflow 保留脚本式和 Workflow IR 双表示。
+- 确认运行控制采用 `Job + Workflow` 组合；脚本式 Workflow 是底层执行形态，Graph/IR/Comfy 类表达转换为脚本语义。
+- 确认 Workflow 是主动行为核心；Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 使用同一 Runtime 的轻量分类。
+- 确认 Ingest 不等待 LLM；Entry → Story 是用户/Agent 可配置的 Knowledge Workflow，Research 通过 Request/Trigger 与 Ingest 解耦。
 - 将 `CONTEXT.md` 收缩为产品共同语言，只维护经常使用、跨模块或容易歧义的核心概念；实现级对象留待真实开发需要时再定义。
 - 迁移并精简适用于 Cosmos 的 Agent、Task、worktree 和验证约定。
 - 将 neuro-book 的通用协作流程去领域化迁移到 Cosmos：补充双语贡献指南、Issue 分流、标签清单、PR 模板和安全报告入口；未复制依赖 neuro-book 运行时代码、发布脚本或产品专用 CI 的 workflow。
@@ -86,7 +88,7 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 
 ## 当前架构基线
 
-以下是 v0.13 的 Phase 0/Phase 1B 基线；后续需求仍可通过记录理由调整：
+以下是 v0.15 的 Phase 0/Phase 1B 基线；后续需求仍可通过记录理由调整：
 
 - 服务器部署优先的模块化单体；逻辑上分 Web、API 和 Worker，第一阶段不引入微服务治理或消息队列集群。
 - Web 使用 React + Next.js App Router；API 使用 NestJS；UI 初步使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。
@@ -113,7 +115,7 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - Workspace Update 失败/取消不替换上一成功版本；人类保护字段优先于 Agent 候选 Revision。
 - Read State 使用 `last_seen_revision_id`；merge/split 的状态迁移保持 canonical 与历史壳边界。
 - v1 和默认产品合同是个人本地优先，不实现多人同步、多租户或复杂权限系统。
-- Agent 内部维护受用户配置范围约束；新增外部来源、数据范围和发送行为需要显式配置/批准。
+- 当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限模型；未来再叠加远端/多人/不可信扩展的权限策略。
 - 第一版扩展按本地可信代码处理，但继续使用 SDK/Command/Query/Event；Phase 1 从 RSS/RSSHub + fixture 开始。
 - Phase 1B 的 Collector 核心只保存统一 `NormalizedIngestItem`，Connector 不直接访问 Prisma、SQLite 或 Blob Root。
 - Bilibili v1 只支持受管 `hot`/`feed` 场景；AI HOT 只支持固定公开 endpoint 和服务 cursor。
@@ -121,6 +123,9 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - 看板优先于推送实现；推送边界仍在架构中保留。
 - Phase 1 只实现一个 Entry → 一个最小 Story projection；跨来源聚类、Story merge/split、Topic 维护和完整推荐后置。
 - Phase 1 直接使用 `pi-ai`；`neuro-agent-harness` 继续独立去领域化演进，稳定后再接入 Cosmos。
+- Workflow 是主动行为核心；脚本式 Workflow 是底层执行形态，Graph/IR/Comfy 类表达转换为脚本语义，不建立第二套 Runtime。
+- Ingest、Knowledge、Research、Maintenance、Delivery 和 Interaction 使用同一 Runtime 的 `kind + tags` 分类。
+- Ingest 先保存 Observation/Entry/Revision/Asset；Entry → Story 由可配置 Knowledge Workflow 处理，Research Workflow 通过 Research Request/Trigger 独立运行。
 - `nb-memory` 作为 Knowledge Manager 的共享长期记忆/知识库候选；Cosmos 通过 Adapter/Port 接入，不直接依赖其内部文件。
 - Knowledge Manager 的 Web Chat、`cosmos cli`、多个分身和 ingest/research 参与属于后续 Phase 3 方向，不是当前 Phase 1 已实现能力。
 - 个性化配置由 Agent 记忆、Cosmos 行为观察和未来其它信号生成；平台推荐流可作为候选来源，但平台推荐信号暂不进入独立偏好模型。
@@ -133,13 +138,15 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - `Domain` 是业务领域层；`Run` 是一次完整流程；`Step` 是流程阶段；`Job` 是 Worker 执行单元；`DomainEvent` 是已发生事实，不代替持久状态。
 - 数据库是事实、状态、历史和用户真相的中心；插件和 Agent 通过版本化合同访问，不直接依赖 Prisma 表。
 - 长期扩展需要统一 `ConnectionInstance`、`SecretStore` 和 `ConnectorStateStore`。Adapter 负责认证协议和状态 schema，但不自行决定 Secret 的持久化位置。
-- 同一个连接可以拥有多个独立采集计划，例如 Bilibili 动态每 30 分钟、推荐流每 2 小时；每个计划分别拥有 Trigger、Flow、checkpoint、预算、错误和重试边界。
-- Entry → Story 采用“同步确定性入库 + 异步知识 Pipeline”。LLM 作为受 Runtime、Capability、预算和审批约束的知识管理员，输出 Proposal 和证据，不直接改写 Observation。
+- 同一个连接可以拥有多个独立采集计划，例如 Bilibili 动态每 30 分钟、推荐流每 2 小时；每个计划分别拥有 Trigger、Workflow、checkpoint、预算、错误和重试边界。
+- Ingest 本身是一种 Workflow；外部来源事实先完成 Observation/Entry/Revision/Asset 入库，不等待 LLM。
+- Entry → Story 采用“同步确定性事实入库 + 异步可配置 Knowledge Workflow”。策略可以是批量全量 Agent，也可以是脚本优先后升级 Agent。
+- Research 不直接耦合 Ingest；分析信号创建 Research Request，由 Trigger 启动独立 Research Workflow，研究结果重新经过 Observation → Entry。
 - 推荐区分外部候选、Admission 和 Cosmos Ranking；代码负责硬约束和 LLM 不可用时的降级，LLM 提供可追溯的异步特征或受限 rerank。
 - `nb-memory` 调研已经完成并写入研究文档；Cosmos 与其的 Adapter、共享存储生命周期和 Node 生产兼容性尚未实现或验收。
 - 个性化配置不再按每个字段设计完整 producer/version/evidence 账本；一般 Story、关系、推荐特征和 Artifact 派生结果仍保留各自 provenance 合同。
 
-本轮不扩大 Phase 1 实现范围。继续增加更多平台 Adapter 前，优先建立 Connection/Secret/State、Job + Workflow Runtime、持久子任务、Proposal/Provenance 和 `nb-memory` Adapter 的实现 Task。
+本轮不扩大 Phase 1 实现范围。继续增加更多平台 Adapter 前，优先建立 Connection/Secret/State、脚本优先 Workflow API、持久子任务、Knowledge/Research Workflow、Proposal/Provenance 和 `nb-memory` Adapter 的实现 Task。
 
 ## 后置决定
 
@@ -151,28 +158,52 @@ Cosmos 已建立公开 GitHub 仓库和 v0.13 架构基线，并完成 Phase 1 �
 - 文本、图片、视频、私信和历史修订的默认保留预算。
 - BiliBili 更深场景、X、Telegram、公众号、QQ群以及平台条款和长期稳定性。
 - 多 Board、公网摘要链接、推送渠道和跨平台发布策略。
-- Source、Trigger、Flow、Action 的产品关系已暂定，更细的实现边界等待真实用例推动。
+- Source、Trigger、Workflow、Action 的产品关系已确认；更细的实现边界、版本合同和持久运行行为统一转入 Workflow Runtime Task。
 - Bun 开发与 Node 生产在 Next、Nest、Prisma、Worker 和 Harness Adapter 上的完整兼容矩阵。
 - Prisma/SQLite 的 FTS5 migration、触发器、Raw SQL Adapter 和未来存储替换边界。
 - 三种宿主模式的认证、Service Endpoint、SSE 恢复、Blob/Artifact 访问和版本协商。
 - Desktop Shell 的具体技术、安装/升级/卸载生命周期，以及 `pi-ai` 到 Harness 的迁移门槛。
 - SecretStore 第一版后端，以及 Adapter SecretRef/StateStore 的具体公共接口。
 - 一个 Connection 下多个 SourceInstance/采集计划的 UI 和持久模型。
-- Flow DSL 的有限 DAG、fan-out/fan-in、等待审批、子 Run 和取消/接管语义。
-- Knowledge Manager Web Chat、`cosmos cli`、多分身共享记忆和 ingest 参与的具体 Capability/审批边界。
+- 脚本优先 Workflow API、Context、Action 调用、Child Workflow、Journal、Graph/IR 转换和 kind/tags。
+- Knowledge Manager Web Chat、`cosmos cli`、多分身共享记忆和 ingest 参与的具体运行合同；当前不建设审批 UI。
+- Research Request、Trigger、Research Workflow、外部渠道访问、结果重新入库和失败恢复语义。
 - `nb-memory` Adapter、存储根目录、tick/instant 映射和 Node 生产兼容性。
 - Agent 记忆、行为观察和未来信号生成程序可读个性化配置的 schema、更新频率和人工覆盖边界。
 - Entry → Story Proposal 的自动接受门槛、用户确认界面和 StoryMembership 迁移。
 - Admission、Ranking、Impression、Feedback 和 LLM 异步特征的第一版预算。
+
+## 文档审查结论
+
+### 已验证
+
+- focused application/storage/runtime tests 已通过；现有测试覆盖固定 Ingest/Probe Job、持久化、Connector、SSE、错误合同和 Web Service Endpoint。
+- Phase 1 固定 Ingest 链路可运行：fixture/RSS → Observation/Entry/Revision/Asset → 最小 Story projection → Search/Feed/Story 查询。
+- 代码和文档都保留了当前单用户最大产品权限、旧 Observation 不覆盖和 Web 不直接访问数据库/文件系统的边界。
+
+### 尚未完成
+
+- 通用脚本优先 Workflow Runtime、WorkflowContext、Child Workflow、Trigger Consumer 和 Graph/IR 转换。
+- Connection、SecretStore、ConnectorStateStore、多个采集计划和 Adapter manifest/Source Operation。
+- KnowledgeSignal、Knowledge Workflow、ResearchRequest、Research Workflow、Outbox 和事件消费恢复。
+- `neuro-agent-harness`/`nb-memory` Adapter、Knowledge Manager Web/CLI、行为观察到程序配置的转换和推荐系统。
+
+### 阻塞后续扩展的实现缺口
+
+- lease fencing 目前没有覆盖 Ingest 中途写入、FTS 和 checkpoint；旧 Worker 仍可能在失去 lease 后写入。
+- 无 URL fallback key 尚未使用 `sourceLocator`。
+- `discoveryContext` 当前被硬编码为 `manual`，缺少完整 provenance。
+- Source/Connection/采集计划/StateStore 尚未真正建模，Run 也未完整保存定义、配置和输入快照。
+- Source 删除、历史 Observation 保留、孤儿 Blob 清理和 Outbox/Consumer 游标仍需单独设计和验收。
 
 ## 尚未实现
 
 - Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；当前环境没有 Docker CLI。
 - 真实 RSS/RSSHub 网络来源验收、跨平台 Node 验收和更长时间的 Worker 重启演练。
 - Bilibili 真实 Entry 保存验收；当前机器 OpenCLI daemon 可运行，但 Browser Bridge 报 `Extension: not connected`，Connector 已明确返回 `dependency_unavailable`。
-- 完整的 Source/Trigger/Flow/Action 产品配置模型；Phase 1 只实现 fixture/RSS ingest 所需最小合同。
+- 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只实现 fixture/RSS ingest 所需最小合同。
 - Connection/Secret/State 统一管理和 Adapter 登录生命周期。
-- 可配置多采集计划、通用 Flow/Action Runtime、LLM 子任务和 Proposal/Provenance。
+- 可配置多采集计划、脚本优先通用 Workflow Runtime、LLM 子任务和 Proposal/Provenance。
 - 去重、Story 归并、Topic 成员、分类、关系和推荐系统。
 - Agent 分析、Artifact、Workspace 和交互状态。
 - 看板、推送、摘要图片和网页发布。
