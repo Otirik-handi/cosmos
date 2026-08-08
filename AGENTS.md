@@ -7,7 +7,7 @@
 - 默认使用简体中文与用户交互。
 - 问答、审查和诊断默认只读；只有用户明确要求变更时才编辑代码或文件。
 - 处理 Bug、报错或性能问题时，先读上下文、缩小范围、复现并建立证据，再报告现象、根因判断、影响和修复方案。
-- 开始任务前按需读取 `PROJECT-STATUS.md`、相关需求、架构、Task、ADR 和 Research；只加载当前任务需要的材料。
+- 开始任务前按需读取 `PROJECT-STATUS.md`、相关需求、架构、Task、ADR 和 Research；只加载当前任务需要的材料。涉及 Entry、Story、Topic、Workspace 或 Artifact 时读取信息模型；涉及 Web/API/Worker、Transport、Prisma/SQLite、宿主模式或生产运行时边界时读取总体架构和当前实现 Task。
 - 保留用户已有的 dirty worktree 改动。开始编辑前检查状态，结束时核对任务范围，不用重置、覆盖或删除来清理无关改动。
 - 批量替换先 dry run；命中不确定或出现意外结果时改为逐处编辑，并报告实际修改范围。
 - 测试和运行产生的临时根放在 `.agent/tmp/<test-name>-<uuid>/`；本地数据放在仓库外或被忽略的 `.cosmos/`。
@@ -36,7 +36,7 @@
 ## 文档
 
 - `PROJECT-STATUS.md` 记录仓库现状、风险和未完成边界；`docs/README.md` 是文档入口。
-- `docs/requirements/` 保存需求，`docs/architecture/` 保存当前设计，`docs/adr/` 保存稳定决定，`docs/research/` 保存调研，`docs/tasks/` 保存重大任务 walkthrough。
+- `docs/requirements/` 保存需求，`docs/architecture/` 保存当前设计，`docs/adr/` 保存稳定决定，`docs/research/` 保存调研，`docs/tasks/` 保存重大任务 walkthrough；当前 Phase 1 入口是 [`docs/tasks/02-rss-ingestion/README.md`](docs/tasks/02-rss-ingestion/README.md)。
 - 需求变更按固定顺序维护：原话追加到 `docs/requirements/0001-original-requirements.md`，解释和待决问题记录到 `CONTEXT.md`，确认后更新 PRD，最后调整架构和 Task。
 - 原始需求保留措辞、数字、示例和不确定性；解释、取舍和重命名进入 PRD、架构或 Task，不反向改写原文。
 - `CONTEXT.md` 是工作台，不是稳定合同；候选名称和工作假设不能伪装成已确认决定。
@@ -46,9 +46,10 @@
 
 ## JS/TS
 
-- 当前技术基线是 Bun + TypeScript；前端沿用仓库已选的 Vue/Nuxt 风格。具体版本以配置和实现 Task 为准。
+- 当前初步技术基线是 Bun + TypeScript、React + Next.js App Router、NestJS、Prisma + SQLite；UI 使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。开发使用 Bun、生产使用 Node；共享代码保持 Node-compatible。具体版本和可替换边界以架构与实现 Task 为准。
 - 使用 4 个空格缩进、严格类型和项目别名导入；外部输入在边界处以 `unknown` 接收并立即校验，避免 `any` 和无约束类型逃逸。
 - 先看 `package.json`、现有模块和测试，优先复用已有能力；不为单次调用制造抽象，不为未提出的旧合同保留兼容代码。
+- UI、Worker、Connector 和扩展通过版本化 Service Endpoint/Command/Query/Event/Transport 访问应用能力，不直接依赖 Prisma、SQLite、Data Root 或 Blob/Artifact Root。
 - 日志使用结构化字段和自然语言消息，不记录 Secret、完整私信/邮件正文或未经脱敏的外部 payload。
 - 公开合同、复杂逻辑和容易回归的路径补充行为测试；注释解释原因、合同和约束，不描述显然代码。
 

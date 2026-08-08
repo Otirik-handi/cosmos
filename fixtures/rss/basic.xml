@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Cosmos Fixture Feed</title>
+        <link>https://example.test/cosmos</link>
+        <description>Deterministic RSS fixture for Phase 1.</description>
+        <item>
+            <guid>fixture-with-url-001</guid>
+            <title>Cosmos scaffold is ready</title>
+            <link>https://example.test/cosmos/scaffold</link>
+            <description>The first fixture item has a web URL.</description>
+            <pubDate>Fri, 07 Aug 2026 12:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <guid>fixture-without-url-002</guid>
+            <title>Message without a web URL</title>
+            <description>The second fixture item proves URL-free ingestion.</description>
+            <pubDate>Fri, 07 Aug 2026 12:01:00 GMT</pubDate>
+        </item>
+        <item>
+            <guid>fixture-with-media-003</guid>
+            <title>Fixture media metadata</title>
+            <link>https://example.test/cosmos/media</link>
+            <description>The third item carries media metadata without requiring a download.</description>
+            <enclosure url="https://example.test/cosmos/media.png" type="image/png" length="2048"/>
+            <pubDate>Fri, 07 Aug 2026 12:02:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

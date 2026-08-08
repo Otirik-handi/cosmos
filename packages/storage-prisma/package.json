@@ -1,0 +1,31 @@
+{
+    "name": "@cosmos/storage-prisma",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "bun": "./src/index.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "db:validate": "bun run ../../scripts/prisma.ts validate",
+        "db:generate": "bun run ../../scripts/prisma.ts generate",
+        "db:migrate": "bun run ../../scripts/prisma.ts migrate deploy"
+    },
+    "devDependencies": {
+        "prisma": "^6.0.0"
+    },
+    "dependencies": {
+        "@cosmos/application": "workspace:*",
+        "@cosmos/blob-store": "workspace:*",
+        "@cosmos/contracts": "workspace:*",
+        "@cosmos/domain": "workspace:*",
+        "@prisma/client": "^6.0.0"
+    }
+}

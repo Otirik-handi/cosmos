@@ -73,7 +73,7 @@ The following are the stable conventions most contributors need. Product behavio
 
 - Use 4-space indentation, strict types, and project aliases; avoid unconstrained cross-module relative imports.
 - Accept external input as `unknown` at the boundary and validate it immediately. Avoid `any`, type escapes, and unexplained broad objects.
-- Prefer classes for backend domain logic. For Vue/Nuxt code, follow the repository's functional and Composition API style.
+- Prefer classes for backend domain logic. Use functional React/Next.js components and Hooks; access application capabilities through the versioned Transport contract.
 - Reuse existing libraries, modules, and interfaces first. Do not create abstractions for one call or hide contract problems with hacks and temporary compatibility layers.
 - Add behavioral tests for public contracts, complex logic, and regression-prone paths. Comments explain reasons, contracts, and constraints, not obvious mechanics.
 

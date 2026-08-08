@@ -2,7 +2,7 @@
 
 Cosmos 是一个面向单个本地用户、可编排的信息聚合与个人情报工作台。它持续从用户配置的渠道收集信息，把已录入的正文、图片、附件和来源关系保存在本地，再通过可配置看板、Agent 深入研究和后续消息推送，把“到处浏览”变成“集中理解和行动”。
 
-项目当前处于架构设计阶段，尚未实现运行时代码。
+项目已进入 Phase 1 脚手架阶段，已建立 Web、API、Worker、公共包和服务器部署入口；RSS 录入、持久任务和离线查询功能仍在实现中。
 
 Cosmos 按 [GNU Affero General Public License v3.0 only](LICENSE) 发布；贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -102,10 +102,14 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 
 ## 当前架构基线
 
-- 本地优先的模块化单体，逻辑上分 Web、API 和 Worker，第一阶段不引入微服务或消息队列集群。
-- Bun + TypeScript 为实现基线，Vue/Nuxt 为看板候选前端。
-- SQLite + WAL 保存元数据、关系、任务和用户状态；FTS5/BM25 提供本地全文检索。
+- 服务器部署优先的本地优先模块化单体，物理上分 Next.js Web、NestJS API 和 Worker；第一阶段不引入微服务治理或消息队列集群。
+- Web 使用 React + Next.js App Router；UI 初步使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。
+- 开发使用 Bun，生产使用 Node；共享包和 Worker 运行路径保持 Node-compatible。
+- Prisma + SQLite + WAL 保存元数据、关系、任务和用户状态；FTS5/BM25、虚拟表和触发器通过受控 SQLite SQL Adapter 使用。
 - 内容寻址 Blob Store 保存原始 payload、图片和附件；Artifact Root 保存版本化生成产物。
+- `docker/Dockerfile` 与 `docker/compose.yml` 提供 Node 生产运行入口：API 启动前执行 migration，Web 使用 standalone server，API/Worker 共享 Data Root；Docker 验证待环境具备后执行。
+- 服务器、客户端、客户端与服务分离三种模式共用版本化 Service Endpoint、Command、Query、Event 和 SSE Transport；客户端不直接访问数据库或 Data Root。
+- Phase 1 先直接使用 `pi-ai`；`neuro-agent-harness` 独立演进，稳定后再通过适配合同接入；Desktop Shell 技术后置。
 - Entry、Story、Topic、Workspace 和 Artifact 分层；同一事件归并与相关推荐使用不同阈值和策略。
 - 第一版推荐以显式关注、内容特征、BM25、Entity/关系、时间、新颖性和本地反馈为主，普通 Feed 不依赖在线 LLM。
 - Topic、Workspace、Spotlight 和 Feed 等上层体验以 Story 为内容单位；Entry 作为 Story 内的来源证据。
@@ -130,13 +134,22 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 | 阶段 | 用户结果 |
 | --- | --- |
 | Phase 0：架构基础 | 需求、架构、Task、ADR 和工程约定形成可持续演进的真相源 |
-| Phase 1：录入与离线查询 | 定时录入一个真实来源，重启不重复，断网可搜索正文和已保存图片 |
+| Phase 1：录入与离线查询 | 定时录入一个真实来源，重启不重复，断网可搜索正文和已保存图片，并从 Story 打开 Entry/来源 |
 | Phase 2：组织与看板 | Story、Topic、关系、分类、批注、多分区信息流和可配置热点 |
 | Phase 3：Agent 与 Workspace | 生成可追溯 Artifact，支持周期刷新和持续交互状态 |
 | Phase 4：推荐与广度 | 接入推荐页、关注账号和搜索来源，建立非 LLM 默认排序与反馈 |
 | Phase 5：摘要与推送 | 生成一致的网页/图片摘要，可靠投递到 Telegram、Email、QQ 等渠道 |
 
-当前只完成 Phase 0 的仓库和设计文档。Phase 1 的首条端到端切片已确定为 RSS/RSSHub + fixture；尚未安装依赖，也没有数据库、前端、Connector、Agent Runtime 或发布物。公开仓库已建立于 [notnotype/cosmos](https://github.com/notnotype/cosmos)。
+当前已完成 Phase 0 文档基线和 Phase 1 最小闭环。fixture/RSS Connector、持久 Job/lease/retry、Prisma/SQLite/FTS5、Nest API、SSE、Next Feed/Search/Story 和 Node/浏览器冒烟已接通；Docker 容器、真实 RSS/RSSHub 和跨平台验收仍待执行。公开仓库已建立于 [notnotype/cosmos](https://github.com/notnotype/cosmos)。
+
+## 脚手架开发
+
+```bash
+bun install
+bun run dev
+```
+
+也可以分别启动 `bun run dev:web`、`bun run dev:api` 和 `bun run dev:worker`。健康检查地址为 `http://localhost:4310/api/v1/health`，端口可通过 `COSMOS_API_PORT` 覆盖；类型检查、测试、构建和 Prisma schema 检查分别使用 `bun run typecheck`、`bun run test`、`bun run build` 和 `bun run db:validate`。Node 生产最小冒烟使用 `pwsh -NoProfile -File scripts/smoke-node.ps1`。
 
 ## 文档入口
 
@@ -147,5 +160,6 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 - [信息领域模型](docs/architecture/0002-information-model.md)：Entry、Story、Topic、相关推荐、热点与 Workspace 的详细边界。
 - [项目状态](PROJECT-STATUS.md)：已完成能力、当前边界、风险和下一步。
 - [Foundation Task](docs/tasks/01-foundation/README.md)：本轮建立仓库与设计基线的过程和验证。
+- [Phase 1 Task](docs/tasks/02-rss-ingestion/README.md)：RSS/RSSHub + fixture 录入、离线查询和最小 Story projection 的实现 walkthrough。
 - [初始调研](docs/research/2026-08-06-daily-digest-research.md)：从远端研究项目归档的参考材料。
 - [贡献指南](CONTRIBUTING.md) 与 [Agent 约定](AGENTS.md)：后续开发和文档演进流程。

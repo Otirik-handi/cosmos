@@ -1,0 +1,70 @@
+services:
+    web:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+            args:
+                COSMOS_API_URL: http://api:4310
+        command:
+            - node
+            - apps/web/.next/standalone/apps/web/server.js
+        environment:
+            HOSTNAME: 0.0.0.0
+            PORT: "3000"
+        depends_on:
+            api:
+                condition: service_healthy
+        ports:
+            - "3000:3000"
+
+    api:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+            args:
+                COSMOS_API_URL: http://api:4310
+        command:
+            - sh
+            - -c
+            - mkdir -p /var/lib/cosmos && touch /var/lib/cosmos/cosmos.sqlite && node packages/storage-prisma/node_modules/prisma/build/index.js migrate deploy --schema packages/storage-prisma/prisma/schema.prisma && node apps/api/dist/main.js
+        environment:
+            COSMOS_API_HOST: 0.0.0.0
+            COSMOS_API_PORT: "4310"
+            COSMOS_DATA_ROOT: /var/lib/cosmos
+            DATABASE_URL: file:/var/lib/cosmos/cosmos.sqlite
+        volumes:
+            - cosmos-data:/var/lib/cosmos
+        ports:
+            - "4310:4310"
+        healthcheck:
+            test:
+                - CMD
+                - node
+                - -e
+                - fetch('http://127.0.0.1:4310/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+            interval: 5s
+            timeout: 3s
+            retries: 20
+            start_period: 10s
+
+    worker:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+            args:
+                COSMOS_API_URL: http://api:4310
+        command:
+            - node
+            - apps/worker/dist/main.js
+        environment:
+            COSMOS_DATA_ROOT: /var/lib/cosmos
+            DATABASE_URL: file:/var/lib/cosmos/cosmos.sqlite
+            COSMOS_WORKER_POLL_MS: "30000"
+        volumes:
+            - cosmos-data:/var/lib/cosmos
+        depends_on:
+            api:
+                condition: service_healthy
+
+volumes:
+    cosmos-data:

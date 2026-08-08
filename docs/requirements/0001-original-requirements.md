@@ -159,3 +159,28 @@
 > 35. 同意
 > 36. 权限不是第一版需要考虑的问题
 > 37. 同意
+
+## 2026-08-07：React 技术栈、Agent Harness 与部署模式初步决策
+
+> 我想走 react 生态。用 next tailwind [**shadcn**](https://claudeskills.info/skills/shadcn/ui/shadcn/) **Prisma sqlite docker React Hook Form+Zod这一套。**
+>
+> 同时你可以去调研一下目前最流行，LLM，或者你最熟悉的技术栈是什么？
+
+> 1. 开发使用 bun，但是生产用 node
+> 2. LLM UI/调用：使用 pi-ai。或者C:\Users\notnotype\Documents\CodeRepository\GithubProjects\neuro-agent-harness。和这个 agent 一起开发（这里面的 tsx profile 和 session 模型已经抽象好了）
+> 3. [https://github.com/shadcn-ui/ui/tree/HEAD/skills/shadcn](https://github.com/shadcn-ui/ui/tree/HEAD/skills/shadcn) 这里提供 skill，可以按照 shadcn 的指导来看看怎么用
+> 4. 【决策点 2】同意
+> 5. 注意本次只是初步决策，后续如果发现不好用或者有更好的选择可以改，例如 sqlite 这边
+> 6. 还有桌面壳：产品应该支持：服务器部署模式（主要先做这个，但是做的时候要考虑尽量为以后的扩展兼容）、客户端模式、客户端与服务分离模式
+
+> 关于 neuro-agent-harness 的设计理念（记录一下）：
+>
+> - TSX Profile 可以去领域化包含在 neuro-agent-harness 里，它的上下文管理很好用
+> - sidecar 功能取消掉，移出 neuro-agent-harness。这个可以靠 workflow 来代替
+> - 去领域化，附带常用工具（read 这些）。附带 SSE
+> - 需要提醒的是 NeuroBook 的 Harness 又演进了许多，修复了许多 bug。所以 neuro-agent-harness 可能有点落后
+> - 目前阶段用到 agent 的地方比较少，可以先直接用 pi-ai。等 neuro-agent-harness 稳定后再切
+>
+> ---
+>
+> shadcn 可以装，装到通用 skill 目录 codex 目录 claude 目录内

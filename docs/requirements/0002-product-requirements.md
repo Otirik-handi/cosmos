@@ -1,6 +1,6 @@
 # Cosmos 产品需求文档
 
-> 状态：Draft v0.9
+> 状态：Draft v0.10
 >
 > 最后更新：2026-08-07
 >
@@ -166,6 +166,20 @@ flowchart LR
 
 产品必须允许每个环节独立演进。例如新增 Telegram Connector 不要求修改看板；新增 Board Block 不要求直接读取 Telegram 数据；升级 Story 归并算法不改写原始采集记录。
 
+### 6.1 初步实现与部署约束
+
+以下是当前阶段的技术与运行形态决策，不构成不可替换的领域合同：
+
+- 第一优先级是服务器部署；产品同时为客户端模式，以及客户端与服务分离模式保留兼容边界。
+- 三种模式共用版本化的 Service Endpoint、Command、Query、Event 和流式 Transport 合同。客户端通过该合同访问应用能力，不直接访问 Prisma、SQLite、Data Root 或 Blob/Artifact Root。
+- Web 使用 React + Next.js App Router；API 使用 NestJS；Scheduler、Flow 和 Job 由独立 Worker 进程运行。Phase 1 先验证这三类宿主之间的边界。
+- 开发环境使用 Bun，生产环境使用 Node。共享代码、构建产物和 Worker 运行时保持 Node-compatible，不把 Bun-only API 写入领域层或公共合同。
+- 初始持久化使用 Prisma + SQLite；FTS5/BM25、虚拟表、触发器和其它 SQLite 专用能力通过受控 SQL Adapter 使用，以便未来替换存储实现。
+- UI 初步使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。shadcn 的组件代码归 Cosmos 源码所有，skill/CLI 只作为开发辅助。
+- 服务器交付预留 Docker 镜像与 Compose 运行方式；具体生产编排、认证和公网发布策略后置。
+- Desktop Shell 只负责承载 UI、连接本地或远程服务并管理必要的本地生命周期；Tauri、Electron 或其它壳的选择后置，不进入领域模型。
+- Phase 1 直接使用 `pi-ai` 满足少量 Agent/LLM 调用。`neuro-agent-harness` 独立演进，稳定后再通过运行时和能力适配合同接入；Harness 的 sidecar 不属于其核心职责。
+
 ## 7. 功能需求
 
 阶段含义：
@@ -215,7 +229,7 @@ flowchart LR
 | ING-008 | Phase 1 | 图片、附件、HTML 快照和其它媒体按策略“尽可能保存”。 | 每个 Asset 明确显示已保存、仅元数据、超预算、需认证、策略跳过或失败等状态。 |
 | ING-009 | Phase 2 | 用户可以按 SourceInstance 配置媒体类型、单文件/单次预算、保留期和失败重试。 | 修改策略只影响后续采集或明确的清理任务，不静默删除已有数据。 |
 | ING-010 | Phase 4 | Source 可覆盖平台首页推荐、关注用户、搜索结果、公告、AIHOT 类聚合站和邮件。 | 每种接入分别记录认证、速率、游标、平台限制和真实验收结果。 |
-| ING-011 | Phase 1 | 第一条端到端实现切片使用 RSS/RSSHub 和本地 fixture，验证采集、信息库、Story、搜索/看板和离线访问闭环。 | fixture 能覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态；真实 Connector 的替换不改变领域合同。 |
+| ING-011 | Phase 1 | 第一条端到端实现切片使用 RSS/RSSHub 和本地 fixture，验证采集、信息库、最小 Story projection、搜索/Feed 和离线访问闭环。 | fixture 能覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态；每个已录入 Entry 至少能投影为一个可打开的 Story；真实 Connector 的替换不改变领域合同。跨来源聚类、merge、split 和 Topic 维护后置。 |
 
 ### 7.4 信息库、分类与检索
 
@@ -299,7 +313,7 @@ flowchart LR
 
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
-| BRD-001 | Phase 1 | 系统提供最小看板和 Feed Block，以 Story 为展示单位。 | 用户无需数据库工具即可浏览 event、document、media 等 Story，并展开查看成员 Entry。 |
+| BRD-001 | Phase 1 | 系统提供最小看板和 Feed Block，以 Story 为展示单位。Phase 1 的 Story 先采用保守 projection，不提前实现完整聚类维护。 | 用户无需数据库工具即可从 Feed 打开 Story、查看其当前 Revision 和 Entry/来源；一个 Story 可以暂时只有一个 Entry。跨来源成员聚合与完整 Story 维护在 Phase 2 验证。 |
 | BRD-002 | Phase 2 | 看板由可配置 Board、Section 和 Block 构成。 | 用户可以调整顺序、隐藏、复制和配置区块；删除区块不删除内容。 |
 | BRD-003 | Phase 2 | 默认看板按热点、精华、普通信息流组织。 | 三个区域可以引用相同 Story、Topic、Workspace 或 Artifact，但使用不同展示策略。 |
 | BRD-004 | Phase 2 | Spotlight Block 可由系统或用户设置，展示事件、话题、状态或大会等高关注目标。 | 用户能固定一个 Topic；系统也能根据明确 policy 推荐 Spotlight。 |
@@ -332,6 +346,7 @@ flowchart LR
 | OPS-005 | 跨阶段 | Secret 与普通配置分离，日志默认脱敏。 | 日志不包含令牌、密码、完整私信/邮件正文或未经允许的原始 payload。 |
 | OPS-006 | 跨阶段 | 系统记录自动结果的 producer、version、时间、依据和当前选择。 | 算法升级后可以重建派生结果，同时保留用户修正和历史审计。 |
 | OPS-007 | Phase 0 | v1 和默认产品合同面向单个本地用户；未来协作能力不得破坏 actor/revision 审计。 | 第一版不引入多人账户、共享租户、云端同步或复杂协作权限。 |
+| OPS-008 | Phase 1 | 服务器、客户端和客户端与服务分离模式共用稳定的 Service Endpoint 与 Transport 合同。 | Web UI 可以连接本地 API 或远端 API；Command/Query/Event/流式更新使用版本化 payload；SSE 断线、恢复、健康检查、版本不兼容和服务不可用都有可识别状态；UI 不直接依赖 Prisma/SQLite。 |
 
 ### 7.11 扩展与插件
 
@@ -539,8 +554,11 @@ flowchart LR
 
 - manual + schedule Trigger、最小 Flow/Action Runtime。
 - RSS/RSSHub 真实 Connector 和一个 fixture Connector，先验证通用合同，再扩展到其它平台。
-- Observation、EntryRevision、Asset、SQLite、Blob Store 和 FTS5/BM25。
-- 最小搜索页、Feed Block 和 Source/Run 状态。
+- Next.js App Router Web、NestJS API 和独立 Worker 的最小宿主边界。
+- Prisma + SQLite、受控 SQLite SQL Adapter、Blob Store 和 FTS5/BM25。
+- Observation、EntryRevision、Asset，以及“一个 Entry → 一个最小 Story projection”的查询/展示投影。
+- 版本化 Service Endpoint/Command/Query/Event/Transport；最小 SSE 更新与健康检查。
+- 最小搜索页、Story-based Feed Block 和 Source/Run 状态。
 
 验收：
 
@@ -548,7 +566,10 @@ flowchart LR
 - 来源编辑形成 Revision。
 - 无 URL fixture 可完整录入。
 - 断网后可搜索正文并查看已保存图片。
+- Feed 以 Story 为入口，能够打开 Story → Entry → Source/Revision；Phase 1 不要求跨来源聚类、Story merge/split 或 Topic 维护。
 - 失败能定位到 Source、Run 和 Action。
+- 同一 Web/Transport 合同可以在本地服务和远端服务之间复用；SSE 断线后能进入可解释的恢复或服务不可用状态。
+- Bun 开发命令与 Node 生产启动路径都通过最小兼容性检查；Docker 镜像/Compose 验证若环境未提供 Docker，明确记录为未运行。
 
 ### Phase 2：组织与可配置看板
 
@@ -625,6 +646,11 @@ flowchart LR
 8. Agent 候选 Revision 的接受/拒绝界面，以及字段保护的最小实现。
 9. `updated_since_last_seen` 在不同 surface、Story split 和 Story merge 后的投影规则。
 10. 显式 state migration command 的批量操作、撤销和用户确认边界。
+11. Bun 开发与 Node 生产在 Next、Nest、Prisma、Worker 和 Harness Adapter 上的完整兼容矩阵及发布检查。
+12. Prisma/SQLite 的 FTS5 migration、触发器、Raw SQL Repository 和未来存储替换边界。
+13. 三种部署模式的认证、Service Endpoint、SSE 恢复、Blob/Artifact 访问与版本协商合同。
+14. Desktop Shell 的具体实现、Node sidecar 生命周期以及安装、升级和卸载行为。
+15. `pi-ai` 直接接入到 Harness `ModelRuntime` 的迁移门槛，以及 NeuroBook Harness 与独立 Harness 的行为差异。
 
 ## 14. 原始需求追踪
 
@@ -651,6 +677,9 @@ flowchart LR
 | Workspace 更新状态：Agent 更新 Workspace 时应显示运行状态、操作者、进度和最近结果 | AGT-012、UC-03、UC-04 |
 | Grilling Round 5：Workspace Update 状态机与原子发布；人类字段保护；Revision 后有更新；merge/split 状态迁移；Spotlight Placement 覆盖 | ORG-019 至 ORG-020、REC-015 至 REC-016、AGT-012 至 AGT-013 |
 | Grilling Round 6：个人本地优先；Agent 内部自主维护与外部副作用显式授权；第一版后置复杂权限；RSS/RSSHub + fixture 首条切片 | OPS-007、ING-011、AGT-014、EXT-005 |
+| React + Next.js、Tailwind、shadcn/ui、Prisma、SQLite、Docker、React Hook Form 和 Zod 的初步技术选择 | 6.1、OPS-008、Phase 1 |
+| Bun 开发、Node 生产，以及服务器、客户端、客户端与服务分离三种运行模式 | 6.1、OPS-008、NFR-010、NFR-012、待决定事项 11 至 14 |
+| Phase 1 先使用 `pi-ai`；`neuro-agent-harness` 去领域化、持续演进并后续通过适配合同接入；sidecar 移出 Harness Core | 6.1、待决定事项 15 |
 
 ## 15. 当前解释与勘误候选
 
@@ -691,3 +720,5 @@ flowchart LR
 - Agent 可以维护用户已配置范围内的内部对象；创建新外部 Source、扩大数据范围和发送外部消息需要显式配置或批准。
 - 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行用户明确安装的本地可信扩展。
 - Phase 1 首条真实 Connector 采用 RSS/RSSHub，并配套 fixture Connector。
+- Phase 1 的 Story 只实现最小 projection；完整跨来源聚类、merge、split、Topic 维护和推荐排序不被提前假设为已完成。
+- 服务器部署优先，但三种运行模式共用 Service Endpoint/Transport；Desktop Shell 和 Harness 接入细节保持后置。

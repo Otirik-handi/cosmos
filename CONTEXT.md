@@ -179,11 +179,28 @@ Story --Ranking--> Feed --> Board
 32. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行本地可信扩展。
 33. Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
 
+## 技术与运行形态（初步）
+
+> 2026-08-07。本节记录已经确认、但明确允许在真实实现后调整的技术方向。
+
+- Web 使用 React + Next.js App Router；API 使用 NestJS；Scheduler、Flow 和 Job 由独立 Worker 运行。开发使用 Bun，生产使用 Node，面向生产的共享代码保持 Node-compatible，不把 Bun-only API 变成领域或公共合同。
+- 初始数据层使用 Prisma + SQLite；FTS5/BM25、虚拟表、触发器和其它 SQLite 专用查询可以通过受控 SQL Adapter 实现。Prisma、SQLite 和搜索实现都不是不可替换的领域合同。
+- 服务器部署是第一优先级；产品同时保留客户端模式和客户端与服务分离模式。三种模式共用 versioned Command、Query、Event 和 Service Endpoint 合同，客户端不直接访问 Prisma、SQLite 或 Data Root。
+- Desktop Shell 只负责承载 UI、连接本地或远程服务并管理必要的本地生命周期；具体选择 Tauri、Electron 或其它壳后置，不让壳概念进入领域模型。
+- 当前 Agent 使用量较少，Phase 1 可以直接使用 `pi-ai`。`neuro-agent-harness` 作为独立项目持续演进；稳定后再通过 `ModelRuntime`、`SessionStore`、Profile 和 Capability Adapter 接入 Cosmos。
+- Harness 的 TSX Profile、领域无关常用工具（例如 `read`）和 SSE Transport 可以逐步吸收，但 NeuroBook 专属 Profile、Workspace、路径、配置和 watcher 不进入 Core；sidecar 不属于 Harness 核心职责，旁路执行由 Workflow 组合。
+- shadcn/ui 使用官方 skill 和 CLI，组件代码归项目源码所有；skill 只约束组件查询、文档、组合、样式和更新流程，不是 Cosmos 的领域依赖。
+
 ## 后置事项
 
 1. 同一 Workspace 的并发更新、重复触发合并和取消/接管语义。
 2. Agent 候选 Revision 的接受/拒绝界面，以及字段保护的最小实现。
 3. `updated_since_last_seen` 在不同 surface、Story split 和 Story merge 后的投影规则。
 4. 显式 state migration command 的批量操作、撤销和用户确认边界。
+5. Bun 开发与 Node 生产在 Next、Nest、Prisma、Worker 和 Harness Adapter 上的兼容矩阵。
+6. Prisma/SQLite 的 FTS5 Migration、触发器、Raw SQL Repository 和未来存储替换边界。
+7. 服务器、客户端和客户端与服务分离模式的认证、Service Endpoint、SSE 恢复和 Blob/Artifact 访问合同。
+8. Desktop Shell 的具体实现、Node sidecar 生命周期和安装/升级/卸载行为。
+9. `pi-ai` 直接接入到 Harness `ModelRuntime` 的迁移门槛，以及 NeuroBook Harness 与独立 Harness 的行为差异。
 
 这些事项不阻塞 Phase 0，且本次 grilling 不继续展开。

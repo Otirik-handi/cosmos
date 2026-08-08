@@ -1,0 +1,216 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
+
+model SourceInstance {
+    id           String        @id @default(cuid())
+    name         String
+    kind         String
+    configJson   String
+    enabled      Boolean       @default(true)
+    createdAt    DateTime      @default(now())
+    updatedAt    DateTime      @updatedAt
+    observations Observation[]
+    runs         Run[]
+    checkpoint   Checkpoint?
+    entries      Entry[]
+}
+
+model Checkpoint {
+    id               String         @id @default(cuid())
+    sourceInstanceId String         @unique
+    cursor           String?
+    updatedAt        DateTime       @updatedAt
+    sourceInstance   SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+}
+
+model Run {
+    id                    String         @id @default(cuid())
+    sourceInstanceId      String
+    triggerKind           String
+    status                String
+    createdAt             DateTime       @default(now())
+    startedAt             DateTime?
+    finishedAt            DateTime?
+    itemCount             Int            @default(0)
+    createdEntryCount     Int            @default(0)
+    revisedEntryCount     Int            @default(0)
+    duplicateObservationCount Int         @default(0)
+    errorCode             String?
+    errorMessage          String?
+    sourceInstance        SourceInstance  @relation(fields: [sourceInstanceId], references: [id])
+    steps                 Step[]
+    jobs                  Job[]
+    observations          Observation[]
+    events                DomainEvent[]
+
+    @@index([sourceInstanceId, createdAt])
+}
+
+model Step {
+    id           String    @id @default(cuid())
+    runId        String
+    position     Int
+    kind         String
+    status       String
+    attempts     Int       @default(0)
+    inputJson    String?
+    outputJson   String?
+    errorMessage String?
+    startedAt    DateTime?
+    finishedAt   DateTime?
+    run          Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+    jobs         Job[]
+
+    @@unique([runId, position])
+}
+
+model Job {
+    id             String    @id @default(cuid())
+    runId          String?
+    stepId         String?
+    kind           String
+    status         String
+    idempotencyKey String    @unique
+    attempts       Int       @default(0)
+    maxAttempts    Int       @default(3)
+    leaseOwner     String?
+    leaseToken     String?
+    leaseExpiresAt DateTime?
+    nextAttemptAt  DateTime?
+    errorMessage   String?
+    createdAt      DateTime  @default(now())
+    updatedAt      DateTime  @updatedAt
+    run            Run?      @relation(fields: [runId], references: [id], onDelete: Cascade)
+    step           Step?     @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+    @@index([status, nextAttemptAt])
+}
+
+model WorkerHeartbeat {
+    id         String    @id @default(cuid())
+    instanceId String    @unique
+    status     String
+    version    String
+    startedAt  DateTime  @default(now())
+    lastSeenAt DateTime  @updatedAt
+    stoppedAt  DateTime?
+}
+
+model DomainEvent {
+    sequence       Int       @id @default(autoincrement())
+    eventId        String    @unique
+    type           String
+    version        String
+    payloadJson    String
+    occurredAt     DateTime  @default(now())
+    aggregateType  String?
+    aggregateId    String?
+    runId          String?
+    run            Run?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+    @@index([occurredAt])
+}
+
+model Observation {
+    id                String         @id @default(cuid())
+    sourceInstanceId  String
+    runId             String?
+    entryId           String?
+    externalId        String?
+    externalKey       String
+    externalRevision  String         @default("0")
+    eventKind         String         @default("create")
+    sourceLocatorJson String
+    discoveryContextJson String?
+    webUrl            String?
+    payloadBlobKey    String?
+    title             String?
+    contentText       String?
+    contentFingerprint String?
+    sourcePublishedAt DateTime?
+    capturedAt        DateTime       @default(now())
+    sourceInstance    SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+    run               Run?           @relation(fields: [runId], references: [id], onDelete: SetNull)
+    entry             Entry?         @relation(fields: [entryId], references: [id], onDelete: SetNull)
+
+    @@unique([sourceInstanceId, runId, externalKey])
+    @@index([sourceInstanceId, externalKey, capturedAt])
+}
+
+model Entry {
+    id                  String         @id @default(cuid())
+    sourceInstanceId    String
+    canonicalExternalId String
+    currentRevisionId   String?        @unique
+    storyId             String?
+    createdAt           DateTime       @default(now())
+    updatedAt           DateTime       @updatedAt
+    sourceInstance      SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+    currentRevision     EntryRevision? @relation("EntryCurrentRevision", fields: [currentRevisionId], references: [id])
+    revisions           EntryRevision[] @relation("EntryRevisions")
+    observations        Observation[]
+    story               Story?         @relation(fields: [storyId], references: [id], onDelete: SetNull)
+
+    @@unique([sourceInstanceId, canonicalExternalId])
+}
+
+model EntryRevision {
+    id                 String        @id @default(cuid())
+    entryId            String
+    revision           Int
+    title              String
+    summary            String?
+    contentText        String
+    contentFingerprint String
+    webUrl             String?
+    sourcePublishedAt  DateTime?
+    createdAt          DateTime      @default(now())
+    entry              Entry         @relation("EntryRevisions", fields: [entryId], references: [id], onDelete: Cascade)
+    currentForEntry    Entry?        @relation("EntryCurrentRevision")
+    assets             Asset[]
+
+    @@unique([entryId, revision])
+    @@index([entryId, createdAt])
+}
+
+model Asset {
+    id              String        @id @default(cuid())
+    entryRevisionId String
+    kind            String
+    status          String
+    sourceUrl       String?
+    storageKey      String?
+    mimeType        String?
+    byteSize        Int?
+    errorMessage    String?
+    createdAt       DateTime      @default(now())
+    entryRevision   EntryRevision @relation(fields: [entryRevisionId], references: [id], onDelete: Cascade)
+}
+
+model Story {
+    id                String         @id
+    kind              String
+    subtype           String?
+    currentRevisionId String?        @unique
+    createdAt         DateTime       @default(now())
+    updatedAt         DateTime       @updatedAt
+    currentRevision   StoryRevision? @relation("StoryCurrentRevision", fields: [currentRevisionId], references: [id])
+    revisions         StoryRevision[] @relation("StoryRevisions")
+    entries           Entry[]
+}
+
+model StoryRevision {
+    id              String  @id @default(cuid())
+    storyId         String
+    title           String
+    summary         String?
+    createdAt       DateTime @default(now())
+    story           Story   @relation("StoryRevisions", fields: [storyId], references: [id], onDelete: Cascade)
+    currentForStory Story?  @relation("StoryCurrentRevision")
+}

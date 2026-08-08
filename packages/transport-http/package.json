@@ -1,0 +1,21 @@
+{
+    "name": "@cosmos/transport-http",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "bun": "./src/index.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit"
+    },
+    "dependencies": {
+        "@cosmos/contracts": "workspace:*"
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "name": "@cosmos/worker",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "bun --watch src/main.ts",
+        "build": "tsc -p tsconfig.json",
+        "start": "node dist/main.js",
+        "typecheck": "tsc -p tsconfig.json --noEmit"
+    },
+    "dependencies": {
+        "@cosmos/application": "workspace:*",
+        "@cosmos/contracts": "workspace:*",
+        "@cosmos/plugin-rss": "workspace:*",
+        "@cosmos/storage-prisma": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^24.0.0",
+        "typescript": "^5.0.0"
+    }
+}

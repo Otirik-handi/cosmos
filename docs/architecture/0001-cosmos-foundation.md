@@ -1,6 +1,6 @@
 # Cosmos 总体架构设计
 
-> 状态：Draft v0.9
+> 状态：Draft v0.10
 >
 > 最后更新：2026-08-07
 >
@@ -16,7 +16,7 @@
 
 ## 1. 结论
 
-Cosmos 应采用“本地优先的模块化单体 + 持久化事件/任务流水线 + 可插拔扩展 SDK”：
+Cosmos 应采用“服务器优先的本地优先模块化单体 + 持久化事件/任务流水线 + 稳定 Transport + 可插拔扩展 SDK”：
 
 - Source、Trigger、Flow、Action 分开建模，提供类似 GitHub Actions 的可编排体验。
 - 所有渠道先进入不可变的采集层，再形成可查询的信息库；网页 URL 只是可选来源属性。
@@ -25,6 +25,8 @@ Cosmos 应采用“本地优先的模块化单体 + 持久化事件/任务流水
 - Agent 作为 Flow 中的一种受控 Action，可以查询信息库、继续调研并生成版本化 Artifact。
 - Workspace 表示长期、可更新、可交互的体验容器；Artifact 表示一次版本化输出。
 - 看板是查询与编排层，不拥有底层内容。热点、精华、普通信息流和 Workspace 可以引用同一批领域对象。
+- 逻辑上保持模块化单体，物理上从第一条切片起分为 Next.js Web、NestJS API 和 Worker 进程；这不是微服务拆分，而是明确的宿主边界。
+- 服务器部署是第一优先级，同时为嵌入式客户端和客户端与服务分离保留同一套 Service Endpoint、Command、Query、Event 和流式 Transport 合同。
 - 第一阶段以看板闭环为主，推送暂缓实现，但保留可靠投递所需的 Publication、Outbox 和 Delivery 边界。
 
 ```mermaid
@@ -100,7 +102,7 @@ flowchart LR
 ### 2.2 当前非目标
 
 - 第一阶段不解决互联网级规模、多租户 SaaS、多人账户同步或复杂协作权限。
-- 第一阶段不引入 Kafka、RabbitMQ 或微服务部署。
+- 第一阶段不引入 Kafka、RabbitMQ 或微服务治理；Web、API、Worker 的多进程宿主只用于形成清晰的运行边界。
 - 不承诺所有平台都能完整下载图片、视频或受保护正文。
 - 不让 LLM 直接成为原始事实、权限或外部副作用的最终裁决者。
 - 不把第三方平台推荐结果视为客观质量；系统需要记录其发现来源并建立自己的展示排序。
@@ -133,6 +135,24 @@ Connector、Trigger、Action、Agent 和 Board Block 只能通过版本化 SDK�
 ### 3.6 展示角色不污染领域模型
 
 “热点”“精华”“信息流”首先是看板上的展示角色，不是所有内容必须继承的底层类型。同一个 Story 可以同时出现在热点区、某份竞品报告的依据和普通信息流中。
+
+### 3.7 多宿主与 Transport 边界
+
+Cosmos 需要兼容三种运行形态：
+
+1. **服务器部署模式**：Next.js Web、NestJS API 和 Worker 部署在同一服务器或同一 Docker Compose 应用中，作为第一优先级交付形态。
+2. **客户端模式**：Desktop Shell 承载 Web UI，并启动或连接本机 API/Worker；数据仍由本地服务管理。
+3. **客户端与服务分离模式**：Desktop Shell 或浏览器连接远端 API/Worker，客户端不拥有核心数据库写入权。
+
+三种模式共享以下边界：
+
+- UI、Connector、Agent 和外部扩展通过版本化 Service Endpoint 访问应用能力，不直接导入 Prisma Client、SQLite Repository 或 Data Root 实现。
+- Command 负责状态修改，Query 负责读取，Event 负责跨模块通知；Transport 负责把这些合同映射到 HTTP、JSON 和 SSE，不把 HTTP 路由名称当作领域合同。
+- 服务暴露健康检查、协议/能力版本和可操作错误。协议不兼容、服务不可用、校验失败、冲突、未找到和结果未知需要分别表达。
+- SSE 事件带有稳定 Event ID 和协议版本；客户端重连时携带游标，服务无法补齐缺失事件时返回 `snapshot_required`，由客户端重新获取授权快照后继续。
+- Blob 与 Artifact 通过服务端受控地址或下载能力访问；客户端不根据文件系统路径拼接用户数据地址。
+
+Desktop Shell 的具体技术（Tauri、Electron 或其它实现）、安装生命周期、远端认证和公网暴露策略都保持在宿主层，不进入领域模型。
 
 ## 4. Source、Trigger、Flow 与 Action
 
@@ -893,8 +913,8 @@ Channel Adapter 负责把平台无关的优先级、图片、正文和链接映�
 
 ### 13.2 第一阶段存储
 
-- SQLite + WAL：核心元数据、关系、用户状态、Run、Job 和 Outbox。
-- FTS5：本地词法全文索引和 BM25 排序。
+- Prisma + SQLite + WAL：核心元数据、关系、用户状态、Run、Job 和 Outbox。普通读写通过 Prisma Repository 和应用层事务边界完成。
+- 受控 SQLite SQL Adapter：承载 FTS5 虚拟表、BM25 排序、触发器和其它 SQLite 专用查询；这些实现不泄漏到领域对象或 Transport。
 - 可替换的 Vector Index：第一阶段可使用 SQLite 扩展，合同不绑定具体实现。
 - Content-addressed Blob Store：原始 payload、图片、附件和大文本。
 - Artifact Root：版本化 Artifact 文件夹。
@@ -918,45 +938,41 @@ Channel Adapter 负责把平台无关的优先级、图片、正文和链接映�
 
 ### 13.3 未来迁移
 
-模块化 SQL Repository 和公开 Query/Command 合同允许未来将核心数据库迁移到 Postgres。Blob 可以迁移到 S3 兼容对象存储，Worker 可以拆成多进程或多主机；领域模型和扩展 SDK 不应因此改变。
+Prisma Repository、受控 SQL Adapter 和公开 Query/Command 合同允许未来将核心数据库迁移到其它 SQL 存储。Blob 可以迁移到 S3 兼容对象存储，Worker 可以拆成多进程或多主机；领域模型、Transport 和扩展 SDK 不应因此改变。
 
 第一阶段不为未来分布式部署引入双写或复杂一致性协议。
 
 ## 14. 模块与仓库布局
 
-采用一个仓库、一个版本体系和清晰模块边界。逻辑上存在 Web、API 和 Worker 入口，第一阶段可以由一个开发命令共同启动。
+采用一个仓库、一个版本体系和清晰模块边界。逻辑上保持模块化单体，物理上存在 Web、API 和 Worker 入口；第一阶段可以由一个开发命令共同启动，也必须能分别启动 API/Worker 做宿主验收。
 
 ```text
 cosmos/
 ├─ apps/
-│  ├─ web/                    Vue/Nuxt 看板
-│  ├─ server/                 HTTP API、Command、Query
+│  ├─ web/                    Next.js App Router 看板
+│  ├─ api/                    NestJS HTTP API、Command、Query、SSE
 │  └─ worker/                 Scheduler、Flow、Job Worker
 ├─ packages/
 │  ├─ contracts/              DTO、事件和版本化公共 schema
 │  ├─ domain/                 Entry、Story、Topic、Workspace 等领域逻辑
 │  ├─ application/            Use case、Command、Query、事务边界
-│  ├─ automation-runtime/     Trigger、Flow、Run、Job
-│  ├─ connector-runtime/      Source 与 Connector 宿主
-│  ├─ library/                录入、关系、Annotation、Collection
-│  ├─ search/                 FTS、vector、hybrid query
-│  ├─ recommendation/         Admission、candidate、ranking、feedback
-│  ├─ artifacts/              Artifact 与 Renderer
-│  ├─ storage-sqlite/         SQLite、迁移、Blob metadata
-│  └─ sdk/                    第三方扩展 SDK
+│  ├─ storage-prisma/         Prisma、SQLite、迁移和受控 SQL Adapter
+│  └─ blob-store/             Blob/Artifact/Cache Root 访问
 ├─ plugins/
-│  └─ builtin/                首批 Connector、Action、Block
+│  └─ rss/                    首批 RSS/RSSHub Connector
+├─ fixtures/
+│  └─ rss/                    fixture Connector 输入
 ├─ docs/
-├─ migrations/
-└─ fixtures/
+└─ docker/
 ```
 
-不要仅为了目录完整就提前创建空 package。实现每条垂直切片时创建实际需要的模块，并用依赖规则保持方向：
+上述是 Phase 1 的目标边界，不要求一次创建所有空目录。实现每条垂直切片时只创建实际需要的模块，并用依赖规则保持方向：
 
 ```text
-apps/plugins -> application/contracts/sdk
+apps/plugins -> application/contracts
 application -> domain/contracts
 storage/runtime -> application ports
+transport -> contracts/application
 domain -> no infrastructure dependency
 ```
 
@@ -1009,6 +1025,20 @@ publication.ready.v1
 ```
 
 消费者记录 Event ID 和处理幂等键。事件升级增加新版本，不静默改变旧 payload 含义。
+
+### 15.4 Service Endpoint 与流式 Transport
+
+Service Endpoint 是三种宿主模式共用的应用边界。第一阶段至少提供：
+
+| 能力 | 责任 | 约束 |
+| --- | --- | --- |
+| `health` | 返回服务状态、协议版本、数据迁移状态和 Worker 摘要 | 可用于启动页、Docker 健康检查和客户端连接诊断 |
+| `command` | 执行版本化状态修改 | 输入先校验，结果带 command ID、幂等结果和关联 Event |
+| `query` | 返回授权的只读投影 | 返回 DTO，不暴露 ORM、绝对文件路径或内部表结构 |
+| `events` | 通过 SSE 推送状态变化 | 使用 Event ID、游标和 `snapshot_required` 恢复语义 |
+| `blob/artifact` | 读取已授权的文件内容或 manifest | 由服务端解析 Root，客户端不拼接文件系统路径 |
+
+HTTP、JSON 和 SSE 是当前初步 Transport 实现；它们可以在客户端模式中连接本机服务，也可以在分离模式中连接远端服务。Transport 错误需要保留稳定的错误码、可读消息、重试建议和关联 request/command ID。
 
 ## 16. 安全、隐私和平台边界
 
@@ -1099,11 +1129,13 @@ Saved View / recommendation policy
 - Source/Trigger/Flow/Action 最小合同。
 - manual + schedule Trigger。
 - RSS/RSSHub 真实 Connector 和一个 fixture Connector，先验证通用合同，再扩展到其它平台。
-- Observation、EntryRevision 和 Asset。
-- SQLite、Blob Store、FTS5/BM25。
-- 最小搜索页和普通 Feed Board Block。
+- Next.js App Router Web、NestJS API 和独立 Worker 的最小宿主边界。
+- Observation、EntryRevision、Asset 和一个 Entry → 一个最小 Story projection。
+- Prisma + SQLite、受控 SQLite SQL Adapter、Blob Store、FTS5/BM25。
+- 版本化 Service Endpoint、Command、Query、Event、SSE 和健康检查。
+- 最小搜索页和以 Story 为入口的 Feed Board Block。
 
-完成标准：定时录入真实信息，重启后不重复，断网后仍可搜索正文和已保存图片。
+完成标准：定时录入真实信息，重启后不重复，断网后仍可搜索正文和已保存图片；用户可以从 Feed 打开 Story → Entry → Source/Revision；本阶段不要求跨来源聚类、Story merge/split、Topic 维护或完整推荐。
 
 ### Phase 2：信息组织与可配置看板
 
@@ -1143,7 +1175,7 @@ Saved View / recommendation policy
 
 ## 19. 当前决定
 
-以下决定进入 v0.9 基线，但后续需求仍可通过记录理由调整：
+以下决定进入 v0.10 基线，但后续需求仍可通过记录理由调整：
 
 1. Source、Trigger、Flow、Action 分离。
 2. URL 为可选字段；结构化 origin locator 承担来源定位。
@@ -1153,7 +1185,7 @@ Saved View / recommendation policy
 6. Timeline 是视图；热点是 Spotlight 展示决定；精华是 Board 策展角色。
 7. 看板与底层内容解耦，Block 通过 ID、Workspace、Saved View 或 Query 引用内容。
 8. Agent 使用普通 Action/Run 合同和配置能力范围。
-9. 第一阶段采用本地 SQLite + Blob/Artifact 文件存储。
+9. 第一阶段采用 Prisma + 本地 SQLite + Blob/Artifact 文件存储；SQLite 专用能力集中在受控 SQL Adapter。
 10. 看板优先，推送后置，但保留 Publication/Delivery 边界。
 11. 每个 Entry 默认拥有一个主 Story，允许单 Entry Story；Topic、Workspace、Spotlight 和 Feed 等上层体验使用 Story，不直接使用 Entry。
 12. Topic 只收录 Story；Agent 自动创建 Topic 后默认启用独立 Maintenance Binding。
@@ -1186,10 +1218,14 @@ Saved View / recommendation policy
 39. Agent 可在用户配置范围内自主维护内部对象；创建外部 Source、扩大数据范围或外部发送需要显式配置/批准。
 40. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行用户明确安装的本地可信扩展。
 41. Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
+42. 初步技术基线为 React + Next.js App Router、Tailwind、shadcn/ui、React Hook Form、Zod、NestJS、Prisma + SQLite；开发使用 Bun，生产使用 Node。
+43. 服务器部署优先，同时为客户端模式和客户端与服务分离模式保留兼容边界；三种模式共用 Service Endpoint、Command、Query、Event 和 SSE Transport。
+44. Phase 1 直接使用 `pi-ai`；`neuro-agent-harness` 独立去领域化演进，稳定后通过 ModelRuntime、SessionStore、Profile 和 Capability Adapter 接入；sidecar 不属于 Harness Core。
+45. Desktop Shell 的具体技术后置；Docker/Compose 作为服务器交付形态的初步封装，不能改变领域和 Transport 合同。
 
 ## 20. 核心边界结论与后置决定
 
-本次 grilling 已结束。首批来源和扩展信任范围已经确认；其它问题保留为后置决定，不阻塞 Phase 0。
+本次 grilling 已结束。首批来源、扩展信任范围和初步技术基线已经记录；其它问题保留为后置决定，不阻塞 Phase 0。
 
 ### 20.1 首批来源
 
@@ -1214,6 +1250,19 @@ Saved View / recommendation policy
 【建议】采用第一项，并允许每个 SourceInstance 覆盖。
 
 【选错代价】策略可调整，但未下载且来源后来消失的内容无法补回；过度保存则需要可靠清理和隐私工具。
+
+### 20.4 初步技术基线与后置边界
+
+已确认当前实现方向：React/Next.js App Router、NestJS、独立 Worker、Prisma + SQLite、Tailwind/shadcn/ui、React Hook Form/Zod、Bun 开发、Node 生产，以及服务器优先的三种宿主模式。
+
+这些选择仍是可回滚的实现方向。以下事项在真正进入实现 Task 后通过兼容性检查和 focused 验收确认：
+
+- Bun 开发命令与 Node 生产启动的兼容矩阵。
+- Prisma migration、SQLite FTS5/触发器/Raw SQL Adapter 与未来存储替换边界。
+- Service Endpoint、HTTP/JSON/SSE Transport、健康检查、版本协商、断线恢复和 Blob/Artifact 访问。
+- Docker 镜像与 Compose 运行方式。
+- Desktop Shell 技术和本地生命周期。
+- `pi-ai` 到 `neuro-agent-harness` 的迁移门槛。
 
 ## 21. 架构不变量
 
@@ -1245,8 +1294,18 @@ Saved View / recommendation policy
 24. 第一版不会因为未来多人协作设想而引入多租户、同步或复杂权限系统。
 25. Agent 不会在没有用户显式配置/批准时增加外部来源、扩大数据范围或发送消息。
 26. 本地可信扩展仍不能直接依赖核心数据库表，未来隔离升级不需要重写扩展合同。
+27. UI 和扩展不直接访问 Prisma、SQLite、Data Root 或 Blob/Artifact Root；跨宿主访问统一经过版本化 Transport。
+28. Phase 1 的 Story 是最小 projection，不把跨来源聚类、merge、split 和 Topic 维护误报为已完成能力。
+29. Worker 即使与 API 分进程运行，仍与应用层共享持久 Job/Lease/Idempotency 合同，不依赖进程内内存状态恢复。
 
 ## 22. 变更记录
+
+### v0.10 - 2026-08-07
+
+- 对齐 React/Next.js App Router、NestJS、独立 Worker、Prisma + SQLite、Bun 开发/Node 生产的初步技术基线。
+- 增加服务器、客户端、客户端与服务分离三种宿主模式，以及版本化 Service Endpoint、Command、Query、Event、SSE Transport 边界。
+- 将 Phase 1 明确为 RSS/RSSHub + fixture + 最小 Story projection；跨来源 Story 维护和 Topic 后置。
+- 记录 `pi-ai` 先行、`neuro-agent-harness` 独立演进、sidecar 移出 Harness Core，以及 Desktop Shell/Docker 的后置边界。
 
 ### v0.9 - 2026-08-07
 

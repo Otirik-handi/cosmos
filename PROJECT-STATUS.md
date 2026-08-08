@@ -1,10 +1,10 @@
 # Cosmos Project Status
 
-> 截至 2026-08-07。
+> 截至 2026-08-08。
 
 ## 一句话结论
 
-Cosmos 已建立公开 GitHub 仓库和 v0.9 Phase 0 架构基线，并确认个人本地优先、Agent 内部自主维护与外部副作用显式配置、第一版后置复杂权限、RSS/RSSHub + fixture 首条实现切片；此前的信息模型、推荐和 Workspace 状态边界继续成立。本次 grilling 已结束，项目仍没有运行时代码、依赖、数据库、前端或发布物。
+Cosmos 已建立公开 GitHub 仓库和 v0.10 Phase 0 架构基线，并完成 Phase 1 服务器模式的最小可验收闭环：fixture RSS → 持久 Ingest Job → Observation/Revision/Asset/Story → Prisma/SQLite/FTS5 → Nest API → Next Feed/Search/Story。Docker 容器验收和真实 RSS/RSSHub 验收仍待环境与来源条件。
 
 ## 已完成
 
@@ -48,6 +48,24 @@ Cosmos 已建立公开 GitHub 仓库和 v0.9 Phase 0 架构基线，并确认个
 - 确认 Agent 可维护用户配置范围内的内部对象；创建外部 Source、扩大数据范围和外部发送需要显式配置/批准。
 - 确认第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行本地可信扩展。
 - 确认 Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
+- 初步确认 React + Next.js App Router、Tailwind、shadcn/ui、React Hook Form、Zod、NestJS、Prisma + SQLite、Docker；技术选择允许在实现验证后调整。
+- 初步确认 Bun 用于开发、Node 用于生产，并要求共享代码和 Worker 保持 Node-compatible。
+- 初步确认服务器部署优先，同时保留客户端模式和客户端与服务分离模式；三种模式共用版本化 Service Endpoint、Command、Query、Event 和 SSE Transport。
+- 初步确认 Phase 1 先直接使用 `pi-ai`；`neuro-agent-harness` 独立演进，后续通过适配合同接入；sidecar 移出 Harness Core。
+- 将 Phase 1 的实现范围收紧为 RSS/RSSHub + fixture + 最小 Story projection，并建立持续 walkthrough。
+- 初始化 Bun workspace、TypeScript 基线和根级 lockfile。
+- 建立 `apps/web`、`apps/api`、`apps/worker`，并验证 Next.js、NestJS API 健康端点和 Node Worker 生产产物。
+- 建立 `contracts`、`domain`、`application`、`storage-prisma`、`blob-store` 和 `plugins/rss` 最小包边界。
+- 建立 Prisma SQLite schema、受控 FTS5 SQL、URL-free RSS fixture，以及 Dockerfile/Compose 服务器入口。
+- 按 shadcn skill 初始化 `components.json`，加入 `button`、`card`、`badge` 源码组件和最小 Story Feed 页面。
+- 固化 `Source`、`Run`、`Job`、`Feed`、`Search`、`Story`、`Entry`、`Revision`、`Asset`、错误、健康检查和 SSE Event Envelope 合同，并提供 HTTP Service Client。
+- 完成 Prisma migration、`COSMOS_DATA_ROOT`/`DATABASE_URL` 数据边界、隔离 Data Root、内容寻址 Blob Store 和 FTS5/BM25 受控 SQL Adapter。
+- 完成 fixture/RSS Connector 的 URL、无 URL、重复轮询、来源修订和媒体元数据路径；重复录入不产生重复 Entry，来源变化追加 Revision，原始 Observation 保留。
+- API 已提供 Source 创建/查询/启停/测试、手动 queued Run、Run 状态、Feed、Search、Story/Entry/Revision 详情和受控 Asset 读取。
+- Worker 已接入持久 Job claim、租约 token、过期接管、旧 token 拒绝、有限指数退避、schedule bucket、heartbeat 和 checkpoint。
+- SSE 已提供持久 Domain Event、游标回放、`Last-Event-ID`/`after`、keepalive 和 `snapshot_required`；Web 会自动刷新并展示服务/SSE 状态。
+- Web 已通过 Service Endpoint 完成来源表单、真实健康检查、队列触发、Feed、关键词/来源/时间/分页搜索和 Story → Entry → Source/Revision 展开。
+- Node 生产冒烟和 Playwright 浏览器链路已通过；浏览器验证覆盖来源创建、队列触发、Feed、搜索、URL-free Story 详情和服务状态。
 - 结束本次 grilling；实现级未决问题转入后置清单。
 - 确认第一版聚类和相关推荐不使用 embedding。
 - 将 `CONTEXT.md` 收缩为产品共同语言，只维护经常使用、跨模块或容易歧义的核心概念；实现级对象留待真实开发需要时再定义。
@@ -58,11 +76,14 @@ Cosmos 已建立公开 GitHub 仓库和 v0.9 Phase 0 架构基线，并确认个
 
 ## 当前架构基线
 
-以下是 v0.9 的 Phase 0 基线；后续需求仍可通过记录理由调整：
+以下是 v0.10 的 Phase 0 基线；后续需求仍可通过记录理由调整：
 
-- 模块化单体优先；逻辑角色可拆进程，但第一阶段不引入分布式基础设施。
-- Bun + TypeScript 为当前实现基线，Vue/Nuxt 为看板候选前端。
-- SQLite 保存核心元数据、关系、任务与用户状态；文件系统保存内容寻址的 Blob 和版本化 Artifact。
+- 服务器部署优先的模块化单体；逻辑上分 Web、API 和 Worker，第一阶段不引入微服务治理或消息队列集群。
+- Web 使用 React + Next.js App Router；API 使用 NestJS；UI 初步使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。
+- Bun 用于开发，Node 用于生产；共享包和 Worker 运行路径保持 Node-compatible。
+- Prisma + SQLite + WAL 保存核心元数据、关系、任务与用户状态；FTS5/BM25、虚拟表和触发器通过受控 SQL Adapter 使用。
+- 服务器、客户端、客户端与服务分离三种模式共用版本化 Service Endpoint、Command、Query、Event 和 SSE Transport；客户端不直接访问 Prisma、SQLite 或 Data Root。
+- 内容寻址 Blob Store 保存原始 payload、图片和附件；Artifact Root 保存版本化生成产物，Cache Root 可重建。
 - 原始 Observation 不可变，外部 URL 可选；派生分析和索引可重建并保留 provenance。
 - Entry 是稳定信息条目；每个 Entry 默认拥有一个主 Story，Story 使用稳定 kind 和受管理 subtype 注册表；Topic 只组织 Story。
 - Workspace 保存长期体验、维护策略和交互状态；Artifact 保存不可变的版本化输出。
@@ -84,6 +105,8 @@ Cosmos 已建立公开 GitHub 仓库和 v0.9 Phase 0 架构基线，并确认个
 - Agent 内部维护受用户配置范围约束；新增外部来源、数据范围和发送行为需要显式配置/批准。
 - 第一版扩展按本地可信代码处理，但继续使用 SDK/Command/Query/Event；Phase 1 从 RSS/RSSHub + fixture 开始。
 - 看板优先于推送实现；推送边界仍在架构中保留。
+- Phase 1 只实现一个 Entry → 一个最小 Story projection；跨来源聚类、Story merge/split、Topic 维护和完整推荐后置。
+- Phase 1 直接使用 `pi-ai`；`neuro-agent-harness` 继续独立去领域化演进，稳定后再接入 Cosmos。
 
 ## 后置决定
 
@@ -96,27 +119,35 @@ Cosmos 已建立公开 GitHub 仓库和 v0.9 Phase 0 架构基线，并确认个
 - BiliBili、X、Telegram、公众号、QQ群和 AIHOT 的合法、稳定接入方式。
 - 多 Board、公网摘要链接、推送渠道和跨平台发布策略。
 - Source、Trigger、Flow、Action 的产品关系已暂定，更细的实现边界等待真实用例推动。
+- Bun 开发与 Node 生产在 Next、Nest、Prisma、Worker 和 Harness Adapter 上的完整兼容矩阵。
+- Prisma/SQLite 的 FTS5 migration、触发器、Raw SQL Adapter 和未来存储替换边界。
+- 三种宿主模式的认证、Service Endpoint、SSE 恢复、Blob/Artifact 访问和版本协商。
+- Desktop Shell 的具体技术、安装/升级/卸载生命周期，以及 `pi-ai` 到 Harness 的迁移门槛。
 
 ## 尚未实现
 
-- Source、Trigger、Flow、Action 和持久执行引擎。
-- SQLite schema、Blob Store、全文/实体/关系索引和查询 API；向量索引后置。
+- Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；当前环境没有 Docker CLI。
+- 真实 RSS/RSSHub 网络来源验收、跨平台 Node 验收和更长时间的 Worker 重启演练。
+- 完整的 Source/Trigger/Flow/Action 产品配置模型；Phase 1 只实现 fixture/RSS ingest 所需最小合同。
 - 去重、Story 归并、Topic 成员、分类、关系和推荐系统。
 - Agent 分析、Artifact、Workspace 和交互状态。
 - 看板、推送、摘要图片和网页发布。
 
 ## 验证边界
 
-本轮为文档、协作流程与仓库初始化，已完成以下检查：
+本次脚手架初始化后已完成以下 focused 检查：
 
-- 29 个仓库文件通过 `git diff --no-index --check`、尾随空白和文件末尾空行检查。
-- 18 份 Markdown 的 53 个仓库内本地链接全部有效，代码围栏成对；原始需求另有 1 个指向仓库外技能文件的本地路径链接，未改写用户原文。
-- 7 个 GitHub YAML 文件解析通过；5 个 Issue Form 的字段 ID 与默认标签引用检查通过，标签清单包含 33 个标签。
-- `CONTEXT.md` 为 189 行，只维护产品共同语言；958 行的算法与实体细节已下沉到独立信息模型。
-- Grilling Round 1 至 Round 6 的回答已逐字追加到原始需求；Q30–Q33 明确后置，未被伪装成已确认决定。
-- Entry、Story、Topic、Relation、Workspace、Artifact、Timeline 与 Spotlight 的关键边界均存在。
-- 产品需求包含 125 个唯一需求编号，并新增个人本地边界、Agent 外部副作用授权、可信扩展和 RSS/RSSHub 首条切片要求。
-- 远端研究文件与本地归档 SHA-256 一致：`bcec8d2698d65d6217ed067fbb8625888e7e1dfab7b65aa0096f0790d9aa930d`。
-- Git 状态为 `master...origin/master` 且工作区干净；首个公开提交为 `1eff6c7`，远端为 `https://github.com/notnotype/cosmos`。
+- `git diff --check`：通过。
+- `bun install`：通过，生成根 `bun.lock`。
+- `bun run db:validate`、`bun run db:generate`：通过，Prisma schema 合法并生成 Prisma Client 6.19.3。
+- `bun run typecheck`、`bun run build`、`bun run lint:web`：通过。
+- `bun run test`：通过，当前 6 个测试文件、14 个测试通过，覆盖 contracts/domain、Blob、RSS、Transport、API SSE、Prisma/FTS、Job lease、Worker、schedule 和分页过滤。
+- `bun run db:migrate`：在隔离 Data Root 上通过；迁移前会创建空 SQLite 文件，FTS5 由 Repository 初始化的受控 SQL 建立。
+- `pwsh -NoProfile -File scripts/smoke-node.ps1`：通过；Node API/Worker、migration、queued Run、fixture 3 条、Search、Story 和 SSE 回放均通过。
+- Playwright 浏览器验收：通过来源创建、手动 queued Run、SSE ready、Feed 3 条、搜索 2 条、URL-free Story/Revision/Observation 和健康检查。
+- `docker version`：未运行，当前环境没有 Docker CLI，因此 Docker/Compose 验收保留为待执行。
+- 20 份仓库 Markdown：代码围栏成对、无尾随空白、文件末尾无多余空行；PRD 126 个需求编号无重复。
+- 62 个仓库内相对 Markdown 链接中，61 个有效；原始需求保留的 1 个仓库外技能路径 `C:\Users\notnotype\.agents\skills\grilling\SKILL.md` 未改写。
+- 未运行：Docker/Compose、真实 RSS/RSSHub、跨平台 Node 和长时间故障恢复验收。
 
-没有可运行代码，因此未运行类型检查、测试、构建、浏览器或真实来源验收。
+此前 Phase 0 的远端仓库、许可证、研究文件 SHA-256 和 GitHub 配置检查结果仍保留在历史 Task 记录中；本次没有执行远端同步、commit、push 或发布。
