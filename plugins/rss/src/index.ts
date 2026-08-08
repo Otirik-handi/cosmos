@@ -2,8 +2,10 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 
 import { XMLParser } from "fast-xml-parser";
-import type {
-    IngestConnector,
+import {
+    ConnectorExecutionError,
+    type LoggerPort,
+    type IngestConnector,
 } from "@cosmos/application";
 import type {
     SourceSnapshot,
@@ -29,6 +31,7 @@ export interface RssItem {
 
 export interface RssConnectorOptions {
     fetch?: typeof globalThis.fetch;
+    logger?: LoggerPort;
 }
 
 export function createRssConnector(
@@ -38,24 +41,98 @@ export function createRssConnector(
 
     return {
         id: rssConnectorId,
+        description: "Fetch RSS or RSSHub XML feeds.",
+        configVersion: "v1",
+        capabilities: ["network", "rss"],
+        validate(source) {
+            if (!source.config.feedUrl) {
+                throw new Error("RSS source is missing config.feedUrl.");
+            }
+        },
         async fetchItems({ source }) {
             const feedUrl = source.config.feedUrl;
             if (!feedUrl) {
                 throw new Error("RSS source is missing config.feedUrl.");
             }
-            const response = await fetcher(feedUrl);
-            if (!response.ok) {
-                throw new Error(`RSS fetch failed with HTTP ${response.status}.`);
+            const startedAt = Date.now();
+            options.logger?.debug("connector.transport.started", {
+                connectorId: rssConnectorId,
+                sourceKind: source.kind,
+                host: safeHost(feedUrl),
+            });
+            let response: Response;
+            try {
+                response = await fetcher(feedUrl);
+            } catch (error) {
+                options.logger?.error("connector.transport.failed", {
+                    connectorId: rssConnectorId,
+                    sourceKind: source.kind,
+                    host: safeHost(feedUrl),
+                    durationMs: Date.now() - startedAt,
+                }, error);
+                throw error;
             }
-            const xml = await response.text();
-            return {
-                items: parseRssXml(xml, {
+            if (!response.ok) {
+                options.logger?.warn("connector.transport.failed", {
+                    connectorId: rssConnectorId,
+                    sourceKind: source.kind,
+                    host: safeHost(feedUrl),
+                    status: response.status,
+                    durationMs: Date.now() - startedAt,
+                });
+                throw new ConnectorExecutionError(
+                    response.status === 429
+                        ? "rate_limited"
+                        : "dependency_unavailable",
+                    `RSS fetch failed with HTTP ${response.status}.`,
+                    response.status >= 500 || response.status === 429,
+                );
+            }
+            let xml = "";
+            let items: readonly NormalizedIngestItem[];
+            try {
+                xml = await response.text();
+                items = parseRssXml(xml, {
                     provider: "rss",
                     feedUrl,
                 }).map((item) => ({
                     ...item,
                     rawPayload: xml,
-                })),
+                    rawPayloadMimeType: "application/xml",
+                }));
+            } catch (error) {
+                options.logger?.error("connector.transport.failed", {
+                    connectorId: rssConnectorId,
+                    sourceKind: source.kind,
+                    host: safeHost(feedUrl),
+                    status: response.status,
+                    responseBytes: Buffer.byteLength(xml, "utf8"),
+                    durationMs: Date.now() - startedAt,
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : "malformed_payload",
+                }, error);
+                if (error instanceof ConnectorExecutionError) {
+                    throw error;
+                }
+                throw new ConnectorExecutionError(
+                    "malformed_payload",
+                    "RSS response could not be parsed.",
+                    false,
+                    { cause: error },
+                );
+            }
+            options.logger?.info("connector.transport.completed", {
+                connectorId: rssConnectorId,
+                sourceKind: source.kind,
+                host: safeHost(feedUrl),
+                status: response.status,
+                itemCount: items.length,
+                responseBytes: Buffer.byteLength(xml, "utf8"),
+                durationMs: Date.now() - startedAt,
+            });
+            return {
+                items,
                 nextCursor: hashCursor(xml),
             };
         },
@@ -65,22 +142,61 @@ export function createRssConnector(
 export function createFixtureRssConnector(options: {
     rootDirectory?: string;
     pages?: readonly string[];
+    logger?: LoggerPort;
 } = {}): IngestConnector {
     return {
         id: fixtureRssConnectorId,
+        description: "Replay a local RSS fixture deterministically.",
+        configVersion: "v1",
+        capabilities: ["fixture", "rss"],
+        validate(source) {
+            const fixturePath = source.config.fixturePath;
+            if (fixturePath !== undefined && !fixturePath.trim()) {
+                throw new Error("Fixture source config.fixturePath cannot be empty.");
+            }
+        },
         async fetchItems({ source }) {
-            const pages = options.pages ?? [
-                await readFixture(source, options.rootDirectory),
-            ];
-            const xml = pages[0];
-            return {
-                items: parseRssXml(xml, {
+            const startedAt = Date.now();
+            options.logger?.debug("connector.transport.started", {
+                connectorId: fixtureRssConnectorId,
+                sourceKind: source.kind,
+            });
+            let xml = "";
+            let items: readonly NormalizedIngestItem[];
+            try {
+                const pages = options.pages ?? [
+                    await readFixture(source, options.rootDirectory),
+                ];
+                xml = pages[0];
+                items = parseRssXml(xml, {
                     provider: "fixture-rss",
                     fixturePath: source.config.fixturePath ?? "fixtures/rss/basic.xml",
                 }).map((item) => ({
                     ...item,
                     rawPayload: xml,
-                })),
+                    rawPayloadMimeType: "application/xml",
+                }));
+            } catch (error) {
+                options.logger?.error("connector.transport.failed", {
+                    connectorId: fixtureRssConnectorId,
+                    sourceKind: source.kind,
+                    responseBytes: Buffer.byteLength(xml, "utf8"),
+                    durationMs: Date.now() - startedAt,
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : "malformed_payload",
+                }, error);
+                throw error;
+            }
+            options.logger?.info("connector.transport.completed", {
+                connectorId: fixtureRssConnectorId,
+                sourceKind: source.kind,
+                itemCount: items.length,
+                responseBytes: Buffer.byteLength(xml, "utf8"),
+                durationMs: Date.now() - startedAt,
+            });
+            return {
+                items,
                 nextCursor: hashCursor(xml),
             };
         },
@@ -93,6 +209,12 @@ export function createSequenceFixtureConnector(
     let pageIndex = 0;
     return {
         id: fixtureRssConnectorId,
+        description: "Replay an in-memory sequence of RSS pages.",
+        configVersion: "v1",
+        capabilities: ["fixture", "rss", "test"],
+        validate() {
+            return;
+        },
         async fetchItems() {
             const xml = pages[Math.min(pageIndex++, pages.length - 1)];
             return {
@@ -102,6 +224,7 @@ export function createSequenceFixtureConnector(
                 }).map((item) => ({
                     ...item,
                     rawPayload: xml,
+                    rawPayloadMimeType: "application/xml",
                 })),
                 nextCursor: hashCursor(xml),
             };
@@ -248,4 +371,12 @@ function hashCursor(value: string): string {
         hash = Math.imul(hash, 16777619);
     }
     return (hash >>> 0).toString(16);
+}
+
+function safeHost(value: string): string | null {
+    try {
+        return new URL(value).hostname;
+    } catch {
+        return null;
+    }
 }

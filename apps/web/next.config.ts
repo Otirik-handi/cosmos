@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     output: "standalone",
+    logging: {
+        incomingRequests: false,
+        browserToTerminal: false,
+    },
     async rewrites() {
         return [{
             source: "/api/:path*",

@@ -13,3 +13,4 @@
 - [`2026-08-06-opencli-youtube-research.md`](2026-08-06-opencli-youtube-research.md) OpenCLI 获取 YouTube 信息实测：代理前置与中断失败形态、全匿名公共命令（含 transcript 字幕）、登录态命令、whoami 不稳定与对 Cosmos 的集成结论。
 - [`2026-08-06-opencli-github-research.md`](2026-08-06-opencli-github-research.md) OpenCLI 获取 GitHub 信息实测：适配器覆盖薄（仅 trending）、免登录免浏览器依赖、富数据缺口（建议直连 REST API）与对 Cosmos 的集成结论。
 - [`2026-08-06-opencli-reddit-research.md`](2026-08-06-opencli-reddit-research.md) OpenCLI 获取 Reddit 信息实测：公开面最大之一（正文/评论树/NSFW 标记）、subscribed 适配器缺陷（API 404）、新账号空数据语义与对 Cosmos 的集成结论。
+- [`2026-08-08-nb-memory-research.md`](2026-08-08-nb-memory-research.md) 记录本地 `nb-memory` 的事实源、双时间轴、检索计划和与 Cosmos 的共享记忆边界。

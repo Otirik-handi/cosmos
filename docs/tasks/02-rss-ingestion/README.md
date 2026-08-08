@@ -42,7 +42,44 @@ RSS/RSSHub 或 fixture
 - `agent.run`、Artifact/Workspace 生成和 `neuro-agent-harness` 接入。
 - Desktop Shell 的具体技术、安装升级卸载和 Node sidecar 生命周期。
 - 多用户、租户、云端同步、细粒度权限 UI 和不可信插件沙箱。
-- 真实 BiliBili、X、Telegram、公众号、IMAP 或 QQ 接入。
+- 原始 RSS Phase 1 切片不包含真实 BiliBili、X、Telegram、公众号、IMAP 或 QQ 接入；BiliBili/AI HOT 仅在下方 Phase 1B 范围内推进。
+
+## Phase 1B：Collector Runtime
+
+Phase 1B 是在 RSS 最小闭环之上的后端扩展切片。它只扩展 API、Worker 和受管 Connector，不重新打开前端、AI、Harness 或 Desktop 范围。
+
+### Goal
+
+交付一条可以持续保存 `Entry` 的服务器端链路：
+
+```text
+受管 Bilibili/OpenCLI 或 AI HOT
+  -> Worker Probe / Ingest Job
+  -> Observation / EntryRevision / Asset
+  -> Prisma + SQLite / FTS5
+  -> API 查询 Job / Entry
+```
+
+### Scope
+
+- `Source.kind` 使用业务来源类型：`rss`、`fixture-rss`、`bilibili`、`aihot`。
+- OpenCLI 只作为 Bilibili Connector 内部的固定版本执行器，不作为通用命令执行平台。
+- Bilibili v1 只支持公开 `hot` 和登录态 `feed` 两个受管场景；`search`、`user-videos` 和 `dynamic` 后置。
+- OpenCLI 的 profile、配置目录和 Browser Bridge 由 OpenCLI 管理；Cosmos 不保存 Cookie、Token 或密码。
+- AI HOT v1 只调用固定的 `https://aihot.virxact.com/api/v1/items`，使用服务返回的 cursor。
+- API 只校验配置、创建 Job 和查询状态；Probe 与正式 Ingest 均由 Worker 执行。
+- Probe 是 dry-run，只保存探测结果，不写 Observation、Entry、Asset，也不推进 checkpoint。
+- 继续复用 Observation、EntryRevision、Asset、Blob Store、FTS5、幂等、租约、重试和 Worker heartbeat。
+- 增加 `GET /api/v1/jobs/:jobId` 和最小 `GET /api/v1/entries` 验收接口。
+- 先完成手动 Probe/Ingest；schedule 在手动链路稳定后接入。
+- Docker 保证 API、Worker 和 AI HOT 的生产入口；Bilibili 需要宿主机或外部运行环境提供 Browser Bridge，依赖缺失时必须返回明确状态。
+
+### Phase 1B Non-goals
+
+- 不允许用户提交任意 OpenCLI command、任意 HTTP endpoint、任意 Header 或认证信息。
+- 不在 API 进程执行外部 HTTP、浏览器桥或 OpenCLI。
+- 不接入 LLM、`pi-ai`、`neuro-agent-harness`、Topic、推荐、聚类或前端。
+- 不把 Cookie、Token、私密浏览器数据写入 Cosmos 数据库或日志。
 
 ## Current State
 
@@ -165,6 +202,38 @@ SourceInstance
 
 完成标准：服务器模式的最小端到端链路可复现；未运行的 Docker、真实 RSS、浏览器或跨平台验收分别标注，不用 focused 测试替代。
 
+### 9. Phase 1B Collector Runtime
+
+先修正当前草稿的合同和生产闭合问题，再实现真实 Connector：
+
+- 将 Connector Registry 的 key 固定为业务 `Source.kind`，移除任意 connector override。
+- 让 `source-probe` 成为持久 Job；API 返回 `202` 和 Job Snapshot，Worker 执行 dry-run。
+- 为 Job 补齐 payload、result、错误码、查询接口和旧租约拒绝提交语义。
+- 用统一 `NormalizedIngestItem` 隔离 Bilibili、AI HOT 和 RSS 的字段差异。
+- AI HOT 先用 fake fetch 测试，再做固定 endpoint 的真实 GET 和 cursor 验收。
+- Bilibili 通过固定 `hot`/`feed` 场景调用 OpenCLI，支持内置版本和环境变量 executable 覆盖。
+- Bilibili 的 Browser Bridge、profile 和登录前置条件必须在 Node smoke 与 Docker 说明中单独报告。
+- 录入仍按“获取 -> 不可变 Observation -> 去重/Revision -> Asset -> Story projection -> FTS -> 成功后 checkpoint”顺序执行。
+
+完成标准：API 不执行外部采集；Probe 无副作用；重复轮询不产生重复 Entry；来源修订追加 Revision；Worker 中断后任务可接管；AI HOT 可在 Docker 中运行；Bilibili 在满足 Browser Bridge 前置条件的 Node 环境中可诊断并保存 Entry。
+
+### 10. 本轮用户视角架构审查
+
+本轮确认 Phase 1/1B 只交付采集基础和最小离线信息库闭环，不等同于最终的可编排知识平台。Run、Step、Job、Domain 和 DomainEvent 的职责已经记录：
+
+- Run 表示一次完整流程，Step 表示流程阶段，Job 表示 Worker 执行单元，DomainEvent 表示已经发生的持久事实。
+- 数据库是事实、状态、历史和用户真相的持久中心；插件和 Agent 通过版本化合同访问数据库，不直接依赖 Prisma 表。
+- Provider、Adapter、ConnectionInstance、SourceInstance、Trigger 和 FlowBinding 分开；一个连接可以复用多个采集计划。
+- 凭证建议由 Cosmos SecretStore 统一管理，非秘密 cursor、ETag、分页 token 和限流状态由命名空间化 ConnectorStateStore 管理。
+- “动态每 30 分钟、推荐流每 2 小时”应建模为同一连接下的两个独立采集计划，各自拥有 Trigger、Flow、checkpoint、预算、错误和重试边界。
+- Entry → Story 保留“同步确定性入库 + 异步知识 Pipeline”两条路径；LLM 通过 Proposal、Evidence、Capability、预算和审批约束参与，不直接改写 Observation。
+- 后续 Story 跨来源聚类需要 StoryMembership；推荐需要区分外部候选、Admission 和 Cosmos Ranking，普通 Feed 不能依赖在线 LLM。
+- 本轮确认知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与；它不是单一 Session。
+- 个性化配置方向是“Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号 → 程序可读配置”，当前不要求逐字段 provenance，也不把平台推荐信号独立建模为用户偏好。
+- `nb-memory` 调研已记录在 [`docs/research/2026-08-08-nb-memory-research.md`](../../research/2026-08-08-nb-memory-research.md)；接入、Node 生产兼容性和行为映射均后置，不扩大本 Task。
+
+这些方向暂不扩大本 Task 的实现范围。继续增加平台 Adapter 前，应先单独建立 Connection/Secret/State、Job + Workflow Runtime、持久子任务、Proposal/Provenance 和 `nb-memory` Adapter 的实现 Task。
+
 ## Verification
 
 已完成：
@@ -188,6 +257,7 @@ SourceInstance
 - Next.js browser/Product 验收。
 - Bun 开发与 Node 生产兼容性验收。
 - Docker/Compose 和三种宿主模式验收。
+- Phase 1B Connector 配置、Probe 无副作用、Job 查询、AI HOT cursor、Bilibili/OpenCLI 场景和 Browser Bridge 前置条件验收。
 
 当前仍未运行：Docker/Compose、真实 RSS/RSSHub、跨平台 Node 和长时间故障恢复验收。
 
@@ -197,5 +267,11 @@ SourceInstance
 - 为 Prisma/SQLite 的 FTS5 migration、触发器和 Raw SQL Adapter 创建实现 Task/ADR。
 - 细化 Service Endpoint 的认证、Blob/Artifact 访问、SSE 恢复和版本协商。
 - 在 Phase 1 完成后再决定 Story 聚类、Topic、Board 编辑器和推荐的切片顺序。
+- 在增加更多平台 Adapter 前，先验证 Connection/Secret/State、多个采集计划和通用 Trigger/Flow/Action Runtime 的边界。
+- 为 Entry → Story 的异步知识 Pipeline 建立独立 Task，先用确定性规则和 fake LLM 验证 Proposal、Evidence、用户确认和重算。
+- 为推荐系统建立独立 Task，区分外部候选、Admission、Ranking、Impression、Feedback 和 LLM 异步特征。
+- 为 Knowledge Manager 建立独立 Task，定义 Web Chat、`cosmos cli`、ingest 调用和共享 `nb-memory` 的 Service/Capability 边界。
+- 为个性化配置建立独立 Task，先验证自然语言记忆、行为观察到程序配置的转换，不引入逐字段 provenance 账本。
 - 评估 `pi-ai` 与 `neuro-agent-harness` 的 ModelRuntime 迁移门槛，不提前把 Harness 接入 Phase 1。
 - 选择 Desktop Shell 技术并定义本地生命周期；不改变当前 Transport 与领域边界。
+- 在 Phase 1B 后评估 Bilibili `dynamic`、搜索、用户视频和更多 OpenCLI 场景，不把它们提前变成通用命令转发。

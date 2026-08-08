@@ -2,15 +2,67 @@ import { z } from "zod";
 
 export const protocolVersion = "v1" as const;
 
-export const sourceKindSchema = z.enum(["rss", "fixture-rss"]);
+/**
+ * A source kind is a stable connector family identifier.
+ *
+ * The core intentionally accepts plugin-defined values so adding a new
+ * collector does not require changing the persistence model or the API
+ * envelope. Built-in values are documented by the connector registry.
+ */
+export const sourceKindSchema = z.string().trim().min(1).max(100);
 export type SourceKind = z.infer<typeof sourceKindSchema>;
+
+const scheduleConfigShape = {
+    scheduleIntervalMs: z.coerce.number().int().min(1_000).max(31 * 24 * 60 * 60 * 1_000).optional(),
+};
 
 export const sourceConfigSchema = z.object({
     feedUrl: z.string().url().optional(),
     fixturePath: z.string().min(1).optional(),
-    scheduleIntervalMs: z.coerce.number().int().min(1_000).max(31 * 24 * 60 * 60 * 1_000).optional(),
+    ...scheduleConfigShape,
 }).passthrough();
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
+
+export const rssSourceConfigSchema = z.object({
+    feedUrl: z.string().url(),
+    ...scheduleConfigShape,
+}).strict();
+export type RssSourceConfig = z.infer<typeof rssSourceConfigSchema>;
+
+export const fixtureRssSourceConfigSchema = z.object({
+    fixturePath: z.string().min(1).optional(),
+    ...scheduleConfigShape,
+}).strict();
+export type FixtureRssSourceConfig = z.infer<typeof fixtureRssSourceConfigSchema>;
+
+const safeProfileSchema = z.string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9._-]+$/);
+
+export const bilibiliSourceConfigSchema = z.object({
+    schemaVersion: z.coerce.number().int().positive().default(1),
+    mode: z.enum(["hot", "feed"]),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    profile: safeProfileSchema.optional(),
+    ...scheduleConfigShape,
+}).strict().superRefine((value, context) => {
+    if (value.mode === "feed" && !value.profile) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["profile"],
+            message: "Bilibili feed requires an OpenCLI profile.",
+        });
+    }
+});
+export type BilibiliSourceConfig = z.infer<typeof bilibiliSourceConfigSchema>;
+
+export const aiHotSourceConfigSchema = z.object({
+    schemaVersion: z.coerce.number().int().positive().default(1),
+    ...scheduleConfigShape,
+}).strict();
+export type AiHotSourceConfig = z.infer<typeof aiHotSourceConfigSchema>;
 
 export const createSourceCommandSchema = z.object({
     name: z.string().trim().min(1).max(200),
@@ -25,14 +77,17 @@ export const updateSourceCommandSchema = z.object({
 });
 export type UpdateSourceCommand = z.infer<typeof updateSourceCommandSchema>;
 
-export const sourceTestResultSchema = z.object({
+export const sourceProbeResultSchema = z.object({
     sourceId: z.string(),
     connectorId: z.string(),
     itemCount: z.number().int().nonnegative(),
-    nextCursor: z.string().nullable(),
+    nextCursorAvailable: z.boolean(),
     checkedAt: z.string(),
 });
-export type SourceTestResult = z.infer<typeof sourceTestResultSchema>;
+export type SourceProbeResult = z.infer<typeof sourceProbeResultSchema>;
+
+export const sourceTestResultSchema = sourceProbeResultSchema;
+export type SourceTestResult = SourceProbeResult;
 
 export const ingestCommandSchema = z.object({
     sourceId: z.string().min(1),
@@ -53,6 +108,14 @@ export const sourceSnapshotSchema = z.object({
     lastError: z.string().nullable(),
 });
 export type SourceSnapshot = z.infer<typeof sourceSnapshotSchema>;
+
+export const connectorDescriptorSchema = z.object({
+    id: z.string().trim().min(1),
+    description: z.string().trim().min(1),
+    capabilities: z.string().array(),
+    configVersion: z.string().trim().min(1),
+});
+export type ConnectorDescriptor = z.infer<typeof connectorDescriptorSchema>;
 
 export const runStatusSchema = z.enum([
     "queued",
@@ -81,6 +144,28 @@ export const jobStatusSchema = z.enum([
     "cancelled",
 ]);
 export type JobStatus = z.infer<typeof jobStatusSchema>;
+
+export const jobKindSchema = z.enum([
+    "source-ingest",
+    "source-probe",
+]);
+export type JobKind = z.infer<typeof jobKindSchema>;
+
+export const jobSnapshotSchema = z.object({
+    id: z.string(),
+    kind: jobKindSchema,
+    sourceId: z.string().nullable(),
+    runId: z.string().nullable(),
+    status: jobStatusSchema,
+    attempts: z.number().int().nonnegative(),
+    maxAttempts: z.number().int().positive(),
+    errorCode: z.string().nullable(),
+    error: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    result: z.unknown().nullable(),
+});
+export type JobSnapshot = z.infer<typeof jobSnapshotSchema>;
 
 export const assetStatusSchema = z.enum([
     "saved",
@@ -236,6 +321,37 @@ export const entryDetailSchema = z.object({
 });
 export type EntryDetail = z.infer<typeof entryDetailSchema>;
 
+export const entryListQuerySchema = z.object({
+    sourceId: z.string().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type EntryListQuery = z.input<typeof entryListQuerySchema>;
+
+export const entryListItemSchema = z.object({
+    id: z.string(),
+    sourceId: z.string(),
+    sourceName: z.string(),
+    sourceKind: sourceKindSchema,
+    storyId: z.string().nullable(),
+    currentRevisionId: z.string(),
+    title: z.string(),
+    summary: z.string().nullable(),
+    webUrl: z.string().nullable(),
+    publishedAt: z.string().nullable(),
+    updatedAt: z.string(),
+    revisionCount: z.number().int().nonnegative(),
+    observationCount: z.number().int().nonnegative(),
+    assets: assetSnapshotSchema.array(),
+});
+export type EntryListItem = z.infer<typeof entryListItemSchema>;
+
+export const entryPageSchema = z.object({
+    items: entryListItemSchema.array(),
+    nextCursor: z.string().nullable(),
+});
+export type EntryPage = z.infer<typeof entryPageSchema>;
+
 export const storyDetailSchema = z.object({
     story: z.object({
         id: z.string(),
@@ -262,6 +378,8 @@ export const ingestResultSchema = z.object({
     createdEntryCount: z.number(),
     revisedEntryCount: z.number(),
     duplicateObservationCount: z.number(),
+    errorCode: z.string().nullable().optional(),
+    retryable: z.boolean().optional(),
 });
 export type IngestResult = z.infer<typeof ingestResultSchema>;
 

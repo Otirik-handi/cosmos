@@ -1,8 +1,8 @@
 # Cosmos 产品需求文档
 
-> 状态：Draft v0.10
+> 状态：Draft v0.11
 >
-> 最后更新：2026-08-07
+> 最后更新：2026-08-08
 >
 > 原始需求真相源：[`0001-original-requirements.md`](0001-original-requirements.md)
 >
@@ -107,6 +107,7 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 - 多来源优先：同一事件保留不同来源，而不是只保留一篇代表文章。
 - 非 LLM 基线：常规 Feed、过滤、全文检索和基础去重在 LLM 不可用时工作。
 - 用户可控：来源、数据保留、Agent 的数据范围、排序偏好和外部发送均有明确设置；复杂权限系统后置。
+- 记忆与配置分层：知识管理者的长期记忆、Cosmos 观察到的行为和未来其它信号可以共同生成程序可读配置；当前不把平台推荐信号单独建模成偏好层。
 - 可扩展但有边界：自定义代码和插件通过公开能力合同访问系统。
 
 ### 4.2 当前非目标
@@ -134,6 +135,7 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 | 分类 | Label / Saved View | 标签和可重复使用的查询视图 |
 | 精华 | Workspace + Artifact | 长期精选体验及其报告、网页、图表或附件产物 |
 | 热点 | Spotlight | 看板中的高关注展示决定，可指向 Story、Topic、Workspace 或 Artifact |
+| 知识管理者 | Knowledge Manager | 用户与系统交互的高权限窗口，可通过 Web/CLI 代替用户执行已授权操作 |
 | 时间线 | Timeline View | 按时间展示 Story 或 Topic 更新的视图 |
 | 消息流 | Feed | 由查询、候选生成、去重和排序得到的普通内容流 |
 | 看板 | Board | 可配置的 Section 与 Block 集合 |
@@ -203,6 +205,11 @@ flowchart LR
 | AUT-006 | Phase 1 | Flow 可以按顺序、条件和批量 fan-out 编排 Action。 | 同一个采集流程能够表达“拉取 → 标准化 → 去重 → 入库”，失败步骤和已完成步骤可区分。 |
 | AUT-007 | Phase 3 | Action 可以运行受控自定义代码或 Agent。 | Run 明确记录代码/Agent 版本、配置能力范围、预算、输入、输出、超时和产物。 |
 | AUT-008 | 跨阶段 | FlowDefinition 和 ActionDefinition 版本化。 | 已执行 Run 始终能定位到当时的定义；修改配置不会改变历史 Run 含义。 |
+| AUT-009 | Phase 2 | 用户可以创建可复用的 ConnectionInstance，并让多个 SourceInstance/采集计划引用同一个连接。 | 用户能看到连接状态、授权范围和失效原因；撤销凭证不删除已录入历史；普通配置、Job payload 和日志不包含凭证明文。 |
+| AUT-010 | Phase 2 | 一个连接下可以配置多个独立采集计划，每个计划拥有自己的来源操作、范围、频率、预算、checkpoint、发现上下文和失败状态。 | 同一 Bilibili 账号可以独立配置“动态每 30 分钟”和“推荐流每 2 小时”，两者的 Run、错误、重试和游标互不混淆。 |
+| AUT-011 | Phase 3 | Agent 或 Action 可以在授权范围内通过持久 Runtime 请求子 Flow/子 Job，而不是直接创建进程内任务。 | 子任务有父 Run/Step、因果 Event、预算、递归深度和审批状态；重启后可以查询、接管或收口。 |
+
+`ActionDefinition` 是可复用能力的版本化合同，不是某一次执行任务。它声明输入/输出、能力范围、幂等、超时、取消和恢复语义；具体一次调用仍通过 Workflow、Run、Step 和 Job 执行。
 
 ### 7.2 持久运行与恢复
 
@@ -214,6 +221,7 @@ flowchart LR
 | RUN-004 | Phase 2 | 用户可以取消、重新运行或从安全步骤恢复 Run。 | UI/API 明确说明会重用哪些结果、产生哪些新副作用。 |
 | RUN-005 | Phase 5 | 外部发送结果未知时保存 `uncertain`，不能自动伪装为成功或普通失败。 | 渠道支持查询时可对账收敛；不支持时按明确策略或用户确认处理。 |
 | RUN-006 | 跨阶段 | 交互、紧急、录入、分析、Artifact 和维护任务使用不同优先级与预算。 | 大批量采集不能长期阻塞用户操作或紧急状态检查。 |
+| RUN-007 | Phase 3 | Run、Step 和 Job 可以表达 Action 版本、父子关系、fan-out/fan-in、等待审批和可恢复的子任务。 | 一个 LLM 研究计划拆出的多个平台搜索任务可以独立重试、合并结果，并在父 Run 中显示进度和最终收口原因。 |
 
 ### 7.3 信息采集与本地保存
 
@@ -230,6 +238,7 @@ flowchart LR
 | ING-009 | Phase 2 | 用户可以按 SourceInstance 配置媒体类型、单文件/单次预算、保留期和失败重试。 | 修改策略只影响后续采集或明确的清理任务，不静默删除已有数据。 |
 | ING-010 | Phase 4 | Source 可覆盖平台首页推荐、关注用户、搜索结果、公告、AIHOT 类聚合站和邮件。 | 每种接入分别记录认证、速率、游标、平台限制和真实验收结果。 |
 | ING-011 | Phase 1 | 第一条端到端实现切片使用 RSS/RSSHub 和本地 fixture，验证采集、信息库、最小 Story projection、搜索/Feed 和离线访问闭环。 | fixture 能覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态；每个已录入 Entry 至少能投影为一个可打开的 Story；真实 Connector 的替换不改变领域合同。跨来源聚类、merge、split 和 Topic 维护后置。 |
+| ING-012 | Phase 2 | Connector 可以通过 Cosmos 提供的命名空间化、版本化 StateStore 保存 cursor、ETag、分页 token 和速率状态等非秘密运行状态。 | Adapter 不直接写核心数据库；状态可备份、恢复、迁移并按 Connection/Source/Flow 范围隔离；Secret 不混入普通状态。 |
 
 ### 7.4 信息库、分类与检索
 
@@ -268,13 +277,15 @@ flowchart LR
 | ORG-018 | Phase 3 | Agent 可以直接移除由系统/Agent 自动加入且未被人类确认的 Topic 成员；人类明确加入或确认的成员只能被 Agent 提议移除。 | 所有移除形成可恢复的 membership revision，保留 actor、理由、evidence 和关联 Run。 |
 | ORG-019 | Phase 3 | 人类接受的 Story/Workspace 内容字段可以被保护；Agent 自动更新必须先生成候选 Revision，不能静默覆盖受保护字段。 | 用户能区分候选、当前和历史 Revision；未受保护字段可按策略自动提升，受保护字段保留人类版本。 |
 | ORG-020 | Phase 2 | Story merge/split 必须定义用户状态和 Topic membership 的迁移语义。 | merge 的当前状态解析到 canonical；split 不自动复制到全部后继，显式迁移记录 actor、理由、依据且可撤销。 |
+| ORG-021 | Phase 2 | Entry → Story 的组织允许确定性算法、传统模型和 LLM 协同；同步入库不依赖 LLM，异步分析可以提出分类、聚类、实体、关系、重要性和紧急性建议。 | 每个自动结果保存输入 Revision、producer、版本、置信度、evidence 和关联 Run；LLM 不能直接改写 Observation 或绕过确认策略。 |
+| ORG-022 | Phase 2 | Story 支持多 Entry 成员和可审计的成员候选、接受、拒绝、merge、split 与证据关系。 | 多个平台描述同一事件时仍保留各自 Entry/Observation，同时可以在一个 event Story 中展示；相关但不同事件不会被强制合并。 |
 
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
 | REC-001 | Phase 1 | Admission 决定是否录入，Ranking 决定当前是否展示。 | 一条未进入今日 Feed 的已录入信息仍可在信息库搜索。 |
-| REC-002 | Phase 4 | Story 候选可来自关注账号、平台推荐、搜索查询、相关链接、Story 更新和 Agent 建议。 | 每个候选保存发现来源，不把平台推荐分数当作 Cosmos 最终分数；Feed 以 Story 排序并可展开 Entry。 |
+| REC-002 | Phase 4 | Story 候选可来自关注账号、平台推荐、搜索查询、相关链接、Story 更新和 Agent 建议。 | 每个候选保存发现来源，不把平台推荐分数当作 Cosmos 最终分数，也暂不把平台推荐信号建模为独立的用户偏好输入；Feed 以 Story 排序并可展开 Entry。 |
 | REC-003 | Phase 4 | 普通 Feed 默认不需要 LLM 在线参与。 | 模型不可用时，分类 Feed、全文检索、基础去重和排序仍能工作。 |
 | REC-004 | Phase 4 | 排序可组合关注强度、来源质量、时效、新颖性、Story 更新量、用户反馈和多样性。 | 每次排序保存 policy/version，并能解释主要信号。 |
 | REC-005 | Phase 4 | 系统记录 impression、open、save、hide、not interested、follow topic、annotate 和完成交互。 | 未点击但已展示的内容不会被误判为“用户没见过”。 |
@@ -289,6 +300,7 @@ flowchart LR
 | REC-014 | Phase 4 | Spotlight 使用分离的趋势、重要性、紧急性和用户兴趣信号，由版本化 policy、迟滞阈值和可续期 TTL 决定进入与保持。 | Placement 保存评分明细、policy/version 和到期时间；人工固定或排除在解除前覆盖自动策略。 |
 | REC-015 | Phase 4 | Read State 保存用户在 Story/surface 上最后看过的 `last_seen_revision_id`，新 Revision 派生 `updated_since_last_seen`。 | 新内容能被标记为“有更新”，但不会删除用户过去已读记录或伪造从未阅读。 |
 | REC-016 | Phase 4 | Spotlight 人工固定/排除绑定具体 target placement，直到用户解除；不同目标 kind 共用 policy 合同，只配置权重和阈值差异。 | 同一 Story 可以在不同 Board/Section 有不同人工展示决定；自动策略不能绕过未解除的覆盖。 |
+| REC-017 | Phase 4 | 推荐采用代码规则、结构化特征和可选 LLM 特征的混合方案；普通 Feed 在 LLM 不可用时仍可工作。 | Admission、Ranking、LLM rerank 和用户反馈分开记录；排序保存 policy/version、主要原因和多样性约束，不把外部平台推荐分数当作 Cosmos 最终分数。 |
 
 ### 7.7 Agent、Artifact 与 Workspace
 
@@ -308,6 +320,18 @@ flowchart LR
 | AGT-012 | Phase 3 | 用户可以看到 Workspace 是否正在被 Agent/Flow 更新、关联 Run、操作者、当前步骤和最近结果；更新运行态与 Workspace 生命周期、Board 可见性及 Interaction State 分离。 | 看板和 Workspace 页面能区分 `queued`、`running`、`waiting`、`failed` 等更新状态，并显示最近结果。 |
 | AGT-013 | Phase 3 | Workspace Update 的候选内容必须在成功时原子发布；失败或取消不能替换最近一次成功发布的 Workspace/Artifact Revision。 | Agent 中途失败、取消或重启后，用户仍能打开上一成功版本；成功发布形成新的可追溯 Revision。 |
 | AGT-014 | Phase 3 | Agent 可以在用户明确配置的内部范围内创建或维护 Topic、Workspace 和 Artifact；创建新外部 Source、扩大数据范围或执行外部发送需要用户显式配置/批准。 | Agent 不会悄悄增加来源、读取新敏感范围或发送消息；外部副作用仍有独立 Run/Delivery 账本。 |
+| AGT-015 | Phase 3 | 知识管理者是用户与 Cosmos 交互的高权限窗口，可以通过 Web GUI 聊天或 `cosmos cli` 代替用户执行已授权的 GUI/Command 操作。 | Web Chat 和 CLI 使用同一 Service/Workflow/Capability 合同；知识管理者不直接访问数据库或绕过持久运行时。 |
+| AGT-016 | Phase 3 | 知识管理者可以有多个聊天、ingest、研究或其它专业分身，并共享 `nb-memory` 维护的长期记忆与知识库。 | 分身不各自复制一套长期记忆；不同入口可以读取同一知识边界，并保留各自 Run/操作上下文。 |
+| AGT-017 | Phase 3 | ingest、research 和其它 Workflow 可以调用知识管理者进行知识点细究、补充研究或生成 Proposal。 | 需要外部搜索或后续处理时，通过持久子 Run/Step/Job 创建任务；知识管理者不能在进程内私自派发不可恢复任务。 |
+
+当前个性化配置草案为：
+
+```text
+Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
+    -> 程序可读的配置
+```
+
+`nb-memory` 是知识管理者的候选共享长期记忆/知识库；Cosmos 保存行为观察并负责将记忆和行为转换为程序可读配置。当前不要求每个配置字段保存独立的 producer/version/evidence 账本，也不把平台自身推荐信号作为独立偏好模型；Story、关系、推荐特征和 Artifact 等一般派生结果仍需按各自合同保留 provenance。
 
 ### 7.8 看板与浏览体验
 
@@ -347,6 +371,7 @@ flowchart LR
 | OPS-006 | 跨阶段 | 系统记录自动结果的 producer、version、时间、依据和当前选择。 | 算法升级后可以重建派生结果，同时保留用户修正和历史审计。 |
 | OPS-007 | Phase 0 | v1 和默认产品合同面向单个本地用户；未来协作能力不得破坏 actor/revision 审计。 | 第一版不引入多人账户、共享租户、云端同步或复杂协作权限。 |
 | OPS-008 | Phase 1 | 服务器、客户端和客户端与服务分离模式共用稳定的 Service Endpoint 与 Transport 合同。 | Web UI 可以连接本地 API 或远端 API；Command/Query/Event/流式更新使用版本化 payload；SSE 断线、恢复、健康检查、版本不兼容和服务不可用都有可识别状态；UI 不直接依赖 Prisma/SQLite。 |
+| OPS-009 | 跨阶段 | SecretStore、ConnectorStateStore、Blob/Artifact Root 和普通数据库状态必须有清晰的所有权与生命周期边界。 | 备份、删除、撤销连接、重建索引和清理缓存不会误删其它类别的数据；敏感状态不进入普通日志和事件 payload。 |
 
 ### 7.11 扩展与插件
 
@@ -357,6 +382,7 @@ flowchart LR
 | EXT-003 | Phase 2 | 插件使用版本化 Command、Query 和 Event 合同。 | 合同升级不静默改变旧 payload 含义；不兼容版本会被拒绝并解释原因。 |
 | EXT-004 | Phase 3 | 插件信任与隔离等级可分阶段，但第三方代码默认不获得核心进程全部能力。 | 即使先支持受信任扩展，也保持独立进程/RPC 可迁移边界。 |
 | EXT-005 | Phase 1 | 第一版只运行用户明确安装的本地可信扩展，不建设细粒度权限 UI 或不可信插件沙箱。 | 自定义代码仍通过 SDK/能力边界访问系统；未来可以提高隔离等级而不改写扩展合同。 |
+| EXT-006 | Phase 2 | 插件 manifest 可以声明多个 Source 操作、认证方式、配置/状态 schema、Action、能力、预算和错误/恢复语义。 | Web/API 可以根据声明展示配置和登录状态；增加新 Adapter 不需要修改核心数据库表或 Worker 的专用分支。 |
 
 ## 8. 主要产品界面
 
@@ -397,7 +423,8 @@ flowchart LR
 ### 8.6 设置与数据管理
 
 - Data Root、Secret、模型、网络、存储和媒体保留策略。
-- 标签、关注 Topic、推荐偏好和通知渠道。
+- 标签、关注 Topic、自然语言偏好、程序可读个性化配置和通知渠道。
+- Cosmos 行为观察的采集范围与关闭/清理选项；平台自身推荐信号暂不作为独立偏好模型配置。
 - 备份、恢复、导出、清理和删除范围。
 
 ## 9. 关键用户场景与验收
@@ -591,6 +618,7 @@ flowchart LR
 范围：
 
 - `agent.run` Action、能力范围和预算。
+- Knowledge Manager 的 Web Chat、`cosmos cli` 和共享 `nb-memory` 记忆 Adapter。
 - Artifact Workspace、Revision、provenance 和安全渲染。
 - Timeline/Dossier/Brief/Learning/Custom Workspace 与 Interaction State。
 
@@ -651,6 +679,14 @@ flowchart LR
 13. 三种部署模式的认证、Service Endpoint、SSE 恢复、Blob/Artifact 访问与版本协商合同。
 14. Desktop Shell 的具体实现、Node sidecar 生命周期以及安装、升级和卸载行为。
 15. `pi-ai` 直接接入到 Harness `ModelRuntime` 的迁移门槛，以及 NeuroBook Harness 与独立 Harness 的行为差异。
+16. SecretStore 的第一版后端是操作系统凭据库、加密文件还是其它本地实现；无论实现如何，公共合同均只暴露 SecretRef/能力受限租约。
+17. Adapter 的 Source 操作是由多个 SourceDefinition、一个带 operation 的 SourceDefinition，还是用户可见的“采集计划”聚合表达。
+18. 通用 Flow Runtime 的 DSL 是否只支持有限 DAG，以及 fan-out/fan-in、等待审批、子 Run 和取消/接管的最小行为。
+19. Entry → Story 的 Proposal 在什么置信度、来源类型和用户设置下可以自动接受，哪些字段必须人工确认。
+20. 推荐系统的第一版 Feed surface、用户反馈权重、LLM 异步特征和 Top-N rerank 的预算边界。
+21. `nb-memory` Adapter/Port 的具体 API、存储根目录、Node 生产兼容性以及 Cosmos Observation/Behavior 到 memory 的映射。
+22. 知识管理者 Web Chat、`cosmos cli`、ingest 参与方式和高权限操作的最小 Capability/审批合同。
+23. Agent 记忆与行为观察生成程序可读个性化配置的 schema、更新频率和人工覆盖边界。
 
 ## 14. 原始需求追踪
 
@@ -680,6 +716,12 @@ flowchart LR
 | React + Next.js、Tailwind、shadcn/ui、Prisma、SQLite、Docker、React Hook Form 和 Zod 的初步技术选择 | 6.1、OPS-008、Phase 1 |
 | Bun 开发、Node 生产，以及服务器、客户端、客户端与服务分离三种运行模式 | 6.1、OPS-008、NFR-010、NFR-012、待决定事项 11 至 14 |
 | Phase 1 先使用 `pi-ai`；`neuro-agent-harness` 去领域化、持续演进并后续通过适配合同接入；sidecar 移出 Harness Core | 6.1、待决定事项 15 |
+| Run、Step、Job、Domain 和 DomainEvent 的职责区分，以及数据库状态、持久事件和可重建 Projection 的边界 | AUT-009 至 AUT-011、RUN-007、OPS-006、OPS-009 |
+| Adapter/Connector 可扩展、Connection/Secret/State 统一管理，以及一个连接下多个独立采集计划 | AUT-009 至 AUT-010、ING-010、ING-012、EXT-006、待决定事项 16 至 17 |
+| Entry → Story 的确定性入库、异步知识 Pipeline、LLM Proposal/Provenance 和可授权子任务 | AUT-011、ORG-021 至 ORG-022、AGT-001 至 AGT-004、待决定事项 18 至 19 |
+| 代码与 LLM 结合的 Admission/Ranking 推荐系统，以及平台推荐与 Cosmos 推荐的边界 | REC-001 至 REC-004、REC-017、待决定事项 20 |
+| 知识管理者的 Web/CLI 入口、共享 `nb-memory` 记忆、多个分身和 ingest/research 参与方式 | AGT-015 至 AGT-017、待决定事项 21 至 23 |
+| Agent 记忆、Cosmos 行为观察和未来信号生成程序可读配置；暂不建模平台推荐偏好信号 | 4.1、AGT-015 至 AGT-017、REC-002 |
 
 ## 15. 当前解释与勘误候选
 
@@ -722,3 +764,12 @@ flowchart LR
 - Phase 1 首条真实 Connector 采用 RSS/RSSHub，并配套 fixture Connector。
 - Phase 1 的 Story 只实现最小 projection；完整跨来源聚类、merge、split、Topic 维护和推荐排序不被提前假设为已完成。
 - 服务器部署优先，但三种运行模式共用 Service Endpoint/Transport；Desktop Shell 和 Harness 接入细节保持后置。
+- 数据库是事实、状态、历史和用户真相的持久中心，但插件和 Agent 不直接依赖 Prisma 表；DomainEvent 是持久事实日志，不代替领域状态。
+- `Run` 表示一次完整 Flow，`Step` 表示其中一个阶段，`Job` 表示 Worker 可领取的任务单；未来 LLM 子任务必须复用同一持久 Runtime。
+- 凭证建议由 Cosmos SecretStore 统一管理，Adapter 负责认证协议；非秘密 cursor、ETag、分页 token 和限流状态通过命名空间化 StateStore 保存。
+- 用户可在同一 Connection 下配置多个独立采集计划，例如 Bilibili 动态每 30 分钟、推荐流每 2 小时；计划分别拥有 Trigger、Flow、checkpoint、预算和错误边界。
+- Entry → Story 采用“同步确定性入库 + 异步规则/模型/LLM Proposal”两条路径；LLM 不能改写 Observation 或绕过 Capability、预算和审批。
+- 推荐系统区分外部候选、Admission 和 Cosmos Ranking；代码负责硬约束和降级，LLM 提供可追溯的异步特征或受限 rerank。
+- 运行控制采用 `Job + Workflow` 组合；Workflow 同时保留脚本式和 Workflow IR 表示，最终落到同一持久 Runtime。
+- 知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作；它不是单一 Session。
+- 个性化配置由 Agent 记忆、Cosmos 观察到的用户行为和未来其它信号共同生成；当前不要求逐字段 provenance，也不独立建模平台推荐偏好信号。

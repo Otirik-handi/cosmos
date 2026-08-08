@@ -6,16 +6,46 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+    ConnectorExecutionError,
+    ConnectorProbeService,
     IngestionService,
     IngestionWorker,
+    type LoggerPort,
     type IngestConnector,
 } from "@cosmos/application";
 import type { SourceSnapshot } from "@cosmos/contracts";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 
-import { PrismaCosmosRepository } from "./index.js";
+import {
+    PrismaCosmosRepository,
+    resolveStorageRoots,
+} from "./index.js";
 
 const temporaryRoots: string[] = [];
+
+function captureLogger(): {
+    logger: LoggerPort;
+    records: Array<Record<string, unknown>>;
+} {
+    const records: Array<Record<string, unknown>> = [];
+    const logger: LoggerPort = {
+        child: () => logger,
+        withContext: (_context, callback) => callback(),
+        debug: (event, fields = {}) => {
+            records.push({ ...fields, event, level: "debug" });
+        },
+        info: (event, fields = {}) => {
+            records.push({ ...fields, event, level: "info" });
+        },
+        warn: (event, fields = {}) => {
+            records.push({ ...fields, event, level: "warn" });
+        },
+        error: (event, fields = {}) => {
+            records.push({ ...fields, event, level: "error" });
+        },
+    };
+    return { logger, records };
+}
 
 afterEach(async () => {
     await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, {
@@ -25,6 +55,18 @@ afterEach(async () => {
 });
 
 describe("PrismaCosmosRepository", () => {
+    it("anchors relative data roots to the workspace root", () => {
+        const workspaceRoot = resolve(tmpdir(), "cosmos-workspace-root");
+        const roots = resolveStorageRoots(".cosmos", workspaceRoot);
+
+        expect(roots.dataRoot).toBe(join(workspaceRoot, ".cosmos"));
+        expect(roots.databasePath).toBe(join(
+            workspaceRoot,
+            ".cosmos",
+            "cosmos.sqlite",
+        ));
+    });
+
     it("persists observations, revisions, assets, Story projections and FTS results", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-storage-test-"));
         temporaryRoots.push(root);
@@ -80,6 +122,10 @@ describe("PrismaCosmosRepository", () => {
             let pageIndex = 0;
             const connector: IngestConnector = {
             id: "test-fixture",
+            description: "Test fixture",
+            configVersion: "v1",
+            capabilities: ["test"],
+            validate: () => undefined,
             async fetchItems() {
                 const revised = pageIndex++ > 0
                     ? pages.map((item) => item.externalId === "stable-1"
@@ -105,6 +151,14 @@ describe("PrismaCosmosRepository", () => {
 
             const feed = await repository.feed({ limit: 20 });
             expect(feed.items).toHaveLength(2);
+
+            const entries = await repository.entries({
+                sourceId: source.id,
+                limit: 20,
+            });
+            expect(entries.items).toHaveLength(2);
+            expect(entries.items.some((item) => item.revisionCount === 2)).toBe(true);
+            expect(entries.items.every((item) => item.observationCount >= 2)).toBe(true);
 
             const search = await repository.search({
                 text: "Revised",
@@ -226,6 +280,108 @@ describe("PrismaCosmosRepository", () => {
         }
     });
 
+    it("logs claim competition and terminal attempts with source correlation", async () => {
+        const { logger, records } = captureLogger();
+        const candidate = {
+            id: "job-logging",
+            runId: "run-logging",
+            kind: "source-ingest",
+            status: "queued",
+            attempts: 0,
+            maxAttempts: 3,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            payloadJson: JSON.stringify({ sourceId: "source-logging" }),
+        };
+        const prisma = {
+            $transaction: async (
+                callback: (transaction: unknown) => unknown,
+            ) => callback({
+                job: {
+                    findFirst: async () => candidate,
+                    updateMany: async () => ({ count: 0 }),
+                    update: async () => candidate,
+                },
+                run: {
+                    update: async () => undefined,
+                },
+                domainEvent: {
+                    create: async () => undefined,
+                },
+            }),
+        };
+        const repository = new PrismaCosmosRepository({
+            prisma: prisma as never,
+            logger,
+        });
+
+        await expect(repository.claimNextJob({
+            owner: "worker-logging",
+            leaseMs: 5_000,
+        })).resolves.toBeNull();
+        candidate.attempts = candidate.maxAttempts;
+        await expect(repository.claimNextJob({
+            owner: "worker-logging",
+            leaseMs: 5_000,
+        })).resolves.toBeNull();
+
+        expect(records).toContainEqual(expect.objectContaining({
+            event: "job.claim_rejected",
+            level: "debug",
+            jobId: "job-logging",
+            runId: "run-logging",
+            sourceId: "source-logging",
+            reason: "lease_competition",
+        }));
+        expect(records).toContainEqual(expect.objectContaining({
+            event: "job.failed_terminal",
+            level: "error",
+            jobId: "job-logging",
+            runId: "run-logging",
+            sourceId: "source-logging",
+            errorCode: "max_attempts",
+        }));
+    });
+
+    it("logs both storage health query and heartbeat failures", async () => {
+        const queryFailure = captureLogger();
+        const queryFailingRepository = new PrismaCosmosRepository({
+            prisma: {
+                $queryRawUnsafe: async () => {
+                    throw new Error("database unavailable");
+                },
+            } as never,
+            logger: queryFailure.logger,
+        });
+        await expect(queryFailingRepository.health()).resolves.toMatchObject({
+            storageStatus: "failed",
+        });
+        expect(queryFailure.records).toContainEqual(expect.objectContaining({
+            event: "storage.health.failed",
+            stage: "query",
+        }));
+
+        const heartbeatFailure = captureLogger();
+        const heartbeatFailingRepository = new PrismaCosmosRepository({
+            prisma: {
+                $queryRawUnsafe: async () => 1,
+                workerHeartbeat: {
+                    findFirst: async () => {
+                        throw new Error("heartbeat unavailable");
+                    },
+                },
+            } as never,
+            logger: heartbeatFailure.logger,
+        });
+        await expect(heartbeatFailingRepository.health()).resolves.toMatchObject({
+            storageStatus: "failed",
+        });
+        expect(heartbeatFailure.records).toContainEqual(expect.objectContaining({
+            event: "storage.health.failed",
+            stage: "worker_heartbeat",
+        }));
+    });
+
     it("lets the persistent worker consume a queued source run end to end", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-worker-test-"));
         temporaryRoots.push(root);
@@ -247,6 +403,10 @@ describe("PrismaCosmosRepository", () => {
             });
             const connector: IngestConnector = {
                 id: "worker-test",
+                description: "Worker test",
+                configVersion: "v1",
+                capabilities: ["test"],
+                validate: () => undefined,
                 async fetchItems() {
                     return {
                         items: [{
@@ -284,6 +444,141 @@ describe("PrismaCosmosRepository", () => {
         }
     });
 
+    it("runs source probes in a worker without persisting entries or checkpoints", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-probe-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const source = await repository.createSource({
+                name: "Probe fixture",
+                kind: "fixture-rss",
+                config: {},
+                enabled: true,
+            });
+            const job = await repository.createProbeJob({
+                sourceId: source.id,
+                idempotencyKey: "probe-command-1",
+            });
+            const connector: IngestConnector = {
+                id: "probe-test",
+                description: "Probe test",
+                configVersion: "v1",
+                capabilities: ["test"],
+                validate: () => undefined,
+                async fetchItems() {
+                    return {
+                        items: [{
+                            externalId: "probe-item",
+                            title: "Probe item",
+                            summary: null,
+                            contentText: "Should not be persisted",
+                            webUrl: null,
+                            sourcePublishedAt: null,
+                            sourceLocator: { provider: "probe-test" },
+                            rawPayload: "{}",
+                            assets: [],
+                        }],
+                        nextCursor: "probe-cursor",
+                    };
+                },
+            };
+            const probe = new ConnectorProbeService(
+                repository,
+                () => connector,
+            );
+            const worker = new IngestionWorker(
+                repository,
+                new IngestionService(repository, () => connector),
+                {
+                    owner: "probe-worker",
+                    leaseMs: 60_000,
+                    probe,
+                },
+            );
+
+            const result = await worker.pollOnce();
+
+            expect(result?.status).toBe("succeeded");
+            expect((await repository.getJob(job.id))?.result).toMatchObject({
+                sourceId: source.id,
+                connectorId: "probe-test",
+                itemCount: 1,
+                nextCursorAvailable: true,
+            });
+            expect((await repository.entries({ limit: 20 })).items).toHaveLength(0);
+            expect(await repository.getCheckpoint(source.id)).toBeNull();
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("does not retry non-retryable connector failures", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-failure-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const source = await repository.createSource({
+                name: "Auth fixture",
+                kind: "fixture-rss",
+                config: {},
+                enabled: true,
+            });
+            const run = await repository.createQueuedRun({
+                sourceId: source.id,
+                triggerKind: "manual",
+                idempotencyKey: "auth-failure-1",
+            });
+            const connector: IngestConnector = {
+                id: "auth-failure",
+                description: "Auth failure",
+                configVersion: "v1",
+                capabilities: ["test"],
+                validate: () => undefined,
+                async fetchItems() {
+                    throw new ConnectorExecutionError(
+                        "authentication_required",
+                        "Login is required.",
+                        false,
+                    );
+                },
+            };
+            const worker = new IngestionWorker(
+                repository,
+                new IngestionService(repository, () => connector),
+                {
+                    owner: "auth-failure-worker",
+                    leaseMs: 60_000,
+                },
+            );
+
+            const result = await worker.pollOnce();
+            const events = await repository.events({
+                afterSequence: 0,
+                limit: 100,
+            });
+            const leasedEvent = events.find((event) => event.type === "job.leased.v1");
+            const jobId = leasedEvent
+                && typeof (leasedEvent.payload as { jobId?: unknown }).jobId === "string"
+                ? (leasedEvent.payload as { jobId: string }).jobId
+                : null;
+            const job = jobId ? await repository.getJob(jobId) : null;
+
+            expect(result?.status).toBe("failed_terminal");
+            expect((await repository.getRun(run.id))?.status).toBe("failed");
+            expect(job?.errorCode).toBe("authentication_required");
+        } finally {
+            await repository.close();
+        }
+    });
+
     it("queues a scheduled source once per interval bucket", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-schedule-test-"));
         temporaryRoots.push(root);
@@ -303,6 +598,10 @@ describe("PrismaCosmosRepository", () => {
             });
             const connector: IngestConnector = {
                 id: "schedule-test",
+                description: "Schedule test",
+                configVersion: "v1",
+                capabilities: ["test"],
+                validate: () => undefined,
                 async fetchItems() {
                     return {
                         items: [],

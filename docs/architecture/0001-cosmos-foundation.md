@@ -1,14 +1,16 @@
 # Cosmos 总体架构设计
 
-> 状态：Draft v0.10
+> 状态：Draft v0.13
 >
-> 最后更新：2026-08-07
+> 最后更新：2026-08-08
 >
 > 原始需求真相源：[`../requirements/0001-original-requirements.md`](../requirements/0001-original-requirements.md)
 >
 > 产品需求：[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md)
 >
 > 初始调研：[`../research/2026-08-06-daily-digest-research.md`](../research/2026-08-06-daily-digest-research.md)
+>
+> `nb-memory` 调研：[`../research/2026-08-08-nb-memory-research.md`](../research/2026-08-08-nb-memory-research.md)
 >
 > 信息领域模型：[`0002-information-model.md`](0002-information-model.md)
 
@@ -23,6 +25,7 @@ Cosmos 应采用“服务器优先的本地优先模块化单体 + 持久化事�
 - 信息库不只保存文章，而是保存来源记录、修订、媒体、实体、长期关注对象、具体事件、标签、批注和关联。
 - Story 是每个 Entry 的上层规范内容单元，通过稳定核心 kind 和受管理、可扩展 subtype 区分形态；Topic 表示围绕问题或目标的长期、主观关注范围。
 - Agent 作为 Flow 中的一种受控 Action，可以查询信息库、继续调研并生成版本化 Artifact。
+- 知识管理者是共享长期记忆之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作。
 - Workspace 表示长期、可更新、可交互的体验容器；Artifact 表示一次版本化输出。
 - 看板是查询与编排层，不拥有底层内容。热点、精华、普通信息流和 Workspace 可以引用同一批领域对象。
 - 逻辑上保持模块化单体，物理上从第一条切片起分为 Next.js Web、NestJS API 和 Worker 进程；这不是微服务拆分，而是明确的宿主边界。
@@ -201,9 +204,11 @@ Trigger 只负责发现“应该开始”，不承担完整抓取、LLM 和写�
 - `render`：把 Board、Workspace 或 Artifact 渲染成网页、图片或其它格式。
 - `delivery`：后续向 Telegram、QQ、Email 等渠道发送。
 
+`ActionDefinition` 是能力合同，不是任务实例。它声明版本化的输入/输出 schema、Capability、幂等、超时、取消、重试和恢复语义；一次实际调用仍然要由 Workflow 创建 Run/Step，并落成可领取的 Job。
+
 ### 4.3 Flow 定义
 
-Flow 使用版本化声明描述触发器、输入、步骤、能力范围和预算。YAML/JSON 适合配置；复杂逻辑通过实现 Action 扩展，而不是在声明中无限增加表达式语言。
+Flow 使用版本化定义描述触发器、输入、步骤、能力范围和预算。Cosmos 同时支持脚本式 Workflow 和可序列化的 Workflow IR；两者不是两套运行时，而是同一执行合同的两种表示。
 
 ```yaml
 id: important-mail-intake
@@ -238,6 +243,14 @@ steps:
 ```
 
 上例只表达合同方向，具体 DSL 在实现 Task 中通过 schema 和行为测试确定。
+
+#### 脚本式 Workflow 与 Workflow IR
+
+- 脚本式 Workflow 适合开发者表达复杂控制流、复用 TypeScript 函数和组合 Action。
+- Workflow IR 适合持久化、版本化、检查、可视化、重放、恢复以及未来由用户/知识管理者生成。
+- 脚本式 Workflow 不能绕过 Runtime；执行时必须产生可追踪的定义版本、Run、Step、Job、输入/输出引用和 DomainEvent。是否在创建 Run 时完整编译为 IR，或采用可恢复的脚本 journal，由实现 Task 决定。
+- IR 也不能直接执行任意网络、文件或进程操作；所有副作用必须映射到已注册的 ActionDefinition 和 Capability。
+- 本地 `nb-workflow` 可作为脚本式 Conductor 的语义参考，复用 Activity journal、`path + seq + fingerprint` 重放、`wf.map`/`wf.all`、`wf.ask`/resume、cancel signal、显式游标和持久 Agent 复用等思想；其当前内存 Run/journal 和 TypeScript 函数定义不直接替代 Cosmos 的持久 Job、Service Endpoint、权限和领域数据库。
 
 ### 4.4 自定义代码与插件
 
@@ -275,6 +288,28 @@ Agent 不能：
 - 绕过 Connector 或 Library Command 直接写表；
 - 未经授权扩大来源、读取 Secret 或发送外部消息；
 - 把自己的结论伪装成来源原文。
+
+### 4.6 Connection、State 与采集计划
+
+外部 Provider、Adapter、SourceInstance 和用户连接需要分开：
+
+| 概念 | 责任 | 示例 |
+| --- | --- | --- |
+| `Provider` / Producer | 外部平台或数据提供者 | Bilibili、RSS、AI HOT |
+| `Adapter` / Connector | 连接 Provider 的代码 | Bilibili Connector、RSS Connector |
+| `ConnectionInstance` | 用户登录或授权后可复用的连接 | “我的 Bilibili 主账号” |
+| `SourceInstance` | 用户配置的具体采集目标 | 动态、推荐流、某个 RSS |
+| `Trigger` | 何时或因何启动 | 每 30 分钟、每 2 小时、内部事件 |
+| `FlowBinding` | 该采集目标使用哪一版 Flow | `bilibili.dynamic@1` |
+
+同一个 `ConnectionInstance` 可以被多个独立采集计划引用。计划分别保留自己的频率、checkpoint、发现上下文、预算、错误和重试边界。用户界面可以把 `SourceInstance + Trigger + FlowBinding` 组合展示为“采集计划”，不要求用户直接配置 Worker。
+
+凭证和普通 Adapter 状态分离：
+
+- `SecretStore` 由 Cosmos 统一提供；Adapter 负责登录协议和凭证格式，但不自行决定凭证的持久化位置。
+- `ConnectionInstance` 只保存连接状态、授权范围和 `SecretRef`；Cookie、Token、Refresh Token 不进入普通配置、Job payload、DomainEvent 或日志。
+- `ConnectorStateStore` 保存 cursor、ETag、分页 token、速率状态等非秘密状态。Adapter 可以定义状态 schema，Cosmos 负责命名空间、版本、备份、并发和恢复。
+- OpenCLI/Browser Bridge 可以作为外部登录态管理例外，Cosmos 只保存 profile 引用；长期仍需映射到统一 Connection 合同。
 
 ## 5. 持久化事件与任务运行时
 
@@ -345,6 +380,28 @@ uncertain
 - `maintenance`
 
 限流可以绑定 Connector、SourceInstance、域名、账号、模型和用户预算。大量推荐信息录入不能饿死用户交互和紧急状态检查。
+
+### 5.6 子任务与知识 Pipeline
+
+LLM、规则处理和外部调研都必须复用同一持久运行时：
+
+```text
+FlowDefinition@version
+  -> Run
+  -> StepRun
+  -> Job
+  -> Child Run/Job
+  -> DomainEvent
+```
+
+Action 或 Agent 可以请求子任务，但请求必须经过 Runtime 校验能力范围、已配置来源、预算、递归深度、并发和审批状态。子任务保存父 Run/Step、因果 Event、输入/输出引用和最终收口原因，不能只存在于进程内内存。
+
+Entry → Story 建议保留两条路径：
+
+1. 同步确定性路径：标准化、去重、证据保存和最小 Story projection，不依赖 LLM。
+2. 异步知识路径：代码召回候选，规则、模型或 LLM 产生分类、聚类、实体、关系、重要性和紧急性 Proposal。
+
+LLM Proposal 不能直接改写 Observation 或绕过 Library Command。每个派生结果需要记录输入 Revision、producer、版本、置信度、evidence 和关联 Run；由 Policy 决定自动接受、进入候选或请求用户确认。
 
 ## 6. 采集层：Observation 没有 URL 假设
 
@@ -788,7 +845,50 @@ Agent 可以由以下条件触发：
 
 Agent 的观点应以 Annotation 或 Artifact 保存，并引用依据；不能改写 Entry 正文。
 
-### 10.6 可视化页面安全
+### 10.6 知识管理者（草案）
+
+知识管理者不是某一个聊天 Session，也不是一个绕过应用边界的超级进程，而是建立在共享长期记忆之上的高权限系统角色。它可以有多个聊天、ingest、研究或其它专业分身，但这些分身共享同一个 `nb-memory` 记忆与知识库。
+
+知识管理者的交互入口包括：
+
+- Web GUI 内的直接聊天；
+- `cosmos cli`；
+- ingest、research 和其它 Workflow 中由系统触发的 Agent 调用。
+
+这些入口都通过同一组 Service Endpoint、Command、Query、Workflow、Capability、Run/Step/Job 和 Event 合同。知识管理者可以代替用户执行 GUI 中可执行的操作，也可以请求创建来源、搜索或研究任务；但外部范围、Secret、网络调用、写入和发送仍由 Cosmos 的 Capability、用户配置、预算和审批边界裁决。
+
+知识管理者与 `nb-memory` 的职责分工：
+
+```text
+nb-memory
+    ├─ 自然语言记忆、事实、主体、别名和知识上下文
+    └─ 多个知识管理者分身共享的长期记忆
+
+Cosmos
+    ├─ Observation / Entry / Story / Source 等信息库事实
+    ├─ 用户行为观察
+    ├─ Workflow / Run / Step / Job / DomainEvent
+    └─ Adapter、Secret、Blob 和外部副作用边界
+
+Knowledge Manager
+    ├─ 读取/写入 nb-memory
+    ├─ 读取 Cosmos 信息库和行为观察
+    ├─ 生成程序可读的个性化配置
+    └─ 参与 ingest / research / Workflow
+```
+
+个性化配置当前采用简化方向：
+
+```text
+Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
+    -> 程序可读的配置
+```
+
+这不是要求每个配置字段都保存独立的 producer/version/evidence。个性化配置可以由知识管理者重新生成、由用户编辑，并在配置整体或更新记录层面保留足够的更新时间和操作者信息。Story、关系、推荐特征、Artifact 和其它一般派生结果仍按各自合同保存 provenance。
+
+平台自身的推荐信号目前只视为候选来源上下文，不作为独立的 Cosmos 用户偏好模型。平台推荐流可以被采集，但不能直接当作用户明确喜欢什么的结论。
+
+### 10.7 可视化页面安全
 
 Agent 生成的 HTML/JS 默认在沙箱 iframe 中显示：
 
@@ -907,6 +1007,7 @@ Channel Adapter 负责把平台无关的优先级、图片、正文和链接映�
 | 核心身份 | Entry、SourceInstance、Story 人工修正 | 持久真相 |
 | 用户真相 | Label、Annotation、Collection、Board、交互进度 | 持久真相，升级必须迁移 |
 | 派生理解 | 摘要、实体建议、embedding、Story 自动归并 | 可重建，但保留版本和当前选择 |
+| 共享知识记忆 | `nb-memory` 的 episode、facts、registry、state | 由 `nb-memory` 自己维护事实源与替换语义；索引可重建，不替代 Cosmos 来源事实 |
 | Artifact | 报告、网页、附件包 | 版本化产物；未被引用的旧版本按策略清理 |
 | 缓存 | 缩略图、转码、临时候选、查询 cache | 可删除、可重建、有容量预算 |
 | 外部副作用账本 | DeliveryIntent、Attempt、receipt | 审计真相，不从日志推断 |
@@ -920,6 +1021,8 @@ Channel Adapter 负责把平台无关的优先级、图片、正文和链接映�
 - Artifact Root：版本化 Artifact 文件夹。
 - Cache Root：缩略图、转码、临时抓取和重建索引。
 - Secret Store：与普通配置分离；具体使用 OS 凭据库还是加密文件待实现 Task 决定。
+- Connector State Store：保存命名空间化、版本化的非秘密 Adapter 状态；不替代 Secret Store，也不允许扩展直接写核心表。
+- `nb-memory` Storage Root：由 `NbMemoryPort`/Adapter 管理，保存知识管理者共享记忆；具体是否位于 Data Root 内、如何备份和如何与 Node 生产运行时兼容，留待接入 Task 决定。
 
 建议运行时目录：
 
@@ -935,6 +1038,8 @@ Channel Adapter 负责把平台无关的优先级、图片、正文和链接映�
 ```
 
 源码 checkout 不是用户数据根。测试必须使用独立的临时 Data Root。
+
+运行日志属于运行诊断数据，不是业务真相、Domain Event 或外部副作用账本。第一版由 API、Worker 和 Web 服务端写入版本化 `log.v1` JSONL，分别使用 `api.jsonl`、`worker.jsonl`、`web.jsonl`，默认写入 `<Data Root>/logs`，也可由 `COSMOS_LOG_ROOT` 指定，并同时输出 stdout。API 在 Nest 路由前建立 `requestId` 和请求上下文，日志通过 `requestId`、`runId`、`jobId`、`sourceId` 和 `connectorId` 关联；不得写入 Secret、Cookie、Token、完整请求体、原始 payload、正文或 Prompt。API 错误 details 只保留受控的校验信息。默认保留 7 天、日志根目录最多 256 MiB，超过后按最旧轮转文件清理。文件 sink 故障回退 stdout，并通过 stderr 报告，不能阻断业务进程。
 
 ### 13.3 未来迁移
 
@@ -954,6 +1059,7 @@ cosmos/
 │  └─ worker/                 Scheduler、Flow、Job Worker
 ├─ packages/
 │  ├─ contracts/              DTO、事件和版本化公共 schema
+│  ├─ logging/                运行日志、上下文、脱敏和本地 JSONL sink
 │  ├─ domain/                 Entry、Story、Topic、Workspace 等领域逻辑
 │  ├─ application/            Use case、Command、Query、事务边界
 │  ├─ storage-prisma/         Prisma、SQLite、迁移和受控 SQL Adapter
@@ -1137,6 +1243,21 @@ Saved View / recommendation policy
 
 完成标准：定时录入真实信息，重启后不重复，断网后仍可搜索正文和已保存图片；用户可以从 Feed 打开 Story → Entry → Source/Revision；本阶段不要求跨来源聚类、Story merge/split、Topic 维护或完整推荐。
 
+### Phase 1B：受管 Collector Runtime
+
+Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块化单体和 Service Endpoint 边界：
+
+- Source kind 使用业务来源类型：`rss`、`fixture-rss`、`bilibili`、`aihot`。
+- Connector 只负责来源配置校验、外部获取和 `NormalizedIngestItem` 标准化，不直接写核心数据库。
+- OpenCLI 是 Bilibili Connector 的内部执行器，只允许固定的 `hot`/`feed` 场景；用户不能提交任意 command。
+- AI HOT 使用固定公开 endpoint 和服务返回的 cursor；不开放任意 endpoint、Header、认证或自定义服务地址。
+- API 只创建和查询持久 Job；外部 HTTP、Browser Bridge 和 OpenCLI 均由 Worker 执行。
+- `source-probe` 是 dry-run，Probe 成功不产生 Observation、Entry、Asset，也不推进 checkpoint。
+- OpenCLI profile、配置目录和登录态由 OpenCLI/浏览器管理，Cosmos 只保存 profile 引用，不保存 Cookie 或 Token。
+- Docker 生产入口不内置用户浏览器；Bilibili 的 Browser Bridge 是外部运行前置条件，依赖不可用时返回明确的可诊断错误。
+
+完成标准：API/Worker 可以通过持久 Job 接入 AI HOT 和受管 Bilibili 场景；重复轮询不产生重复 Entry，来源修订追加 EntryRevision，Worker 重启后可接管任务；Probe 无副作用；未满足 Browser Bridge 前置条件时不会伪装成成功。
+
 ### Phase 2：信息组织与可配置看板
 
 - Label、Annotation、Collection、Saved View。
@@ -1149,6 +1270,7 @@ Saved View / recommendation policy
 ### Phase 3：Agent Artifact 与 Workspace
 
 - `agent.run` Action。
+- Knowledge Manager 的 Web Chat、`cosmos cli` 和共享 `nb-memory` 记忆 Adapter。
 - Artifact Workspace、Revision、provenance 和沙箱渲染。
 - Recurring Workspace 和 Interaction State。
 - 技术博客批注、竞品分析和学习 Workspace。
@@ -1222,6 +1344,16 @@ Saved View / recommendation policy
 43. 服务器部署优先，同时为客户端模式和客户端与服务分离模式保留兼容边界；三种模式共用 Service Endpoint、Command、Query、Event 和 SSE Transport。
 44. Phase 1 直接使用 `pi-ai`；`neuro-agent-harness` 独立去领域化演进，稳定后通过 ModelRuntime、SessionStore、Profile 和 Capability Adapter 接入；sidecar 不属于 Harness Core。
 45. Desktop Shell 的具体技术后置；Docker/Compose 作为服务器交付形态的初步封装，不能改变领域和 Transport 合同。
+46. Phase 1B 的来源类型使用业务 `Source.kind`，不暴露 `opencli` 这类底层执行器类型，也不允许任意 connector override。
+47. Phase 1B 的 OpenCLI 只实现受管 Bilibili `hot`/`feed` 场景；新增场景必须通过新的配置合同和标准化测试进入 Registry。
+48. Phase 1B 的 AI HOT 只调用固定公开 endpoint，并使用服务返回的 cursor；通用 HTTP 代理能力不属于 Collector 核心。
+49. API 不执行外部采集；Probe 和 Ingest 都先创建持久 Job，由 Worker 负责执行、租约、重试和恢复。
+50. Probe 是 dry-run，不写 Observation、Entry、Asset，不推进 checkpoint；Probe 结果通过 Job Snapshot 查询。
+51. OpenCLI 的浏览器登录态由 OpenCLI/Browser Bridge 管理，Cosmos 只保存 profile 引用，不保存 Cookie、Token 或密码。
+52. 运行控制采用 `Job + Workflow` 组合；Workflow 同时保留脚本式和 Workflow IR 表示，最终落到同一持久 Runtime。
+53. 知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作；它不是单一 Session。
+54. 个性化配置由 Agent 记忆、Cosmos 观察到的用户行为和未来其它信号共同生成；当前不要求逐字段 provenance，也不独立建模平台推荐偏好信号。
+55. `nb-memory` 作为共享记忆/知识库通过 Adapter/Port 接入 Cosmos；它不替代 Cosmos 的 Observation、Entry、Run、Job 或 Workflow Runtime。
 
 ## 20. 核心边界结论与后置决定
 
@@ -1229,7 +1361,7 @@ Saved View / recommendation policy
 
 ### 20.1 首批来源
 
-已确认：Phase 1 先实现 RSS/RSSHub + 本地 fixture。该切片用于验证定时采集、修订、媒体、去重、无 URL 内容和离线查询；BiliBili/X 等平台接入后置。
+已确认：原始 Phase 1 先实现 RSS/RSSHub + 本地 fixture；Phase 1B 在其后接入受管 Bilibili `hot`/`feed` 和固定 AI HOT endpoint。BiliBili 的搜索、用户视频、dynamic 以及其它平台仍后置。
 
 ### 20.2 插件信任范围
 
@@ -1264,6 +1396,31 @@ Saved View / recommendation policy
 - Desktop Shell 技术和本地生命周期。
 - `pi-ai` 到 `neuro-agent-harness` 的迁移门槛。
 
+### 20.5 2026-08-08：用户视角架构审查形成的方向
+
+本轮审查确认：当前 Phase 1/1B 是采集基础和最小离线信息库闭环，不应描述为完整的可编排知识平台。继续增加 Provider/Adapter 前，优先验证以下边界：
+
+1. 数据库是事实、状态、历史和用户真相的持久中心；DomainEvent 是持久事实日志，FTS、分类、关系、推荐特征和 LLM 结果是带 producer/version/evidence 的可重建 Projection。
+2. `Domain`、`Run`、`Step`、`Job` 和 `DomainEvent` 的职责分开：Run 是一次完整流程，Step 是阶段，Job 是 Worker 执行单元，DomainEvent 是已发生事实。
+3. Provider、Adapter、ConnectionInstance、SourceInstance、Trigger 和 FlowBinding 分开；一个连接可以被多个独立采集计划复用。
+4. 凭证建议由 Cosmos `SecretStore` 统一管理，Adapter 只负责认证协议；非秘密 cursor、ETag、分页 token 和限流状态通过命名空间化 `ConnectorStateStore` 管理。
+5. 用户配置的是采集计划，不是 Worker。类似“动态每 30 分钟、推荐流每 2 小时”的场景应有独立 Trigger、Flow、checkpoint、预算和错误边界。
+6. Entry → Story 采用同步确定性入库和异步知识 Pipeline 两条路径；LLM 以受 Capability、预算和审批约束的 Agent/Action 生成 Proposal，可以请求持久子 Job，但不能直接改写 Observation 或最终用户真相。
+7. Story 跨来源聚类需要 StoryMembership、候选、merge/split 历史和 evidence；当前单 Entry Story projection 只作为 Phase 1 保守实现。
+8. 推荐区分外部候选、Admission 和 Cosmos Ranking；代码负责硬约束和模型不可用时的降级，LLM 只提供可追溯的异步特征或受限 rerank。
+
+以上是架构方向，不代表本轮已经完成对应数据库迁移、UI 或 Agent 实现。SecretStore 后端、Flow DSL、Proposal 自动接受门槛和推荐预算仍需在实现 Task 中单独验证。
+
+### 20.6 2026-08-08：知识管理者与 `nb-memory` 修正
+
+本轮进一步确认：
+
+1. `nb-memory` 是知识管理者共享的长期记忆/知识库候选，Cosmos 通过 Adapter/Port 使用，不直接共享内部文件或把它改造成 Cosmos Runtime。
+2. 知识管理者是高权限交互角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 代替用户执行已授权操作；它可以有多个分身，但共享同一长期记忆。
+3. 个性化配置由“Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号”生成程序可读配置；当前不要求每个配置字段单独保留 producer/version/evidence。
+4. 平台自身的推荐信号当前不建立独立偏好模型；平台推荐流仍可作为候选来源，但不能直接推断为用户偏好。
+5. 以上是草案和方向确认，不代表 Phase 1 已完成 `nb-memory` 接入、Knowledge Manager UI/CLI、行为观察或个性化配置生成。
+
 ## 21. 架构不变量
 
 后续实现和重构必须持续验证：
@@ -1297,8 +1454,43 @@ Saved View / recommendation policy
 27. UI 和扩展不直接访问 Prisma、SQLite、Data Root 或 Blob/Artifact Root；跨宿主访问统一经过版本化 Transport。
 28. Phase 1 的 Story 是最小 projection，不把跨来源聚类、merge、split 和 Topic 维护误报为已完成能力。
 29. Worker 即使与 API 分进程运行，仍与应用层共享持久 Job/Lease/Idempotency 合同，不依赖进程内内存状态恢复。
+30. API 不直接执行外部 Connector；所有 Probe/Ingest 外部副作用都经过持久 Job 和 Worker lease。
+31. Connector 不接受任意 OpenCLI command、任意 HTTP endpoint、Header 或认证信息作为用户配置。
+32. Probe 不写入 Observation、Entry、Asset 或 checkpoint。
+33. Adapter 不直接持久化 Secret；凭证通过 SecretRef/SecretStore 访问，非秘密运行状态通过命名空间化 StateStore 访问。
+34. 一个 Connection 可以复用多个 SourceInstance，但每个采集计划的 Trigger、Flow、checkpoint、预算和错误状态必须可区分。
+35. LLM 或其它 Action 请求的子任务必须持久化父子关系、因果 Event、能力范围、预算和收口状态，不能只依赖进程内内存。
+36. LLM 生成的分类、Story 聚类、关系、推荐特征和 Artifact 结果必须保留 producer/version/evidence，并不能伪装成来源事实。
+37. 外部平台推荐流是候选发现来源，不等于 Cosmos 的最终 Ranking；普通 Feed 在 LLM 不可用时仍能工作。
+38. Job 与 Workflow 必须共享同一持久 Runtime；脚本式 Workflow 和 Workflow IR 不能形成绕过租约、重试和恢复的第二执行路径。
+39. 知识管理者可以代替用户执行已授权操作，但不能绕过 Service/Capability/Workflow/Job 边界或直接访问核心数据库。
+40. 多个知识管理者分身共享 `nb-memory` 长期记忆；`nb-memory` 不替代 Cosmos 的 Observation、Entry、Run、Job 和外部来源证据。
+41. 个性化程序配置可以由记忆和行为观察重新生成，不要求每个配置字段都复制一般派生结果的 producer/version/evidence 账本。
+42. 平台推荐信号当前不作为独立的 Cosmos 用户偏好模型输入；平台推荐流仍不能直接等同于用户偏好。
 
 ## 22. 变更记录
+
+### v0.13 - 2026-08-08
+
+- 引入 `nb-memory` 调研结论和知识管理者共享记忆/知识库边界。
+- 明确知识管理者的 Web Chat、`cosmos cli`、多个分身和 ingest/research 参与方向；不把它建模为单一 Session。
+- 确认个性化配置由 Agent 记忆、Cosmos 行为观察和未来其它信号生成，并简化逐字段 provenance 要求。
+- 确认 `Job + Workflow` 组合，以及脚本式 Workflow 与 Workflow IR 的双表示。
+- 明确平台推荐信号暂不建模为独立用户偏好输入。
+
+### v0.12 - 2026-08-08
+
+- 记录从用户角度对数据库、Provider/Adapter、Connection/Secret/State、采集计划和 Worker 关系的审查方向。
+- 明确 Run、Step、Job、Domain 与 DomainEvent 的职责边界。
+- 增加 ConnectionInstance、SecretStore、ConnectorStateStore 和多采集计划的架构边界。
+- 明确 Entry → Story 的同步确定性入库、异步知识 Pipeline、LLM Proposal/Provenance 和持久子任务方向。
+- 明确外部平台推荐、Admission、Cosmos Ranking、代码规则与 LLM 特征之间的边界。
+
+### v0.11 - 2026-08-08
+
+- 增加 Phase 1B Collector Runtime。
+- 固化受管 Bilibili `hot`/`feed`、固定 AI HOT endpoint、异步 Probe 和 Worker-only 外部执行边界。
+- 明确 OpenCLI profile/Browser Bridge 前置条件与不保存 Cookie/Token 的约束。
 
 ### v0.10 - 2026-08-07
 

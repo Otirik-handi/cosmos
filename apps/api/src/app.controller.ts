@@ -4,6 +4,8 @@ import {
     Controller,
     Get,
     Header,
+    HttpCode,
+    Inject,
     NotFoundException,
     Param,
     Patch,
@@ -13,6 +15,7 @@ import {
     StreamableFile,
     Headers,
     Sse,
+    Optional,
     type MessageEvent,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -22,11 +25,12 @@ import { ZodError } from "zod";
 import { createHealthSnapshot } from "@cosmos/application";
 import {
     createSourceCommandSchema,
+    entryListQuerySchema,
     searchQuerySchema,
-    sourceTestResultSchema,
     updateSourceCommandSchema,
     type HealthResponse,
 } from "@cosmos/contracts";
+import type { Logger } from "@cosmos/logging";
 import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
 import { SourceProbeService } from "./source-probe.service.js";
 
@@ -45,8 +49,13 @@ function validationError(error: unknown): never {
 @Controller()
 export class AppController {
     constructor(
+        @Inject(PrismaCosmosRepository)
         private readonly repository: PrismaCosmosRepository,
+        @Inject(SourceProbeService)
         private readonly sourceProbe: SourceProbeService,
+        @Optional()
+        @Inject("COSMOS_LOGGER")
+        private readonly logger?: Logger,
     ) {}
 
     @Get("health")
@@ -56,6 +65,11 @@ export class AppController {
             version: process.env.COSMOS_VERSION ?? "0.1.0",
             ...state,
         });
+    }
+
+    @Get("connectors")
+    connectors() {
+        return this.sourceProbe.list();
     }
 
     @Get("sources")
@@ -81,11 +95,20 @@ export class AppController {
     @Bind(Body())
     async createSource(body: unknown) {
         try {
-            return await this.repository.createSource(
-                createSourceCommandSchema.parse(body),
-            );
+            const command = createSourceCommandSchema.parse(body);
+            this.sourceProbe.validate(command);
+            return await this.repository.createSource(command);
         } catch (error) {
-            validationError(error);
+            if (error instanceof ZodError) {
+                validationError(error);
+            }
+            throw new BadRequestException({
+                code: "validation_failed",
+                message: error instanceof Error
+                    ? error.message
+                    : "Source configuration is invalid.",
+                retryable: false,
+            });
         }
     }
 
@@ -111,8 +134,9 @@ export class AppController {
     }
 
     @Post("sources/:sourceId/test")
-    @Bind(Param("sourceId"))
-    async testSource(sourceId: string) {
+    @HttpCode(202)
+    @Bind(Param("sourceId"), Headers("idempotency-key"))
+    async testSource(sourceId: string, idempotencyKey?: string) {
         const source = await this.repository.getSource(sourceId);
         if (!source) {
             throw new NotFoundException({
@@ -121,7 +145,18 @@ export class AppController {
                 retryable: false,
             });
         }
-        return sourceTestResultSchema.parse(await this.sourceProbe.test(source));
+        const job = await this.repository.createProbeJob({
+            sourceId,
+            idempotencyKey: idempotencyKey?.trim()
+                || `probe:${sourceId}:${randomUUID()}`,
+        });
+        this.logger?.info("job.queued", {
+            jobId: job.id,
+            sourceId: job.sourceId ?? sourceId,
+            kind: job.kind,
+            status: job.status,
+        });
+        return job;
     }
 
     @Post("sources/:sourceId/runs")
@@ -135,11 +170,18 @@ export class AppController {
                 retryable: false,
             });
         }
-        return this.repository.createQueuedRun({
+        const run = await this.repository.createQueuedRun({
             sourceId,
             triggerKind: "manual",
             idempotencyKey: idempotencyKey?.trim() || `manual:${sourceId}:${randomUUID()}`,
         });
+        this.logger?.info("run.queued", {
+            runId: run.id,
+            sourceId: run.sourceId ?? sourceId,
+            triggerKind: run.triggerKind,
+            status: run.status,
+        });
+        return run;
     }
 
     @Get("runs/:runId")
@@ -150,6 +192,20 @@ export class AppController {
             throw new NotFoundException({
                 code: "not_found",
                 message: `Run not found: ${runId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Get("jobs/:jobId")
+    @Bind(Param("jobId"))
+    async job(jobId: string) {
+        const result = await this.repository.getJob(jobId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Job not found: ${jobId}`,
                 retryable: false,
             });
         }
@@ -170,6 +226,21 @@ export class AppController {
     async search(query: Record<string, unknown>) {
         try {
             return await this.repository.search(searchQuerySchema.parse(query));
+        } catch (error) {
+            validationError(error);
+        }
+    }
+
+    @Get("entries")
+    @Bind(Query())
+    async entries(query: Record<string, unknown>) {
+        try {
+            const parsed = entryListQuerySchema.parse(query);
+            return await this.repository.entries({
+                sourceId: parsed.sourceId,
+                cursor: parsed.cursor,
+                limit: parsed.limit,
+            });
         } catch (error) {
             validationError(error);
         }

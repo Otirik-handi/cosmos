@@ -1,6 +1,6 @@
 # Cosmos Context
 
-> 最后更新：2026-08-07。
+> 最后更新：2026-08-08。
 >
 > 本文件维护 Cosmos 经常使用、跨模块出现或容易歧义的产品共同语言。它不是数据库实体清单，也不提前记录尚未在产品讨论中出现的实现对象。
 
@@ -143,6 +143,99 @@ Story --Ranking--> Feed --> Board
 - Agent 可以维护已配置范围内的内部对象；创建外部 Source、扩大数据范围和外部发送需要用户显式配置或批准。
 - 第一版只运行用户明确安装的本地可信扩展，复杂权限 UI 和不可信插件沙箱后置。
 
+## 2026-08-08：从用户角度的架构审查
+
+> 本节记录本轮讨论形成的共同方向。除非明确标为“已确认”，否则仍属于待实现验证的架构建议，不等同于当前代码已经具备的能力。
+
+### Run、Step、Job、Domain 与 DomainEvent
+
+- `Domain` 是业务领域层，不是数据库表；负责稳定身份、业务规则和可重建的领域计算，不依赖 Prisma、Nest 或 Next。
+- `Run` 是一次完整 Flow 的执行记录，例如“每 30 分钟抓取一次 Bilibili 动态”。
+- `Step` 是 Run 内的逻辑阶段，例如拉取、标准化、入库、分类或研究。
+- `Job` 是 Worker 可以领取、租约、重试和完成的持久任务单。一个 Step 可以拆成多个 Job。
+- `DomainEvent` 是已经发生的事实，例如 `entry.created`、`run.succeeded` 或 `job.failed_terminal`，用于审计、SSE 和后续 Flow 触发；它不代替领域状态，也不是完整 Event Sourcing。
+- 当前 Phase 1 代码只实现了 Source Ingest/Probe 的最小 Run、单个 Ingest Step 和有限 Job 类型；通用 Flow Runtime 仍未落地。
+
+### 数据库与扩展边界
+
+- 数据库是事实、状态、历史和用户真相的持久中心，但不是插件公共合同；插件和 Agent 不直接依赖 Prisma 表。
+- 原始 Observation、Entry、EntryRevision、Asset 和用户确认属于持久真相；FTS、分类、关系、推荐特征和 LLM 结果通常属于带 producer/version/evidence 的派生投影。个性化程序配置暂不要求逐字段复制这套 provenance 账本，以免把配置层做成分析结果账本。
+- 运行时采用“状态表 + 持久 DomainEvent + 可重建 Projection”，不把所有业务状态压缩到事件日志或任意 JSON 中。
+- 外部生产者、Adapter、Connector 和 Cosmos 内部 Action 需要通过版本化 Command、Query、Event、Capability 和 Service Endpoint 访问核心能力。
+
+### Producer、Adapter、Source 与采集计划
+
+- “Producer/Provider”表示外部平台或数据提供者，例如 Bilibili、RSS、AI HOT。
+- “Adapter/Connector”表示把某个 Provider 接入 Cosmos 的代码；它负责认证协议、外部读取、标准化和平台特有错误处理。
+- `SourceDefinition` 描述一种可用来源或操作；`SourceInstance` 表示用户配置好的具体采集目标。
+- 用户界面可以把 `SourceInstance + Trigger + FlowBinding` 组合展示为“采集计划”，但不应让用户直接配置 Worker。
+- 一个连接可以复用多个采集计划。例如同一个 Bilibili 账号可以有“动态每 30 分钟”和“推荐流每 2 小时”两个独立计划；它们分别拥有游标、错误、预算、发现上下文和重试边界。
+
+### 凭证与适配器状态
+
+- 当前建议由 Cosmos 提供统一 `SecretStore`；Adapter 负责登录协议和凭证格式，但不自行决定凭证的持久化位置。
+- `ConnectionInstance` 保存平台、账号、授权范围、状态和 `SecretRef`；Cookie、Token、Refresh Token 不进入普通配置、Job payload、DomainEvent 或日志。
+- Adapter 运行时只获得能力受限、短生命周期的凭证租约。
+- Cosmos 同时提供命名空间化、版本化的 `ConnectorStateStore`，保存 cursor、ETag、分页 token、速率状态等非秘密状态；Adapter 可以定义状态 schema，但 Cosmos 负责生命周期、备份、并发和恢复。
+- OpenCLI/Browser Bridge 当前可以作为外部登录态管理例外，Cosmos 只保存 profile 引用；长期仍需要将其映射到统一 Connection 合同。
+
+### Trigger、Flow 与 Worker
+
+- `Trigger` 负责判断何时或因何启动，`Flow` 负责组织过程，`Action` 负责提供单项能力，`Worker` 只负责可靠执行持久 Job。
+- 推荐的执行关系为：
+
+```text
+Connection / SourceInstance
+  -> Trigger
+  -> FlowDefinition@version
+  -> Run
+  -> StepRun
+  -> Job
+  -> Worker
+  -> Adapter / Action
+```
+
+- 未来 Flow 需要支持顺序、条件、foreach、fan-out/fan-in、等待审批、取消、重试、预算和子 Run；LLM 派发的研究任务也必须通过同一运行时创建子 Job，而不是绕过 Worker 进入内存队列。
+- 当前 `scheduleIntervalMs` 放在 Source 配置中只是 Phase 1 简化实现；长期应由持久 Trigger 表达频率、时区、错过执行策略、并发策略和限流。
+- 运行控制采用 `Job + Workflow` 组合：Job 是持久执行单元，Workflow 负责组织步骤、分支、等待、子任务和收口。
+- Workflow 同时保留脚本式和 Workflow IR 两种表示。脚本式适合开发者表达复杂逻辑，IR 适合版本化、持久化、检查、重放和未来由用户/Agent 生成；两者必须落到同一 Run/Step/Job Runtime。
+
+### Entry、Story 与知识 Pipeline
+
+- 当前 Entry → Story 是保守的单 Entry Story projection，用于先保证可阅读，不代表完成了跨来源事件聚类。
+- 推荐保留两条路径：
+  - 同步入库路径：代码完成标准化、去重、证据保存和最小 Story 创建，不依赖 LLM。
+  - 异步知识路径：代码召回候选，规则/模型/LLM 生成分类、聚类、实体、关系、重要性和紧急性建议。
+- LLM 不直接改写 Observation 或最终用户真相；它生成带输入 Revision、模型/版本、置信度、Evidence 和 Run 的 `AnalysisResult/Proposal`，再由 Policy 自动接受、进入候选或请求用户确认。
+- LLM 可以担任“知识管理员”或研究规划者，但数据库、Runtime、Capability、预算和审批规则仍是权威。LLM 请求多个平台搜索时，只能调用用户已配置并授权的 Adapter/Action。
+- 未来跨来源 Story 需要 `StoryMembership`、候选聚类、merge/split 历史和可审计的证据引用；不能只依赖当前 `Entry.storyId`。
+
+### 知识管理者与个性化配置（草案）
+
+- 知识管理者是用户与 Cosmos 交互的高权限系统角色，可以代替用户执行 GUI 中可执行的操作；它仍通过 Service/Workflow/Capability 边界运行，不直接写数据库或绕过外部副作用控制。
+- 用户入口包括 Web GUI 内的直接聊天，以及 `cosmos cli`。两者调用同一组版本化 Command、Query、Workflow 和 Event 合同。
+- 知识管理者不是一个 Session。系统可以有多个聊天、ingest、研究或其它专业分身，它们共享同一个 `nb-memory` 长期记忆与知识库。
+- `nb-memory` 适合作为知识管理者的共享记忆/知识库；Cosmos 负责信息库、行为观察、运行时和外部能力。对应调研记录见 [`docs/research/2026-08-08-nb-memory-research.md`](docs/research/2026-08-08-nb-memory-research.md)。
+- ingest 过程中可以调用知识管理者进行知识点细究、补充研究或生成 Proposal；需要外部平台搜索时，知识管理者必须通过已配置的 Adapter/Action 创建持久子 Job。
+- 个性化配置的当前方向是：`Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号 -> 程序可读的配置`。当前不设计逐字段 producer/version/evidence，也不把平台自身推荐信号作为独立偏好模型。
+
+### 推荐系统
+
+- 外部平台的推荐流可以是候选来源，但不等于 Cosmos 的最终推荐，也暂不作为独立的 Cosmos 用户偏好信号建模。
+- Cosmos 推荐采用两道决策：
+  - `Admission`：是否值得保存到信息库。
+  - `Ranking`：当前是否值得在某个 Feed/Board surface 展示。
+- 代码负责硬过滤、时间、新颖性、来源质量、去重、多样性、预算和模型不可用时的降级。
+- LLM 可以异步生成主题、实体、质量、重要性、紧急性和小规模 rerank 特征，但普通 Feed 不应依赖在线 LLM。
+- 后续需要持久化 `Candidate`、`FeatureValue`、版本化 `RecommendationPolicy`、`RecommendationDecision`、`Impression`、`Feedback` 和 `ReadState`，并保留排序原因。
+
+### 当前完整性判断
+
+- Phase 1 的采集、持久化、搜索和离线阅读基础已经足够继续验证。
+- 面向高扩展产品的连接管理、通用 Flow Runtime、知识处理、Story 多成员关系和推荐反馈闭环尚未完整实现。
+- 在继续增加大量平台 Adapter 前，优先补齐 `Connection/Secret/State`、`Trigger/Flow/Action`、通用 Job/子任务和 Proposal/Provenance 合同。
+- 知识管理者与 `nb-memory` 的共享记忆接入方向已确认，但 Adapter、行为观察到程序配置的转换和 Web/CLI 入口尚未实现。
+
 ## 当前命名结论
 
 1. 用户可读的最小内容单元使用“信息条目 / Entry”，不使用“原始报道”作为总称。
@@ -178,6 +271,9 @@ Story --Ranking--> Feed --> Board
 31. Agent 可自主维护已配置范围内的内部对象，新外部范围和外部副作用需要显式配置/批准。
 32. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行本地可信扩展。
 33. Phase 1 首条真实 Connector 使用 RSS/RSSHub，并配套 fixture Connector。
+34. 运行控制采用 `Job + Workflow` 组合；Workflow 同时保留脚本式和 Workflow IR 表示，最终落到同一持久 Runtime。
+35. 知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与系统操作；它不是单一 Session。
+36. 个性化配置由 Agent 记忆、Cosmos 观察到的用户行为和未来其它信号共同生成；当前不要求逐字段 provenance，也不独立建模平台推荐偏好信号。
 
 ## 技术与运行形态（初步）
 
@@ -202,5 +298,13 @@ Story --Ranking--> Feed --> Board
 7. 服务器、客户端和客户端与服务分离模式的认证、Service Endpoint、SSE 恢复和 Blob/Artifact 访问合同。
 8. Desktop Shell 的具体实现、Node sidecar 生命周期和安装/升级/卸载行为。
 9. `pi-ai` 直接接入到 Harness `ModelRuntime` 的迁移门槛，以及 NeuroBook Harness 与独立 Harness 的行为差异。
+10. SecretStore 第一版后端，以及 Adapter 访问 SecretRef/StateStore 的公共接口。
+11. 一个 Connection 下多个 SourceInstance/采集计划的 UI 和持久模型。
+12. 通用 Flow Runtime 的有限 DAG、fan-out/fan-in、等待审批、子 Run 和取消/接管语义。
+13. Entry → Story Proposal 的自动接受门槛、用户确认界面和 StoryMembership 迁移。
+14. Admission、Ranking、Impression、Feedback 和 LLM 异步特征的第一版预算。
+15. `nb-memory` Adapter/Port、共享记忆目录、Node 生产兼容性以及 Cosmos Observation/Behavior 到 memory 的映射。
+16. 知识管理者 Web Chat、`cosmos cli`、ingest 参与方式和高权限操作的最小 Capability 合同。
+17. Agent 记忆与行为观察生成程序可读个性化配置的 schema、更新频率和人工覆盖边界。
 
 这些事项不阻塞 Phase 0，且本次 grilling 不继续展开。

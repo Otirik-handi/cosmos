@@ -107,6 +107,7 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 - 开发使用 Bun，生产使用 Node；共享包和 Worker 运行路径保持 Node-compatible。
 - Prisma + SQLite + WAL 保存元数据、关系、任务和用户状态；FTS5/BM25、虚拟表和触发器通过受控 SQLite SQL Adapter 使用。
 - 内容寻址 Blob Store 保存原始 payload、图片和附件；Artifact Root 保存版本化生成产物。
+- API、Worker 和 Web 服务端使用统一 `log.v1` 结构化运行日志，默认分别写入 `<Data Root>/logs/api.jsonl`、`worker.jsonl`、`web.jsonl`，也可由 `COSMOS_LOG_ROOT` 指定，并与 stdout 双写；日志只用于诊断，不替代业务事件或外部副作用账本。
 - `docker/Dockerfile` 与 `docker/compose.yml` 提供 Node 生产运行入口：API 启动前执行 migration，Web 使用 standalone server，API/Worker 共享 Data Root；Docker 验证待环境具备后执行。
 - 服务器、客户端、客户端与服务分离三种模式共用版本化 Service Endpoint、Command、Query、Event 和 SSE Transport；客户端不直接访问数据库或 Data Root。
 - Phase 1 先直接使用 `pi-ai`；`neuro-agent-harness` 独立演进，稳定后再通过适配合同接入；Desktop Shell 技术后置。
@@ -140,16 +141,17 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 | Phase 4：推荐与广度 | 接入推荐页、关注账号和搜索来源，建立非 LLM 默认排序与反馈 |
 | Phase 5：摘要与推送 | 生成一致的网页/图片摘要，可靠投递到 Telegram、Email、QQ 等渠道 |
 
-当前已完成 Phase 0 文档基线和 Phase 1 最小闭环。fixture/RSS Connector、持久 Job/lease/retry、Prisma/SQLite/FTS5、Nest API、SSE、Next Feed/Search/Story 和 Node/浏览器冒烟已接通；Docker 容器、真实 RSS/RSSHub 和跨平台验收仍待执行。公开仓库已建立于 [notnotype/cosmos](https://github.com/notnotype/cosmos)。
+当前已完成 Phase 0 文档基线、Phase 1 最小闭环和运行诊断日志切片。fixture/RSS Connector、持久 Job/lease/retry、Prisma/SQLite/FTS5、Nest API、SSE、Next Feed/Search/Story、结构化 API/Worker/Web 日志和 Node/浏览器冒烟已接通；Docker 容器、真实 RSS/RSSHub、日志卷和跨平台验收仍待执行。公开仓库已建立于 [notnotype/cosmos](https://github.com/notnotype/cosmos)。
 
 ## 脚手架开发
 
 ```bash
 bun install
+bun run db:migrate
 bun run dev
 ```
 
-也可以分别启动 `bun run dev:web`、`bun run dev:api` 和 `bun run dev:worker`。健康检查地址为 `http://localhost:4310/api/v1/health`，端口可通过 `COSMOS_API_PORT` 覆盖；类型检查、测试、构建和 Prisma schema 检查分别使用 `bun run typecheck`、`bun run test`、`bun run build` 和 `bun run db:validate`。Node 生产最小冒烟使用 `pwsh -NoProfile -File scripts/smoke-node.ps1`。
+也可以分别启动 `bun run dev:web`、`bun run dev:api` 和 `bun run dev:worker`。开发启动脚本会把相对 `COSMOS_DATA_ROOT` 自动解析为仓库根目录下的绝对路径，因此 API 和 Worker 不会因工作目录不同而打开不同的 SQLite 文件。API 默认优先使用 `COSMOS_API_PORT`（默认 `4310`）；如果端口已被占用，开发启动会自动选择后续空闲端口，并把实际 API 地址同步给 Web。健康检查地址以启动日志中的实际端口为准；类型检查、测试、构建和 Prisma schema 检查分别使用 `bun run typecheck`、`bun run test`、`bun run build` 和 `bun run db:validate`。Node 生产最小冒烟使用 `pwsh -NoProfile -File scripts/smoke-node.ps1`。
 
 ## 文档入口
 

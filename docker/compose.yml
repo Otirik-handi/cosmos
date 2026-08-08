@@ -11,6 +11,10 @@ services:
         environment:
             HOSTNAME: 0.0.0.0
             PORT: "3000"
+            COSMOS_LOG_ROOT: /var/lib/cosmos/logs
+            COSMOS_LOG_OUTPUT: both
+        volumes:
+            - cosmos-logs:/var/lib/cosmos/logs
         depends_on:
             api:
                 condition: service_healthy
@@ -32,8 +36,11 @@ services:
             COSMOS_API_PORT: "4310"
             COSMOS_DATA_ROOT: /var/lib/cosmos
             DATABASE_URL: file:/var/lib/cosmos/cosmos.sqlite
+            COSMOS_LOG_ROOT: /var/lib/cosmos/logs
+            COSMOS_LOG_OUTPUT: both
         volumes:
             - cosmos-data:/var/lib/cosmos
+            - cosmos-logs:/var/lib/cosmos/logs
         ports:
             - "4310:4310"
         healthcheck:
@@ -60,11 +67,15 @@ services:
             COSMOS_DATA_ROOT: /var/lib/cosmos
             DATABASE_URL: file:/var/lib/cosmos/cosmos.sqlite
             COSMOS_WORKER_POLL_MS: "30000"
+            COSMOS_LOG_ROOT: /var/lib/cosmos/logs
+            COSMOS_LOG_OUTPUT: both
         volumes:
             - cosmos-data:/var/lib/cosmos
+            - cosmos-logs:/var/lib/cosmos/logs
         depends_on:
             api:
                 condition: service_healthy
 
 volumes:
     cosmos-data:
+    cosmos-logs:
