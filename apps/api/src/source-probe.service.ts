@@ -1,40 +1,39 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import {
-    type IngestConnector,
+    ConnectorRegistry,
 } from "@cosmos/application";
 import {
+    type CreateSourceCommand,
+    type ConnectorDescriptor,
     type SourceSnapshot,
-    type SourceTestResult,
+    sourceConfigSchema,
 } from "@cosmos/contracts";
-import {
-    createFixtureRssConnector,
-    createRssConnector,
-} from "@cosmos/plugin-rss";
 
 @Injectable()
 export class SourceProbeService {
-    async test(source: SourceSnapshot): Promise<SourceTestResult> {
-        const connector = this.resolveConnector(source);
-        const result = await connector.fetchItems({
-            source,
-            cursor: null,
-        });
-        return {
-            sourceId: source.id,
-            connectorId: connector.id,
-            itemCount: result.items.length,
-            nextCursor: result.nextCursor,
-            checkedAt: new Date().toISOString(),
-        };
+    constructor(
+        @Inject(ConnectorRegistry)
+        private readonly connectors: ConnectorRegistry,
+    ) {}
+
+    list(): readonly ConnectorDescriptor[] {
+        return this.connectors.descriptors();
     }
 
-    private resolveConnector(source: SourceSnapshot): IngestConnector {
-        if (source.kind === "rss") {
-            return createRssConnector();
-        }
-        return createFixtureRssConnector({
-            rootDirectory: process.env.COSMOS_WORKSPACE_ROOT ?? process.cwd(),
+    validate(input: CreateSourceCommand): void {
+        const now = new Date().toISOString();
+        this.connectors.validate({
+            id: "pending",
+            name: input.name,
+            kind: input.kind,
+            config: sourceConfigSchema.parse(input.config),
+            enabled: input.enabled ?? true,
+            createdAt: now,
+            updatedAt: now,
+            lastRunAt: null,
+            lastError: null,
         });
     }
+
 }

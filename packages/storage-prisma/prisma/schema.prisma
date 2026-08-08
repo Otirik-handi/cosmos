@@ -76,6 +76,8 @@ model Job {
     stepId         String?
     kind           String
     status         String
+    payloadJson    String?
+    resultJson     String?
     idempotencyKey String    @unique
     attempts       Int       @default(0)
     maxAttempts    Int       @default(3)
@@ -83,6 +85,7 @@ model Job {
     leaseToken     String?
     leaseExpiresAt DateTime?
     nextAttemptAt  DateTime?
+    errorCode      String?
     errorMessage   String?
     createdAt      DateTime  @default(now())
     updatedAt      DateTime  @updatedAt

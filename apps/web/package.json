@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@cosmos/contracts": "workspace:*",
+    "@cosmos/logging": "workspace:*",
     "@cosmos/transport-http": "workspace:*",
     "@base-ui/react": "^1.7.0",
     "class-variance-authority": "^0.7.1",

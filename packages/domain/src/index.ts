@@ -22,6 +22,7 @@ export interface NormalizedIngestItem {
     sourcePublishedAt: string | null;
     sourceLocator: Record<string, unknown>;
     rawPayload: string;
+    rawPayloadMimeType?: string;
     assets: readonly NormalizedAssetInput[];
 }
 

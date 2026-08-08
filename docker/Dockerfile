@@ -12,8 +12,10 @@ COPY packages/application/package.json packages/application/package.json
 COPY packages/blob-store/package.json packages/blob-store/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/domain/package.json packages/domain/package.json
+COPY packages/logging/package.json packages/logging/package.json
 COPY packages/storage-prisma/package.json packages/storage-prisma/package.json
 COPY packages/transport-http/package.json packages/transport-http/package.json
+COPY plugins/collectors/package.json plugins/collectors/package.json
 COPY plugins/rss/package.json plugins/rss/package.json
 
 RUN bun install --frozen-lockfile

@@ -1,15 +1,20 @@
 import {
     protocolVersion,
     type CreateSourceCommand,
+    type ConnectorDescriptor,
     type FeedPage,
     type HealthResponse,
     type IngestResult,
     type EntryDetail,
+    type EntryPage,
+    type JobKind,
+    type JobSnapshot,
     type RevisionDetail,
     type RunSnapshot,
     type SearchPage,
     type SearchQuery,
     type SourceSnapshot,
+    type SourceProbeResult,
     type StoryDetail,
 } from "@cosmos/contracts";
 import type { NormalizedIngestItem } from "@cosmos/domain";
@@ -26,6 +31,43 @@ export interface RepositoryHealth {
     workerStatus: HealthResponse["workerStatus"];
 }
 
+export interface LoggerContext {
+    requestId?: string;
+    runId?: string;
+    jobId?: string;
+    sourceId?: string;
+    connectorId?: string;
+}
+
+export interface LoggerPort {
+    child(context: LoggerContext): LoggerPort;
+    withContext<T>(
+        context: LoggerContext,
+        callback: () => T | Promise<T>,
+    ): T | Promise<T>;
+    debug(event: string, fields?: Record<string, unknown>): void;
+    info(event: string, fields?: Record<string, unknown>): void;
+    warn(event: string, fields?: Record<string, unknown>): void;
+    error(
+        event: string,
+        fields?: Record<string, unknown>,
+        error?: unknown,
+    ): void;
+}
+
+const noopLogger: LoggerPort = {
+    child: () => noopLogger,
+    withContext: (_context, callback) => callback(),
+    debug: () => undefined,
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+};
+
+function resolveLogger(logger?: LoggerPort): LoggerPort {
+    return logger ?? noopLogger;
+}
+
 export interface CosmosRepository {
     createSource(input: CreateSourceCommand): Promise<SourceSnapshot>;
     listSources(): Promise<readonly SourceSnapshot[]>;
@@ -40,6 +82,11 @@ export interface CosmosRepository {
         triggerKind: "manual" | "schedule";
         idempotencyKey?: string;
     }): Promise<RunSnapshot>;
+    createProbeJob(input: {
+        sourceId: string;
+        idempotencyKey?: string;
+    }): Promise<JobSnapshot>;
+    getJob(jobId: string): Promise<JobSnapshot | null>;
     startRun(runId: string, lease?: JobLease): Promise<RunSnapshot>;
     getRun(runId: string): Promise<RunSnapshot | null>;
     getCheckpoint(sourceId: string): Promise<string | null>;
@@ -53,6 +100,7 @@ export interface CosmosRepository {
         leaseToken: string;
         attempts: number;
         maxAttempts: number;
+        payload: unknown;
     } | null>;
     renewJobLease(input: {
         jobId: string;
@@ -64,6 +112,8 @@ export interface CosmosRepository {
         leaseToken: string;
         status: "succeeded" | "retry_wait" | "failed_terminal";
         error?: string | null;
+        errorCode?: string | null;
+        result?: unknown;
         retryDelayMs?: number;
     }): Promise<boolean>;
     resetRunForRetry(input: {
@@ -88,6 +138,11 @@ export interface CosmosRepository {
         limit: number;
     }): Promise<FeedPage>;
     search(input: SearchQuery): Promise<SearchPage>;
+    entries(input: {
+        sourceId?: string;
+        cursor?: string;
+        limit: number;
+    }): Promise<EntryPage>;
     story(storyId: string): Promise<StoryDetail | null>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
@@ -121,6 +176,10 @@ export interface JobLease {
 
 export interface IngestConnector {
     id: string;
+    description: string;
+    configVersion: string;
+    capabilities: readonly string[];
+    validate(source: SourceSnapshot): void;
     fetchItems(input: {
         source: SourceSnapshot;
         cursor: string | null;
@@ -130,15 +189,197 @@ export interface IngestConnector {
     }>;
 }
 
+export type ConnectorErrorCode =
+    | "dependency_unavailable"
+    | "authentication_required"
+    | "timeout"
+    | "rate_limited"
+    | "malformed_payload"
+    | "unsupported_version"
+    | "invalid_configuration";
+
+export class ConnectorExecutionError extends Error {
+    constructor(
+        readonly code: ConnectorErrorCode,
+        message: string,
+        readonly retryable = true,
+        options?: { cause?: unknown },
+    ) {
+        super(message, options);
+        this.name = "ConnectorExecutionError";
+    }
+}
+
+class RunFinalizationError extends Error {
+    constructor(cause: unknown) {
+        super("Run finalization failed.", { cause });
+        this.name = "RunFinalizationError";
+    }
+}
+
 export type ConnectorResolver = (
     source: SourceSnapshot,
 ) => IngestConnector;
 
+/**
+ * Runtime composition boundary for business-source collectors.
+ *
+ * API and Worker use the same registry. The registry key is a stable
+ * business source kind; implementation details such as OpenCLI remain inside
+ * the connector.
+ */
+export class ConnectorRegistry {
+    private readonly connectors = new Map<string, IngestConnector>();
+
+    constructor(connectors: readonly IngestConnector[] = []) {
+        for (const connector of connectors) {
+            this.register(connector);
+        }
+    }
+
+    register(connector: IngestConnector): this {
+        if (this.connectors.has(connector.id)) {
+            throw new Error(`Duplicate connector id: ${connector.id}`);
+        }
+        this.connectors.set(connector.id, connector);
+        return this;
+    }
+
+    resolve(source: SourceSnapshot): IngestConnector {
+        const connector = this.connectors.get(source.kind);
+        if (!connector) {
+            throw new Error(`Unsupported source connector: ${source.kind}`);
+        }
+        return connector;
+    }
+
+    validate(source: SourceSnapshot): IngestConnector {
+        const connector = this.resolve(source);
+        connector.validate(source);
+        return connector;
+    }
+
+    descriptors(): readonly ConnectorDescriptor[] {
+        return [...this.connectors.values()].map((connector) => ({
+            id: connector.id,
+            description: connector.description,
+            capabilities: [...connector.capabilities],
+            configVersion: connector.configVersion,
+        }));
+    }
+}
+
+export class ConnectorProbeService {
+    private readonly logger: LoggerPort;
+
+    constructor(
+        private readonly repository: Pick<CosmosRepository, "getSource">,
+        private readonly resolveConnector: ConnectorResolver,
+        private readonly now: () => string = () => new Date().toISOString(),
+        logger?: LoggerPort,
+    ) {
+        this.logger = resolveLogger(logger);
+    }
+
+    async runSource(sourceId: string): Promise<SourceProbeResult> {
+        const startedAt = Date.now();
+        let stage = "prepare";
+        let logger = this.logger.child({ sourceId });
+        try {
+            const source = await this.repository.getSource(sourceId);
+            if (!source) {
+                throw new Error(`Source not found: ${sourceId}`);
+            }
+            const connector = this.resolveConnector(source);
+            logger = logger.child({
+                connectorId: connector.id,
+            });
+            logger.info("connector.probe.started", {
+                sourceKind: source.kind,
+            });
+            stage = "validate";
+            try {
+                connector.validate(source);
+            } catch (error) {
+                logger.error("connector.validate.failed", {
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : "invalid_configuration",
+                    retryable: error instanceof ConnectorExecutionError
+                        ? error.retryable
+                        : false,
+                }, error);
+                throw error;
+            }
+            const fetchStartedAt = Date.now();
+            stage = "fetch";
+            logger.debug("connector.fetch.started", {
+                cursorPresent: false,
+            });
+            let result: Awaited<ReturnType<IngestConnector["fetchItems"]>>;
+            try {
+                result = await logger.withContext(
+                    { sourceId, connectorId: connector.id },
+                    () => connector.fetchItems({
+                        source,
+                        cursor: null,
+                    }),
+                );
+            } catch (error) {
+                logger.error("connector.fetch.failed", {
+                    durationMs: Date.now() - fetchStartedAt,
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : null,
+                    retryable: error instanceof ConnectorExecutionError
+                        ? error.retryable
+                        : true,
+                }, error);
+                throw error;
+            }
+            logger.info("connector.fetch.completed", {
+                itemCount: result.items.length,
+                nextCursorAvailable: result.nextCursor !== null,
+                durationMs: Date.now() - fetchStartedAt,
+            });
+            logger.info("connector.probe.completed", {
+                itemCount: result.items.length,
+                nextCursorAvailable: result.nextCursor !== null,
+                durationMs: Date.now() - startedAt,
+            });
+            return {
+                sourceId,
+                connectorId: connector.id,
+                itemCount: result.items.length,
+                nextCursorAvailable: result.nextCursor !== null,
+                checkedAt: this.now(),
+            };
+        } catch (error) {
+            logger.error("connector.probe.failed", {
+                stage,
+                durationMs: Date.now() - startedAt,
+                errorCode: error instanceof ConnectorExecutionError
+                    ? error.code
+                    : null,
+                retryable: error instanceof ConnectorExecutionError
+                    ? error.retryable
+                    : true,
+            }, error);
+            throw error;
+        }
+    }
+}
+
 export class IngestionService {
+    private readonly logger: LoggerPort;
+
     constructor(
         private readonly repository: CosmosRepository,
         private readonly resolveConnector: ConnectorResolver,
-    ) {}
+        logger?: LoggerPort,
+    ) {
+        this.logger = resolveLogger(logger);
+    }
 
     async runSource(sourceId: string): Promise<IngestResult> {
         const source = await this.repository.getSource(sourceId);
@@ -161,16 +402,28 @@ export class IngestionService {
         runId: string,
         lease?: JobLease,
     ): Promise<IngestResult> {
-        const run = await this.repository.getRun(runId);
-        if (!run || !run.sourceId) {
-            throw new Error(`Run not found: ${runId}`);
+        const startedAt = Date.now();
+        const logger = this.logger.child({
+            runId,
+            ...(lease ? { jobId: lease.jobId } : {}),
+        });
+        try {
+            const run = await this.repository.getRun(runId);
+            if (!run || !run.sourceId) {
+                throw new Error(`Run not found: ${runId}`);
+            }
+            const source = await this.repository.getSource(run.sourceId);
+            if (!source) {
+                throw new Error(`Source not found: ${run.sourceId}`);
+            }
+            await this.repository.startRun(runId, lease);
+            return this.executeRun(runId, source, lease);
+        } catch (error) {
+            logger.error("run.start_failed", {
+                durationMs: Date.now() - startedAt,
+            }, error);
+            throw error;
         }
-        const source = await this.repository.getSource(run.sourceId);
-        if (!source) {
-            throw new Error(`Source not found: ${run.sourceId}`);
-        }
-        await this.repository.startRun(runId, lease);
-        return this.executeRun(runId, source, lease);
     }
 
     private async executeRun(
@@ -178,21 +431,99 @@ export class IngestionService {
         source: SourceSnapshot,
         lease?: JobLease,
     ): Promise<IngestResult> {
+        return await this.logger.withContext(
+            {
+                runId,
+                sourceId: source.id,
+                ...(lease ? { jobId: lease.jobId } : {}),
+            },
+            () => this.executeRunInContext(runId, source, lease),
+        );
+    }
+
+    private async executeRunInContext(
+        runId: string,
+        source: SourceSnapshot,
+        lease?: JobLease,
+    ): Promise<IngestResult> {
         let createdEntryCount = 0;
         let revisedEntryCount = 0;
         let duplicateObservationCount = 0;
+        const startedAt = Date.now();
+        let connectorId: string | undefined;
+        let completionFailed = false;
+        let logger = this.logger.child({
+            runId,
+            sourceId: source.id,
+        });
 
         try {
-            const page = await this.resolveConnector(source).fetchItems({
-                source,
-                cursor: await this.repository.getCheckpoint(source.id),
+            const connector = this.resolveConnector(source);
+            connectorId = connector.id;
+            logger = logger.child({ connectorId: connector.id });
+            logger.info("run.started", {
+                sourceKind: source.kind,
+            });
+            try {
+                connector.validate(source);
+            } catch (error) {
+                logger.error("connector.validate.failed", {
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : "invalid_configuration",
+                    retryable: error instanceof ConnectorExecutionError
+                        ? error.retryable
+                        : false,
+                }, error);
+                throw error;
+            }
+            const cursor = await this.repository.getCheckpoint(source.id);
+            const fetchStartedAt = Date.now();
+            logger.debug("connector.fetch.started", {
+                cursorPresent: cursor !== null,
+            });
+            let page: Awaited<ReturnType<IngestConnector["fetchItems"]>>;
+            try {
+                page = await logger.withContext(
+                    {
+                        runId,
+                        sourceId: source.id,
+                        connectorId: connector.id,
+                    },
+                    () => connector.fetchItems({
+                        source,
+                        cursor,
+                    }),
+                );
+            } catch (error) {
+                logger.error("connector.fetch.failed", {
+                    durationMs: Date.now() - fetchStartedAt,
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : null,
+                    retryable: error instanceof ConnectorExecutionError
+                        ? error.retryable
+                        : true,
+                }, error);
+                throw error;
+            }
+            logger.info("connector.fetch.completed", {
+                itemCount: page.items.length,
+                nextCursorAvailable: page.nextCursor !== null,
+                durationMs: Date.now() - fetchStartedAt,
             });
 
-            for (const item of page.items) {
+            for (const [index, item] of page.items.entries()) {
                 const result = await this.repository.persistIngestItem({
                     sourceId: source.id,
                     runId,
                     item,
+                });
+                logger.debug("ingest.item.persisted", {
+                    index,
+                    createdEntry: result.createdEntry,
+                    revisedEntry: result.revisedEntry,
+                    duplicateObservation: result.duplicateObservation,
                 });
                 if (result.createdEntry) {
                     createdEntryCount += 1;
@@ -206,13 +537,23 @@ export class IngestionService {
             }
 
             await this.repository.setCheckpoint(source.id, page.nextCursor);
-            const completedRun = await this.repository.completeRun({
-                runId,
-                status: "succeeded",
-                lease,
-            });
+            let completedRun: RunSnapshot;
+            try {
+                completedRun = await this.repository.completeRun({
+                    runId,
+                    status: "succeeded",
+                    lease,
+                });
+            } catch (error) {
+                completionFailed = true;
+                logger.error("run.completion_failed", {
+                    status: "succeeded",
+                    durationMs: Date.now() - startedAt,
+                }, error);
+                throw new RunFinalizationError(error);
+            }
 
-            return {
+            const result: IngestResult = {
                 run: {
                     ...completedRun,
                     itemCount: page.items.length,
@@ -223,13 +564,45 @@ export class IngestionService {
                 revisedEntryCount,
                 duplicateObservationCount,
             };
-        } catch (error) {
-            const completedRun = await this.repository.completeRun({
-                runId,
-                status: "failed",
-                error: error instanceof Error ? error.message : String(error),
-                lease,
+            logger.info("run.succeeded", {
+                itemCount: page.items.length,
+                createdEntryCount,
+                revisedEntryCount,
+                duplicateObservationCount,
+                durationMs: Date.now() - startedAt,
             });
+            return result;
+        } catch (error) {
+            const message = errorMessage(error);
+            if (completionFailed) {
+                throw error;
+            }
+            logger.error("run.failed", {
+                connectorId,
+                durationMs: Date.now() - startedAt,
+                errorCode: error instanceof ConnectorExecutionError
+                    ? error.code
+                    : null,
+                retryable: error instanceof ConnectorExecutionError
+                    ? error.retryable
+                    : true,
+            }, error);
+            let completedRun: RunSnapshot;
+            try {
+                completedRun = await this.repository.completeRun({
+                    runId,
+                    status: "failed",
+                    error: message,
+                    lease,
+                });
+            } catch (completionError) {
+                completionFailed = true;
+                logger.error("run.completion_failed", {
+                    status: "failed",
+                    durationMs: Date.now() - startedAt,
+                }, completionError);
+                throw new RunFinalizationError(completionError);
+            }
             return {
                 run: {
                     ...completedRun,
@@ -240,6 +613,12 @@ export class IngestionService {
                 createdEntryCount,
                 revisedEntryCount,
                 duplicateObservationCount,
+                errorCode: error instanceof ConnectorExecutionError
+                    ? error.code
+                    : null,
+                retryable: error instanceof ConnectorExecutionError
+                    ? error.retryable
+                    : true,
             };
         }
     }
@@ -250,6 +629,8 @@ export interface IngestionWorkerOptions {
     leaseMs: number;
     pollIntervalMs?: number;
     now?: () => Date;
+    probe?: ConnectorProbeService;
+    logger?: LoggerPort;
 }
 
 export interface WorkerJobResult {
@@ -259,8 +640,14 @@ export interface WorkerJobResult {
     attempts: number;
 }
 
+type ClaimedJob = NonNullable<
+    Awaited<ReturnType<CosmosRepository["claimNextJob"]>>
+>;
+type CompleteJobInput = Parameters<CosmosRepository["completeJob"]>[0];
+
 export class IngestionWorker {
     private readonly now: () => Date;
+    private readonly logger: LoggerPort;
 
     constructor(
         private readonly repository: CosmosRepository,
@@ -268,6 +655,7 @@ export class IngestionWorker {
         private readonly options: IngestionWorkerOptions,
     ) {
         this.now = options.now ?? (() => new Date());
+        this.logger = resolveLogger(options.logger);
     }
 
     async pollOnce(): Promise<WorkerJobResult | null> {
@@ -279,29 +667,96 @@ export class IngestionWorker {
         if (!job) {
             return null;
         }
+        const sourceId = readOptionalSourceId(job.payload);
+        const logger = this.logger.child({
+            jobId: job.id,
+            ...(job.runId ? { runId: job.runId } : {}),
+            ...(sourceId ? { sourceId } : {}),
+        });
+        logger.info("job.claimed", {
+            kind: job.kind,
+            attempts: job.attempts,
+            maxAttempts: job.maxAttempts,
+        });
 
         const leaseHeartbeatMs = Math.max(
             1_000,
             Math.floor(this.options.leaseMs / 3),
         );
         const leaseHeartbeat = setInterval(() => {
-            void this.repository.renewJobLease({
-                jobId: job.id,
-                leaseToken: job.leaseToken,
-                leaseMs: this.options.leaseMs,
+            void (async () => {
+                const renewed = await logger.withContext(
+                    {
+                        jobId: job.id,
+                        ...(job.runId ? { runId: job.runId } : {}),
+                        ...(sourceId ? { sourceId } : {}),
+                    },
+                    () => this.repository.renewJobLease({
+                        jobId: job.id,
+                        leaseToken: job.leaseToken,
+                        leaseMs: this.options.leaseMs,
+                    }),
+                );
+                if (!renewed) {
+                    logger.warn("job.lease_lost", {
+                        kind: job.kind,
+                    });
+                    return;
+                }
+                logger.debug("job.lease_renewed", {
+                    kind: job.kind,
+                });
+            })().catch((error) => {
+                logger.error("job.lease_renew_failed", {
+                    kind: job.kind,
+                }, error);
             });
         }, leaseHeartbeatMs);
         try {
             if (job.kind !== "source-ingest" || !job.runId) {
-                const completed = await this.repository.completeJob({
-                    jobId: job.id,
-                    leaseToken: job.leaseToken,
+                if (job.kind === "source-probe" && !job.runId && this.options.probe) {
+                    const result = await logger.withContext(
+                        {
+                            jobId: job.id,
+                            ...(sourceId ? { sourceId } : {}),
+                        },
+                        () => this.options.probe!.runSource(
+                            readSourceId(job.payload),
+                        ),
+                    );
+                    const completed = await this.completeClaimedJob(job, logger, {
+                        status: "succeeded",
+                        result,
+                    });
+                    if (completed) {
+                        logger.info("job.completed", {
+                            kind: job.kind,
+                            status: "succeeded",
+                            attempts: job.attempts,
+                        });
+                    }
+                    return completed
+                        ? {
+                            jobId: job.id,
+                            runId: null,
+                            status: "succeeded",
+                            attempts: job.attempts,
+                        }
+                        : null;
+                }
+                const completed = await this.completeClaimedJob(job, logger, {
                     status: "failed_terminal",
                     error: `Unsupported job: ${job.kind}`,
                 });
                 if (!completed) {
                     return null;
                 }
+                logger.error("job.failed_terminal", {
+                    kind: job.kind,
+                    status: "failed_terminal",
+                    attempts: job.attempts,
+                    errorCode: "unsupported_job",
+                });
                 return {
                     jobId: job.id,
                     runId: job.runId,
@@ -310,16 +765,28 @@ export class IngestionWorker {
                 };
             }
 
-            const result = await this.ingestion.runExistingRunWithLease(job.runId, {
-                jobId: job.id,
-                leaseToken: job.leaseToken,
-            });
-            if (result.run.status === "succeeded") {
-                const completed = await this.repository.completeJob({
+            const result = await logger.withContext(
+                {
+                    jobId: job.id,
+                    runId: job.runId,
+                    ...(sourceId ? { sourceId } : {}),
+                },
+                () => this.ingestion.runExistingRunWithLease(job.runId!, {
                     jobId: job.id,
                     leaseToken: job.leaseToken,
+                }),
+            );
+            if (result.run.status === "succeeded") {
+                const completed = await this.completeClaimedJob(job, logger, {
                     status: "succeeded",
                 });
+                if (completed) {
+                    logger.info("job.completed", {
+                        kind: job.kind,
+                        status: "succeeded",
+                        attempts: job.attempts,
+                    });
+                }
                 return completed
                     ? {
                         jobId: job.id,
@@ -330,8 +797,20 @@ export class IngestionWorker {
                     : null;
             }
 
-            return this.finishFailedJob(job, result.run.error);
+            return this.finishFailedJob(job, {
+                message: result.run.error ?? "Ingest failed.",
+                code: result.errorCode ?? null,
+                retryable: result.retryable ?? true,
+            });
         } catch (error) {
+            if (error instanceof RunFinalizationError) {
+                logger.error("job.run_completion_failed", {
+                    kind: job.kind,
+                    status: "unknown",
+                    attempts: job.attempts,
+                }, error);
+                return null;
+            }
             return this.finishFailedJob(
                 job,
                 error instanceof Error ? error.message : String(error),
@@ -356,48 +835,130 @@ export class IngestionWorker {
                 continue;
             }
             const bucket = Math.floor(now.getTime() / interval);
-            await this.repository.createQueuedRun({
-                sourceId: source.id,
-                triggerKind: "schedule",
-                idempotencyKey: `schedule:${source.id}:${bucket}`,
-            });
+            try {
+                const run = await this.repository.createQueuedRun({
+                    sourceId: source.id,
+                    triggerKind: "schedule",
+                    idempotencyKey: `schedule:${source.id}:${bucket}`,
+                });
+                this.logger.child({
+                    runId: run.id,
+                    sourceId: source.id,
+                }).info("run.queued", {
+                    triggerKind: "schedule",
+                    status: run.status,
+                });
+            } catch (error) {
+                this.logger.child({
+                    sourceId: source.id,
+                }).error("run.queue_failed", {
+                    triggerKind: "schedule",
+                }, error);
+                throw error;
+            }
+        }
+    }
+
+    private async completeClaimedJob(
+        job: ClaimedJob,
+        logger: LoggerPort,
+        input: Omit<CompleteJobInput, "jobId" | "leaseToken">,
+    ): Promise<boolean> {
+        const sourceId = readOptionalSourceId(job.payload);
+        try {
+            const completed = await logger.withContext(
+                {
+                    jobId: job.id,
+                    ...(job.runId ? { runId: job.runId } : {}),
+                    ...(sourceId ? { sourceId } : {}),
+                },
+                () => this.repository.completeJob({
+                    jobId: job.id,
+                    leaseToken: job.leaseToken,
+                    ...input,
+                }),
+            );
+            if (!completed) {
+                logger.warn("job.completion_rejected", {
+                    kind: job.kind,
+                    status: input.status,
+                    attempts: job.attempts,
+                });
+            }
+            return completed;
+        } catch (error) {
+            logger.error("job.completion_failed", {
+                kind: job.kind,
+                status: input.status,
+                attempts: job.attempts,
+            }, error);
+            return false;
         }
     }
 
     private async finishFailedJob(
-        job: {
-            id: string;
-            runId: string | null;
-            leaseToken: string;
-            attempts: number;
-            maxAttempts: number;
-        },
-        error: string | null | undefined,
+        job: ClaimedJob,
+        error: unknown,
     ): Promise<WorkerJobResult | null> {
-        const terminal = job.attempts >= job.maxAttempts;
+        const failure = normalizeFailure(error);
+        const message = failure.message;
+        const errorCode = failure.code;
+        const terminal = job.attempts >= job.maxAttempts
+            || !failure.retryable;
+        const sourceId = readOptionalSourceId(job.payload);
+        const logger = this.logger.child({
+            jobId: job.id,
+            ...(job.runId ? { runId: job.runId } : {}),
+            ...(sourceId ? { sourceId } : {}),
+        });
         if (!terminal && job.runId) {
             try {
-                await this.repository.resetRunForRetry({
-                    runId: job.runId,
-                    error: error ?? null,
-                    lease: {
+                await logger.withContext(
+                    {
                         jobId: job.id,
-                        leaseToken: job.leaseToken,
+                        runId: job.runId,
+                        ...(sourceId ? { sourceId } : {}),
                     },
-                });
-            } catch {
+                    () => this.repository.resetRunForRetry({
+                        runId: job.runId!,
+                        error: message,
+                        lease: {
+                            jobId: job.id,
+                            leaseToken: job.leaseToken,
+                        },
+                    }),
+                );
+            } catch (resetError) {
+                logger.error("job.retry_reset_failed", {
+                    attempts: job.attempts,
+                    maxAttempts: job.maxAttempts,
+                    errorCode,
+                }, resetError);
                 return null;
             }
         }
-        const completed = await this.repository.completeJob({
-            jobId: job.id,
-            leaseToken: job.leaseToken,
+        const retryDelay = terminal
+            ? undefined
+            : retryDelayMs(job.attempts);
+        const completed = await this.completeClaimedJob(job, logger, {
             status: terminal ? "failed_terminal" : "retry_wait",
-            error: error ?? null,
-            retryDelayMs: terminal
-                ? undefined
-                : retryDelayMs(job.attempts),
+            error: message,
+            errorCode,
+            retryDelayMs: retryDelay,
         });
+        if (completed) {
+            logger[terminal ? "error" : "warn"](
+                terminal ? "job.failed_terminal" : "job.retry_scheduled",
+                {
+                    status: terminal ? "failed_terminal" : "retry_wait",
+                    attempts: job.attempts,
+                    maxAttempts: job.maxAttempts,
+                    errorCode,
+                    retryDelayMs: retryDelay,
+                },
+                error,
+            );
+        }
         return completed
             ? {
                 jobId: job.id,
@@ -411,6 +972,67 @@ export class IngestionWorker {
 
 function retryDelayMs(attempt: number): number {
     return Math.min(30_000, 1_000 * 2 ** Math.max(0, attempt - 1));
+}
+
+function readSourceId(payload: unknown): string {
+    if (
+        !payload
+        || typeof payload !== "object"
+        || typeof (payload as { sourceId?: unknown }).sourceId !== "string"
+        || !(payload as { sourceId: string }).sourceId
+    ) {
+        throw new Error("Source probe job is missing sourceId.");
+    }
+    return (payload as { sourceId: string }).sourceId;
+}
+
+function readOptionalSourceId(payload: unknown): string | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+    const sourceId = (payload as { sourceId?: unknown }).sourceId;
+    return typeof sourceId === "string" && sourceId
+        ? sourceId
+        : null;
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeFailure(error: unknown): {
+    message: string;
+    code: string | null;
+    retryable: boolean;
+} {
+    if (error instanceof ConnectorExecutionError) {
+        return {
+            message: error.message,
+            code: error.code,
+            retryable: error.retryable,
+        };
+    }
+    if (error && typeof error === "object") {
+        const candidate = error as {
+            message?: unknown;
+            code?: unknown;
+            retryable?: unknown;
+        };
+        return {
+            message: typeof candidate.message === "string"
+                ? candidate.message
+                : String(error),
+            code: typeof candidate.code === "string"
+                ? candidate.code
+                : null,
+            retryable: candidate.retryable !== false,
+        };
+    }
+    return {
+        message: String(error),
+        code: null,
+        retryable: true,
+    };
 }
 
 export function createHealthSnapshot(input: {

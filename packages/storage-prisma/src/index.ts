@@ -6,12 +6,16 @@ import {
 } from "node:path";
 
 import {
+    jobKindSchema,
+    sourceKindSchema,
     sourceConfigSchema,
     type CreateSourceCommand,
     type EntryDetail,
+    type EntryPage,
     type FeedItem,
     type FeedPage,
     type HealthResponse,
+    type JobSnapshot,
     type SearchPage,
     type SearchQuery,
     type RevisionDetail,
@@ -27,6 +31,7 @@ import {
 import type {
     CosmosRepository,
     JobLease,
+    LoggerPort,
     PersistIngestItemResult,
     RepositoryHealth,
 } from "@cosmos/application";
@@ -48,9 +53,10 @@ export interface StorageRoots {
 }
 
 export function resolveStorageRoots(
-    dataRoot = process.env.COSMOS_DATA_ROOT ?? ".cosmos",
+    dataRoot = process.env.COSMOS_DATA_ROOT?.trim() || ".cosmos",
+    workspaceRoot = process.env.COSMOS_WORKSPACE_ROOT ?? process.cwd(),
 ): StorageRoots {
-    const root = resolve(dataRoot);
+    const root = resolve(workspaceRoot, dataRoot);
     const databasePath = join(root, "cosmos.sqlite");
 
     return {
@@ -66,7 +72,7 @@ export function resolveStorageRoots(
 }
 
 export function createPrismaClient(
-    dataRoot = process.env.COSMOS_DATA_ROOT ?? ".cosmos",
+    dataRoot = process.env.COSMOS_DATA_ROOT?.trim() || ".cosmos",
 ): PrismaClient {
     const roots = resolveStorageRoots(dataRoot);
 
@@ -99,33 +105,55 @@ export class PrismaCosmosRepository implements CosmosRepository {
     readonly roots: StorageRoots;
     readonly prisma: PrismaClient;
     readonly blobs: FileBlobStore;
+    private readonly logger?: LoggerPort;
 
     constructor(options: {
         dataRoot?: string;
         prisma?: PrismaClient;
         blobs?: FileBlobStore;
+        logger?: LoggerPort;
     } = {}) {
         this.roots = resolveStorageRoots(options.dataRoot);
         this.prisma = options.prisma ?? createPrismaClient(this.roots.dataRoot);
         this.blobs = options.blobs ?? new FileBlobStore({
             root: this.roots.blobRoot,
         });
+        this.logger = options.logger;
     }
 
     async initialize(): Promise<void> {
-        await this.prisma.$connect();
-        await this.prisma.$executeRawUnsafe(`
-            CREATE VIRTUAL TABLE IF NOT EXISTS entry_search USING fts5(
-                entry_id UNINDEXED,
-                title,
-                content_text,
-                tokenize = 'unicode61'
-            )
-        `);
+        const startedAt = Date.now();
+        this.logger?.info("storage.initialize.started");
+        try {
+            await this.prisma.$connect();
+            await this.prisma.$executeRawUnsafe(`
+                CREATE VIRTUAL TABLE IF NOT EXISTS entry_search USING fts5(
+                    entry_id UNINDEXED,
+                    title,
+                    content_text,
+                    tokenize = 'unicode61'
+                )
+            `);
+            this.logger?.info("storage.initialize.completed", {
+                durationMs: Date.now() - startedAt,
+            });
+        } catch (error) {
+            this.logger?.error("storage.initialize.failed", {
+                durationMs: Date.now() - startedAt,
+            }, error);
+            throw error;
+        }
     }
 
     async close(): Promise<void> {
-        await this.prisma.$disconnect();
+        this.logger?.debug("storage.close.started");
+        try {
+            await this.prisma.$disconnect();
+            this.logger?.debug("storage.close.completed");
+        } catch (error) {
+            this.logger?.error("storage.close.failed", {}, error);
+            throw error;
+        }
     }
 
     async createSource(input: CreateSourceCommand): Promise<SourceSnapshot> {
@@ -172,7 +200,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
         ? Exclude<T, null>
         : never> {
         const now = new Date();
-        const run = await this.prisma.$transaction(async (tx) => {
+        try {
+            const run = await this.prisma.$transaction(async (tx) => {
             const created = await tx.run.create({
                 data: {
                     sourceInstanceId: input.sourceId,
@@ -196,6 +225,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     stepId: step.id,
                     kind: "source-ingest",
                     status: "leased",
+                    payloadJson: JSON.stringify({ sourceId: input.sourceId }),
                     idempotencyKey: `run:${created.id}:ingest`,
                     attempts: 1,
                     leaseOwner: "synchronous-ingest",
@@ -211,8 +241,15 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 payload: { runId: created.id, sourceId: input.sourceId },
             });
             return created;
-        });
-        return this.toRunSnapshot(run);
+            });
+            return this.toRunSnapshot(run);
+        } catch (error) {
+            this.logger?.error("storage.run.create.failed", {
+                sourceId: input.sourceId,
+                triggerKind: input.triggerKind,
+            }, error);
+            throw error;
+        }
     }
 
     async createQueuedRun(input: {
@@ -220,7 +257,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
         triggerKind: "manual" | "schedule";
         idempotencyKey?: string;
     }) {
-        const run = await this.prisma.$transaction(async (tx) => {
+        try {
+            const run = await this.prisma.$transaction(async (tx) => {
             if (input.idempotencyKey) {
                 const existingJob = await tx.job.findUnique({
                     where: { idempotencyKey: input.idempotencyKey },
@@ -252,6 +290,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     stepId: step.id,
                     kind: "source-ingest",
                     status: "queued",
+                    payloadJson: JSON.stringify({ sourceId: input.sourceId }),
                     idempotencyKey: input.idempotencyKey ?? `run:${created.id}:ingest`,
                 },
             });
@@ -263,42 +302,104 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 payload: { runId: created.id, sourceId: input.sourceId },
             });
             return created;
-        });
-        return this.toRunSnapshot(run);
+            });
+            return this.toRunSnapshot(run);
+        } catch (error) {
+            this.logger?.error("storage.run.queue.failed", {
+                sourceId: input.sourceId,
+                triggerKind: input.triggerKind,
+            }, error);
+            throw error;
+        }
+    }
+
+    async createProbeJob(input: {
+        sourceId: string;
+        idempotencyKey?: string;
+    }): Promise<JobSnapshot> {
+        try {
+            const job = await this.prisma.$transaction(async (tx) => {
+            if (input.idempotencyKey) {
+                const existing = await tx.job.findUnique({
+                    where: { idempotencyKey: input.idempotencyKey },
+                });
+                if (existing) {
+                    return existing;
+                }
+            }
+
+            const created = await tx.job.create({
+                data: {
+                    kind: "source-probe",
+                    status: "queued",
+                    payloadJson: JSON.stringify({ sourceId: input.sourceId }),
+                    idempotencyKey: input.idempotencyKey
+                        ?? `probe:${input.sourceId}:${randomUUID()}`,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "job.queued.v1",
+                aggregateType: "Job",
+                aggregateId: created.id,
+                payload: {
+                    jobId: created.id,
+                    kind: created.kind,
+                    sourceId: input.sourceId,
+                },
+            });
+            return created;
+            });
+            return this.toJobSnapshot(job);
+        } catch (error) {
+            this.logger?.error("storage.job.queue.failed", {
+                sourceId: input.sourceId,
+                kind: "source-probe",
+            }, error);
+            throw error;
+        }
     }
 
     async startRun(runId: string, lease?: JobLease) {
         const now = new Date();
-        const run = await this.prisma.$transaction(async (tx) => {
-            if (lease) {
-                await assertJobLease(tx, runId, lease);
-            }
-            const updated = await tx.run.update({
-                where: { id: runId },
-                data: {
-                    status: "running",
-                    startedAt: now,
-                    finishedAt: null,
-                },
+        let run: Prisma.RunGetPayload<{}>;
+        try {
+            run = await this.prisma.$transaction(async (tx) => {
+                if (lease) {
+                    await assertJobLease(tx, runId, lease);
+                }
+                const updated = await tx.run.update({
+                    where: { id: runId },
+                    data: {
+                        status: "running",
+                        startedAt: now,
+                        finishedAt: null,
+                    },
+                });
+                await tx.step.updateMany({
+                    where: { runId },
+                    data: {
+                        status: "running",
+                        attempts: { increment: 1 },
+                        startedAt: now,
+                        finishedAt: null,
+                    },
+                });
+                await appendDomainEvent(tx, {
+                    type: "run.started.v1",
+                    aggregateType: "Run",
+                    aggregateId: runId,
+                    runId,
+                    payload: { runId },
+                });
+                return updated;
             });
-            await tx.step.updateMany({
-                where: { runId },
-                data: {
-                    status: "running",
-                    attempts: { increment: 1 },
-                    startedAt: now,
-                    finishedAt: null,
-                },
-            });
-            await appendDomainEvent(tx, {
-                type: "run.started.v1",
-                aggregateType: "Run",
-                aggregateId: runId,
+        } catch (error) {
+            this.logger?.error("storage.run.start.failed", {
                 runId,
-                payload: { runId },
-            });
-            return updated;
-        });
+                ...(lease ? { jobId: lease.jobId } : {}),
+            }, error);
+            throw error;
+        }
         return this.toRunSnapshot(run);
     }
 
@@ -307,6 +408,13 @@ export class PrismaCosmosRepository implements CosmosRepository {
             where: { id: runId },
         });
         return run ? this.toRunSnapshot(run) : null;
+    }
+
+    async getJob(jobId: string): Promise<JobSnapshot | null> {
+        const job = await this.prisma.job.findUnique({
+            where: { id: jobId },
+        });
+        return job ? this.toJobSnapshot(job) : null;
     }
 
     async getCheckpoint(sourceId: string): Promise<string | null> {
@@ -321,7 +429,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
         leaseMs: number;
     }) {
         const now = new Date();
-        return this.prisma.$transaction(async (tx) => {
+        try {
+            return await this.prisma.$transaction(async (tx) => {
             const candidate = await tx.job.findFirst({
                 where: {
                     OR: [
@@ -345,6 +454,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             }
 
             if (candidate.attempts >= candidate.maxAttempts) {
+                const sourceId = readPayloadSourceId(candidate.payloadJson);
                 await tx.job.update({
                     where: { id: candidate.id },
                     data: {
@@ -376,6 +486,14 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         reason: "max_attempts",
                     },
                 });
+                this.logger?.error("job.failed_terminal", {
+                    jobId: candidate.id,
+                    runId: candidate.runId,
+                    ...(sourceId ? { sourceId } : {}),
+                    attempts: candidate.attempts,
+                    maxAttempts: candidate.maxAttempts,
+                    errorCode: "max_attempts",
+                });
                 return null;
             }
 
@@ -402,6 +520,15 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 },
             });
             if (updated.count !== 1) {
+                const sourceId = readPayloadSourceId(candidate.payloadJson);
+                this.logger?.debug("job.claim_rejected", {
+                    jobId: candidate.id,
+                    ...(candidate.runId ? { runId: candidate.runId } : {}),
+                    ...(sourceId ? { sourceId } : {}),
+                    owner: input.owner,
+                    status: candidate.status,
+                    reason: "lease_competition",
+                });
                 return null;
             }
             await appendDomainEvent(tx, {
@@ -423,8 +550,17 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 leaseToken,
                 attempts: candidate.attempts + 1,
                 maxAttempts: candidate.maxAttempts,
+                payload: candidate.payloadJson
+                    ? JSON.parse(candidate.payloadJson) as unknown
+                    : null,
             };
-        });
+            });
+        } catch (error) {
+            this.logger?.error("storage.job.claim.failed", {
+                owner: input.owner,
+            }, error);
+            throw error;
+        }
     }
 
     async renewJobLease(input: {
@@ -432,17 +568,24 @@ export class PrismaCosmosRepository implements CosmosRepository {
         leaseToken: string;
         leaseMs: number;
     }): Promise<boolean> {
-        const result = await this.prisma.job.updateMany({
-            where: {
-                id: input.jobId,
-                leaseToken: input.leaseToken,
-                status: "leased",
-            },
-            data: {
-                leaseExpiresAt: new Date(Date.now() + input.leaseMs),
-            },
-        });
-        return result.count === 1;
+        try {
+            const result = await this.prisma.job.updateMany({
+                where: {
+                    id: input.jobId,
+                    leaseToken: input.leaseToken,
+                    status: "leased",
+                },
+                data: {
+                    leaseExpiresAt: new Date(Date.now() + input.leaseMs),
+                },
+            });
+            return result.count === 1;
+        } catch (error) {
+            this.logger?.error("storage.job.lease_renew.failed", {
+                jobId: input.jobId,
+            }, error);
+            throw error;
+        }
     }
 
     async completeJob(input: {
@@ -450,46 +593,63 @@ export class PrismaCosmosRepository implements CosmosRepository {
         leaseToken: string;
         status: "succeeded" | "retry_wait" | "failed_terminal";
         error?: string | null;
+        errorCode?: string | null;
+        result?: unknown;
         retryDelayMs?: number;
     }): Promise<boolean> {
-        return this.prisma.$transaction(async (tx) => {
-            const job = await tx.job.findFirst({
-                where: {
-                    id: input.jobId,
-                    leaseToken: input.leaseToken,
-                    status: "leased",
-                },
-            });
-            if (!job) {
-                return false;
-            }
-            await tx.job.update({
-                where: { id: input.jobId },
-                data: {
-                    status: input.status,
-                    errorMessage: input.error ?? null,
-                    leaseExpiresAt: null,
-                    leaseOwner: null,
-                    leaseToken: null,
-                    nextAttemptAt: input.status === "retry_wait"
-                        ? new Date(Date.now() + (input.retryDelayMs ?? 30_000))
-                        : null,
-                },
-            });
-            await appendDomainEvent(tx, {
-                type: `job.${input.status}.v1`,
-                aggregateType: "Job",
-                aggregateId: input.jobId,
-                runId: job.runId,
-                payload: {
-                    jobId: input.jobId,
+        try {
+            return await this.prisma.$transaction(async (tx) => {
+                const job = await tx.job.findFirst({
+                    where: {
+                        id: input.jobId,
+                        leaseToken: input.leaseToken,
+                        status: "leased",
+                    },
+                });
+                if (!job) {
+                    return false;
+                }
+                await tx.job.update({
+                    where: { id: input.jobId },
+                    data: {
+                        status: input.status,
+                        errorMessage: input.error ?? null,
+                        errorCode: input.errorCode ?? null,
+                        resultJson: input.result === undefined
+                            ? undefined
+                            : JSON.stringify(input.result),
+                        leaseExpiresAt: null,
+                        leaseOwner: null,
+                        leaseToken: null,
+                        nextAttemptAt: input.status === "retry_wait"
+                            ? new Date(Date.now() + (input.retryDelayMs ?? 30_000))
+                            : null,
+                    },
+                });
+                await appendDomainEvent(tx, {
+                    type: `job.${input.status}.v1`,
+                    aggregateType: "Job",
+                    aggregateId: input.jobId,
                     runId: job.runId,
-                    status: input.status,
-                    error: input.error ?? null,
-                },
+                    payload: {
+                        jobId: input.jobId,
+                        runId: job.runId,
+                        status: input.status,
+                        error: input.error ?? null,
+                        errorCode: input.errorCode ?? null,
+                        result: input.result ?? null,
+                    },
+                });
+                return true;
             });
-            return true;
-        });
+        } catch (error) {
+            this.logger?.error("storage.job.complete.failed", {
+                jobId: input.jobId,
+                status: input.status,
+                errorCode: input.errorCode ?? null,
+            }, error);
+            throw error;
+        }
     }
 
     async resetRunForRetry(input: {
@@ -498,45 +658,81 @@ export class PrismaCosmosRepository implements CosmosRepository {
         lease?: JobLease;
     }) {
         const now = new Date();
-        const run = await this.prisma.$transaction(async (tx) => {
-            if (input.lease) {
-                await assertJobLease(tx, input.runId, input.lease);
-            }
-            const updated = await tx.run.update({
-                where: { id: input.runId },
-                data: {
-                    status: "queued",
-                    startedAt: null,
-                    finishedAt: null,
-                    errorMessage: input.error ?? null,
-                },
-            });
-            await tx.step.updateMany({
-                where: { runId: input.runId },
-                data: {
-                    status: "queued",
-                    startedAt: null,
-                    finishedAt: null,
-                    errorMessage: input.error ?? null,
-                },
-            });
-            await appendDomainEvent(tx, {
-                type: "run.retry_wait.v1",
-                aggregateType: "Run",
-                aggregateId: input.runId,
-                runId: input.runId,
-                payload: {
+        let run: Prisma.RunGetPayload<{}>;
+        try {
+            run = await this.prisma.$transaction(async (tx) => {
+                if (input.lease) {
+                    await assertJobLease(tx, input.runId, input.lease);
+                }
+                const updated = await tx.run.update({
+                    where: { id: input.runId },
+                    data: {
+                        status: "queued",
+                        startedAt: null,
+                        finishedAt: null,
+                        errorMessage: input.error ?? null,
+                    },
+                });
+                await tx.step.updateMany({
+                    where: { runId: input.runId },
+                    data: {
+                        status: "queued",
+                        startedAt: null,
+                        finishedAt: null,
+                        errorMessage: input.error ?? null,
+                    },
+                });
+                await appendDomainEvent(tx, {
+                    type: "run.retry_wait.v1",
+                    aggregateType: "Run",
+                    aggregateId: input.runId,
                     runId: input.runId,
-                    error: input.error ?? null,
-                    at: now.toISOString(),
-                },
+                    payload: {
+                        runId: input.runId,
+                        error: input.error ?? null,
+                        at: now.toISOString(),
+                    },
+                });
+                return updated;
             });
-            return updated;
-        });
+        } catch (error) {
+            this.logger?.error("storage.run.retry_reset.failed", {
+                runId: input.runId,
+                ...(input.lease ? { jobId: input.lease.jobId } : {}),
+            }, error);
+            throw error;
+        }
         return this.toRunSnapshot(run);
     }
 
     async persistIngestItem(input: {
+        sourceId: string;
+        runId: string;
+        item: NormalizedIngestItem;
+    }): Promise<PersistIngestItemResult> {
+        const startedAt = Date.now();
+        try {
+            const result = await this.persistIngestItemInternal(input);
+            this.logger?.debug("storage.persist_ingest.completed", {
+                sourceId: input.sourceId,
+                runId: input.runId,
+                createdEntry: result.createdEntry,
+                revisedEntry: result.revisedEntry,
+                duplicateObservation: result.duplicateObservation,
+                durationMs: Date.now() - startedAt,
+            });
+            return result;
+        } catch (error) {
+            this.logger?.error("storage.persist_ingest.failed", {
+                sourceId: input.sourceId,
+                runId: input.runId,
+                durationMs: Date.now() - startedAt,
+            }, error);
+            throw error;
+        }
+    }
+
+    private async persistIngestItemInternal(input: {
         sourceId: string;
         runId: string;
         item: NormalizedIngestItem;
@@ -549,20 +745,47 @@ export class PrismaCosmosRepository implements CosmosRepository {
             webUrl: input.item.webUrl,
             sourcePublishedAt: input.item.sourcePublishedAt,
         });
-        const rawPayload = await this.blobs.put(
-            new TextEncoder().encode(input.item.rawPayload),
-            { mimeType: "application/xml" },
-        );
-        const storedAssets = await Promise.all(input.item.assets.map(async (asset) => {
+        let rawPayload: Awaited<ReturnType<FileBlobStore["put"]>>;
+        try {
+            rawPayload = await this.blobs.put(
+                new TextEncoder().encode(input.item.rawPayload),
+                {
+                    mimeType: input.item.rawPayloadMimeType
+                        ?? "application/octet-stream",
+                },
+            );
+        } catch (error) {
+            this.logger?.error("storage.blob.put.failed", {
+                sourceId: input.sourceId,
+                runId: input.runId,
+                kind: "raw_payload",
+                byteSize: Buffer.byteLength(input.item.rawPayload, "utf8"),
+            }, error);
+            throw error;
+        }
+        const storedAssets = await Promise.all(input.item.assets.map(async (asset, index) => {
             if (!asset.content || asset.status !== "saved") {
                 return {
                     ...asset,
                     storageKey: null,
                 };
             }
-            const stored = await this.blobs.put(asset.content, {
-                mimeType: asset.mimeType,
-            });
+            let stored: Awaited<ReturnType<FileBlobStore["put"]>>;
+            try {
+                stored = await this.blobs.put(asset.content, {
+                    mimeType: asset.mimeType,
+                });
+            } catch (error) {
+                this.logger?.error("storage.blob.put.failed", {
+                    sourceId: input.sourceId,
+                    runId: input.runId,
+                    kind: "asset",
+                    assetKind: asset.kind,
+                    assetIndex: index,
+                    byteSize: asset.content.byteLength,
+                }, error);
+                throw error;
+            }
             return {
                 ...asset,
                 storageKey: stored.key,
@@ -779,14 +1002,21 @@ export class PrismaCosmosRepository implements CosmosRepository {
     }
 
     async setCheckpoint(sourceId: string, cursor: string | null): Promise<void> {
-        await this.prisma.checkpoint.upsert({
-            where: { sourceInstanceId: sourceId },
-            create: {
-                sourceInstanceId: sourceId,
-                cursor,
-            },
-            update: { cursor },
-        });
+        try {
+            await this.prisma.checkpoint.upsert({
+                where: { sourceInstanceId: sourceId },
+                create: {
+                    sourceInstanceId: sourceId,
+                    cursor,
+                },
+                update: { cursor },
+            });
+        } catch (error) {
+            this.logger?.error("storage.checkpoint.failed", {
+                sourceId,
+            }, error);
+            throw error;
+        }
     }
 
     async completeRun(input: {
@@ -796,54 +1026,64 @@ export class PrismaCosmosRepository implements CosmosRepository {
         lease?: JobLease;
     }) {
         const now = new Date();
-        const run = await this.prisma.$transaction(async (tx) => {
-            if (input.lease) {
-                await assertJobLease(tx, input.runId, input.lease);
-            }
-            const updated = await tx.run.update({
-                where: { id: input.runId },
-                data: {
-                    status: input.status,
-                    finishedAt: now,
-                    errorMessage: input.error ?? null,
-                },
-            });
-            await tx.step.updateMany({
-                where: { runId: input.runId },
-                data: {
-                    status: input.status,
-                    finishedAt: now,
-                    errorMessage: input.error ?? null,
-                },
-            });
-            if (!input.lease) {
-                await tx.job.updateMany({
-                    where: { runId: input.runId },
+        let run: Prisma.RunGetPayload<{}>;
+        try {
+            run = await this.prisma.$transaction(async (tx) => {
+                if (input.lease) {
+                    await assertJobLease(tx, input.runId, input.lease);
+                }
+                const updated = await tx.run.update({
+                    where: { id: input.runId },
                     data: {
-                        status: input.status === "succeeded"
-                            ? "succeeded"
-                            : input.status === "cancelled"
-                                ? "cancelled"
-                                : "failed_terminal",
-                        leaseExpiresAt: null,
-                        leaseOwner: null,
-                        leaseToken: null,
+                        status: input.status,
+                        finishedAt: now,
+                        errorMessage: input.error ?? null,
                     },
                 });
-            }
-            await appendDomainEvent(tx, {
-                type: `run.${input.status}.v1`,
-                aggregateType: "Run",
-                aggregateId: input.runId,
-                runId: input.runId,
-                payload: {
+                await tx.step.updateMany({
+                    where: { runId: input.runId },
+                    data: {
+                        status: input.status,
+                        finishedAt: now,
+                        errorMessage: input.error ?? null,
+                    },
+                });
+                if (!input.lease) {
+                    await tx.job.updateMany({
+                        where: { runId: input.runId },
+                        data: {
+                            status: input.status === "succeeded"
+                                ? "succeeded"
+                                : input.status === "cancelled"
+                                    ? "cancelled"
+                                    : "failed_terminal",
+                            leaseExpiresAt: null,
+                            leaseOwner: null,
+                            leaseToken: null,
+                        },
+                    });
+                }
+                await appendDomainEvent(tx, {
+                    type: `run.${input.status}.v1`,
+                    aggregateType: "Run",
+                    aggregateId: input.runId,
                     runId: input.runId,
-                    status: input.status,
-                    error: input.error ?? null,
-                },
+                    payload: {
+                        runId: input.runId,
+                        status: input.status,
+                        error: input.error ?? null,
+                    },
+                });
+                return updated;
             });
-            return updated;
-        });
+        } catch (error) {
+            this.logger?.error("storage.run.complete.failed", {
+                runId: input.runId,
+                status: input.status,
+                ...(input.lease ? { jobId: input.lease.jobId } : {}),
+            }, error);
+            throw error;
+        }
         return this.toRunSnapshot(run);
     }
 
@@ -964,6 +1204,62 @@ export class PrismaCosmosRepository implements CosmosRepository {
         };
     }
 
+    async entries(input: {
+        sourceId?: string;
+        cursor?: string;
+        limit: number;
+    }): Promise<EntryPage> {
+        const offset = parseCursor(input.cursor);
+        const entries = await this.prisma.entry.findMany({
+            where: {
+                currentRevisionId: { not: null },
+                sourceInstanceId: input.sourceId,
+            },
+            orderBy: { updatedAt: "desc" },
+            skip: offset,
+            take: input.limit + 1,
+            include: {
+                sourceInstance: true,
+                currentRevision: {
+                    include: { assets: true },
+                },
+                _count: {
+                    select: {
+                        observations: true,
+                        revisions: true,
+                    },
+                },
+            },
+        });
+        const hasNext = entries.length > input.limit;
+        const items = entries.slice(0, input.limit).flatMap((entry) => {
+            if (!entry.currentRevision) {
+                return [];
+            }
+            return [{
+                id: entry.id,
+                sourceId: entry.sourceInstance.id,
+                sourceName: entry.sourceInstance.name,
+                sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
+                storyId: entry.storyId,
+                currentRevisionId: entry.currentRevision.id,
+                title: entry.currentRevision.title,
+                summary: entry.currentRevision.summary,
+                webUrl: entry.currentRevision.webUrl,
+                publishedAt: entry.currentRevision.sourcePublishedAt?.toISOString() ?? null,
+                updatedAt: entry.updatedAt.toISOString(),
+                revisionCount: entry._count.revisions,
+                observationCount: entry._count.observations,
+                assets: entry.currentRevision.assets.map((asset) => this.toAssetSnapshot(asset)),
+            }];
+        });
+
+        return {
+            items,
+            nextCursor: hasNext ? String(offset + input.limit) : null,
+        };
+    }
+
     async story(storyId: string): Promise<StoryDetail | null> {
         const story = await this.prisma.story.findUnique({
             where: { id: storyId },
@@ -1006,7 +1302,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 id: entry.id,
                 sourceId: entry.sourceInstance.id,
                 sourceName: entry.sourceInstance.name,
-                sourceKind: entry.sourceInstance.kind as "rss" | "fixture-rss",
+                sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
                 currentRevisionId: entry.currentRevision.id,
                 revisions: entry.revisions.map((revision) => ({
                     id: revision.id,
@@ -1056,7 +1352,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             id: entry.id,
             sourceId: entry.sourceInstance.id,
             sourceName: entry.sourceInstance.name,
-            sourceKind: entry.sourceInstance.kind as "rss" | "fixture-rss",
+            sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
             currentRevisionId: entry.currentRevision.id,
             revisions: entry.revisions.map((revision) => ({
                 id: revision.id,
@@ -1101,7 +1397,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             entryId: revision.entryId,
             sourceId: revision.entry.sourceInstance.id,
             sourceName: revision.entry.sourceInstance.name,
-            sourceKind: revision.entry.sourceInstance.kind as "rss" | "fixture-rss",
+            sourceKind: sourceKindSchema.parse(revision.entry.sourceInstance.kind),
             revision: revision.revision,
             title: revision.title,
             summary: revision.summary,
@@ -1146,16 +1442,23 @@ export class PrismaCosmosRepository implements CosmosRepository {
         content: Uint8Array;
         mimeType: string;
     } | null> {
-        const asset = await this.prisma.asset.findUnique({
-            where: { id: assetId },
-        });
-        if (!asset?.storageKey) {
-            return null;
+        try {
+            const asset = await this.prisma.asset.findUnique({
+                where: { id: assetId },
+            });
+            if (!asset?.storageKey) {
+                return null;
+            }
+            return {
+                content: await this.blobs.read(asset.storageKey),
+                mimeType: asset.mimeType ?? "application/octet-stream",
+            };
+        } catch (error) {
+            this.logger?.error("storage.asset_read.failed", {
+                assetId,
+            }, error);
+            throw error;
         }
-        return {
-            content: await this.blobs.read(asset.storageKey),
-            mimeType: asset.mimeType ?? "application/octet-stream",
-        };
     }
 
     async touchWorkerHeartbeat(input: {
@@ -1163,28 +1466,39 @@ export class PrismaCosmosRepository implements CosmosRepository {
         status: "starting" | "ready" | "stopped";
         version: string;
     }): Promise<void> {
-        await this.prisma.workerHeartbeat.upsert({
-            where: { instanceId: input.instanceId },
-            create: {
+        try {
+            await this.prisma.workerHeartbeat.upsert({
+                where: { instanceId: input.instanceId },
+                create: {
+                    instanceId: input.instanceId,
+                    status: input.status,
+                    version: input.version,
+                    lastSeenAt: new Date(),
+                    stoppedAt: input.status === "stopped" ? new Date() : null,
+                },
+                update: {
+                    status: input.status,
+                    version: input.version,
+                    lastSeenAt: new Date(),
+                    stoppedAt: input.status === "stopped" ? new Date() : null,
+                },
+            });
+        } catch (error) {
+            this.logger?.error("storage.worker_heartbeat.failed", {
                 instanceId: input.instanceId,
                 status: input.status,
-                version: input.version,
-                lastSeenAt: new Date(),
-                stoppedAt: input.status === "stopped" ? new Date() : null,
-            },
-            update: {
-                status: input.status,
-                version: input.version,
-                lastSeenAt: new Date(),
-                stoppedAt: input.status === "stopped" ? new Date() : null,
-            },
-        });
+            }, error);
+            throw error;
+        }
     }
 
     async health(): Promise<RepositoryHealth> {
         try {
             await this.prisma.$queryRawUnsafe("SELECT 1");
-        } catch {
+        } catch (error) {
+            this.logger?.error("storage.health.failed", {
+                stage: "query",
+            }, error);
             return {
                 storageStatus: "failed",
                 migrationStatus: "failed",
@@ -1192,9 +1506,21 @@ export class PrismaCosmosRepository implements CosmosRepository {
             };
         }
 
-        const heartbeat = await this.prisma.workerHeartbeat.findFirst({
-            orderBy: { lastSeenAt: "desc" },
-        });
+        let heartbeat;
+        try {
+            heartbeat = await this.prisma.workerHeartbeat.findFirst({
+                orderBy: { lastSeenAt: "desc" },
+            });
+        } catch (error) {
+            this.logger?.error("storage.health.failed", {
+                stage: "worker_heartbeat",
+            }, error);
+            return {
+                storageStatus: "failed",
+                migrationStatus: "ready",
+                workerStatus: "unknown",
+            };
+        }
         const workerStatus: HealthResponse["workerStatus"] = !heartbeat
             ? "unknown"
             : heartbeat.status === "stopped"
@@ -1220,7 +1546,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return {
             id: source.id,
             name: source.name,
-            kind: source.kind as "rss" | "fixture-rss",
+            kind: sourceKindSchema.parse(source.kind),
             config: sourceConfigSchema.parse(JSON.parse(source.configJson)),
             enabled: source.enabled,
             createdAt: source.createdAt.toISOString(),
@@ -1245,6 +1571,32 @@ export class PrismaCosmosRepository implements CosmosRepository {
             createdEntryCount: run.createdEntryCount,
             revisedEntryCount: run.revisedEntryCount,
             error: run.errorMessage,
+        };
+    }
+
+    private toJobSnapshot(job: Prisma.JobGetPayload<{}>): JobSnapshot {
+        const payload = job.payloadJson
+            ? JSON.parse(job.payloadJson) as { sourceId?: unknown }
+            : null;
+        const sourceId = typeof payload?.sourceId === "string"
+            ? payload.sourceId
+            : null;
+
+        return {
+            id: job.id,
+            kind: jobKindSchema.parse(job.kind),
+            sourceId,
+            runId: job.runId,
+            status: job.status as JobSnapshot["status"],
+            attempts: job.attempts,
+            maxAttempts: job.maxAttempts,
+            errorCode: job.errorCode,
+            error: job.errorMessage,
+            createdAt: job.createdAt.toISOString(),
+            updatedAt: job.updatedAt.toISOString(),
+            result: job.resultJson
+                ? JSON.parse(job.resultJson) as unknown
+                : null,
         };
     }
 
@@ -1276,7 +1628,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             entryId: entry.id,
             sourceId: entry.sourceInstance.id,
             sourceName: entry.sourceInstance.name,
-            sourceKind: entry.sourceInstance.kind as "rss" | "fixture-rss",
+            sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
             revisionId: entry.currentRevision.id,
             publishedAt: entry.currentRevision.sourcePublishedAt?.toISOString() ?? null,
             assets: entry.currentRevision.assets.map((asset) => this.toAssetSnapshot(asset)),
@@ -1302,7 +1654,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             entryId: row.entryId,
             sourceId: row.sourceId,
             sourceName: row.sourceName,
-            sourceKind: row.sourceKind as "rss" | "fixture-rss",
+            sourceKind: sourceKindSchema.parse(row.sourceKind),
             revisionId: row.revisionId,
             publishedAt: row.publishedAt
                 ? new Date(row.publishedAt).toISOString()
@@ -1382,4 +1734,20 @@ async function appendDomainEvent(
 function parseCursor(cursor: string | undefined): number {
     const value = Number.parseInt(cursor ?? "0", 10);
     return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function readPayloadSourceId(payloadJson: string | null): string | null {
+    if (!payloadJson) {
+        return null;
+    }
+    try {
+        const payload = JSON.parse(payloadJson) as {
+            sourceId?: unknown;
+        };
+        return typeof payload.sourceId === "string" && payload.sourceId
+            ? payload.sourceId
+            : null;
+    } catch {
+        return null;
+    }
 }

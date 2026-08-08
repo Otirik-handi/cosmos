@@ -3,8 +3,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const rootDirectory = resolve(import.meta.dirname, "..");
+const configuredDataRoot = process.env.COSMOS_DATA_ROOT?.trim();
 const dataRoot = resolve(
-    process.env.COSMOS_DATA_ROOT ?? resolve(rootDirectory, ".cosmos"),
+    rootDirectory,
+    configuredDataRoot || ".cosmos",
 );
 const databasePath = resolve(dataRoot, "cosmos.sqlite");
 const prismaCli = "packages/storage-prisma/node_modules/prisma/build/index.js";

@@ -34,6 +34,30 @@ describe("HttpCosmosClient", () => {
         expect(requests).toEqual(["http://localhost:4310/api/v1/health"]);
     });
 
+    it("lists connector capabilities through the API-only control surface", async () => {
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async () => new Response(JSON.stringify([{
+                id: "bilibili",
+                description: "Bilibili",
+                capabilities: ["bilibili", "opencli"],
+                configVersion: "v1",
+            }]), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            }),
+        });
+
+        const connectors = await client.listConnectors();
+
+        expect(connectors).toEqual([{
+            id: "bilibili",
+            description: "Bilibili",
+            capabilities: ["bilibili", "opencli"],
+            configVersion: "v1",
+        }]);
+    });
+
     it("opens the versioned SSE endpoint and validates event envelopes", () => {
         let instance: CosmosEventSource | undefined;
         let openedUrl = "";

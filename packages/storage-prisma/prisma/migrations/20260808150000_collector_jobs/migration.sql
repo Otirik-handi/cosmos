@@ -1,0 +1,3 @@
+ALTER TABLE "Job" ADD COLUMN "payloadJson" TEXT;
+ALTER TABLE "Job" ADD COLUMN "resultJson" TEXT;
+ALTER TABLE "Job" ADD COLUMN "errorCode" TEXT;

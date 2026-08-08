@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { createLogger } from "@cosmos/logging";
+
 import {
+    createRssConnector,
     createSequenceFixtureConnector,
     parseRssXml,
 } from "./index.js";
@@ -57,5 +60,49 @@ describe("RSS connector", () => {
 
         expect(first.items[0].contentText).toBe("First item.");
         expect(second.items[0].contentText).toBe("Revised item.");
+    });
+
+    it("logs a response body failure without recording its contents", async () => {
+        const lines: string[] = [];
+        const logger = createLogger({
+            service: "rss-test",
+            output: "stdout",
+            stdoutWriter: (line) => lines.push(line),
+        });
+        const connector = createRssConnector({
+            fetch: async () => ({
+                ok: true,
+                status: 200,
+                text: async () => {
+                    throw new Error('response body token=LEAK');
+                },
+            } as unknown as Response),
+            logger,
+        });
+
+        await expect(connector.fetchItems({
+            source: {
+                id: "source-rss",
+                name: "RSS",
+                kind: "rss",
+                config: { feedUrl: "https://example.test/feed.xml" },
+                enabled: true,
+                createdAt: "2026-08-08T00:00:00.000Z",
+                updatedAt: "2026-08-08T00:00:00.000Z",
+                lastRunAt: null,
+                lastError: null,
+            },
+            cursor: null,
+        })).rejects.toThrow("RSS response could not be parsed.");
+        await logger.close();
+
+        const failed = lines
+            .map((line) => JSON.parse(line) as Record<string, unknown>)
+            .find((record) => record.event === "connector.transport.failed");
+        expect(failed).toMatchObject({
+            connectorId: "rss",
+            errorCode: "malformed_payload",
+        });
+        expect(lines.join("\n")).not.toContain("LEAK");
     });
 });

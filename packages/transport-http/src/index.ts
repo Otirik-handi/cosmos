@@ -1,26 +1,31 @@
 import {
     createSourceCommandSchema,
+    connectorDescriptorSchema,
     feedPageSchema,
     healthResponseSchema,
+    jobSnapshotSchema,
     runSnapshotSchema,
     searchPageSchema,
-    sourceTestResultSchema,
     sourceSnapshotSchema,
     storyDetailSchema,
     entryDetailSchema,
+    entryPageSchema,
     revisionDetailSchema,
     sseEventSchema,
     type CreateSourceCommand,
+    type ConnectorDescriptor,
     type FeedPage,
     type HealthResponse,
+    type JobSnapshot,
     type RunSnapshot,
     type SearchPage,
     type SearchQuery,
     type SourceSnapshot,
-    type SourceTestResult,
     type StoryDetail,
     type SseEvent,
     type EntryDetail,
+    type EntryListQuery,
+    type EntryPage,
     type RevisionDetail,
     type UpdateSourceCommand,
 } from "@cosmos/contracts";
@@ -81,6 +86,12 @@ export class HttpCosmosClient {
         });
     }
 
+    async listConnectors(): Promise<readonly ConnectorDescriptor[]> {
+        return this.request("/api/v1/connectors", {
+            schema: connectorDescriptorSchema.array(),
+        });
+    }
+
     async listSources(): Promise<readonly SourceSnapshot[]> {
         return this.request("/api/v1/sources", {
             schema: sourceSnapshotSchema.array(),
@@ -113,10 +124,13 @@ export class HttpCosmosClient {
         });
     }
 
-    async testSource(sourceId: string): Promise<SourceTestResult> {
+    async testSource(sourceId: string, idempotencyKey?: string): Promise<JobSnapshot> {
         return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}/test`, {
             method: "POST",
-            schema: sourceTestResultSchema,
+            headers: idempotencyKey
+                ? { "idempotency-key": idempotencyKey }
+                : undefined,
+            schema: jobSnapshotSchema,
         });
     }
 
@@ -130,6 +144,12 @@ export class HttpCosmosClient {
                 ? { "idempotency-key": options.idempotencyKey }
                 : undefined,
             schema: runSnapshotSchema,
+        });
+    }
+
+    async getJob(jobId: string): Promise<JobSnapshot> {
+        return this.request(`/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+            schema: jobSnapshotSchema,
         });
     }
 
@@ -177,6 +197,22 @@ export class HttpCosmosClient {
     async story(storyId: string): Promise<StoryDetail> {
         return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}`, {
             schema: storyDetailSchema,
+        });
+    }
+
+    async entries(query: EntryListQuery = {}): Promise<EntryPage> {
+        const params = new URLSearchParams();
+        if (query.sourceId) {
+            params.set("sourceId", query.sourceId);
+        }
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/entries?${params.toString()}`, {
+            schema: entryPageSchema,
         });
     }
 
