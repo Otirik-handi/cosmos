@@ -264,6 +264,7 @@ flowchart LR
 | ING-014 | Phase 3 | Research 不与 Ingest 强耦合；知识分析可以产生紧急、需要研究或来源冲突信号，再由 Trigger 启动独立 Research Workflow。 | Research Request/触发原因可追溯；研究结果重新经过 Observation → Entry，不直接写入 Story；研究失败不丢失原始 Entry。 |
 | ING-015 | 跨阶段 | 每个 Connector 必须返回外部稳定 external key；没有外部 ID 时必须由完整 `sourceLocator` 和规范化内容生成 fallback key。 | 同标题、同时间但不同来源位置的无 URL 内容不会被错误合并；key 规则版本化且可回放。 |
 | ING-016 | 跨阶段 | 每个 Observation 必须保存结构化 `originLocator`、`discoveryContext`、原始 payload 引用、媒体保存状态和产生它的 WorkflowRun。 | 能区分关注账号、推荐流、搜索、公告监控、手动导入、Agent 调研和 Research 发现；旧 Observation 不被覆盖。 |
+| ING-017 | Phase 1B | Connector 标准化输出必须携带内容形态、发布者、互动指标和证据优先的时间值。 | `NormalizedIngestItem.kind` 区分 `listing`/`video` 等内容形态；`publisher.platformId` 可为 `null`，作者名仍可保存；`metrics` 是当前快照且不创建 Revision；精准时间统一为 UTC，展示文本只作 fallback。 |
 
 ### 7.3.1 KnowledgeSignal 与 ResearchRequest
 

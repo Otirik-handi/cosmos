@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 截至 2026-08-08。
+> 截至 2026-08-10。
 
 ## 一句话结论
 
@@ -88,7 +88,7 @@ Cosmos 的 Phase 1 最小服务器闭环已完成，完整 Phase 1/扩展平台�
 
 ## 当前架构基线
 
-以下是 v0.15 的 Phase 0/Phase 1B 基线；后续需求仍可通过记录理由调整：
+以下是 v0.16 的 Phase 0/Phase 1B 基线；后续需求仍可通过记录理由调整：
 
 - 服务器部署优先的模块化单体；逻辑上分 Web、API 和 Worker，第一阶段不引入微服务治理或消息队列集群。
 - Web 使用 React + Next.js App Router；API 使用 NestJS；UI 初步使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。
@@ -117,7 +117,7 @@ Cosmos 的 Phase 1 最小服务器闭环已完成，完整 Phase 1/扩展平台�
 - v1 和默认产品合同是个人本地优先，不实现多人同步、多租户或复杂权限系统。
 - 当前单用户阶段知识管理者和 Agent 按最大产品权限运行，不建设审批 UI 或细粒度权限模型；未来再叠加远端/多人/不可信扩展的权限策略。
 - 第一版扩展按本地可信代码处理，但继续使用 SDK/Command/Query/Event；Phase 1 从 RSS/RSSHub + fixture 开始。
-- Phase 1B 的 Collector 核心只保存统一 `NormalizedIngestItem`，Connector 不直接访问 Prisma、SQLite 或 Blob Root。
+- Phase 1B 的 Collector 核心只保存统一 `NormalizedIngestItem`：内容使用 `ContentKind`，作者使用允许空 `platformId` 的 `Publisher`，指标保存为 Entry 当前快照，时间使用证据优先的 `TemporalValue`；Connector 不直接访问 Prisma、SQLite 或 Blob Root。
 - Bilibili v1 只支持受管 `hot`/`feed` 场景；AI HOT 只支持固定公开 endpoint 和服务 cursor。
 - Probe 和 Ingest 均通过持久 Job、lease、heartbeat、retry 和旧 token 防护执行；API 不执行外部采集。
 - 看板优先于推送实现；推送边界仍在架构中保留。
@@ -144,6 +144,7 @@ Cosmos 的 Phase 1 最小服务器闭环已完成，完整 Phase 1/扩展平台�
 - Research 不直接耦合 Ingest；分析信号创建 Research Request，由 Trigger 启动独立 Research Workflow，研究结果重新经过 Observation → Entry。
 - 推荐区分外部候选、Admission 和 Cosmos Ranking；代码负责硬约束和 LLM 不可用时的降级，LLM 提供可追溯的异步特征或受限 rerank。
 - `nb-memory` 调研已经完成并写入研究文档；Cosmos 与其的 Adapter、共享存储生命周期和 Node 生产兼容性尚未实现或验收。
+- 2026-08-10 完成 Task 05：RSS、Bilibili、AI HOT 输出统一内容合同；作者空 ID、listing/video 映射、指标无 Revision 刷新和 TemporalValue 持久化已有 focused 覆盖。
 - 个性化配置不再按每个字段设计完整 producer/version/evidence 账本；一般 Story、关系、推荐特征和 Artifact 派生结果仍保留各自 provenance 合同。
 
 本轮不扩大 Phase 1 实现范围。继续增加更多平台 Adapter 前，优先建立 Connection/Secret/State、脚本优先 Workflow API、持久子任务、Knowledge/Research Workflow、Proposal/Provenance 和 `nb-memory` Adapter 的实现 Task。
@@ -191,7 +192,6 @@ Cosmos 的 Phase 1 最小服务器闭环已完成，完整 Phase 1/扩展平台�
 ### 阻塞后续扩展的实现缺口
 
 - lease fencing 目前没有覆盖 Ingest 中途写入、FTS 和 checkpoint；旧 Worker 仍可能在失去 lease 后写入。
-- 无 URL fallback key 尚未使用 `sourceLocator`。
 - `discoveryContext` 当前被硬编码为 `manual`，缺少完整 provenance。
 - Source/Connection/采集计划/StateStore 尚未真正建模，Run 也未完整保存定义、配置和输入快照。
 - Source 删除、历史 Observation 保留、孤儿 Blob 清理和 Outbox/Consumer 游标仍需单独设计和验收。
@@ -216,12 +216,12 @@ Cosmos 的 Phase 1 最小服务器闭环已完成，完整 Phase 1/扩展平台�
 - `bun install`：通过，生成根 `bun.lock`。
 - `bun run db:validate`、`bun run db:generate`：通过，Prisma schema 合法并生成 Prisma Client 6.19.3。
 - `bun run typecheck`、`bun run build`、`bun run lint:web`：通过。
-- `bun run test`：通过，当前 13 个测试文件、57 个测试通过，覆盖 logging 配置/脱敏/轮转、API 错误与 SSE、Probe prepare、Job claim/terminal、Storage health、Connector、Web instrumentation 和既有业务合同。
-- `bun run db:migrate`：在隔离 Data Root 上通过；迁移前会创建空 SQLite 文件，FTS5 由 Repository 初始化的受控 SQL 建立。
+- `bun run test`：通过，当前 13 个测试文件、63 个测试通过；新增作者空 ID、ContentKind、TemporalValue、指标无 Revision 和 Publisher/时间持久化覆盖。
+- `bun run db:migrate`：通过，新增 `20260810020829_normalized_content_model` 迁移；迁移前会创建空 SQLite 文件，FTS5 由 Repository 初始化的受控 SQL 建立。
 - `pwsh -NoProfile -File scripts/smoke-node.ps1`：通过；Node API/Worker、migration、queued Run、fixture 3 条、Search、Story 和 SSE 回放均通过。
 - Node production Connector smoke：通过；AI HOT 真实 GET 返回 200，Worker 真实保存 3 条 Entry；OpenCLI 内置入口返回版本 `1.8.6`。
 - Bilibili doctor smoke：已运行；daemon 在端口 `19825`，但 Browser Bridge 为 `Extension: not connected`，真实 hot 采集未执行成功。
-- 运行日志收口修复后，`bun run test` 通过（13 个测试文件、57 个测试），`bun run typecheck`、`bun run build`、`bun run lint:web`、增强版 Node API/Worker smoke 和 Web standalone smoke 已通过；Docker/Compose 仍因当前环境缺少 Docker CLI 未验证。
+- 运行日志收口修复后，`bun run test` 通过（13 个测试文件、63 个测试），本 Task 额外通过 `bun run typecheck` 和 `bun run build:packages`；Docker/Compose 仍因当前环境缺少 Docker CLI 未验证。
 - Playwright 浏览器验收：通过来源创建、手动 queued Run、SSE ready、Feed 3 条、搜索 2 条、URL-free Story/Revision/Observation 和健康检查。
 - `docker version`：未运行，当前环境没有 Docker CLI，因此 Docker/Compose 验收保留为待执行。
 - 20 份仓库 Markdown：代码围栏成对、无尾随空白、文件末尾无多余空行；PRD 126 个需求编号无重复。

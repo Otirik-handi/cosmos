@@ -175,6 +175,14 @@ export interface JobLease {
 }
 
 export interface IngestConnector {
+    /**
+     * Phase 1B runtime boundary for one business source kind.
+     *
+     * A connector validates a configured SourceInstance, reads its external
+     * provider, and returns normalized items. It does not persist domain data.
+     * Future SourceOperation entries can refine this boundary without making
+     * the connector a database-facing object.
+     */
     id: string;
     description: string;
     configVersion: string;

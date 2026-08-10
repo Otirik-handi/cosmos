@@ -15,6 +15,7 @@ const firstPage = `<?xml version="1.0"?>
         <title>One</title>
         <link>https://example.test/one</link>
         <description>First item.</description>
+        <author>RSS author</author>
         <pubDate>Fri, 07 Aug 2026 12:00:00 GMT</pubDate>
     </item>
     <item>
@@ -31,7 +32,14 @@ describe("RSS connector", () => {
 
         expect(items).toHaveLength(2);
         expect(items[0].webUrl).toBe("https://example.test/one");
+        expect(items[0].kind).toBe("article");
+        expect(items[0].publisher).toMatchObject({
+            platformId: null,
+            name: "RSS author",
+            kind: "unknown",
+        });
         expect(items[1].webUrl).toBeNull();
+        expect(items[1].publisher).toBeNull();
         expect(items[1].sourceLocator.externalId).toBeNull();
     });
 

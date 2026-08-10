@@ -19,6 +19,7 @@
         "@cosmos/application": "workspace:*",
         "@cosmos/contracts": "workspace:*",
         "@cosmos/domain": "workspace:*",
+        "@cosmos/logging": "workspace:*",
         "fast-xml-parser": "^5.2.5"
     }
 }

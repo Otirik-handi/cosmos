@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
     aiHotSourceConfigSchema,
     bilibiliSourceConfigSchema,
+    publisherSchema,
     createSourceCommandSchema,
     jobSnapshotSchema,
     sourceProbeResultSchema,
+    temporalValueSchema,
 } from "./index.js";
 
 describe("source and job contracts", () => {
@@ -72,5 +74,28 @@ describe("source and job contracts", () => {
             updatedAt: "2026-08-08T00:00:00.000Z",
             result: null,
         }).kind).toBe("source-probe");
+    });
+
+    it("accepts author records without a platform id and normalizes blanks to null", () => {
+        expect(publisherSchema.parse({
+            platformId: "  ",
+            name: "RSS author",
+            handle: "",
+            profileUrl: null,
+            kind: "unknown",
+        })).toMatchObject({
+            platformId: null,
+            name: "RSS author",
+            handle: null,
+            kind: "unknown",
+        });
+    });
+
+    it("requires a temporal value to retain exact or fallback evidence", () => {
+        expect(() => temporalValueSchema.parse({
+            exact: null,
+            exactPrecision: null,
+            fallback: null,
+        })).toThrow();
     });
 });

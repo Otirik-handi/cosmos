@@ -28,6 +28,12 @@ Cosmos 在用户授权和资源预算内持续积累、可查询并尽量可离�
 
 采集实现中还会保留不可变的 `Observation`，表示 Cosmos 某次实际看到的外部证据；这是为了处理重复轮询和来源编辑，不需要在普通产品对话中与 `Entry` 混用。
 
+Phase 1B 的 `NormalizedIngestItem` 是 Connector 的唯一标准化输出。它使用独立的 `ContentKind` 表达 `post`、`article`、`video`、`audio`、`image`、`comment` 和 `listing`，不复用 Story 的 `kind`。
+
+发布者 `Publisher` 是 Entry 的内容属性。`platformId` 明确允许为空：有作者名但没有平台 ID 时仍保存作者，空白 ID 规范化为 `null`；没有作者信息时 `publisher` 为 `null`。作者 ID 不参与 Entry 身份去重，未知作者类型使用 `unknown`。
+
+来源时间使用 `TemporalValue`：Connector 优先提供证据层精准时间并统一为 UTC，拿不到时才保留展示文本解析出的 fallback。旧 `sourcePublishedAt` 只是查询/API 投影，时间精度提升不产生新 Revision；指标是 Entry 当前快照，变化不产生 Revision。
+
 ### Story（规范内容单元）
 
 `Story` 是上层组织和展示使用的规范内容单元。每个 Entry 都属于一个主 Story，Story 使用稳定的 `kind` 区分 `event`、`document`、`media`、`thread` 等形态，并可用受管理、可扩展的 `subtype` 细分，例如 `media.comic`、`media.anime`。核心 kind 的合同保持稳定；新增 subtype 通过注册表声明所属 kind、展示信息、版本和身份规则，不把每个细分都升级成新的顶层 kind。
@@ -168,6 +174,7 @@ Story --Ranking--> Feed --> Board
 
 - “Producer/Provider”表示外部平台或数据提供者，例如 Bilibili、RSS、AI HOT。
 - “Adapter/Connector”表示把某个 Provider 接入 Cosmos 的代码；它负责认证协议、外部读取、标准化和平台特有错误处理。
+- Phase 1B 的 `IngestConnector` 是按 `Source.kind` 解析的运行时边界，负责配置校验、外部读取、标准化输出和 cursor，不直接写 Prisma、SQLite 或 Blob。`SourceOperation` 是未来在同一 Provider 下区分多个采集操作的粒度，不是当前用户配置字段。
 - `SourceDefinition` 描述一种可用来源或操作；`SourceInstance` 表示用户配置好的具体采集目标。
 - 用户界面可以把 `SourceInstance + Trigger + WorkflowBinding` 组合展示为“采集计划”，但不应让用户直接配置 Worker。
 - 一个连接可以复用多个采集计划。例如同一个 Bilibili 账号可以有“动态每 30 分钟”和“推荐流每 2 小时”两个独立计划；它们分别拥有游标、错误、预算、发现上下文和重试边界。
