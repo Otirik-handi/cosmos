@@ -93,14 +93,81 @@ describe("built-in collectors", () => {
         expect(result.items).toMatchObject([{
             externalId: "BV1COSMOS",
             title: "一个 B 站视频",
-            summary: "Cosmos",
+            summary: null,
+            contentText: "一个 B 站视频",
+            kind: "listing",
+            publisher: {
+                platformId: null,
+                name: "Cosmos",
+                kind: "user",
+            },
+            metrics: null,
             webUrl: "https://www.bilibili.com/video/BV1COSMOS",
             assets: [{
                 kind: "cover",
                 status: "metadata_only",
             }],
         }]);
+        expect(result.items[0]?.publishedAt).toMatchObject({
+            exact: "2026-08-08T06:22:03.000Z",
+            exactPrecision: "second",
+            fallback: null,
+        });
         expect(result.nextCursor).toBeNull();
+    });
+
+    it("normalizes a Bilibili feed video with publisher id and metrics", async () => {
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async (args) => ({
+                    stdout: args[0] === "--version"
+                        ? "1.8.6"
+                        : args[0] === "doctor"
+                            ? "[OK] Extension: connected\n[OK] Connectivity: passed"
+                            : JSON.stringify([{
+                                bvid: "BV1FEED",
+                                title: "Feed video",
+                                owner: {
+                                    mid: 9988,
+                                    name: "Feed author",
+                                },
+                                view: 100,
+                                like: 8,
+                                favorite: 3,
+                                pubdate: 1_786_170_123,
+                            }]),
+                    stderr: "",
+                    exitCode: 0,
+                }),
+            },
+        });
+
+        const result = await connector.fetchItems({
+            source: source({
+                kind: "bilibili",
+                config: {
+                    mode: "feed",
+                    profile: "chrome-main",
+                    limit: 1,
+                },
+            }),
+            cursor: null,
+        });
+
+        expect(result.items[0]).toMatchObject({
+            kind: "video",
+            publisher: {
+                platformId: "9988",
+                name: "Feed author",
+            },
+            metrics: {
+                values: {
+                    views: 100,
+                    likes: 8,
+                    collects: 3,
+                },
+            },
+        });
     });
 
     it("keeps the logged-in Bilibili feed bound to a named profile", () => {

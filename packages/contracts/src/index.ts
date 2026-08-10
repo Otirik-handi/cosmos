@@ -2,6 +2,96 @@ import { z } from "zod";
 
 export const protocolVersion = "v1" as const;
 
+export const contentKindSchema = z.enum([
+    "post",
+    "article",
+    "video",
+    "audio",
+    "image",
+    "comment",
+    "listing",
+]);
+export type ContentKind = z.infer<typeof contentKindSchema>;
+
+export const publisherKindSchema = z.enum([
+    "user",
+    "channel",
+    "subreddit",
+    "official-account",
+    "org",
+    "unknown",
+]);
+export type PublisherKind = z.infer<typeof publisherKindSchema>;
+
+const nullableTrimmedStringSchema = z.preprocess(
+    (value) => typeof value === "string" ? value.trim() || null : value,
+    z.string().min(1).nullable(),
+);
+
+export const publisherMetricsSchema = z.object({
+    followers: z.number().finite().nullable().optional(),
+    following: z.number().finite().nullable().optional(),
+    statuses: z.number().finite().nullable().optional(),
+    voteup: z.number().finite().nullable().optional(),
+    reliable: z.enum(["high", "low", "unknown"]).optional(),
+});
+export type PublisherMetrics = z.infer<typeof publisherMetricsSchema>;
+
+export const publisherSchema = z.object({
+    platformId: nullableTrimmedStringSchema,
+    name: z.string().trim().min(1),
+    handle: nullableTrimmedStringSchema,
+    profileUrl: nullableTrimmedStringSchema,
+    kind: publisherKindSchema,
+    metrics: publisherMetricsSchema.nullable().optional(),
+});
+export type Publisher = z.infer<typeof publisherSchema>;
+
+export const temporalPrecisionSchema = z.enum([
+    "second",
+    "minute",
+    "hour",
+    "day",
+    "week",
+    "month",
+    "year",
+    "unknown",
+]);
+export type TemporalPrecision = z.infer<typeof temporalPrecisionSchema>;
+
+export const temporalFallbackSchema = z.object({
+    raw: z.string().min(1),
+    lowerBound: z.string().datetime({ offset: true }),
+    precision: temporalPrecisionSchema,
+    timezone: z.string().nullable(),
+    confidence: z.enum(["high", "inferred", "uncertain"]),
+});
+export type TemporalFallback = z.infer<typeof temporalFallbackSchema>;
+
+export const temporalValueSchema = z.object({
+    exact: z.string().datetime({ offset: true }).nullable(),
+    exactPrecision: z.literal("second").nullable(),
+    fallback: temporalFallbackSchema.nullable(),
+}).refine((value) => {
+    return value.exact !== null || value.fallback !== null;
+}, "TemporalValue must contain exact or fallback time data.");
+export type TemporalValue = z.infer<typeof temporalValueSchema>;
+
+export const contentMetricsSchema = z.object({
+    values: z.object({
+        likes: z.number().finite().nullable().optional(),
+        views: z.number().finite().nullable().optional(),
+        reposts: z.number().finite().nullable().optional(),
+        comments: z.number().finite().nullable().optional(),
+        collects: z.number().finite().nullable().optional(),
+        score: z.number().finite().nullable().optional(),
+    }),
+    raw: z.record(z.string(), z.string()),
+    reliability: z.enum(["high", "low", "unknown"]),
+    capturedAt: z.string().datetime({ offset: true }),
+});
+export type ContentMetrics = z.infer<typeof contentMetricsSchema>;
+
 /**
  * A source kind is a stable connector family identifier.
  *
@@ -293,6 +383,10 @@ export const entryRevisionSnapshotSchema = z.object({
     summary: z.string().nullable(),
     contentText: z.string(),
     webUrl: z.string().nullable(),
+    contentKind: contentKindSchema,
+    publisher: publisherSchema.nullable(),
+    publishedAt: temporalValueSchema.nullable(),
+    updatedAt: temporalValueSchema.nullable(),
     sourcePublishedAt: z.string().nullable(),
     createdAt: z.string(),
     assets: assetSnapshotSchema.array(),
@@ -316,6 +410,7 @@ export const entryDetailSchema = z.object({
     sourceName: z.string(),
     sourceKind: sourceKindSchema,
     currentRevisionId: z.string(),
+    metrics: contentMetricsSchema.nullable(),
     revisions: entryRevisionSnapshotSchema.array(),
     observations: observationSnapshotSchema.array(),
 });
@@ -338,6 +433,9 @@ export const entryListItemSchema = z.object({
     title: z.string(),
     summary: z.string().nullable(),
     webUrl: z.string().nullable(),
+    contentKind: contentKindSchema,
+    publisher: publisherSchema.nullable(),
+    metrics: contentMetricsSchema.nullable(),
     publishedAt: z.string().nullable(),
     updatedAt: z.string(),
     revisionCount: z.number().int().nonnegative(),

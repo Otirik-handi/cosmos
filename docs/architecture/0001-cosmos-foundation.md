@@ -1,8 +1,8 @@
 # Cosmos 总体架构设计
 
-> 状态：Draft v0.15
+> 状态：Draft v0.16
 >
-> 最后更新：2026-08-08
+> 最后更新：2026-08-10
 >
 > 原始需求真相源：[`../requirements/0001-original-requirements.md`](../requirements/0001-original-requirements.md)
 >
@@ -311,7 +311,9 @@ Workflow 使用轻量 `kind + tags` 分类，不为每类 Workflow 复制一套 
 - 幂等、超时、取消和恢复能力；
 - 运行入口和资源预算。
 
-`SourceOperation` 是 Adapter 对外部来源提供的一项可调用操作，例如 `bilibili.dynamic`、`bilibili.recommendation` 或 `rss.poll`。它声明输入配置、输出的标准化 `NormalizedIngestItem`、稳定 external key、`originLocator`、`discoveryContext`、媒体状态、checkpoint 读写范围和错误语义；它不是 Workflow，也不直接写 Cosmos 数据库。
+`SourceOperation` 是未来由 Adapter 对外部来源提供的一项可调用操作，例如 `bilibili.dynamic`、`bilibili.recommendation` 或 `rss.poll`。它声明输入配置、输出的标准化 `NormalizedIngestItem`、稳定 external key、`originLocator`、`discoveryContext`、媒体状态、checkpoint 读写范围和错误语义；它不是 Workflow，也不直接写 Cosmos 数据库。
+
+Phase 1B 当前实现使用较小的 `IngestConnector` 运行时边界：`ConnectorRegistry` 按业务 `Source.kind` 解析一个 Connector，Connector 只执行配置校验和外部读取，返回标准化 items 与 cursor。`SourceOperation` 是未来在一个 Provider 下区分多个采集操作的设计粒度，当前不作为用户配置字段或 Registry override。
 
 Workflow 通过 `ActionDefinition` 调用 Source Operation。Adapter manifest 只注册能力和 schema，用户的 Connection、SourceInstance 和采集计划再把某个 operation 绑定到具体凭证、范围、Trigger、Workflow 版本和 StateStore 命名空间。
 
@@ -574,6 +576,32 @@ Later poll
 例如 Telegram 消息被编辑时，旧 Observation 和 Revision 保留，新版本追加。来源删除时追加 delete Observation，并在 Entry 上投影当前可见状态；本地是否保留已采集内容由用户保留策略决定。
 
 跨平台的两篇报道仍是两个 Entry。它们可以被标记为副本、转载或加入同一个 Story，但不丢失各自来源身份。
+
+`NormalizedIngestItem` 是 Phase 1B Connector 唯一的标准化输出合同：
+
+```text
+NormalizedIngestItem
+├─ externalId?                 外部内容 ID，可空
+├─ title / summary / contentText
+├─ webUrl?                     可选网页入口
+├─ kind                        ContentKind，不是 StoryKind
+├─ publisher?                  Publisher，可为 null
+├─ metrics?                    当前互动指标快照，可为 null
+├─ publishedAt? / updatedAt?   TemporalValue
+├─ sourceLocator               结构化来源定位
+├─ rawPayload                  原始证据，最终进入 Blob Store
+└─ assets                      媒体元数据或已保存内容
+```
+
+`externalId` 与作者 `publisher.platformId` 都允许为空，但二者不表达同一身份。持久层必须始终生成稳定 `externalKey`：优先使用内容 external ID，其次使用稳定 URL，最后使用来源定位和规范化内容的 fallback。作者名不能单独作为内容身份键，缺失作者 ID 不得阻止录入。
+
+`Publisher` 的 `platformId` 类型为 `string | null`；空白值规范化为 `null`。有作者名但无平台 ID 时仍保存 Publisher；没有作者信息时 Publisher 为 `null`。`Publisher.kind` 允许 `unknown`，不得为了填满枚举而猜测作者类型。
+
+`ContentKind` 使用 `post`、`article`、`video`、`audio`、`image`、`comment`、`listing`。它通过显式映射投影到上层 `StoryKind`，不能把视频的 `kind` 直接写成 Story 的 `kind`。
+
+`TemporalValue` 优先保存证据层精准时间并统一为 UTC；只有精准时间缺失时才保存展示文本解析出的 fallback。旧的 `sourcePublishedAt` 继续作为查询/API 的 UTC 投影，不作为 Connector 的第二套输入合同。fallback 到 exact 的精度提升不创建新 Revision。
+
+指标是 Entry 上的当前快照；指标变化只更新 `metricsJson` 和 `capturedAt`，不创建 EntryRevision。Publisher 和 ContentKind 作为 Revision 内容属性保存，参与语义指纹。
 
 ### 6.4 Asset 与“尽可能保存”
 
@@ -1475,6 +1503,11 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 57. Ingest 本身是一种 Workflow；外部来源事实先完成 Observation/Entry/Revision/Asset 入库，不等待 LLM。
 58. Entry → Story 是可由用户或 Agent 配置的 Knowledge Workflow；Research 不直接耦合 Ingest，而是由分析信号产生 Research Request，再由 Trigger 启动独立 Research Workflow。
 59. Research Workflow 可以查询 Cosmos 信息库并访问外部渠道；研究结果重新经过 Observation → Entry，不直接写入 Story。
+60. `NormalizedIngestItem` 是 Phase 1B 唯一标准化输出合同；`SourceOperation` 是未来操作粒度，不与当前 `Source.kind -> IngestConnector` 映射混用。
+61. `externalId` 和 `Publisher.platformId` 都允许为空；作者 ID 缺失不能阻止录入，也不能用作者名伪造内容身份。
+62. `ContentKind` 与 `StoryKind` 是两个不同层次的枚举，必须通过显式映射投影。
+63. `TemporalValue` 优先保存证据层精准 UTC 时间；fallback 只在 exact 缺失时产生，精度提升不创建 Revision。
+64. ContentMetrics 是 Entry 当前快照；指标变化不创建 EntryRevision，Publisher 和 ContentKind 参与内容 Revision 指纹。
 
 ## 20. 核心边界结论与后置决定
 
@@ -1605,6 +1638,13 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 46. Research Workflow 发现的新来源内容重新经过 Observation → Entry，不直接把未经入库的外部结果写入 Story。
 
 ## 22. 变更记录
+
+### v0.16 - 2026-08-10
+
+- 固化 Phase 1B `NormalizedIngestItem` 的唯一实现合同：`ContentKind`、`Publisher`、`ContentMetrics` 和 `TemporalValue`。
+- 明确 `Publisher.platformId` 可为 `null`，空白 ID 不参与内容身份；作者类型允许 `unknown`。
+- 明确 `ContentKind` 与 `StoryKind` 的映射、指标快照不进 Revision、fallback 时间升级不进 Revision。
+- 明确当前 Connector 是按 `Source.kind` 解析的运行时边界，`SourceOperation` 保留为未来操作粒度。
 
 ### v0.15 - 2026-08-08
 

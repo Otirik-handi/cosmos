@@ -14,8 +14,13 @@ import {
     type SourceSnapshot,
 } from "@cosmos/contracts";
 import type {
+    ContentMetrics,
     NormalizedAssetInput,
     NormalizedIngestItem,
+} from "@cosmos/domain";
+import {
+    createTemporalValue,
+    normalizePublisher,
 } from "@cosmos/domain";
 import {
     createFixtureRssConnector,
@@ -442,6 +447,7 @@ function normalizeBilibiliOutput(
             readRecordValue(row.author, "name"),
             readRecordValue(row.owner, "name"),
         );
+        const owner = asRecord(row.owner);
         const description = firstText(
             row.description,
             row.desc,
@@ -455,21 +461,54 @@ function normalizeBilibiliOutput(
                 ? `https://www.bilibili.com/video/${externalId}`
                 : null,
         );
-        const sourcePublishedAt = normalizeDate(
-            firstText(row.published_at, row.publishedAt, row.pubdate, row.time),
+        const publishedAtRaw = firstText(
+            row.published_at,
+            row.publishedAt,
+            row.pubdate,
+            row.time,
         );
         const asset = createMetadataAsset(
             "cover",
             firstUrl(row.cover, row.pic, row.thumbnail, row.cover_url),
         );
+        const metrics = normalizeContentMetrics({
+            likes: firstText(row.likes, row.like),
+            views: firstText(row.views, row.view),
+            reposts: firstText(row.reposts, row.repost),
+            comments: firstText(row.comments, row.comment),
+            collects: firstText(row.collects, row.favorite, row.favorites),
+            score: firstText(row.score),
+        });
 
         return {
             externalId,
             title,
-            summary: description || author || null,
-            contentText: description || [title, author].filter(Boolean).join("\n"),
+            summary: description || null,
+            contentText: description || title,
             webUrl,
-            sourcePublishedAt,
+            kind: mode === "hot" ? "listing" : "video",
+            publisher: normalizePublisher({
+                platformId: firstText(
+                    row.mid,
+                    row.uid,
+                    row.author_id,
+                    readRecordValue(owner, "mid"),
+                    readRecordValue(owner, "uid"),
+                ),
+                name: author,
+                kind: "user",
+                profileUrl: firstUrl(
+                    row.author_url,
+                    readRecordValue(owner, "url"),
+                ),
+            }),
+            metrics,
+            publishedAt: createTemporalValue({
+                exact: publishedAtRaw,
+                raw: publishedAtRaw,
+                timezone: "Asia/Shanghai",
+            }),
+            updatedAt: null,
             sourceLocator: {
                 provider: "bilibili",
                 mode,
@@ -499,6 +538,11 @@ function normalizeAiHotItem(
     const links = asRecord(item.links);
     const source = asRecord(item.source);
     const summary = firstText(item.summary, item.description);
+    const publishedAtRaw = firstText(
+        item.publishedAt,
+        item.published_at,
+        item.discoveredAt,
+    );
     const originalUrl = firstUrl(
         links?.original,
         links?.url,
@@ -511,6 +555,14 @@ function normalizeAiHotItem(
         item.image,
         item.thumbnail,
     );
+    const metrics = normalizeContentMetrics({
+        likes: firstText(item.likes, item.like),
+        views: firstText(item.views, item.view),
+        reposts: firstText(item.reposts, item.repost),
+        comments: firstText(item.comments, item.comment),
+        collects: firstText(item.collects, item.collectsCount),
+        score: firstText(item.score),
+    });
 
     return {
         externalId,
@@ -518,9 +570,28 @@ function normalizeAiHotItem(
         summary: summary || null,
         contentText: firstText(item.content, item.text, summary, title) ?? title,
         webUrl: originalUrl ?? aiHotUrl,
-        sourcePublishedAt: normalizeDate(
-            firstText(item.publishedAt, item.published_at, item.discoveredAt),
-        ),
+        kind: "article",
+        publisher: normalizePublisher({
+            platformId: firstText(
+                item.authorId,
+                item.author_id,
+                asRecord(item.author)?.id,
+            ),
+            name: firstText(
+                item.author,
+                item.authorName,
+                asRecord(item.author)?.name,
+                source?.name,
+            ),
+            kind: "unknown",
+        }),
+        metrics,
+        publishedAt: createTemporalValue({
+            exact: publishedAtRaw,
+            raw: publishedAtRaw,
+            timezone: "UTC",
+        }),
+        updatedAt: null,
         sourceLocator: {
             provider: "aihot",
             itemId: externalId,
@@ -670,6 +741,41 @@ function createMetadataAsset(
         : null;
 }
 
+function normalizeContentMetrics(input: {
+    likes?: string | null;
+    views?: string | null;
+    reposts?: string | null;
+    comments?: string | null;
+    collects?: string | null;
+    score?: string | null;
+}): ContentMetrics | null {
+    const values: ContentMetrics["values"] = {};
+    const raw: Record<string, string> = {};
+    const entries = Object.entries(input) as Array<
+        [keyof ContentMetrics["values"], string | null | undefined]
+    >;
+
+    for (const [key, rawValue] of entries) {
+        if (!rawValue) {
+            continue;
+        }
+        raw[key] = rawValue;
+        const numeric = Number(rawValue.replaceAll(",", ""));
+        if (Number.isFinite(numeric)) {
+            values[key] = numeric;
+        }
+    }
+
+    return Object.keys(raw).length > 0
+        ? {
+            values,
+            raw,
+            reliability: "unknown",
+            capturedAt: new Date().toISOString(),
+        }
+        : null;
+}
+
 function readRecordValue(
     value: unknown,
     key: string,
@@ -707,20 +813,4 @@ function firstUrl(...values: readonly unknown[]): string | null {
         }
     }
     return null;
-}
-
-function normalizeDate(value: string | null): string | null {
-    if (!value) {
-        return null;
-    }
-    const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > 0) {
-        const milliseconds = numeric < 10_000_000_000
-            ? numeric * 1_000
-            : numeric;
-        const date = new Date(milliseconds);
-        return Number.isNaN(date.getTime()) ? null : date.toISOString();
-    }
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }

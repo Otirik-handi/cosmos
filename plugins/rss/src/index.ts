@@ -14,6 +14,10 @@ import type {
     NormalizedAssetInput,
     NormalizedIngestItem,
 } from "@cosmos/domain";
+import {
+    createTemporalValue,
+    normalizePublisher,
+} from "@cosmos/domain";
 
 export const rssConnectorId = "rss";
 export const fixtureRssConnectorId = "fixture-rss";
@@ -24,7 +28,11 @@ export interface RssItem {
     summary: string | null;
     contentText: string;
     webUrl: string | null;
-    sourcePublishedAt: string | null;
+    kind: "article";
+    publisher: ReturnType<typeof normalizePublisher>;
+    metrics: null;
+    publishedAt: ReturnType<typeof createTemporalValue>;
+    updatedAt: ReturnType<typeof createTemporalValue>;
     sourceLocator: Record<string, unknown>;
     assets: readonly NormalizedAssetInput[];
 }
@@ -269,9 +277,14 @@ export function parseRssXml(
         const externalId = readText(item.guid)
             || readText(item.id)
             || null;
-        const publishedAt = readText(item.pubDate)
+        const publishedAtRaw = readText(item.pubDate)
             || readText(item.published)
             || readText(item.updated)
+            || null;
+        const updatedAtRaw = readText(item.updated) || null;
+        const author = readText(item.author)
+            || readText(item.creator)
+            || readText(item["dc:creator"])
             || null;
         const assets = readAssets(item);
 
@@ -281,7 +294,24 @@ export function parseRssXml(
             summary: readText(item.description) || null,
             contentText,
             webUrl: link,
-            sourcePublishedAt: normalizeDate(publishedAt),
+            kind: "article",
+            publisher: normalizePublisher({
+                name: author,
+                kind: "unknown",
+            }),
+            metrics: null,
+            publishedAt: createTemporalValue({
+                exact: publishedAtRaw,
+                raw: publishedAtRaw,
+                timezone: "UTC",
+            }),
+            updatedAt: updatedAtRaw
+                ? createTemporalValue({
+                    exact: updatedAtRaw,
+                    raw: updatedAtRaw,
+                    timezone: "UTC",
+                })
+                : null,
             sourceLocator: {
                 ...locator,
                 externalId,
@@ -354,14 +384,6 @@ function stripMarkup(value: string): string {
         .replace(/<[^>]*>/g, " ")
         .replace(/\s+/g, " ")
         .trim();
-}
-
-function normalizeDate(value: string | null): string | null {
-    if (!value) {
-        return null;
-    }
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function hashCursor(value: string): string {

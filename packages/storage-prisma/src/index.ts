@@ -6,10 +6,12 @@ import {
 } from "node:path";
 
 import {
+    contentKindSchema,
     jobKindSchema,
     sourceKindSchema,
     sourceConfigSchema,
     type CreateSourceCommand,
+    type ContentMetrics,
     type EntryDetail,
     type EntryPage,
     type FeedItem,
@@ -21,11 +23,14 @@ import {
     type RevisionDetail,
     type SourceSnapshot,
     type StoryDetail,
+    type TemporalValue,
+    type Publisher,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
     fingerprintEntryRevision,
     projectEntryToStory,
+    temporalProjection,
     type NormalizedIngestItem,
 } from "@cosmos/domain";
 import type {
@@ -743,8 +748,25 @@ export class PrismaCosmosRepository implements CosmosRepository {
             summary: input.item.summary,
             contentText: input.item.contentText,
             webUrl: input.item.webUrl,
-            sourcePublishedAt: input.item.sourcePublishedAt,
+            kind: input.item.kind,
+            publisher: input.item.publisher,
         });
+        const publishedAtJson = input.item.publishedAt
+            ? JSON.stringify(input.item.publishedAt)
+            : null;
+        const updatedAtJson = input.item.updatedAt
+            ? JSON.stringify(input.item.updatedAt)
+            : null;
+        const sourcePublishedAt = temporalProjection(input.item.publishedAt);
+        const sourcePublishedAtDate = sourcePublishedAt
+            ? new Date(sourcePublishedAt)
+            : null;
+        const publisherJson = input.item.publisher
+            ? JSON.stringify(input.item.publisher)
+            : null;
+        const metricsJson = input.item.metrics
+            ? JSON.stringify(input.item.metrics)
+            : null;
         let rawPayload: Awaited<ReturnType<FileBlobStore["put"]>>;
         try {
             rawPayload = await this.blobs.put(
@@ -820,10 +842,6 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     currentRevision: true,
                 },
             });
-            const sourcePublishedAt = input.item.sourcePublishedAt
-                ? new Date(input.item.sourcePublishedAt)
-                : null;
-
             const observation = await tx.observation.create({
                 data: {
                     sourceInstanceId: input.sourceId,
@@ -842,13 +860,49 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     title: input.item.title,
                     contentText: input.item.contentText,
                     contentFingerprint,
-                    sourcePublishedAt,
+                    contentKind: input.item.kind,
+                    publisherJson,
+                    metricsJson,
+                    publishedAtJson,
+                    updatedAtJson,
+                    sourcePublishedAt: sourcePublishedAtDate,
                 },
             });
 
             if (
                 existingEntry?.currentRevision?.contentFingerprint === contentFingerprint
             ) {
+                const revisionUpdate: {
+                    publishedAtJson?: string;
+                    updatedAtJson?: string;
+                    sourcePublishedAt?: Date;
+                } = {};
+                if (
+                    sourcePublishedAtDate
+                    && existingEntry.currentRevision.sourcePublishedAt?.getTime()
+                        !== sourcePublishedAtDate.getTime()
+                ) {
+                    revisionUpdate.publishedAtJson = publishedAtJson ?? undefined;
+                    revisionUpdate.sourcePublishedAt = sourcePublishedAtDate;
+                }
+                if (
+                    updatedAtJson
+                    && existingEntry.currentRevision.updatedAtJson !== updatedAtJson
+                ) {
+                    revisionUpdate.updatedAtJson = updatedAtJson;
+                }
+                if (Object.keys(revisionUpdate).length > 0) {
+                    await tx.entryRevision.update({
+                        where: { id: existingEntry.currentRevision.id },
+                        data: revisionUpdate,
+                    });
+                }
+                if (metricsJson) {
+                    await tx.entry.update({
+                        where: { id: existingEntry.id },
+                        data: { metricsJson },
+                    });
+                }
                 await tx.run.update({
                     where: { id: input.runId },
                     data: {
@@ -884,25 +938,31 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     summary: input.item.summary,
                     contentText: input.item.contentText,
                     contentFingerprint,
+                    contentKind: input.item.kind,
+                    publisherJson,
+                    publishedAtJson,
+                    updatedAtJson,
                     webUrl: input.item.webUrl,
-                    sourcePublishedAt,
+                    sourcePublishedAt: sourcePublishedAtDate,
                 },
             });
 
-            const storyId = existingEntry?.storyId ?? projectEntryToStory({
+            const storyProjection = projectEntryToStory({
                 entryId: entry.id,
                 revisionId: revision.id,
                 title: input.item.title,
                 summary: input.item.summary,
-            }).id;
+                contentKind: input.item.kind,
+            });
+            const storyId = existingEntry?.storyId ?? storyProjection.id;
             await tx.story.upsert({
                 where: { id: storyId },
                 create: {
                     id: storyId,
-                    kind: "document",
+                    kind: storyProjection.kind,
                 },
                 update: {
-                    kind: "document",
+                    kind: storyProjection.kind,
                 },
             });
             const storyRevision = await tx.storyRevision.create({
@@ -920,6 +980,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 data: {
                     storyId,
                     currentRevisionId: revision.id,
+                    ...(metricsJson ? { metricsJson } : {}),
                 },
             });
             await tx.story.update({
@@ -1159,6 +1220,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
         const rows = await this.prisma.$queryRawUnsafe<Array<{
             entryId: string;
             storyId: string;
+            storyKind: string;
             title: string;
             summary: string | null;
             sourceId: string;
@@ -1172,6 +1234,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 SELECT
                     e.id AS entryId,
                     e.storyId AS storyId,
+                    story.kind AS storyKind,
                     r.title AS title,
                     r.summary AS summary,
                     s.id AS sourceId,
@@ -1183,6 +1246,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 ${fromClause}
                 JOIN EntryRevision r ON r.id = e.currentRevisionId
                 JOIN SourceInstance s ON s.id = e.sourceInstanceId
+                JOIN Story story ON story.id = e.storyId
                 ${whereClause}
                 ${orderClause}
                 LIMIT ? OFFSET ?
@@ -1246,6 +1310,9 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 title: entry.currentRevision.title,
                 summary: entry.currentRevision.summary,
                 webUrl: entry.currentRevision.webUrl,
+                contentKind: contentKindSchema.parse(entry.currentRevision.contentKind),
+                publisher: parseJson<Publisher>(entry.currentRevision.publisherJson),
+                metrics: parseJson<ContentMetrics>(entry.metricsJson),
                 publishedAt: entry.currentRevision.sourcePublishedAt?.toISOString() ?? null,
                 updatedAt: entry.updatedAt.toISOString(),
                 revisionCount: entry._count.revisions,
@@ -1304,6 +1371,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 sourceName: entry.sourceInstance.name,
                 sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
                 currentRevisionId: entry.currentRevision.id,
+                metrics: parseJson<ContentMetrics>(entry.metricsJson),
                 revisions: entry.revisions.map((revision) => ({
                     id: revision.id,
                     revision: revision.revision,
@@ -1311,6 +1379,11 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     summary: revision.summary,
                     contentText: revision.contentText,
                     webUrl: revision.webUrl,
+                    contentKind: contentKindSchema.parse(revision.contentKind),
+                    publisher: parseJson<Publisher>(revision.publisherJson),
+                    publishedAt: parseJson<TemporalValue>(revision.publishedAtJson)
+                        ?? exactTemporalValue(revision.sourcePublishedAt),
+                    updatedAt: parseJson<TemporalValue>(revision.updatedAtJson),
                     sourcePublishedAt: revision.sourcePublishedAt?.toISOString() ?? null,
                     createdAt: revision.createdAt.toISOString(),
                     assets: revision.assets.map((asset) => this.toAssetSnapshot(asset)),
@@ -1354,6 +1427,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             sourceName: entry.sourceInstance.name,
             sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
             currentRevisionId: entry.currentRevision.id,
+            metrics: parseJson<ContentMetrics>(entry.metricsJson),
             revisions: entry.revisions.map((revision) => ({
                 id: revision.id,
                 revision: revision.revision,
@@ -1361,6 +1435,11 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 summary: revision.summary,
                 contentText: revision.contentText,
                 webUrl: revision.webUrl,
+                contentKind: contentKindSchema.parse(revision.contentKind),
+                publisher: parseJson<Publisher>(revision.publisherJson),
+                publishedAt: parseJson<TemporalValue>(revision.publishedAtJson)
+                    ?? exactTemporalValue(revision.sourcePublishedAt),
+                updatedAt: parseJson<TemporalValue>(revision.updatedAtJson),
                 sourcePublishedAt: revision.sourcePublishedAt?.toISOString() ?? null,
                 createdAt: revision.createdAt.toISOString(),
                 assets: revision.assets.map((asset) => this.toAssetSnapshot(asset)),
@@ -1403,6 +1482,11 @@ export class PrismaCosmosRepository implements CosmosRepository {
             summary: revision.summary,
             contentText: revision.contentText,
             webUrl: revision.webUrl,
+            contentKind: contentKindSchema.parse(revision.contentKind),
+            publisher: parseJson<Publisher>(revision.publisherJson),
+            publishedAt: parseJson<TemporalValue>(revision.publishedAtJson)
+                ?? exactTemporalValue(revision.sourcePublishedAt),
+            updatedAt: parseJson<TemporalValue>(revision.updatedAtJson),
             sourcePublishedAt: revision.sourcePublishedAt?.toISOString() ?? null,
             createdAt: revision.createdAt.toISOString(),
             assets: revision.assets.map((asset) => this.toAssetSnapshot(asset)),
@@ -1638,6 +1722,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
     private toFeedItemFromSearchRow(row: {
         entryId: string;
         storyId: string;
+        storyKind: string;
         title: string;
         summary: string | null;
         sourceId: string;
@@ -1648,7 +1733,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
     }): Omit<FeedItem, "assets"> {
         return {
             storyId: row.storyId,
-            storyKind: "document",
+            storyKind: row.storyKind as "event" | "document" | "media" | "thread",
             title: row.title,
             summary: row.summary,
             entryId: row.entryId,
@@ -1729,6 +1814,27 @@ async function appendDomainEvent(
             runId: input.runId ?? null,
         },
     });
+}
+
+function parseJson<T>(value: string | null): T | null {
+    if (!value) {
+        return null;
+    }
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return null;
+    }
+}
+
+function exactTemporalValue(date: Date | null): TemporalValue | null {
+    return date
+        ? {
+            exact: date.toISOString(),
+            exactPrecision: "second",
+            fallback: null,
+        }
+        : null;
 }
 
 function parseCursor(cursor: string | undefined): number {

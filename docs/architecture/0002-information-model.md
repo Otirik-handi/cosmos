@@ -1,8 +1,8 @@
 # Cosmos 信息模型、相关推荐与持续工作区
 
-> 状态：Draft v0.10
+> 状态：Draft v0.11
 >
-> 最后更新：2026-08-08
+> 最后更新：2026-08-10
 >
 > 产品共同语言：[`../../CONTEXT.md`](../../CONTEXT.md)
 >
@@ -162,6 +162,14 @@ Entry 是用户在信息库中看到、搜索、收藏、标注和引用的最�
 - 独立教程。
 
 “原始报道”不适合作为总称，因为上面的内容并不都属于新闻报道。
+
+Entry 的标准化内容属性由 Phase 1B `NormalizedIngestItem` 提供：
+
+- `kind` 使用 `post`、`article`、`video`、`audio`、`image`、`comment`、`listing`，与上层 `StoryKind` 分开。
+- `publisher` 表示作者、频道、公众号或子版块；`platformId: string | null`，无平台 ID 时仍可保存作者名，未知作者类型使用 `unknown`。
+- `metrics` 是带 `capturedAt` 的当前互动指标快照，不属于 Entry Revision。
+- `publishedAt`/`updatedAt` 使用 `TemporalValue`，证据层精准时间优先并统一 UTC；展示文本只作为 fallback。
+- 旧 `sourcePublishedAt` 仅作为查询和 v1 API 的 UTC 投影，不作为 Connector 的第二套输入字段。
 
 ### 3.3 URL 只是可选来源属性
 
@@ -916,7 +924,7 @@ Topic 的成员和 Workspace 的用户状态不会因为生成 v2 而丢失。
 | 第一版必须先做完整插件权限/沙箱 | 第一版只运行本地可信扩展，复杂权限和不可信沙箱后置 |
 | 第一条 Connector 直接选择最复杂的平台推荐页 | 先 RSS/RSSHub + fixture 验证通用端到端合同 |
 
-当前已经存在 Phase 1/1B 的运行时代码、数据库和固定 Ingest/Probe Job；本文件的 v0.10 更新只同步信息模型与运行时边界，不把未来 Workflow/Knowledge/Research 合同伪装成已实现表或能力。
+当前已经存在 Phase 1/1B 的运行时代码、数据库和固定 Ingest/Probe Job；本文件的 v0.11 更新同步规范化内容属性与运行时边界，不把未来 Workflow/Knowledge/Research 合同伪装成已实现表或能力。
 
 ## 13. 后置压力测试问题
 
@@ -928,6 +936,12 @@ Topic 的成员和 Workspace 的用户状态不会因为生成 v2 而丢失。
 这些问题已明确标为后置，不阻塞本次 Phase 0 基线，也不继续作为本次 grilling 的问题。
 
 ## 14. 变更记录
+
+### v0.11 - 2026-08-10
+
+- 固化 `NormalizedIngestItem` 的内容形态、发布者、指标快照和时间值边界。
+- 明确作者平台 ID 可为空，作者缺失 ID 不影响 Entry 身份。
+- 明确指标变化和时间精度提升不创建 Entry Revision。
 
 ### v0.10 - 2026-08-08
 

@@ -136,6 +136,11 @@ model Observation {
     title             String?
     contentText       String?
     contentFingerprint String?
+    contentKind       String          @default("article")
+    publisherJson     String?
+    metricsJson       String?
+    publishedAtJson   String?
+    updatedAtJson     String?
     sourcePublishedAt DateTime?
     capturedAt        DateTime       @default(now())
     sourceInstance    SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
@@ -152,6 +157,7 @@ model Entry {
     canonicalExternalId String
     currentRevisionId   String?        @unique
     storyId             String?
+    metricsJson         String?
     createdAt           DateTime       @default(now())
     updatedAt           DateTime       @updatedAt
     sourceInstance      SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
@@ -172,6 +178,10 @@ model EntryRevision {
     contentText        String
     contentFingerprint String
     webUrl             String?
+    contentKind        String        @default("article")
+    publisherJson      String?
+    publishedAtJson    String?
+    updatedAtJson      String?
     sourcePublishedAt  DateTime?
     createdAt          DateTime      @default(now())
     entry              Entry         @relation("EntryRevisions", fields: [entryId], references: [id], onDelete: Cascade)
