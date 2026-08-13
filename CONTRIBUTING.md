@@ -2,7 +2,7 @@
 
 [English](CONTRIBUTING.en.md)
 
-Cosmos 当前处于架构与第一条垂直链路设计阶段。清楚的范围、真实的验证和可追溯的设计决定，比把无关改动塞进同一个贡献更重要。
+Cosmos 已有 Phase 1 的 Web、NestJS API、固定 Ingest Worker、Prisma/SQLite 和第一条垂直链路基线；目标中的 Durable Host、通用 Workflow、Worker Admin 和远程 Worker 仍未全部实现。清楚的范围、真实的验证和可追溯的设计决定，比把无关改动塞进同一个贡献更重要。
 
 ## 开始之前
 
@@ -38,7 +38,7 @@ Issue 被接受表示方向和范围可以继续讨论，不承诺特定实现�
 - Bun；具体依赖、脚本和框架版本以仓库中的 `package.json`、锁文件和实现 Task 为准。
 - 运行当前改动所需的操作系统工具；部署或平台相关工作另行声明所需环境。
 
-Cosmos 目前没有运行时代码或依赖。实现开始后，先按仓库脚本安装依赖和启动服务；PR 必须列出实际执行的完整命令和结果。未运行的检查写“未运行”，聚焦测试通过不能写成全量测试通过。
+Cosmos 已有运行时代码和依赖。开始修改前先读取 PROJECT-STATUS.md、相关 Task、架构/ADR、package.json 和测试脚本，确认是在已有 Phase 1 基线上扩展，还是在独立 worktree 中做目标架构收敛。PR 必须列出实际执行的完整命令和结果；未运行的检查写“未运行”，聚焦测试通过不能写成全量测试通过。
 
 ### 依赖与本地数据
 
@@ -91,8 +91,12 @@ Cosmos 目前没有运行时代码或依赖。实现开始后，先按仓库脚�
 - 开发 Agent 必须先读取 `AGENTS.md` 以及相关 Issue、需求、Task、架构、ADR 和测试。
 - 处理 Bug、报错或性能回归时，先复现、缩小范围并建立证据，再提出或实施修复。
 - 多个 Agent 只能并行处理独立调研、审查、测试或明确不重叠的文件；由一个集成负责人统一处理跨模块合同、冲突、文档和最终验证。
+- 跨仓库或跨多个 worktree 的任务必须指定一个 leader。Leader 统一维护 walkthrough、冻结跨模块候选合同、分派 worktree、审查证据和控制阶段门禁；子代理不能自行扩大范围、覆盖 dirty worktree 或合并彼此的工作。
+- 每个写入代理必须登记 repository、branch、worktree、base SHA、可写文件集合和隔离测试数据根。Prisma schema/migration、公共 DTO、Task walkthrough 各自只能有一个当前写入者；其它代理只能提交只读审查或不重叠文件的修改。
+- Leader 的阶段判断不等于外部操作授权。commit、push、创建 PR、merge、发布、部署和删除 worktree 仍需遵守用户授权与本仓库 Git 规则。
 - Agent 不得覆盖工作区已有改动、绕过类型系统、伪造测试结果，或把当前对话的一次性要求写入产品提示词或稳定合同。
 - 使用者必须理解、审查并承担所有 Agent 生成的改动；责任不能转交给工具。
+- 每轮代理交付至少包含：目标、范围、实际修改、完整验证命令与结果、偏差、未验证风险和需要 leader 决定的事项；必须区分 focused、full、typecheck/build、Node、browser、Docker 和真实来源验证。
 - Agent 结论和 PR 描述应能追溯到代码、文档、日志、Trace、请求或测试证据；所有未运行的验证必须披露。
 
 ## Issue、Task 与架构记录

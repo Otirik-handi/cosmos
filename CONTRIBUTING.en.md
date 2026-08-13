@@ -2,7 +2,7 @@
 
 [中文](CONTRIBUTING.md)
 
-Cosmos is currently in its architecture and first vertical-slice phase. A clear scope, honest verification, and traceable design decisions matter more than putting unrelated changes into one contribution.
+Cosmos already has a Phase 1 baseline containing the Web app, NestJS API, fixed Ingest Worker, Prisma/SQLite storage, and the first vertical slice. The target Durable Host, generic Workflow runtime, Worker Admin API, and remote Worker are not all implemented yet. A clear scope, honest verification, and traceable design decisions matter more than putting unrelated changes into one contribution.
 
 ## Before You Start
 
@@ -38,7 +38,7 @@ Documentation-only changes may skip the code worktree and runtime checks, but mu
 - Bun; exact dependencies, scripts, and framework versions come from `package.json`, the lockfile, and the implementation task.
 - Operating-system tools required by the change; deployment or platform work may require additional environments.
 
-Cosmos currently has no runtime code or dependencies. Once implementation begins, use the repository scripts as the source of truth for installation and development. Every PR must list the exact commands that were run and their outcomes. Mark checks that were not run as “not run”; focused tests must not be presented as the full suite.
+Cosmos already has runtime code and dependencies. Before changing anything, read PROJECT-STATUS.md, the relevant Task, architecture/ADR documents, package.json, and test scripts to establish whether the work extends the existing Phase 1 baseline or belongs in an isolated convergence worktree. Every PR must list the exact commands that were run and their outcomes. Mark checks that were not run as “not run”; focused tests must not be presented as the full suite.
 
 ### Dependencies and local data
 
@@ -91,8 +91,12 @@ Here, a “coding agent” means Codex, Claude, Copilot, or another tool assisti
 - A coding agent must read `AGENTS.md` plus the relevant issue, requirements, task, architecture, ADR, and tests before it starts.
 - For bugs, errors, and performance regressions, reproduce the symptom, reduce the scope, and gather evidence before proposing or implementing a fix.
 - Multiple agents may work in parallel only on independent research, review, testing, or clearly non-overlapping files. One integration owner reconciles cross-module contracts, conflicts, documentation, and final verification.
+- Cross-repository or multi-worktree work must have one named leader. The leader owns the walkthrough, freezes cross-module candidate contracts, assigns worktrees, reviews evidence, and controls phase gates; sub-agents may not expand scope, overwrite dirty worktrees, or merge each other's work.
+- Every writing agent must register its repository, branch, worktree, base SHA, writable file set, and isolated test-data root. Prisma schema/migrations, public DTOs, and the Task walkthrough each have one current writer; other agents may only perform read-only review or edit disjoint files.
+- A leader's phase decision is not authorization for external operations. Commits, pushes, PR creation, merges, releases, deployments, and worktree deletion still require user authorization and the repository Git rules.
 - Agents must not overwrite existing workspace changes, bypass the type system, fabricate test results, or write one-off conversation requests into product prompts or stable contracts.
 - The contributor must understand, review, and take responsibility for every agent-generated change.
+- Each agent round must report its goal, scope, actual file changes, complete verification commands and results, deviations, unverified risks, and decisions needed from the leader. Reports must distinguish focused, full, typecheck/build, Node, browser, Docker, and real-source verification.
 - Agent conclusions and PR descriptions must be traceable to code, documents, logs, traces, requests, or test evidence. Disclose every verification step that was not run.
 
 ## Issues, Tasks, and Architecture Records
