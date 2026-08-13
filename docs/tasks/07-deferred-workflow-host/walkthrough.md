@@ -144,11 +144,13 @@ bun test
 bun run typecheck
   passed
 
-bun run verify:package
+`bun run verify:package`
   NODE_PACKAGE_SMOKE_OK
   TARBALL_DECLARATION_CONSUMER_OK
   ISOLATED_PACKAGE_SMOKE_OK
-```
+
+`bun run prepublishOnly`（nb-workflow clean checkpoint `9183a4f`）
+  PUBLISH_READY_OK
 
 偏差：第一次 Windows 修复使用 `npm.cmd`，在当前 Node `v24.13.0` 下仍触发 `EINVAL`；已改用 Node 直接加载 npm CLI，并修正 declaration consumer 的真实 tarball 安装参数。上述结果来自本地 dirty worktree；Registry `@notnotype/nb-workflow@0.1.2` 仍没有 Deferred 导出。
 
