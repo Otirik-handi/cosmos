@@ -20,6 +20,11 @@
   当前设计已同步、实现暂停，阻塞于 `nb-workflow` 稳定门禁。
 - `tasks/06-nb-workflow-kernel-convergence/walkthrough.md`：记录本轮文档收口、
   当前实现偏差、三份未来输入和停止边界。
+- `tasks/07-deferred-workflow-host/README.md`：leader-controlled 的实现治理 Task，
+  记录 nb-workflow Deferred Activity、Cosmos Host、固定 Ingest parity 和 Worker
+  Admin 的阶段门禁；当前尚未开始 Cosmos Host 代码实施。
+- `tasks/07-deferred-workflow-host/walkthrough.md`：记录跨仓库基线、代理边界、
+  每轮验证和偏差；历史 Spike 证据与当前验证严格分开。
 
 当前文档状态分层：
 
@@ -35,6 +40,9 @@ Task 04
 
 Task 06
 -> 实现暂停；先稳定 nb-workflow，再实现 Cosmos Worker/Host
+
+Task 07
+-> leader-controlled；先稳定 nb-workflow Deferred Activity，再实现 Cosmos Host
 ```
 
 后续顺序是 `nb-workflow` Kernel/conformance → Cosmos 本地 Worker/Durable Host
