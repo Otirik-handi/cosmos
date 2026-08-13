@@ -23,9 +23,5 @@
 - [`03-runtime-logging/`](03-runtime-logging/)：API、Worker、Connector、存储和 Web 服务端的结构化运行日志。
 - [`04-workflow-runtime/`](04-workflow-runtime/)：后续 Durable Workflow、Job 恢复、Connection/Adapter、Knowledge/Research 和 Harness 边界。
 - [`05-normalized-content-model/`](05-normalized-content-model/)：`NormalizedIngestItem`、Publisher、ContentKind、ContentMetrics 和 TemporalValue 的实现合同。
-- [`06-nb-workflow-kernel-convergence/`](06-nb-workflow-kernel-convergence/)：nb-workflow Kernel 与 Cosmos Durable Host 的设计收口；当前暂停，等待 Kernel 稳定。
+- [`06-nb-workflow-kernel-convergence/`](06-nb-workflow-kernel-convergence/)：`nb-workflow` Kernel 与 Cosmos Durable Host 的设计收口；当前暂停，等待 Kernel 稳定。
 - [`07-deferred-workflow-host/`](07-deferred-workflow-host/)：由 leader agent 协调的 Deferred Activity、Cosmos Host、Activity Job、固定 Ingest parity 和 Worker Admin 实施 Task。
-
-Task 07 的 leader 只能在独立 worktree 中协调实现；nb-workflow dirty master、Cosmos
-Task 04/05 worktree 和其它用户 dirty 文件均属于保护区。Task 07 当前是计划与治理
-基线，不表示 Cosmos Host、Worker Admin 或 Deferred Activity 已实现。

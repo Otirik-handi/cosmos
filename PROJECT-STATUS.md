@@ -25,7 +25,7 @@ Worker/Host。Worker Admin 随后实现，远程 Worker Gateway 继续后置。
 - `docs/api/` Draft v0.2：已经五路只读审查、尚未进入公共 Zod schema 或宿主实现
   的目标合同。
 - Task 06：设计已同步、实现暂停，阻塞于 `nb-workflow` 稳定门禁。
-- Task 07：leader-controlled 治理基线已建立，尚未开始 Cosmos Host 代码实施。
+- Task 07：已建立实现治理和 walkthrough，当前仍未开始代码实施；由 leader agent 统一协调，先完成 `nb-workflow` Deferred Activity，再进入 Cosmos Host/Worker 收敛。
 
 ## 已完成
 
