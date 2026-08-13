@@ -1,6 +1,6 @@
 # Task 07：Deferred Workflow、Cosmos Host 与本地 Worker 收敛
 
-> 状态：Cosmos Host 代码实施尚未开始；nb-workflow Phase 1 Deferred Activity 的本地实现与 package gates 已通过；发布和后续 Cosmos 接入仍待授权。
+> 状态：Cosmos Host 代码实施尚未开始；nb-workflow Phase 1 Deferred Activity 的本地实现、package gates 和 Registry consumer 已通过；Cosmos Host 发布后接入仍待授权。
 >
 > 日期：2026-08-13
 
@@ -156,4 +156,4 @@ Cosmos 至少验收：Prisma Backend conformance、Activity Job 幂等、双 Wor
 3. 复用 Task 04 convergence 分支作为行为和 fencing 证据，逐项重建 Activity Job、双 Worker fencing、Completion Outbox 和固定 Ingest parity；历史 Spike 不作为当前验证。
 4. 只有本地 Host/Worker 收敛通过后，才进入 Product API manifest-only 收敛和 Worker Admin 门禁。
 
-本 Task 当前不授权 Cosmos Host 代码实施、发布、push、PR 或合并。
+本 Task 当前不授权 Cosmos Host 代码实施、发布、合并或部署；本次仅提交已获授权的文档 PR。
