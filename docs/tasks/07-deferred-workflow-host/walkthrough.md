@@ -23,7 +23,7 @@ Cosmos governance worktree = .worktree/t07-governance-baseline
 nb-workflow origin/master = cb4c814
 nb-workflow dirty local master = cf34d15
 nb-workflow implementation worktree = nb-workflow-t03-deferred-activity
-nb-workflow package latest = 0.1.2
+nb-workflow package latest（Round 0 历史基线）：0.1.2
 ```
 
 ### 实际修改
@@ -106,7 +106,7 @@ Cosmos current code baseline
 
 focused、conformance、full test、typecheck 和 build 结果沿用 Task 03 Round 2/3 记录；本轮没有在 Cosmos worktree 运行代码测试、typecheck、build、Node、browser、Docker、migration 或真实来源验证。
 
-与计划的偏差：原计划可在 Phase 1 后进入 Cosmos Host；实际审查发现 npm latest 仍是 `0.1.2`，且 `origin/master` 没有 `cosmos.ingest@1` consumer。Task 04 convergence 分支存在可复用实现，但尚未合并且 API executable ownership 尚未满足目标，因此没有创建 Cosmos implementation worktree。
+与计划的偏差：原计划可在 Phase 1 后进入 Cosmos Host；Round 1 当时审查发现 npm latest 仍是 `0.1.2`，且 `origin/master` 没有 `cosmos.ingest@1` consumer。该段是 Round 1 的历史记录；Round 3 已记录 `0.2.0` 发布后的当前状态。Task 04 convergence 分支存在可复用实现，但尚未合并且 API executable ownership 尚未满足目标，因此没有创建 Cosmos implementation worktree。
 
 未验证和风险：npm 发布后的外部消费者、真实 Prisma Backend conformance、跨进程 waiting 恢复、双 Worker 长时间 takeover、固定 Ingest parity、API manifest-only、Worker Admin、Docker、browser、migration、Redis、Gateway、真实 Provider 和多主机均未验证。Task 04 文档中与其代码不一致的“API 已统一走 Ingest Workflow”叙述不得作为证据。
 
@@ -157,6 +157,39 @@ bun run typecheck
 未验证和风险：远端 CI、npm publish、Registry 外部消费者、真实 Prisma Backend、跨进程 waiting 恢复、双 Worker takeover、固定 Ingest parity、API manifest-only、Worker Admin、browser、Docker、migration、Redis、Gateway、真实 Provider 和多主机均未验证。Cosmos `origin/master@61ed21e` 仍没有 `cosmos.ingest@1` consumer；Task 04 convergence worktree 只能作为待移植 parity 证据。
 
 leader 判定：Phase 1 本地行为和 package gates 通过；Cosmos Host/Worker、固定 Ingest parity、Product API 和 Worker Admin 继续停止，等待发布/接入授权与独立 Cosmos implementation worktree。
+
+## Round 3：`0.2.0` Registry 发布证据回接
+
+日期：2026-08-13
+
+目标：把 nb-workflow `0.2.0` 的真实 Registry 发布和 consumer 证据回接到 Cosmos Task 07，纠正 Phase 1 的版本、基线和依赖边界；不启动 Cosmos Host 实施。
+
+范围：本 Task `README.md` 与 walkthrough。只读取 nb-workflow Task 03 Round 6、发布合并提交 `af162ea114c2fddddf3e1cde2c654d357b217fb2` 和 Registry consumer 结果；没有修改 Cosmos 运行时代码、Prisma、migration、API、Worker、NeuroBook 或其它 worktree。
+
+实际修改：
+
+- 将 nb-workflow 实施基线更新为发布合并提交 `af162ea114c2fddddf3e1cde2c654d357b217fb2` 与 Registry package `@notnotype/nb-workflow@0.2.0`。
+- 将 Phase 1 证据拆成行为合同、真实 tarball 和 Registry consumer 三层，保留 Memory fixture、durable Backend、跨进程恢复和 Cosmos 生产集成之间的边界。
+- 更新 Phase 2 入口条件：发布/依赖门禁已完成，但真实 Durable Host consumer 与 Cosmos 实施授权仍是前置条件。
+
+验证命令与结果：
+
+```text
+来源：nb-workflow Task 03 walkthrough Round 6
+npm publish --access public -> Registry `0.2.0` 可查询，dist-tags.latest = `0.2.0`
+npm install @notnotype/nb-workflow@0.2.0 -> added 1 package in 1s
+Node consumer -> REGISTRY_CONSUMER_OK version=0.2.0 exports=6
+Bun consumer -> BUN_REGISTRY_IMPORT_OK function function
+TypeScript declaration consumer -> tsc passed，退出码为 0
+PR #8 verify -> SUCCESS
+```
+
+偏差：此前 Round 1/2 记录的是 `@notnotype/nb-workflow@0.1.2` 尚未发布 Deferred 的状态；本轮已按 Round 6 真实结果更新，不能把历史未发布状态继续当作当前状态。
+
+未验证和风险：Cosmos `origin/master` 仍没有 `@notnotype/nb-workflow` consumer、Harness Adapter 或 `cosmos.ingest@1` 的 Kernel consumer；真实 Prisma Backend、跨进程 waiting 恢复、双 Worker takeover、固定 Ingest parity、API manifest-only、Worker Admin、browser、Docker、migration、Redis、Gateway、真实 Provider 和多主机仍未运行。
+
+leader 判定：Phase 1 的发布、package 和 Registry consumer 门禁完成；Cosmos Host/Worker、固定 Ingest parity、Product API 和 Worker Admin 继续停止，等待 Cosmos 实施授权与独立实现 worktree。
+
 
 ## 后续轮次模板
 
