@@ -830,8 +830,7 @@ Task 07 当前的下一步不是把本地合入写成全部完成，而是由 le
    Ingest 路径。不得把本地合入写成 push、PR、worktree 清理或 Docker/browser/真实来源完成。
 
 本 Task 的实现规格范围统一由 [`docs/spec/README.md`](../../spec/README.md) 索引；Draft、Planned、
-Reserved API、Gateway、Redis、跨主机和其它后续设计仍不等于实现。本文档本轮没有创建文档提交，
-也不记录文档提交 SHA。
+本轮已创建并推送到 master 的文档提交为 `d8e1360`（完整提交消息为 `docs: add reconstructable component specifications`）；该提交完成 `docs/spec/` 索引、29 个可重建组件规格及相关事实同步，并通过规格结构、链接和字节级检查。
 
 本 Task 不把合入前 dirty worktree 的 focused/full/package、Node smoke 证据写成完整门禁或 Task 07 完成；
 剩余门禁通过前继续保留旧 Ingest 路径。
