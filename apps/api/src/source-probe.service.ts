@@ -1,39 +1,27 @@
 import { Inject, Injectable } from "@nestjs/common";
 
+import type { CatalogPort } from "@cosmos/application/catalog";
 import {
-    ConnectorRegistry,
-} from "@cosmos/application";
-import {
-    type CreateSourceCommand,
-    type ConnectorDescriptor,
-    type SourceSnapshot,
     sourceConfigSchema,
+    type ConnectorDescriptor,
+    type CreateSourceCommand,
 } from "@cosmos/contracts";
 
 @Injectable()
 export class SourceProbeService {
     constructor(
-        @Inject(ConnectorRegistry)
-        private readonly connectors: ConnectorRegistry,
+        @Inject("COSMOS_CATALOG")
+        private readonly catalog: CatalogPort,
     ) {}
 
     list(): readonly ConnectorDescriptor[] {
-        return this.connectors.descriptors();
+        return this.catalog.listConnectors();
     }
 
     validate(input: CreateSourceCommand): void {
-        const now = new Date().toISOString();
-        this.connectors.validate({
-            id: "pending",
-            name: input.name,
-            kind: input.kind,
-            config: sourceConfigSchema.parse(input.config),
-            enabled: input.enabled ?? true,
-            createdAt: now,
-            updatedAt: now,
-            lastRunAt: null,
-            lastError: null,
-        });
+        if (!this.catalog.getSourceDefinition(input.kind)) {
+            throw new Error(`Source kind is not available in the manifest catalog: ${input.kind}`);
+        }
+        sourceConfigSchema.parse(input.config);
     }
-
 }

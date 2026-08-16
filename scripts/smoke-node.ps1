@@ -10,6 +10,119 @@ $workerErrorLog = Join-Path $root "worker.err.log"
 $api = $null
 $worker = $null
 
+function Invoke-SmokeWebRequest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Parameters
+    )
+
+    try {
+        return Invoke-WebRequest @Parameters
+    } catch {
+        $response = $_.Exception.Response
+        if ($null -eq $response -or $null -eq $response.StatusCode) {
+            throw
+        }
+
+        $content = $_.ErrorDetails.Message
+        if ([string]::IsNullOrWhiteSpace([string]$content)) {
+            $content = $null
+        }
+        if ($null -ne $response.PSObject.Methods["GetResponseStream"]) {
+            if ($null -eq $content) {
+                $stream = $null
+                $reader = $null
+                try {
+                    $stream = $response.GetResponseStream()
+                    if ($stream) {
+                        if ($stream.CanSeek) {
+                            $stream.Position = 0
+                        }
+                        $reader = New-Object System.IO.StreamReader($stream)
+                        $content = $reader.ReadToEnd()
+                    }
+                } finally {
+                    if ($reader) {
+                        $reader.Dispose()
+                    } elseif ($stream) {
+                        $stream.Dispose()
+                    }
+                }
+            }
+            $headers = $response.Headers
+        } else {
+            if ($null -eq $content -and $response.Content) {
+                try {
+                    $content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                } catch {
+                    # PowerShell 7 may dispose HttpResponseMessage.Content before this catch.
+                    $content = $_.ErrorDetails.Message
+                }
+            }
+            $headers = @{}
+            foreach ($header in $response.Headers) {
+                $headers[[string]$header.Key] = [string]::Join(", ", [string[]]$header.Value)
+            }
+            if ($response.Content -and $response.Content.Headers) {
+                foreach ($header in $response.Content.Headers) {
+                    if (-not $headers.ContainsKey([string]$header.Key)) {
+                        $headers[[string]$header.Key] = [string]::Join(", ", [string[]]$header.Value)
+                    }
+                }
+            }
+        }
+
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            Content = $content
+            Headers = $headers
+        }
+    }
+}
+function Read-SmokeStructuredLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return @()
+    }
+
+    $records = @()
+    try {
+        foreach ($line in @(Get-Content -LiteralPath $Path -ErrorAction Stop)) {
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+            try {
+                $records += ($line | ConvertFrom-Json)
+            } catch {
+                # The writer may still be finishing a JSONL line; retry on the next poll.
+            }
+        }
+    } catch {
+        # The writer may be opening or rotating the file; retry on the next poll.
+    }
+    return $records
+}
+
+function Get-SmokeLogTail {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return "<missing: $Path>"
+    }
+    try {
+        return ((Get-Content -LiteralPath $Path -Tail 40 -ErrorAction Stop) -join "`n")
+    } catch {
+        return ("<unavailable: {0}: {1}>" -f $Path, $_.Exception.Message)
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 
 try {
@@ -21,6 +134,7 @@ try {
     $env:COSMOS_VERSION = "0.1.0"
     $env:COSMOS_WORKER_POLL_MS = "200"
     $env:COSMOS_WORKER_LEASE_MS = "5000"
+    $env:COSMOS_WORKFLOW_HOST_ENABLED = "true"
     $env:COSMOS_LOG_ROOT = $logRoot
     $env:COSMOS_LOG_OUTPUT = "both"
     $env:COSMOS_LOG_LEVEL = "debug"
@@ -58,25 +172,25 @@ try {
         throw "API did not become ready. $((Get-Content $apiErrorLog -Raw).Trim())"
     }
 
-    $notFound = Invoke-WebRequest `
-        -Uri "http://127.0.0.1:4321/api/v1/does-not-exist?token=should-not-log" `
-        -TimeoutSec 2 `
-        -UseBasicParsing `
-        -SkipHttpErrorCheck
+    $notFound = Invoke-SmokeWebRequest -Parameters @{
+        Uri = "http://127.0.0.1:4321/api/v1/does-not-exist?token=should-not-log"
+        TimeoutSec = 2
+        UseBasicParsing = $true
+    }
     $notFoundBody = $notFound.Content | ConvertFrom-Json
     if (($notFound.StatusCode -ne 404) -or ($notFoundBody.code -ne "not_found") `
         -or ([string]$notFoundBody.requestId -ne [string]$notFound.Headers["X-Request-Id"])) {
         throw "404 error contract did not include a matching requestId."
     }
 
-    $validation = Invoke-WebRequest `
-        -Method Post `
-        -Uri "http://127.0.0.1:4321/api/v1/sources" `
-        -ContentType "application/json" `
-        -Body '{"name":123,"kind":"fixture-rss","config":{}}' `
-        -TimeoutSec 2 `
-        -UseBasicParsing `
-        -SkipHttpErrorCheck
+    $validation = Invoke-SmokeWebRequest -Parameters @{
+        Method = "Post"
+        Uri = "http://127.0.0.1:4321/api/v1/sources"
+        ContentType = "application/json"
+        Body = '{"name":123,"kind":"fixture-rss","config":{}}'
+        TimeoutSec = 2
+        UseBasicParsing = $true
+    }
     $validationBody = $validation.Content | ConvertFrom-Json
     if (($validation.StatusCode -ne 400) -or ($validationBody.code -ne "validation_failed") `
         -or (-not $validationBody.requestId)) {
@@ -95,19 +209,25 @@ try {
             }
             enabled = $true
         } | ConvertTo-Json -Depth 5)
-    $queued = Invoke-RestMethod `
-        -Method Post `
-        -Uri "http://127.0.0.1:4321/api/v1/sources/$($source.id)/runs" `
-        -Headers @{ "Idempotency-Key" = "smoke-run-1" } `
-        -ResponseHeadersVariable queuedHeaders
+    $queuedResponse = Invoke-SmokeWebRequest -Parameters @{
+        Method = "Post"
+        Uri = "http://127.0.0.1:4321/api/v1/sources/$($source.id)/runs"
+        Headers = @{ "Idempotency-Key" = "smoke-run-1" }
+        UseBasicParsing = $true
+    }
+    $queued = $queuedResponse.Content | ConvertFrom-Json
+    $queuedHeaders = $queuedResponse.Headers
     $queuedRequestId = [string]$queuedHeaders["X-Request-Id"]
     if (-not $queuedRequestId) {
         throw "Queued Run response did not contain X-Request-Id."
     }
-    $probe = Invoke-RestMethod `
-        -Method Post `
-        -Uri "http://127.0.0.1:4321/api/v1/sources/$($source.id)/test" `
-        -ResponseHeadersVariable probeHeaders
+    $probeResponse = Invoke-SmokeWebRequest -Parameters @{
+        Method = "Post"
+        Uri = "http://127.0.0.1:4321/api/v1/sources/$($source.id)/test"
+        UseBasicParsing = $true
+    }
+    $probe = $probeResponse.Content | ConvertFrom-Json
+    $probeHeaders = $probeResponse.Headers
     $probeRequestId = [string]$probeHeaders["X-Request-Id"]
     if (-not $probeRequestId) {
         throw "Probe Job response did not contain X-Request-Id."
@@ -129,6 +249,32 @@ try {
     if (-not $feed -or @($feed.items).Count -lt 3) {
         throw "Worker did not ingest fixture. $((Get-Content $workerErrorLog -Raw).Trim())"
     }
+    $durableRunState = $null
+    for ($attempt = 0; $attempt -lt 50; $attempt += 1) {
+        try {
+            $durableRunState = Invoke-RestMethod `
+                -Uri "http://127.0.0.1:4321/api/v1/runs/$($queued.id)" `
+                -TimeoutSec 2
+            if ($durableRunState.status -eq "succeeded" -and $durableRunState.sourceId -eq $source.id) {
+                break
+            }
+        } catch {
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    if (-not $durableRunState -or $durableRunState.status -ne "succeeded" -or $durableRunState.sourceId -ne $source.id) {
+        $durableStatus = if ($durableRunState) { [string]$durableRunState.status } else { "unavailable" }
+        $durableSourceId = if ($durableRunState) { [string]$durableRunState.sourceId } else { "unavailable" }
+        throw ("Durable WorkflowRun did not complete for runId {0} after Feed ingestion (status={1}, sourceId={2}, expectedSourceId={3}). API stderr:`n{4}`nWorker stderr:`n{5}`nAPI output:`n{6}`nWorker output:`n{7}" -f `
+            $queued.id,
+            $durableStatus,
+            $durableSourceId,
+            $source.id,
+            (Get-SmokeLogTail -Path $apiErrorLog),
+            (Get-SmokeLogTail -Path $workerErrorLog),
+            (Get-SmokeLogTail -Path $apiLog),
+            (Get-SmokeLogTail -Path $workerLog))
+    }
     $probeState = $null
     for ($attempt = 0; $attempt -lt 50; $attempt += 1) {
         try {
@@ -149,75 +295,98 @@ try {
 
     $apiStructuredLog = Join-Path $logRoot "api.jsonl"
     $workerStructuredLog = Join-Path $logRoot "worker.jsonl"
-    if (-not (Test-Path -LiteralPath $apiStructuredLog)) {
-        throw "API structured log was not created."
-    }
-    if (-not (Test-Path -LiteralPath $workerStructuredLog)) {
-        throw "Worker structured log was not created."
-    }
     if (Test-Path -LiteralPath (Join-Path $dataRoot "logs")) {
         throw "API or Worker ignored COSMOS_LOG_ROOT and wrote under Data Root."
     }
-    $apiRecords = @(Get-Content -LiteralPath $apiStructuredLog | ForEach-Object {
-        $_ | ConvertFrom-Json
-    })
-    $workerRecords = @(Get-Content -LiteralPath $workerStructuredLog | ForEach-Object {
-        $_ | ConvertFrom-Json
-    })
-    $correlatedWorkerRecords = @($workerRecords | Where-Object {
-        $_.runId -eq $queued.id -and $_.jobId -and $_.sourceId -eq $source.id
-    })
-    $correlatedConnectorRecords = @($workerRecords | Where-Object {
-        $_.runId -eq $queued.id `
-            -and $_.jobId `
-            -and $_.sourceId -eq $source.id `
-            -and $_.connectorId -eq "fixture-rss"
-    })
-    if ($correlatedWorkerRecords.Count -eq 0) {
-        throw "Worker structured logs did not contain the queued Run and Job correlation."
+
+    $apiRecords = @()
+    $workerRecords = @()
+    $durableLaneRecords = @()
+    $probeBridgeRecords = @()
+    $probeWorkerRecords = @()
+    $runBridgeRecords = @()
+    $logsReady = $false
+    for ($attempt = 0; $attempt -lt 50; $attempt += 1) {
+        $apiRecords = @(Read-SmokeStructuredLog -Path $apiStructuredLog)
+        $workerRecords = @(Read-SmokeStructuredLog -Path $workerStructuredLog)
+        $durableLaneRecords = @($workerRecords | Where-Object {
+            $_.event -eq "workflow.lanes.polled" -and $_.completionStatus -eq "completed"
+        })
+        $probeBridgeRecords = @($apiRecords | Where-Object {
+            $_.event -eq "job.queued" `
+                -and $_.jobId -eq $probe.id `
+                -and $_.sourceId -eq $source.id `
+                -and $_.requestId -eq $probeRequestId
+        })
+        $probeWorkerRecords = @($workerRecords | Where-Object {
+            $_.jobId -eq $probe.id `
+                -and $_.sourceId -eq $source.id `
+                -and $_.connectorId -eq "fixture-rss"
+        })
+        $runBridgeRecords = @($apiRecords | Where-Object {
+            ($_.event -eq "workflow.run.queued" -or $_.event -eq "run.queued") `
+                -and $_.runId -eq $queued.id `
+                -and $_.sourceId -eq $source.id `
+                -and $_.requestId -eq $queuedRequestId
+        })
+        if ($durableLaneRecords.Count -gt 0 `
+            -and $probeBridgeRecords.Count -gt 0 `
+            -and $probeWorkerRecords.Count -gt 0 `
+            -and $runBridgeRecords.Count -gt 0) {
+            $logsReady = $true
+            break
+        }
+        Start-Sleep -Milliseconds 200
     }
-    $probeBridgeRecords = @($apiRecords | Where-Object {
-        $_.event -eq "job.queued" `
-            -and $_.jobId -eq $probe.id `
-            -and $_.sourceId -eq $source.id `
-            -and $_.requestId -eq $probeRequestId
-    })
-    $probeWorkerRecords = @($workerRecords | Where-Object {
-        $_.jobId -eq $probe.id `
-            -and $_.sourceId -eq $source.id `
-            -and $_.connectorId -eq "fixture-rss"
-    })
-    if ($probeBridgeRecords.Count -eq 0) {
-        throw "API structured logs did not bridge requestId to the probe Job."
+
+    if (-not (Test-Path -LiteralPath $apiStructuredLog) -or -not (Test-Path -LiteralPath $workerStructuredLog)) {
+        throw ("Expected API and Worker structured log files after polling. apiExists={0}, workerExists={1}. API tail:`n{2}`nWorker tail:`n{3}" -f `
+            (Test-Path -LiteralPath $apiStructuredLog),
+            (Test-Path -LiteralPath $workerStructuredLog),
+            (Get-SmokeLogTail -Path $apiStructuredLog),
+            (Get-SmokeLogTail -Path $workerStructuredLog))
     }
-    if ($probeWorkerRecords.Count -eq 0) {
-        throw "Worker structured logs did not contain probe Job correlation."
+    if (-not $logsReady) {
+        throw ("Structured log records did not arrive after polling. durableLaneCompletedRecords={0}, probeBridgeRecords={1}, probeWorkerRecords={2}, queueBridgeRecords={3}. API tail:`n{4}`nWorker tail:`n{5}" -f `
+            $durableLaneRecords.Count,
+            $probeBridgeRecords.Count,
+            $probeWorkerRecords.Count,
+            $runBridgeRecords.Count,
+            (Get-SmokeLogTail -Path $apiStructuredLog),
+            (Get-SmokeLogTail -Path $workerStructuredLog))
     }
     if (@($apiRecords | Where-Object { $_.requestId }).Count -eq 0) {
         throw "API structured logs did not contain requestId."
-    }
-    $runBridgeRecords = @($apiRecords | Where-Object {
-        $_.event -eq "run.queued" `
-            -and $_.runId -eq $queued.id `
-            -and $_.sourceId -eq $source.id `
-            -and $_.requestId -eq $queuedRequestId
-    })
-    if ($runBridgeRecords.Count -eq 0) {
-        throw "API structured logs did not bridge requestId to the queued Run."
-    }
-    if ($correlatedConnectorRecords.Count -eq 0) {
-        throw "Worker connector logs did not contain Run/Job/Source/Connector correlation."
     }
 
     $search = Invoke-RestMethod `
         -Uri "http://127.0.0.1:4321/api/v1/search?text=Cosmos"
     $story = Invoke-RestMethod `
         -Uri "http://127.0.0.1:4321/api/v1/stories/$($feed.items[0].storyId)"
-    $sse = & curl.exe -sS -N --max-time 2 `
-        "http://127.0.0.1:4321/api/v1/events?after=0" 2>$null
+    $nativeCommandPreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    $previousNativeCommandPreference = $null
+    if ($null -ne $nativeCommandPreference) {
+        $previousNativeCommandPreference = $nativeCommandPreference.Value
+        $nativeCommandPreference.Value = $false
+    }
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $sse = @(& curl.exe -sS -N --max-time 2 `
+            "http://127.0.0.1:4321/api/v1/events?after=0" 2>&1)
+        $sseExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($null -ne $nativeCommandPreference) {
+            $nativeCommandPreference.Value = $previousNativeCommandPreference
+        }
+    }
     $sseText = $sse -join "`n"
+    if ($sseExitCode -ne 0 -and $sseExitCode -ne 28) {
+        throw ("SSE curl failed with exit code {0}. Raw output: {1}" -f $sseExitCode, $sseText)
+    }
     if ($sseText -notmatch "run.queued.v1" -or $sseText -notmatch "feed.updated.v1") {
-        throw "SSE did not return the persisted domain events. Raw output: $sse"
+        throw "SSE did not return the persisted domain events. Raw output: $sseText"
     }
     $rawStructuredLogs = @(
         Get-Content -LiteralPath $apiStructuredLog
@@ -233,6 +402,8 @@ try {
     [pscustomobject]@{
         healthWorker = $health.workerStatus
         queuedStatus = $queued.status
+        durableRunStatus = $durableRunState.status
+        durableRunSourceId = $durableRunState.sourceId
         feedItems = @($feed.items).Count
         searchItems = @($search.items).Count
         storyTitle = $story.story.title
@@ -240,9 +411,8 @@ try {
         sseHasFeedEvent = [bool]($sseText -match "feed.updated.v1")
         apiStructuredRecords = $apiRecords.Count
         workerStructuredRecords = $workerRecords.Count
-        correlatedWorkerRecords = $correlatedWorkerRecords.Count
-        correlatedConnectorRecords = $correlatedConnectorRecords.Count
-        requestIdBridgedToRun = $runBridgeRecords.Count
+        durableLaneCompletedRecords = $durableLaneRecords.Count
+        requestIdBridgedToDurableRun = $runBridgeRecords.Count
         requestIdBridgedToProbe = $probeBridgeRecords.Count
         probeWorkerRecords = $probeWorkerRecords.Count
         notFoundStatus = $notFound.StatusCode
@@ -262,6 +432,7 @@ try {
     Remove-Item Env:COSMOS_API_PORT -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_VERSION -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_WORKER_POLL_MS -ErrorAction SilentlyContinue
+    Remove-Item Env:COSMOS_WORKFLOW_HOST_ENABLED -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_WORKER_LEASE_MS -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_LOG_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_LOG_OUTPUT -ErrorAction SilentlyContinue

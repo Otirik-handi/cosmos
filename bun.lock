@@ -19,10 +19,8 @@
       "version": "0.1.0",
       "dependencies": {
         "@cosmos/application": "workspace:*",
-        "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",
         "@cosmos/logging": "workspace:*",
-        "@cosmos/plugin-collectors": "workspace:*",
         "@cosmos/storage-prisma": "workspace:*",
         "@nestjs/common": "11.0.0",
         "@nestjs/core": "11.0.0",
@@ -73,10 +71,15 @@
       "version": "0.1.0",
       "dependencies": {
         "@cosmos/application": "workspace:*",
+        "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",
         "@cosmos/logging": "workspace:*",
         "@cosmos/plugin-collectors": "workspace:*",
         "@cosmos/storage-prisma": "workspace:*",
+        "@cosmos/worker-admin": "workspace:*",
+        "@notnotype/nb-workflow": "0.2.0",
+        "@prisma/client": "^6.0.0",
+        "zod": "^4.0.0",
       },
       "devDependencies": {
         "@types/node": "^24.0.0",
@@ -87,8 +90,10 @@
       "name": "@cosmos/application",
       "version": "0.1.0",
       "dependencies": {
+        "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",
         "@cosmos/domain": "workspace:*",
+        "zod": "^4.0.0",
       },
     },
     "packages/blob-store": {
@@ -138,6 +143,10 @@
       "dependencies": {
         "@cosmos/contracts": "workspace:*",
       },
+    },
+    "packages/worker-admin": {
+      "name": "@cosmos/worker-admin",
+      "version": "0.1.0",
     },
     "plugins/collectors": {
       "name": "@cosmos/plugin-collectors",
@@ -260,6 +269,8 @@
     "@cosmos/transport-http": ["@cosmos/transport-http@workspace:packages/transport-http"],
 
     "@cosmos/worker": ["@cosmos/worker@workspace:apps/worker"],
+
+    "@cosmos/worker-admin": ["@cosmos/worker-admin@workspace:packages/worker-admin"],
 
     "@dotenvx/dotenvx": ["@dotenvx/dotenvx@1.75.1", "", { "dependencies": { "@dotenvx/primitives": "^0.8.0", "commander": "^11.1.0", "conf": "^10.2.0", "dotenv": "^17.2.1", "enquirer": "^2.4.1", "env-paths": "^2.2.1", "execa": "^5.1.1", "fdir": "^6.2.0", "ignore": "^5.3.0", "object-treeify": "1.1.33", "open": "^8.4.2", "picomatch": "^4.0.4", "systeminformation": "^5.22.11", "undici": "^7.11.0", "which": "^4.0.0", "yocto-spinner": "^1.1.0" }, "bin": { "dotenvx": "src/cli/dotenvx.js" } }, "sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ=="],
 

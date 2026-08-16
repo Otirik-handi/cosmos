@@ -14,6 +14,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/logging/package.json packages/logging/package.json
 COPY packages/storage-prisma/package.json packages/storage-prisma/package.json
+COPY packages/worker-admin/package.json packages/worker-admin/package.json
 COPY packages/transport-http/package.json packages/transport-http/package.json
 COPY plugins/collectors/package.json plugins/collectors/package.json
 COPY plugins/rss/package.json plugins/rss/package.json
@@ -32,6 +33,14 @@ ENV COSMOS_DATA_ROOT=/var/lib/cosmos
 ENV DATABASE_URL=file:/var/lib/cosmos/cosmos.sqlite
 
 COPY --from=build /app/ /app/
+RUN if [ -d apps/web/.next/static ]; then \
+        mkdir -p apps/web/.next/standalone/apps/web/.next \
+        && cp -a apps/web/.next/static apps/web/.next/standalone/apps/web/.next/; \
+    fi \
+    && if [ -d apps/web/public ]; then \
+        mkdir -p apps/web/.next/standalone/apps/web \
+        && cp -a apps/web/public apps/web/.next/standalone/apps/web/; \
+    fi
 
 RUN mkdir -p /var/lib/cosmos
 

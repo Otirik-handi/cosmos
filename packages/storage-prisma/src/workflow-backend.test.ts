@@ -4,8 +4,12 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+    MemoryDefinitionRegistry,
+    MemoryValueStore,
     WorkflowBackendConflictError,
     WorkflowRunNotFoundError,
+    deferredActivityConformanceCases,
+    type DeferredActivityConformanceHarness,
     type WorkflowRunState,
     workflowBackendConformanceCases,
     workflowRunnerBackendConformanceCases,
@@ -14,8 +18,10 @@ import { PrismaClient } from "@prisma/client";
 
 import {
     PrismaWorkflowBackend,
+    createWorkflowEnvelopeMarker,
     WorkflowStateIntegrityError,
 } from "./workflow-backend.js";
+import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 
 const roots: string[] = [];
 const clients = new Set<PrismaClient>();
@@ -45,6 +51,22 @@ describe("PrismaWorkflowBackend", () => {
         });
     }
 
+    for (const testCase of deferredActivityConformanceCases) {
+        it(`deferred Activity conformance: ${testCase.name}`, async () => {
+            const backend = await createBackend();
+            const host = new PrismaWorkflowHostStore(backend.prisma);
+            const harness: DeferredActivityConformanceHarness = {
+                backend,
+                deferredActivities: {
+                    startAction: (request) => host.startAction(request),
+                },
+                values: new MemoryValueStore(),
+                definitions: new MemoryDefinitionRegistry(),
+            };
+            await testCase.run(() => harness);
+        });
+    }
+
     it("round-trips state across Prisma clients and rejects stale revisions", async () => {
         const backend = await createBackend();
         const initial = sampleRun("restart-round-trip");
@@ -56,6 +78,8 @@ describe("PrismaWorkflowBackend", () => {
             updatedAt: "2026-08-13T00:00:01.000Z",
         }, 0);
         expect(saved.revision).toBe(1);
+        await expect(backend.prisma.workflowRun.findUnique({ where: { id: initial.runId } }))
+            .resolves.toMatchObject({ finishedAt: new Date("2026-08-13T00:00:01.000Z") });
         const databasePath = databasePathFor(backend);
         await backend.prisma.$disconnect();
         clients.delete(backend.prisma);
@@ -100,6 +124,69 @@ describe("PrismaWorkflowBackend", () => {
             data: { stateJson: "not-json" },
         });
         await expect(backend.loadRun(initial.runId)).rejects.toBeInstanceOf(WorkflowStateIntegrityError);
+    });
+
+    it("adopts envelope-only runs atomically and conceals them from Kernel reads", async () => {
+        const backend = await createBackend();
+        expect(backend.capabilities).toMatchObject({
+            durability: "durable",
+            processRestart: true,
+            concurrentExecution: true,
+            multiWorker: true,
+            leases: true,
+            externalReceipts: true,
+            valueReferences: true,
+        });
+        const runId = "envelope-adoption";
+        const createdAt = "2026-08-13T00:00:00.000Z";
+        const marker = createWorkflowEnvelopeMarker(runId);
+        await backend.prisma.workflowRun.create({
+            data: {
+                id: runId,
+                stateJson: JSON.stringify(marker),
+                kernelRevision: 0,
+                status: "queued",
+                resumeRequired: false,
+                definitionKey: "cosmos.ingest",
+                definitionVersion: "1",
+                manifestHash: "sha256:host",
+                idempotencyKey: "idem-envelope-adoption",
+                inputSnapshotJson: JSON.stringify({ sourceId: "source-1" }),
+                productRunJson: JSON.stringify({ status: "queued" }),
+                createdAt: new Date(createdAt),
+                updatedAt: new Date(createdAt),
+            },
+        });
+
+        await expect(backend.loadRun(runId)).resolves.toBeNull();
+        await expect(backend.listRuns()).resolves.toEqual([]);
+
+        const initial = sampleRun(runId, createdAt);
+        const adopted = await backend.createRun(initial);
+        expect(adopted).toMatchObject({
+            runId,
+            revision: 0,
+            status: "running",
+        });
+        await expect(backend.loadRun(runId)).resolves.toMatchObject({
+            runId,
+            status: "running",
+        });
+        await expect(backend.listRuns()).resolves.toHaveLength(1);
+
+        const adoptedRow = await backend.prisma.workflowRun.findUnique({
+            where: { id: runId },
+        });
+        expect(adoptedRow).toMatchObject({
+            idempotencyKey: "idem-envelope-adoption",
+            inputSnapshotJson: JSON.stringify({ sourceId: "source-1" }),
+            productRunJson: JSON.stringify({ status: "queued" }),
+            createdAt: new Date(createdAt),
+        });
+
+        await expect(backend.createRun(initial)).rejects.toBeInstanceOf(
+            WorkflowBackendConflictError,
+        );
     });
 });
 

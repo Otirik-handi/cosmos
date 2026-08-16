@@ -25,8 +25,11 @@ model Checkpoint {
     id               String         @id @default(cuid())
     sourceInstanceId String         @unique
     cursor           String?
+    revision         Int            @default(0)
+    workflowRunId    String?
     updatedAt        DateTime       @updatedAt
     sourceInstance   SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+    workflowRun      WorkflowRun?   @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
 }
 
 model Run {
@@ -74,25 +77,31 @@ model Job {
     id             String    @id @default(cuid())
     runId          String?
     stepId         String?
-    kind           String
-    status         String
-    payloadJson    String?
-    resultJson     String?
-    idempotencyKey String    @unique
-    attempts       Int       @default(0)
-    maxAttempts    Int       @default(3)
-    leaseOwner     String?
-    leaseToken     String?
-    leaseExpiresAt DateTime?
-    nextAttemptAt  DateTime?
-    errorCode      String?
-    errorMessage   String?
-    createdAt      DateTime  @default(now())
-    updatedAt      DateTime  @updatedAt
-    run            Run?      @relation(fields: [runId], references: [id], onDelete: Cascade)
-    step           Step?     @relation(fields: [stepId], references: [id], onDelete: Cascade)
+    workflowRunId          String?
+    workflowKernelRevision Int?
+    kind                   String
+    status                 String
+    payloadJson            String?
+    resultJson             String?
+    idempotencyKey         String    @unique
+    attempts               Int       @default(0)
+    maxAttempts            Int       @default(3)
+    leaseOwner             String?
+    leaseToken             String?
+    leaseExpiresAt         DateTime?
+    nextAttemptAt          DateTime?
+    errorCode              String?
+    errorMessage           String?
+    createdAt              DateTime  @default(now())
+    updatedAt              DateTime  @updatedAt
+    run                    Run?      @relation(fields: [runId], references: [id], onDelete: Cascade)
+    step                   Step?     @relation(fields: [stepId], references: [id], onDelete: Cascade)
+    workflowRun            WorkflowRun? @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+    completion             WorkflowCompletion?
 
     @@index([status, nextAttemptAt])
+    @@index([workflowRunId, status])
+    @@index([workflowRunId, workflowKernelRevision])
 }
 
 model WorkerHeartbeat {
@@ -106,24 +115,32 @@ model WorkerHeartbeat {
 }
 
 model DomainEvent {
-    sequence       Int       @id @default(autoincrement())
-    eventId        String    @unique
-    type           String
-    version        String
-    payloadJson    String
-    occurredAt     DateTime  @default(now())
-    aggregateType  String?
-    aggregateId    String?
-    runId          String?
-    run            Run?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+    sequence        Int       @id @default(autoincrement())
+    eventId         String    @unique
+    type            String
+    version         String
+    payloadJson     String
+    occurredAt      DateTime  @default(now())
+    aggregateType   String?
+    aggregateId     String?
+    runId           String?
+    workflowRunId   String?
+    idempotencyKey  String?
+    run             Run?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+    workflowRun     WorkflowRun? @relation("WorkflowRunEvents", fields: [workflowRunId], references: [id], onDelete: SetNull)
 
     @@index([occurredAt])
+    @@index([workflowRunId, occurredAt])
+    @@unique([workflowRunId, idempotencyKey])
 }
 
 model Observation {
     id                String         @id @default(cuid())
     sourceInstanceId  String
     runId             String?
+    workflowRunId     String?
+    ingestCommandId   String?        @unique
+    ingestResultJson  String?
     entryId           String?
     externalId        String?
     externalKey       String
@@ -137,19 +154,22 @@ model Observation {
     contentText       String?
     contentFingerprint String?
     contentKind       String          @default("article")
-    publisherJson     String?
-    metricsJson       String?
+    publisherJson      String?
+    metricsJson        String?
     publishedAtJson   String?
     updatedAtJson     String?
     sourcePublishedAt DateTime?
-    capturedAt        DateTime       @default(now())
-    sourceInstance    SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
-    run               Run?           @relation(fields: [runId], references: [id], onDelete: SetNull)
-    entry             Entry?         @relation(fields: [entryId], references: [id], onDelete: SetNull)
+    capturedAt        DateTime        @default(now())
+    sourceInstance    SourceInstance  @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+    run               Run?            @relation(fields: [runId], references: [id], onDelete: SetNull)
+    workflowRun       WorkflowRun?    @relation("WorkflowRunObservations", fields: [workflowRunId], references: [id], onDelete: SetNull)
+    entry             Entry?          @relation(fields: [entryId], references: [id], onDelete: SetNull)
 
     @@unique([sourceInstanceId, runId, externalKey])
     @@index([sourceInstanceId, externalKey, capturedAt])
+    @@index([workflowRunId, capturedAt])
 }
+
 
 model Entry {
     id                  String         @id @default(cuid())
@@ -229,16 +249,55 @@ model StoryRevision {
 }
 
 model WorkflowRun {
-    id              String   @id
-    stateJson       String
-    kernelRevision  Int      @default(0)
-    status          String
-    resumeRequired  Boolean  @default(false)
-    definitionKey   String
-    definitionVersion String
-    manifestHash    String
-    createdAt       DateTime
-    updatedAt       DateTime @updatedAt
+    id                 String                @id
+    stateJson          String
+    kernelRevision     Int                   @default(0)
+    status             String
+    resumeRequired     Boolean               @default(false)
+    definitionKey      String
+    definitionVersion  String
+    manifestHash       String
+    idempotencyKey     String?               @unique
+    inputSnapshotJson  String                @default("{}")
+    productRunJson     String                @default("{}")
+    runLeaseOwner      String?
+    runLeaseToken      String?
+    runLeaseExpiresAt  DateTime?
+    startedAt          DateTime?
+    finishedAt         DateTime?
+    createdAt          DateTime
+    updatedAt          DateTime
+    checkpoints        Checkpoint[]
+    workflowObservations Observation[] @relation("WorkflowRunObservations")
+    jobs               Job[]
+    completions        WorkflowCompletion[]
+    events             DomainEvent[]         @relation("WorkflowRunEvents")
 
     @@index([status, updatedAt])
+}
+
+model WorkflowCompletion {
+    id             String      @id
+    workflowRunId  String
+    jobId          String      @unique
+    activityKey    String
+    receipt        String      @unique
+    reference      String
+    fingerprint    String
+    completionJson String
+    status         String
+    attempts       Int         @default(0)
+    maxAttempts    Int         @default(5)
+    availableAt    DateTime
+    leaseOwner     String?
+    leaseToken     String?
+    leaseExpiresAt DateTime?
+    lastError      String?
+    createdAt      DateTime    @default(now())
+    updatedAt      DateTime    @updatedAt
+    workflowRun    WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+    job            Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+    @@index([status, availableAt])
+    @@index([workflowRunId])
 }

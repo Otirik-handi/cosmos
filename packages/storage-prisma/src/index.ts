@@ -21,10 +21,12 @@ import {
     type SearchPage,
     type SearchQuery,
     type RevisionDetail,
+    type IngestTriggerKind,
+    type SourceCheckpointOutput,
+    type Publisher,
     type SourceSnapshot,
     type StoryDetail,
     type TemporalValue,
-    type Publisher,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
@@ -35,10 +37,12 @@ import {
 } from "@cosmos/domain";
 import type {
     CosmosRepository,
+    HostActionExecutionFence,
     JobLease,
     LoggerPort,
     PersistIngestItemResult,
     RepositoryHealth,
+    WorkflowAttemptSnapshot,
 } from "@cosmos/application";
 import { FileBlobStore } from "@cosmos/blob-store";
 import {
@@ -422,6 +426,31 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return job ? this.toJobSnapshot(job) : null;
     }
 
+    async listWorkflowAttempts(jobId: string): Promise<readonly WorkflowAttemptSnapshot[]> {
+        const normalizedJobId = jobId.trim();
+        if (!normalizedJobId) return [];
+        const events = await this.prisma.domainEvent.findMany({
+            where: {
+                aggregateType: "WorkflowActivityJob",
+                aggregateId: normalizedJobId,
+            },
+            orderBy: { sequence: "asc" },
+            take: 1_000,
+        });
+        return projectWorkflowAttempts(normalizedJobId, events);
+    }
+
+    async getWorkflowAttempt(attemptId: string): Promise<WorkflowAttemptSnapshot | null> {
+        const marker = ":attempt:";
+        const markerIndex = attemptId.lastIndexOf(marker);
+        if (markerIndex <= 0) return null;
+        const jobId = attemptId.slice(0, markerIndex);
+        const number = Number.parseInt(attemptId.slice(markerIndex + marker.length), 10);
+        if (!Number.isSafeInteger(number) || number <= 0) return null;
+        const attempt = (await this.listWorkflowAttempts(jobId)).find((item) => item.number === number);
+        return attempt ?? null;
+    }
+
     async getCheckpoint(sourceId: string): Promise<string | null> {
         const checkpoint = await this.prisma.checkpoint.findUnique({
             where: { sourceInstanceId: sourceId },
@@ -429,15 +458,33 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return checkpoint?.cursor ?? null;
     }
 
+    async getCheckpointSnapshot(sourceId: string): Promise<{
+        cursor: string | null;
+        revision: number;
+    }> {
+        const checkpoint = await this.prisma.checkpoint.findUnique({
+            where: { sourceInstanceId: sourceId },
+        });
+        return {
+            cursor: checkpoint?.cursor ?? null,
+            revision: checkpoint?.revision ?? 0,
+        };
+    }
+
     async claimNextJob(input: {
         owner: string;
         leaseMs: number;
+        acceptedKinds: readonly string[];
     }) {
+        if (input.acceptedKinds.length === 0) {
+            return null;
+        }
         const now = new Date();
         try {
             return await this.prisma.$transaction(async (tx) => {
             const candidate = await tx.job.findFirst({
                 where: {
+                    kind: { in: [...input.acceptedKinds] },
                     OR: [
                         {
                             status: { in: ["queued", "retry_wait"] },
@@ -710,6 +757,25 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return this.toRunSnapshot(run);
     }
 
+    async persistWorkflowIngestItem(input: {
+        sourceId: string;
+        workflowRunId: string;
+        triggerKind: IngestTriggerKind;
+        item: NormalizedIngestItem;
+        fence: HostActionExecutionFence;
+        idempotencyKey: string;
+    }): Promise<PersistIngestItemResult> {
+        return this.persistIngestItemInternal({
+            sourceId: input.sourceId,
+            runId: null,
+            workflowRunId: input.workflowRunId,
+            triggerKind: input.triggerKind,
+            item: input.item,
+            fence: input.fence,
+            ingestCommandId: input.idempotencyKey,
+        });
+    }
+
     async persistIngestItem(input: {
         sourceId: string;
         runId: string;
@@ -739,7 +805,11 @@ export class PrismaCosmosRepository implements CosmosRepository {
 
     private async persistIngestItemInternal(input: {
         sourceId: string;
-        runId: string;
+        runId: string | null;
+        workflowRunId?: string;
+        triggerKind?: IngestTriggerKind;
+        fence?: HostActionExecutionFence;
+        ingestCommandId?: string;
         item: NormalizedIngestItem;
     }): Promise<PersistIngestItemResult> {
         const externalKey = deriveExternalKey(input.item);
@@ -816,13 +886,31 @@ export class PrismaCosmosRepository implements CosmosRepository {
         }));
 
         return this.prisma.$transaction(async (tx) => {
-            const existingObservation = await tx.observation.findFirst({
-                where: {
-                    sourceInstanceId: input.sourceId,
-                    runId: input.runId,
-                    externalKey,
-                },
-            });
+            if (input.fence && input.workflowRunId) {
+                await assertWorkflowActionFence(tx, input.fence, input.workflowRunId);
+            }
+            const existingByCommand = input.ingestCommandId
+                ? await tx.observation.findUnique({
+                    where: { ingestCommandId: input.ingestCommandId },
+                })
+                : null;
+            if (existingByCommand) {
+                const savedResult = parseJson<PersistIngestItemResult>(existingByCommand.ingestResultJson);
+                return savedResult ?? {
+                    createdEntry: false,
+                    revisedEntry: false,
+                    duplicateObservation: true,
+                };
+            }
+            const existingObservation = input.runId === null
+                ? null
+                : await tx.observation.findFirst({
+                    where: {
+                        sourceInstanceId: input.sourceId,
+                        runId: input.runId,
+                        externalKey,
+                    },
+                });
             if (existingObservation) {
                 return {
                     createdEntry: false,
@@ -846,14 +934,17 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 data: {
                     sourceInstanceId: input.sourceId,
                     runId: input.runId,
+                    workflowRunId: input.workflowRunId ?? null,
+                    ingestCommandId: input.ingestCommandId ?? null,
+                    ingestResultJson: null,
                     entryId: existingEntry?.id,
                     externalId: input.item.externalId ?? null,
-                    externalKey,
+                    externalKey: externalKey,
                     externalRevision: contentFingerprint,
                     eventKind: existingEntry ? "update" : "create",
                     sourceLocatorJson: JSON.stringify(input.item.sourceLocator),
                     discoveryContextJson: JSON.stringify({
-                        kind: "manual",
+                        kind: input.triggerKind ?? "manual",
                     }),
                     webUrl: input.item.webUrl,
                     payloadBlobKey: rawPayload.key,
@@ -903,13 +994,15 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         data: { metricsJson },
                     });
                 }
-                await tx.run.update({
-                    where: { id: input.runId },
-                    data: {
-                        itemCount: { increment: 1 },
-                        duplicateObservationCount: { increment: 1 },
-                    },
-                });
+                if (input.runId) {
+                    await tx.run.update({
+                        where: { id: input.runId },
+                        data: {
+                            itemCount: { increment: 1 },
+                            duplicateObservationCount: { increment: 1 },
+                        },
+                    });
+                }
                 return {
                     createdEntry: false,
                     revisedEntry: false,
@@ -1028,6 +1121,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     aggregateType: "Entry",
                     aggregateId: entry.id,
                     runId: input.runId,
+                    workflowRunId: input.workflowRunId ?? null,
                 },
             });
             await appendDomainEvent(tx, {
@@ -1035,29 +1129,140 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 aggregateType: "Feed",
                 aggregateId: storyId,
                 runId: input.runId,
+                workflowRunId: input.workflowRunId,
                 payload: {
                     storyId,
                     entryId: entry.id,
                     revisionId: revision.id,
                 },
             });
-            await tx.run.update({
-                where: { id: input.runId },
-                data: {
-                    itemCount: { increment: 1 },
-                    createdEntryCount: existingEntry
-                        ? undefined
-                        : { increment: 1 },
-                    revisedEntryCount: existingEntry
-                        ? { increment: 1 }
-                        : undefined,
-                },
-            });
-
-            return {
+            const result: PersistIngestItemResult = {
                 createdEntry: !existingEntry,
                 revisedEntry: Boolean(existingEntry),
                 duplicateObservation: false,
+            };
+            if (input.ingestCommandId) {
+                await tx.observation.update({
+                    where: { id: observation.id },
+                    data: { ingestResultJson: JSON.stringify(result) },
+                });
+            }
+            if (input.runId) {
+                await tx.run.update({
+                    where: { id: input.runId },
+                    data: {
+                        itemCount: { increment: 1 },
+                        createdEntryCount: existingEntry
+                            ? undefined
+                            : { increment: 1 },
+                        revisedEntryCount: existingEntry
+                            ? { increment: 1 }
+                            : undefined,
+                    },
+                });
+            }
+            return result;
+        });
+    }
+
+    async setWorkflowIngestCheckpoint(input: {
+        sourceId: string;
+        workflowRunId: string;
+        cursor: string | null;
+        expectedRevision: number;
+        itemCount: number;
+        fence: HostActionExecutionFence;
+        idempotencyKey: string;
+    }): Promise<SourceCheckpointOutput> {
+        return this.prisma.$transaction(async (tx) => {
+            await assertWorkflowActionFence(tx, input.fence, input.workflowRunId);
+            const existingEvent = await tx.domainEvent.findFirst({
+                where: {
+                    workflowRunId: input.workflowRunId,
+                    idempotencyKey: input.idempotencyKey,
+                },
+            });
+            if (existingEvent) {
+                const payload = parseJson<{ sourceId?: string; cursor?: string | null; revision?: number; committed?: boolean }>(existingEvent.payloadJson);
+                if (payload?.sourceId !== input.sourceId) {
+                    throw new Error("Checkpoint idempotency key conflicts with another source.");
+                }
+                return {
+                    sourceId: input.sourceId,
+                    cursor: payload.cursor ?? null,
+                    revision: payload.revision ?? input.expectedRevision,
+                    committed: payload.committed === true,
+                };
+            }
+            const checkpoint = await tx.checkpoint.findUnique({
+                where: { sourceInstanceId: input.sourceId },
+            });
+            const currentRevision = checkpoint?.revision ?? 0;
+            const currentCursor = checkpoint?.cursor ?? null;
+            if (currentRevision !== input.expectedRevision) {
+                await appendDomainEvent(tx, {
+                    type: "source.checkpoint.superseded.v1",
+                    workflowRunId: input.workflowRunId,
+                    idempotencyKey: input.idempotencyKey,
+                    payload: {
+                        sourceId: input.sourceId,
+                        cursor: currentCursor,
+                        revision: currentRevision,
+                        committed: false,
+                    },
+                });
+                return {
+                    sourceId: input.sourceId,
+                    cursor: currentCursor,
+                    revision: currentRevision,
+                    committed: false,
+                };
+            }
+            const nextRevision = currentRevision + 1;
+            if (checkpoint) {
+                const updated = await tx.checkpoint.updateMany({
+                    where: {
+                        sourceInstanceId: input.sourceId,
+                        revision: input.expectedRevision,
+                    },
+                    data: {
+                        cursor: input.cursor,
+                        revision: nextRevision,
+                        workflowRunId: input.workflowRunId,
+                    },
+                });
+                if (updated.count !== 1) {
+                    throw new Error("Checkpoint revision CAS lost.");
+                }
+            } else if (input.expectedRevision !== 0) {
+                throw new Error("Checkpoint revision CAS expected a missing revision 0 row.");
+            } else {
+                await tx.checkpoint.create({
+                    data: {
+                        sourceInstanceId: input.sourceId,
+                        cursor: input.cursor,
+                        revision: nextRevision,
+                        workflowRunId: input.workflowRunId,
+                    },
+                });
+            }
+            await appendDomainEvent(tx, {
+                type: "source.checkpoint.committed.v1",
+                workflowRunId: input.workflowRunId,
+                idempotencyKey: input.idempotencyKey,
+                payload: {
+                    sourceId: input.sourceId,
+                    cursor: input.cursor,
+                    revision: nextRevision,
+                    itemCount: input.itemCount,
+                    committed: true,
+                },
+            });
+            return {
+                sourceId: input.sourceId,
+                cursor: input.cursor,
+                revision: nextRevision,
+                committed: true,
             };
         });
     }
@@ -1774,8 +1979,103 @@ export class PrismaCosmosRepository implements CosmosRepository {
         };
     }
 }
+function projectWorkflowAttempts(
+    jobId: string,
+    events: readonly {
+        type: string;
+        payloadJson: string;
+        occurredAt: Date;
+    }[],
+): readonly WorkflowAttemptSnapshot[] {
+    const attempts = new Map<number, WorkflowAttemptSnapshot>();
+    for (const event of events) {
+        const prefix = "workflow.activity.";
+        const suffix = ".v1";
+        if (!event.type.startsWith(prefix) || !event.type.endsWith(suffix)) continue;
+        const status = event.type.slice(prefix.length, -suffix.length);
+        const payload = parseJson<{
+            attempt?: unknown;
+            owner?: unknown;
+            leaseExpiresAt?: unknown;
+            error?: unknown;
+        }>(event.payloadJson);
+        const number = payload?.attempt;
+        if (!Number.isSafeInteger(number) || (number as number) <= 0) continue;
+        const attemptNumber = number as number;
+        const occurredAt = event.occurredAt.toISOString();
+        const owner = typeof payload?.owner === "string" && payload.owner.length > 0
+            ? payload.owner
+            : "unknown";
+        const leaseExpiresAt = typeof payload?.leaseExpiresAt === "string"
+            ? payload.leaseExpiresAt
+            : occurredAt;
+        let projection = attempts.get(attemptNumber);
+        if (!projection) {
+            projection = {
+                id: `${jobId}:attempt:${attemptNumber}`,
+                jobId,
+                number: attemptNumber,
+                workerId: owner,
+                workerInstanceId: owner,
+                ownerEpoch: 0,
+                ownerSessionId: null,
+                status: "leased",
+                leaseAcquiredAt: occurredAt,
+                leaseExpiresAt,
+                lastHeartbeatAt: null,
+                finishedAt: null,
+                error: null,
+            };
+            attempts.set(attemptNumber, projection);
+        }
+        if (status === "leased") {
+            projection.status = "leased";
+            projection.workerId = owner;
+            projection.workerInstanceId = owner;
+            projection.leaseExpiresAt = leaseExpiresAt;
+            projection.leaseAcquiredAt = occurredAt;
+            projection.finishedAt = null;
+        } else {
+            projection.status = status === "succeeded"
+                ? "succeeded"
+                : status === "cancelled"
+                    ? "cancelled"
+                    : status === "released"
+                        ? "lease_lost"
+                        : "failed";
+            projection.finishedAt = occurredAt;
+            const error = typeof payload?.error === "string" ? payload.error : null;
+            projection.error = error === null
+                ? projection.error
+                : {
+                    kind: status === "retry_wait"
+                        ? "retryable"
+                        : status === "cancelled"
+                            ? "aborted"
+                            : status === "released"
+                                ? "unknown"
+                                : "terminal",
+                    code: null,
+                    message: error,
+                    retryable: status === "retry_wait",
+                    occurredAt,
+                    detailsRef: null,
+                };
+        }
+    }
+    return [...attempts.values()].sort((left, right) => left.number - right.number);
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+    return typeof error === "object"
+        && error !== null
+        && "code" in error
+        && error.code === "P2002";
+}
 
 export { PrismaWorkflowBackend } from "./workflow-backend.js";
+export { PrismaWorkflowHostStore } from "./workflow-host-store.js";
+export { PrismaWorkflowEventSink } from "./workflow-event-sink.js";
 
 async function assertJobLease(
     tx: Prisma.TransactionClient,
@@ -1794,6 +2094,56 @@ async function assertJobLease(
         throw new Error("Job lease lost.");
     }
 }
+async function assertWorkflowActionFence(
+    tx: Prisma.TransactionClient,
+    fence: HostActionExecutionFence,
+    workflowRunId: string,
+): Promise<void> {
+    if (fence.workflowRunId !== workflowRunId) {
+        throw new Error("Workflow action fence Run identity mismatch.");
+    }
+    const now = new Date();
+    const run = await tx.workflowRun.findFirst({
+        where: {
+            id: workflowRunId,
+            runLeaseToken: fence.runLeaseToken,
+            runLeaseExpiresAt: { gt: now },
+            status: { notIn: ["completed", "failed", "cancelled"] },
+        },
+    });
+    if (!run || run.kernelRevision !== fence.kernelRevision) {
+        throw new Error("Workflow Run fence lost or Kernel revision changed.");
+    }
+    const job = await tx.job.findFirst({
+        where: {
+            id: fence.jobId,
+            workflowRunId,
+            kind: "workflow-activity",
+            status: "leased",
+            attempts: fence.attempt,
+            leaseToken: fence.jobLeaseToken,
+            leaseExpiresAt: { gt: now },
+        },
+    });
+    if (!job) {
+        throw new Error("Workflow Activity Job fence lost.");
+    }
+    const payload = parseJson<Record<string, unknown>>(job.payloadJson);
+    const activity = payload?.activity;
+    const activityRecord = typeof activity === "object"
+        && activity !== null
+        && !Array.isArray(activity)
+        ? activity as Record<string, unknown>
+        : null;
+    if (!activityRecord
+        || activityRecord.key !== fence.activity.key
+        || activityRecord.path !== fence.activity.path
+        || activityRecord.seq !== fence.activity.seq
+        || activityRecord.kind !== fence.activity.kind
+        || activityRecord.fingerprint !== fence.activity.fingerprint) {
+        throw new Error("Workflow Activity identity changed under fence.");
+    }
+}
 
 async function appendDomainEvent(
     tx: Prisma.TransactionClient,
@@ -1802,20 +2152,61 @@ async function appendDomainEvent(
         aggregateType?: string;
         aggregateId?: string;
         runId?: string | null;
+        workflowRunId?: string | null;
+        idempotencyKey?: string | null;
         payload: unknown;
     },
 ): Promise<void> {
-    await tx.domainEvent.create({
-        data: {
-            eventId: randomUUID(),
-            type: input.type,
-            version: "v1",
-            payloadJson: JSON.stringify(input.payload),
-            aggregateType: input.aggregateType,
-            aggregateId: input.aggregateId,
-            runId: input.runId ?? null,
-        },
-    });
+    const data = {
+        eventId: randomUUID(),
+        type: input.type,
+        version: "v1",
+        payloadJson: JSON.stringify(input.payload),
+        aggregateType: input.aggregateType,
+        aggregateId: input.aggregateId,
+        runId: input.runId ?? null,
+        workflowRunId: input.workflowRunId ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
+    };
+    if (input.workflowRunId && input.idempotencyKey) {
+        const existing = await tx.domainEvent.findFirst({
+            where: {
+                workflowRunId: input.workflowRunId,
+                idempotencyKey: input.idempotencyKey,
+            },
+        });
+        if (existing) {
+            if (
+                existing.type !== data.type
+                || existing.version !== data.version
+                || existing.payloadJson !== data.payloadJson
+            ) {
+                throw new Error(`Workflow domain event ${input.idempotencyKey} conflicts with existing payload.`);
+            }
+            return;
+        }
+    }
+    try {
+        await tx.domainEvent.create({ data });
+    } catch (error) {
+        if (!isUniqueConstraintError(error) || !input.workflowRunId || !input.idempotencyKey) {
+            throw error;
+        }
+        const winner = await tx.domainEvent.findFirst({
+            where: {
+                workflowRunId: input.workflowRunId,
+                idempotencyKey: input.idempotencyKey,
+            },
+        });
+        if (!winner) throw error;
+        if (
+            winner.type !== data.type
+            || winner.version !== data.version
+            || winner.payloadJson !== data.payloadJson
+        ) {
+            throw new Error(`Workflow domain event ${input.idempotencyKey} conflicts with existing payload.`);
+        }
+    }
 }
 
 function parseJson<T>(value: string | null): T | null {

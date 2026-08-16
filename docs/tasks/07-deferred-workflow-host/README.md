@@ -1,8 +1,10 @@
 # Task 07：Deferred Workflow、Cosmos Host 与本地 Worker 收敛
-> 状态：Cosmos Host PR A 本地实现已完成并通过 focused 门禁；Activity Host、固定 Ingest parity 和后续 Product/Worker Admin 阶段尚未开始。
+> 状态：PR A（Prisma Backend/Blob ValueStore）已 squash 合并到 `origin/master@b678fb5`；PR B Activity Host 仍仅存在于 `feat/t07-activity-host` 的 dirty、未提交、未 merge worktree，不视为已完成。
 >
-> 日期：2026-08-13
->
+> 当前日期：2026-08-16。当前 dirty worktree 的 focused/full、typecheck、build、Prisma
+> generate/validate、fencing 以及最终 Node durable smoke PASS 证据已记录，但 Docker/browser/
+> 真实来源及完整 Task 07 门禁仍未完成；不得把本段证据写成生产完成或 Task 07 完成。
+
 > 本 Task 是实现阶段的总指挥文档。后续由一个 leader agent 按本文件协调多个
 > 子代理；子代理不能自行扩大范围、改变架构决定或直接合并彼此的工作。
 
@@ -46,7 +48,7 @@ Durable Host、固定 Ingest parity 和 Worker Admin API。
 当前共享基线为：
 
 ```text
-master = origin/master = 61ed21e
+master = origin/master = b678fb5
 ```
 
 `master` 已经有：
@@ -56,27 +58,108 @@ master = origin/master = 61ed21e
 - Observation、Entry、Revision、Asset、最小 Story、FTS5/BM25；
 - Feed、Search、Story/Entry/Revision 查询、SSE 和运行日志。
 
+PR A 已合并到上述基线，包含 `PrismaWorkflowBackend`、`BlobWorkflowValueStore`、
+forward-only migration `20260813160000_workflow_run_backend` 及
+`@notnotype/nb-workflow@0.2.0` 的稳定依赖接入。该合并只覆盖 Backend/ValueStore，
+不等于 Activity Host、固定 Ingest parity、Product API 或 Worker Admin 已进入共享基线。
+
 当前 Worker 的准确定位是：
 
-> 已有固定 Ingest Worker 进程，但还没有实现文档中 Draft 的 Worker Admin HTTP API。
+> 共享基线仍有固定 Ingest Worker；`feat/t07-activity-host` dirty worktree 已实现 direct mode 的独立 loopback Worker Admin，当前有 focused Admin 证据，最终 Node HTTP/durable smoke 也已 PASS，但尚未 commit/merge，不视为已完成。
 
-当前没有：
+当前 dirty worktree 已有、但尚未形成共享基线的能力：
 
-- 基于已发布 `nb-workflow` 的 Cosmos Durable Host；
-- Activity 级 Job 与 Deferred Activity 恢复；
-- Worker Admin `/healthz`、`/readyz`、status、capability、drain API；
-- manifest-only Product API；
-- Worker Gateway 或远程 Worker。
+- Activity Host、Activity Job/Attempt/Lease 和 durable Ingest fixture vertical smoke；
+- API manifest-only catalog/control 路径、workflow run 查询和健康探针；
+- Worker Admin `/healthz`、`/readyz`、status、capability、metrics、drain API。
 
-### 2.2 开放 PR
+仍未完成或未完整验证的能力：
 
-当前 GitHub 有两个开放 PR：
+- 完整固定 Ingest parity、跨进程恢复、双 Worker takeover 和中断/修订/多媒体矩阵；
+- Product API 与真实 Worker 不可用、Node/browser/Docker 的分开验收；
+- Worker Gateway、远程 Worker、Redis 和多主机运行。
 
-- PR #5：ActionDefinition、ActionRegistry、Connector Action Adapter；
-- PR #6：OpenCLI 执行器抽成独立插件。
+PR B 的当前实现只存在于 dirty worktree：
 
-两者目前显示无冲突，但没有 CI 检查记录。它们在干净集成 worktree 中重新通过
-本地门禁前，不视为已验收。
+- worktree：`.worktree/t07-activity-host`，分支 `feat/t07-activity-host`；
+- 基线：`b678fb5`；当前包含 dirty WIP，未提交、未创建/合并 PR，相关门禁尚未完整
+  运行；
+- 该 worktree 及其实现只能作为待审查输入，不得写成 Activity Host 已完成或已验证。
+
+### 2.1.1 2026-08-16 当前 dirty worktree 验证记录
+
+以下是 `.worktree/t07-activity-host` 当前实现的最新证据，不改写后文保留的历史
+Round；实现仍 dirty、未提交、未 merge，不能作为共享基线或 Task 07 完成证明。
+
+```text
+bunx vitest run packages/application/src/workflow-ingest.test.ts packages/application/src/workflow-host-runtime.test.ts apps/api/src/app.controller.test.ts packages/storage-prisma/src/workflow-host-store.test.ts
+  4 test files / 47 tests passed / 0 failed (contract regression)
+
+bunx vitest run
+  23 test files / 165 tests passed / 0 failed
+
+bun run typecheck       -> passed
+bun run build           -> passed
+bun run db:generate     -> passed
+bun run db:validate     -> passed
+git diff --check         -> passed
+```
+
+Storage focused tests cover fresh migration, pre-host migration upgrade while retaining old
+WorkflowRun/old data, and two-client lease/completion fencing. The terminal-Run late Activity
+completion test now reuses one isolated Prisma store/client across its `completed` and
+`cancelled` cases and uses a 30-second timeout, avoiding a second Windows migration/client/root
+startup; this is a test-runtime fix, not a production completion claim.
+
+The Worker process defaults the durable Host to enabled; setting
+`COSMOS_WORKFLOW_HOST_ENABLED=false` is the only disable switch. `scripts/dev.ts`/
+`scripts/dev-env.ts`, `scripts/smoke-node.ps1`, and `docker/compose.yml` also set the explicit
+`true` value. This keeps API enqueue and Worker execution on the same default path. Worker Admin
+`activePollCount` counts polls from `beginPoll` until `endPoll`; active Attempt fields count only
+runtime Attempts explicitly registered with a real identity. The current `apps/worker` `pollOnce`
+interface does not expose a safe Attempt identity, so the implementation must not invent Attempt
+IDs or claim that an active poll is an active Attempt. Drain stops new polls, waits for active polls
+plus explicitly registered Attempts, and on deadline keeps `timed_out`/`resourcesClosed=false` with
+the remaining poll/Attempt counts.
+
+Node durable smoke 最终 PASS。命令在目标 worktree 的 cwd 执行：
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\Users\notnotype\Documents\CodeRepository\GithubProjects\cosmos\.worktree\t07-activity-host\scripts\smoke-node.ps1'"
+cwd=C:/Users/notnotype/Documents/CodeRepository/GithubProjects/cosmos/.worktree/t07-activity-host
+exitCode=0 wallTime=7.04s
+fresh db:migrate: 6 migrations applied
+  20260808003247_phase1_foundation
+  20260808150000_collector_jobs
+  20260810020829_normalized_content_model
+  20260813160000_workflow_run_backend
+  20260814090000_workflow_activity_host
+  20260815090000_workflow_ingest
+healthWorker=ready queuedStatus=queued durableRunStatus=succeeded durableRunSourceId=<source>
+feedItems=3 searchItems=1 storyTitle=Fixture media metadata
+sseHasRunEvent=true sseHasFeedEvent=true
+apiStructuredRecords=21 workerStructuredRecords=33 durableLaneCompletedRecords=1
+requestIdBridgedToDurableRun=1 requestIdBridgedToProbe=1 probeWorkerRecords=6
+notFoundStatus=404 validationStatus=400
+```
+
+终端 JSON 成功输出表示 log redaction/serialized `undefined` 断言通过。新的持久化
+`run.queued.v1` event 由当前 build 后的 dist 经 SSE 回放；此前缺 event 是 stale dist 的
+历史失败/已修复产物问题，不能写成当前代码失败。Docker CLI 不可用，Docker/browser/e2e
+未验证，真实 RSS/Bilibili/OpenCLI 未运行。
+
+### 2.2 PR #5/#6 保护区与重建边界
+
+PR #5 和 PR #6 都基于落后于当前 `b678fb5` 的旧提交，不能直接合并：
+
+- PR #5：ActionDefinition、ActionRegistry、Connector Action Adapter；只读审计来源
+  `96e27fd`。其旧的未版本化 Action 合同已与当前基线分叉，只能在当前基线上重建并
+  重新通过门禁；
+- PR #6：OpenCLI 执行器抽成独立插件；只读审计来源 `498018e`。它不是本四阶段的
+  前置依赖，保留为保护区和后续重建参考。
+
+两者的有用行为可按当前合同重建，但不把旧 diff、旧 base 或未重新验证的实现当作
+已验收能力。
 
 ### 2.3 Cosmos Spike
 
@@ -122,20 +205,13 @@ Registry package = @notnotype/nb-workflow@0.2.0
 | 真实 tarball | `bun run verify:package` 输出 `NODE_PACKAGE_SMOKE_OK`、`TARBALL_DECLARATION_CONSUMER_OK`、`ISOLATED_PACKAGE_SMOKE_OK` | 验证 Node/TypeScript 包边界和 Deferred 行为，不验证 Cosmos |
 | npm Registry consumer | `@notnotype/nb-workflow@0.2.0` 已可安装；`REGISTRY_CONSUMER_OK version=0.2.0 exports=6`、`BUN_REGISTRY_IMPORT_OK function function`、TypeScript tsc passed | 证明公开包可被 Node/Bun/TypeScript consumer 使用，不证明 durable host |
 
-因此，Phase 1 的本地行为、package 和 Registry consumer 门禁已通过；进入 Cosmos Phase 2 仍缺真实 Durable Host consumer 与已授权的 Cosmos 实施。
+Phase 1 的 nb-workflow 行为、package 和 Registry consumer 门禁已通过；Task 06 的
+稳定阻塞已解除，Cosmos Backend/Host 收敛由本 Task 承接。该结果仍不证明 Cosmos
+durable host、跨进程 waiting 恢复、Activity Host、固定 Ingest parity、Product API
+或 Worker Admin。
 
-当前公开的 `ActivityExecutor` 是等待结果的宿主端口，尚未完整表达：
-
-```text
-Activity 创建外部 Job
-→ Workflow 进入 waiting
-→ Job 由另一个 Worker 执行
-→ Job 完成后恢复同一个 Activity
-```
-
-因此本 Task 先在 `nb-workflow` 独立任务中增加并验证 Deferred Activity 语义，再开始 Cosmos Host 实现。Deferred Activity 的具体 symbol 名称和最终 payload 形状不在本文件提前冻结。
-
-`nb-workflow` 主工作区当前存在用户未提交修改，至少涉及 `src/index.ts`、`src/ports.ts`、`src/runner.ts`、`src/types.ts` 和测试文件。正式实施前必须重新审计；本 Task 不授权任何代理直接修改其 dirty `master`。
+`nb-workflow` dirty master 及其它外部 worktree 继续属于保护区；本 Task 不直接修改
+其 dirty `master`，也不复制 Task 04 Spike 的 Kernel 或 migration。
 
 ## 3. Goal
 
@@ -278,9 +354,12 @@ flowchart LR
 
 1. 从最新 `origin/master` 建立实现分支；
 2. 重新审查 PR #5/#6 的依赖关系和变更边界；
-3. 在干净 worktree 中合并或重建两个 PR；
+3. 不直接合并落后 base 的旧 PR；只在 `b678fb5` 上重建经当前合同验证的有用行为；
 4. 运行 focused/full tests、typecheck、build 和 `git diff --check`；
 5. 保存 master、PR、Spike 和 dirty worktree 的 hash 基线。
+
+状态：PR A/#9 已合并并冻结 `b678fb5`；PR #5/#6 仍是落后基线的保护区来源，需
+重建而非直接合并。Phase 0 的文档基线已收口，不表示后续 Host/API/Admin 门禁已通过。
 
 本阶段不修改任何 T04 Spike worktree，也不开始 Kernel convergence。
 
@@ -293,8 +372,12 @@ flowchart LR
 - 外部 completion 的 idempotency 和 identity 验证；
 - cancel、timeout、late completion 和 failure 传播；
 - Backend conformance、跨进程 load/replay、Node package smoke；
-- 发布一个包含 Deferred Activity 合同的版本，版本号由 nb-workflow Task 在
-  conformance 后决定，计划上的 `0.2.0` 只是候选，不是本 Task 的硬冻结。
+- 发布包含 Deferred Activity 合同的稳定版本；当前版本为
+  `@notnotype/nb-workflow@0.2.0`。
+
+状态：Phase 1 的发布、package 和 Registry consumer 门禁已通过；Task 06 的稳定
+阻塞已解除。该状态不替代 Cosmos durable Backend/Activity Host、固定 Ingest parity、
+Product API 或 Worker Admin 验证。
 
 进入 Phase 2 的门禁：Kernel 能在不依赖 Cosmos/Prisma/domain 类型的情况下表达
 Activity pending、resume、cancel 和 duplicate completion。
@@ -312,12 +395,16 @@ Activity pending、resume、cancel 和 duplicate completion。
 
 不新增第二套 replay、fingerprint、map/all、wait 或 child 语义。
 
+
 持久化策略必须 forward-only：
 
 - 不删除 master 已有 migration；
 - 不复制 Spike 的未合并 migration；
 - fresh DB、master DB upgrade、已有 Workflow 数据读取分别验证；
 - 旧固定 Run/Job 数据需要兼容读取时，增加明确 adapter，不隐式重写历史。
+
+状态：PR A/#9 的 Backend/ValueStore 部分已合并到 `b678fb5`，并不表示 Activity
+Host、Job/Attempt/Lease、completion recovery 或后续 Product/Worker 能力已完成。
 
 ### Phase 3：Activity Job、Attempt、Lease 和 Completion
 
@@ -346,6 +433,11 @@ reference 幂等。Action 已成功时重放只读结果；Job 仍在 queued/lea
 - Workflow Run 当前 pending Activity；
 - Workflow state revision；
 - Run 未取消或已终止。
+
+状态：Phase 3 当前实现仍只有 `feat/t07-activity-host` dirty、未提交、未 merge 的 WIP。其
+focused runtime/storage、full Vitest、typecheck/build、Prisma generate/validate 以及最终
+Node durable smoke 已通过，但这不能声称 Activity Host、完整 durable recovery、双 Worker
+fencing 或 completion 门禁已完成；Docker/browser/真实来源及完整生产验收仍未验证。
 
 旧 Worker、过期 lease 和迟到 completion 不能写：
 
@@ -552,6 +644,21 @@ await wf.callAction("source.fetch@1", input);
 
 只要最终行为满足本节 conformance，具体 public API 可以由 nb-workflow Task 决定。
 
+### 9.4 版本化 Action 与 SQL fencing 候选执行合同
+
+Round 5 冻结以下后续实现候选；它们约束执行侧边界，不伪造当前 dirty WIP 已满足：
+
+- `ActionRef` 固定为 `namespace.operation@positive-integer`；
+- `ActionDefinition` 携带 executable Zod input/output schema，`ActionDescriptor`/
+  `Manifest` 只包含可序列化字段；
+- `executionPlacement` 仅取 `host | trusted_worker | remote_worker`；
+- Host Action 必须同时验证 Workflow Run lease、Activity Job lease 和 SQL revision
+  fencing。lease token 只用于内部事务校验，不进入 Job payload、Kernel state、
+  manifest 或 Product/Admin DTO。
+
+上述是后续实现的候选“执行合同”，不是已合并 API、不是 Activity Host 完成证明；
+`cosmos.ingest@1` parity、Product API manifest-only 和 Worker Admin 仍后置。
+
 ## 10. 验收矩阵
 
 ### 10.1 nb-workflow
@@ -698,12 +805,18 @@ nb-workflow Deferred Activity conformance 通过
 
 ## 14. 下一步
 
-Task 07 创建后，下一动作不是写 Cosmos Runtime，而是由用户指定 leader agent，
-让 leader 完成：
+Task 07 当前的下一步不是把 dirty WIP 写成完成，而是由 leader 按剩余阶段门禁继续：
 
-1. 先在独立 Cosmos implementation worktree 完成 PR A：Prisma/SQLite `WorkflowBackend`、Blob `ValueStore`、forward-only `WorkflowRun` migration 和 Kernel conformance。
-2. PR A 仅在本地完成 `2ba4341`；push、PR、review、merge 仍按仓库规则单独授权。
-3. PR A 之后才进入 Activity Job、Attempt、Lease、staged activation、completion dispatcher、cancel 和 durable recovery。
-4. 固定 `cosmos.ingest@1` parity、Product API manifest-only、Worker Admin、默认路径切换和旧 Runtime 删除仍后置。
+1. 保持 `b678fb5` 与 PR A/#9 合并结果为唯一 Cosmos 共享基线；PR #5/#6 旧 base
+   只能重建，不能直接合并。
+2. 对 `t07-activity-host` 补齐固定 `cosmos.ingest@1` parity：重复/修订/媒体、
+   abort/takeover、Feed/Search/Story 回归、跨进程 recovery 和双 Worker fencing。
+3. 单独验收 Product API 与 Worker 不可用边界、Worker Admin SIGTERM/活跃 Attempt deadline、
+   migration、Node 生产边界、browser/Docker 和真实来源；最终 Node durable smoke 已 PASS，
+   但不能替代这些验收。当前 full Vitest 23 files/165 tests、contract regression 4 files/47 tests、
+   typecheck/build、db generate/validate 和 two-client fencing 证据仍不等于完整门禁。
+4. 所有恢复、parity、生产和只读审查门禁通过后，才决定是否删除旧回滚路径、更新状态文档并进入
+   commit/PR/merge；在此之前保留旧 Ingest 路径作为回滚基线。
 
-本 Task 不把 PR A focused/full/package 证据写成 Cosmos Host 完成；未通过后续阶段门禁前保留旧 Ingest 路径。
+本 Task 不把当前 dirty worktree 的 focused/full/package、Node smoke 证据写成共享基线或
+Task 07 完成；剩余门禁通过前继续保留旧 Ingest 路径。

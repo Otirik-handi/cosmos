@@ -9,6 +9,24 @@
             "bun": "./src/index.ts",
             "import": "./dist/index.js",
             "default": "./dist/index.js"
+        },
+        "./catalog": {
+            "types": "./src/catalog.ts",
+            "bun": "./src/catalog.ts",
+            "import": "./dist/catalog.js",
+            "default": "./dist/catalog.js"
+        },
+        "./workflow-control": {
+            "types": "./src/workflow-control.ts",
+            "bun": "./src/workflow-control.ts",
+            "import": "./dist/workflow-control.js",
+            "default": "./dist/workflow-control.js"
+        },
+        "./workflow-ingest": {
+            "types": "./src/workflow-ingest.ts",
+            "bun": "./src/workflow-ingest.ts",
+            "import": "./dist/workflow-ingest.js",
+            "default": "./dist/workflow-ingest.js"
         }
     },
     "scripts": {
@@ -16,7 +34,9 @@
         "typecheck": "tsc -p tsconfig.json --noEmit"
     },
     "dependencies": {
+        "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",
-        "@cosmos/domain": "workspace:*"
+        "@cosmos/domain": "workspace:*",
+        "zod": "^4.0.0"
     }
 }

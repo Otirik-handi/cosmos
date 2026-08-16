@@ -276,15 +276,18 @@ describe("runtime logging context", () => {
         const rejectedCapture = captureLogger();
         const rejectedRepository = {
             listSources: async () => [],
-            claimNextJob: async () => ({
-                id: "job-1",
-                runId: null,
-                kind: "source-probe",
-                leaseToken: "lease-1",
-                attempts: 1,
-                maxAttempts: 3,
-                payload: { sourceId: "source-1" },
-            }),
+            claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
+                expect(acceptedKinds).toEqual(["source-ingest", "source-probe"]);
+                return {
+                    id: "job-1",
+                    runId: null,
+                    kind: "source-probe",
+                    leaseToken: "lease-1",
+                    attempts: 1,
+                    maxAttempts: 3,
+                    payload: { sourceId: "source-1" },
+                };
+            },
             completeJob: async () => false,
         } as unknown as CosmosRepository;
         const rejectedWorker = new IngestionWorker(
@@ -314,15 +317,18 @@ describe("runtime logging context", () => {
         const failedCapture = captureLogger();
         const failedRepository = {
             listSources: async () => [],
-            claimNextJob: async () => ({
-                id: "job-2",
-                runId: null,
-                kind: "source-probe",
-                leaseToken: "lease-2",
-                attempts: 1,
-                maxAttempts: 3,
-                payload: { sourceId: "source-1" },
-            }),
+            claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
+                expect(acceptedKinds).toEqual(["source-ingest", "source-probe"]);
+                return {
+                    id: "job-2",
+                    runId: null,
+                    kind: "source-probe",
+                    leaseToken: "lease-2",
+                    attempts: 1,
+                    maxAttempts: 3,
+                    payload: { sourceId: "source-1" },
+                };
+            },
             completeJob: async () => {
                 throw new Error("database unavailable");
             },

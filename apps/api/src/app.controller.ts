@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import {
     BadRequestException,
     Bind,
@@ -20,19 +21,32 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { Observable } from "rxjs";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
-import { createHealthSnapshot } from "@cosmos/application";
+import {
+    createHealthSnapshot,
+    type CosmosRepository,
+    type WorkflowEnvelope,
+    type WorkflowHostStore,
+} from "@cosmos/application";
+import type { CatalogPort } from "@cosmos/application/catalog";
+import type { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import {
     createSourceCommandSchema,
     entryListQuerySchema,
     searchQuerySchema,
     updateSourceCommandSchema,
     type HealthResponse,
+    type RunStatus,
+    type SourceSnapshot,
 } from "@cosmos/contracts";
 import type { Logger } from "@cosmos/logging";
-import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
 import { SourceProbeService } from "./source-probe.service.js";
+
+const productRunSchema = z.object({
+    sourceId: z.string().nullable().optional(),
+    triggerKind: z.enum(["manual", "schedule"]).optional(),
+}).passthrough();
 
 function validationError(error: unknown): never {
     if (error instanceof ZodError) {
@@ -49,13 +63,22 @@ function validationError(error: unknown): never {
 @Controller()
 export class AppController {
     constructor(
-        @Inject(PrismaCosmosRepository)
-        private readonly repository: PrismaCosmosRepository,
+        @Inject("COSMOS_PRODUCT_PORT")
+        private readonly repository: CosmosRepository,
         @Inject(SourceProbeService)
         private readonly sourceProbe: SourceProbeService,
         @Optional()
         @Inject("COSMOS_LOGGER")
         private readonly logger?: Logger,
+        @Optional()
+        @Inject("COSMOS_WORKFLOW_CONTROL")
+        private readonly workflowControl?: IngestWorkflowControlService,
+        @Optional()
+        @Inject("COSMOS_WORKFLOW_STORE")
+        private readonly workflowStore?: WorkflowHostStore,
+        @Optional()
+        @Inject("COSMOS_CATALOG")
+        private readonly catalog?: CatalogPort,
     ) {}
 
     @Get("health")
@@ -72,9 +95,71 @@ export class AppController {
         return this.sourceProbe.list();
     }
 
+
+    @Get("source-definitions")
+    sourceDefinitions() {
+        return catalogPage(this.catalog?.listSourceDefinitions() ?? []);
+    }
+
+    @Get("source-definitions/:id")
+    @Bind(Param("id"))
+    sourceDefinition(id: string) {
+        const result = this.catalog?.getSourceDefinition(id);
+        if (!result) throw new NotFoundException({ code: "not_found", message: `Source definition not found: ${id}`, retryable: false });
+        return result;
+    }
+
+    @Get("workflow-definitions")
+    workflowDefinitions() {
+        return catalogPage(this.catalog?.listWorkflowDefinitions() ?? []);
+    }
+
+    @Get("workflow-definitions/:id/versions/:version")
+    @Bind(Param("id"), Param("version"))
+    workflowDefinition(id: string, version: string) {
+        const parsedVersion = parsePositiveInteger(version);
+        const result = this.catalog?.getWorkflowDefinition(id, parsedVersion);
+        if (!result) throw new NotFoundException({ code: "not_found", message: `Workflow definition not found: ${id}@${version}`, retryable: false });
+        return result;
+    }
+
+    @Get("action-definitions")
+    actionDefinitions() {
+        return catalogPage(this.catalog?.listActionDefinitions() ?? []);
+    }
+
+    @Get("action-definitions/:id/versions/:version")
+    @Bind(Param("id"), Param("version"))
+    actionDefinition(id: string, version: string) {
+        const parsedVersion = parsePositiveInteger(version);
+        const result = this.catalog?.getActionDefinition(id, parsedVersion);
+        if (!result) throw new NotFoundException({ code: "not_found", message: `Action definition not found: ${id}@${version}`, retryable: false });
+        return result;
+    }
+
+    @Get("capabilities")
+    capabilities() {
+        return {
+            productProtocolVersion: "1",
+            workerProtocolVersions: ["1"],
+            features: {
+                sourceDefinitions: { status: "enabled", version: "1" },
+                workflowDefinitions: { status: "enabled", version: "1" },
+                actionDefinitions: { status: "enabled", version: "1" },
+                workflowIngest: { status: "enabled", version: "1" },
+            },
+            limits: {
+                maxPageSize: 100,
+                maxInlineValueBytes: 64 * 1024,
+                maxUploadBytes: null,
+                sseReplayLimit: Number(process.env.COSMOS_SSE_REPLAY_LIMIT ?? "100"),
+            },
+            serverTime: new Date().toISOString(),
+        };
+    }
     @Get("sources")
     async sources() {
-        return this.repository.listSources();
+        return (await this.repository.listSources()).map(toPublicSource);
     }
 
     @Get("sources/:sourceId")
@@ -88,7 +173,7 @@ export class AppController {
                 retryable: false,
             });
         }
-        return source;
+        return toPublicSource(source);
     }
 
     @Post("sources")
@@ -97,7 +182,7 @@ export class AppController {
         try {
             const command = createSourceCommandSchema.parse(body);
             this.sourceProbe.validate(command);
-            return await this.repository.createSource(command);
+            return toPublicSource(await this.repository.createSource(command));
         } catch (error) {
             if (error instanceof ZodError) {
                 validationError(error);
@@ -124,10 +209,11 @@ export class AppController {
                     retryable: false,
                 });
             }
-            return await this.repository.setSourceEnabled(
+            const updated = await this.repository.setSourceEnabled(
                 sourceId,
                 updateSourceCommandSchema.parse(body).enabled,
             );
+            return toPublicSource(updated);
         } catch (error) {
             validationError(error);
         }
@@ -170,10 +256,26 @@ export class AppController {
                 retryable: false,
             });
         }
+        const key = idempotencyKey?.trim() || `manual:${sourceId}:${randomUUID()}`;
+        if (this.workflowControl) {
+            const envelope = await this.workflowControl.enqueue({
+                sourceId,
+                triggerKind: "manual",
+                idempotencyKey: key,
+            });
+            const result = toPublicWorkflowRun(envelope);
+            this.logger?.info("workflow.run.queued", {
+                runId: result.id,
+                sourceId,
+                triggerKind: result.triggerKind,
+                status: result.status,
+            });
+            return result;
+        }
         const run = await this.repository.createQueuedRun({
             sourceId,
             triggerKind: "manual",
-            idempotencyKey: idempotencyKey?.trim() || `manual:${sourceId}:${randomUUID()}`,
+            idempotencyKey: key,
         });
         this.logger?.info("run.queued", {
             runId: run.id,
@@ -187,6 +289,8 @@ export class AppController {
     @Get("runs/:runId")
     @Bind(Param("runId"))
     async run(runId: string) {
+        const envelope = await this.workflowStore?.loadWorkflowEnvelope(runId);
+        if (envelope) return toPublicWorkflowRun(envelope);
         const result = await this.repository.getRun(runId);
         if (!result) {
             throw new NotFoundException({
@@ -198,6 +302,14 @@ export class AppController {
         return result;
     }
 
+    @Get("workflow-runs/:runId")
+    @Bind(Param("runId"))
+    async workflowRun(runId: string) {
+        return this.run(runId);
+    }
+
+
+
     @Get("jobs/:jobId")
     @Bind(Param("jobId"))
     async job(jobId: string) {
@@ -206,6 +318,26 @@ export class AppController {
             throw new NotFoundException({
                 code: "not_found",
                 message: `Job not found: ${jobId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Get("jobs/:jobId/attempts")
+    @Bind(Param("jobId"))
+    async attempts(jobId: string) {
+        return catalogPage(await this.repository.listWorkflowAttempts(jobId));
+    }
+
+    @Get("attempts/:attemptId")
+    @Bind(Param("attemptId"))
+    async attempt(attemptId: string) {
+        const result = await this.repository.getWorkflowAttempt(attemptId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Attempt not found: ${attemptId}`,
                 retryable: false,
             });
         }
@@ -415,4 +547,84 @@ function clampLimit(value: string | undefined): number {
 function parseEventCursor(value: string | undefined): number {
     const parsed = Number.parseInt(value ?? "0", 10);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function catalogPage<T>(items: readonly T[]): { items: T[]; nextCursor: null; snapshotAt: string } {
+    return {
+        items: [...items],
+        nextCursor: null,
+        snapshotAt: new Date().toISOString(),
+    };
+}
+
+function parsePositiveInteger(value: string): number {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+        throw new BadRequestException({
+            code: "validation_failed",
+            message: "Version must be a positive integer.",
+            retryable: false,
+        });
+    }
+    return parsed;
+}
+
+function toPublicSource(source: SourceSnapshot) {
+    const config: Record<string, unknown> = {};
+    if (typeof source.config.feedUrl === "string") config.feedUrl = source.config.feedUrl;
+    if (typeof source.config.scheduleIntervalMs === "number") {
+        config.scheduleIntervalMs = source.config.scheduleIntervalMs;
+    }
+    if (source.kind === "bilibili") {
+        for (const key of ["mode", "limit", "profile", "schemaVersion"] as const) {
+            const value = source.config[key];
+            if (value !== undefined) config[key] = value;
+        }
+    }
+    return {
+        id: source.id,
+        name: source.name,
+        kind: source.kind,
+        config,
+        enabled: source.enabled,
+        createdAt: source.createdAt,
+        updatedAt: source.updatedAt,
+        lastRunAt: source.lastRunAt,
+        lastError: source.lastError,
+    };
+}
+
+function toProductWorkflowRunStatus(status: WorkflowEnvelope["status"]): RunStatus {
+    switch (status) {
+        case "queued":
+            return "queued";
+        case "running":
+        case "waiting":
+            return "running";
+        case "completed":
+            return "succeeded";
+        case "failed":
+            return "failed";
+        case "cancelled":
+            return "cancelled";
+    }
+}
+
+function toPublicWorkflowRun(envelope: WorkflowEnvelope) {
+    const parsedProductRun = productRunSchema.safeParse(envelope.productRun);
+    const productRun = parsedProductRun.success ? parsedProductRun.data : {};
+    const triggerKind = productRun.triggerKind ?? "manual";
+    return {
+        id: envelope.runId,
+        sourceId: productRun.sourceId ?? null,
+        triggerKind,
+        status: toProductWorkflowRunStatus(envelope.status),
+        definition: envelope.definition,
+        idempotencyKey: envelope.idempotencyKey,
+        resumeRequired: envelope.resumeRequired,
+        createdAt: envelope.createdAt,
+        updatedAt: envelope.updatedAt,
+        startedAt: envelope.startedAt,
+        finishedAt: envelope.finishedAt,
+    };
 }

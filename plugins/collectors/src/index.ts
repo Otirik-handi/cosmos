@@ -46,6 +46,7 @@ export interface OpenCliRunOptions {
     env?: Record<string, string | undefined>;
     timeoutMs?: number;
     maxBufferBytes?: number;
+    signal?: AbortSignal;
 }
 
 export interface OpenCliRunner {
@@ -95,7 +96,7 @@ export function createNodeOpenCliRunner(
                         ...(runOptions.env ?? {}),
                     },
                     timeout: runOptions.timeoutMs ?? timeoutMs,
-                    maxBuffer: runOptions.maxBufferBytes ?? maxBufferBytes,
+                    signal: runOptions.signal,
                     shell: Boolean(
                         externalExecutable
                         && /\.(cmd|bat)$/i.test(externalExecutable),
@@ -217,7 +218,7 @@ export function createBilibiliConnector(
         validate(source) {
             parseBilibiliConfig(source);
         },
-        async fetchItems({ source }) {
+        async fetchItems({ source, signal }) {
             const config = parseBilibiliConfig(source);
             const args = [
                 "bilibili",
@@ -241,6 +242,7 @@ export function createBilibiliConnector(
             }
             const result = await runner.run(args, {
                 env,
+                signal,
             });
             if (result.exitCode === 66) {
                 return { items: [], nextCursor: null };
@@ -297,7 +299,7 @@ export function createAiHotConnector(
         validate(source) {
             parseAiHotConfig(source);
         },
-        async fetchItems({ source, cursor }) {
+        async fetchItems({ source, cursor, signal }) {
             parseAiHotConfig(source);
             const url = new URL(aiHotItemsUrl);
             if (cursor) {
@@ -311,7 +313,7 @@ export function createAiHotConnector(
             });
             let response: Response;
             try {
-                response = await fetcher(url);
+                response = await fetcher(url, signal ? { signal } : undefined);
             } catch (error) {
                 options.logger?.error("connector.transport.failed", {
                     connectorId: aiHotConnectorId,

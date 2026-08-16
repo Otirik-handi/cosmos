@@ -21,7 +21,7 @@
 
 - [`02-rss-ingestion/`](02-rss-ingestion/)：Phase 1 RSS/RSSHub + fixture 录入、离线查询与最小 Story projection。
 - [`03-runtime-logging/`](03-runtime-logging/)：API、Worker、Connector、存储和 Web 服务端的结构化运行日志。
-- [`04-workflow-runtime/`](04-workflow-runtime/)：后续 Durable Workflow、Job 恢复、Connection/Adapter、Knowledge/Research 和 Harness 边界。
-- [`05-normalized-content-model/`](05-normalized-content-model/)：`NormalizedIngestItem`、Publisher、ContentKind、ContentMetrics 和 TemporalValue 的实现合同。
-- [`06-nb-workflow-kernel-convergence/`](06-nb-workflow-kernel-convergence/)：`nb-workflow` Kernel 与 Cosmos Durable Host 的设计收口；当前暂停，等待 Kernel 稳定。
-- [`07-deferred-workflow-host/`](07-deferred-workflow-host/)：由 leader agent 协调的 Deferred Activity、Cosmos Host、Activity Job、固定 Ingest parity 和 Worker Admin 实施 Task。
+- [`04-workflow-runtime/`](04-workflow-runtime/)：后续 Durable Workflow、Job 恢复、Connection/Adapter、Knowledge/Research 和 Harness 边界；其 Spike 仅作保护区/parity 证据。
+- [`05-normalized-content-model/`](05-normalized-content-model/)：`NormalizedIngestItem`、Publisher、ContentKind、ContentMetrics 和 TemporalValue 的实现合同；worktree 为保护区。
+- [`06-nb-workflow-kernel-convergence/`](06-nb-workflow-kernel-convergence/)：`nb-workflow@0.2.0` Kernel 稳定门禁已解除，执行权转交 Task 07；Cosmos Host convergence 仍未完成。
+- [`07-deferred-workflow-host/`](07-deferred-workflow-host/)：由 leader agent 协调的 Deferred Activity、Cosmos Host、Activity Job、固定 Ingest parity 和 Worker Admin 实施 Task；PR A / PR #9 已合并到 `b678fb5`，PR B Activity Host 当前 dirty、未提交、未验证。

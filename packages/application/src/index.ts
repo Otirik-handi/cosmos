@@ -13,16 +13,46 @@ import {
     type RunSnapshot,
     type SearchPage,
     type SearchQuery,
+    type SourceCheckpointOutput,
     type SourceSnapshot,
     type SourceProbeResult,
     type StoryDetail,
 } from "@cosmos/contracts";
 import type { NormalizedIngestItem } from "@cosmos/domain";
+import type { HostActionExecutionFence } from "./action.js";
+
+export * from "./action.js";
+export * from "./catalog.js";
+export * from "./workflow-host.js";
+export * from "./workflow-host-runtime.js";
 
 export interface PersistIngestItemResult {
     createdEntry: boolean;
     revisedEntry: boolean;
     duplicateObservation: boolean;
+}
+
+export interface WorkflowAttemptSnapshot {
+    id: string;
+    jobId: string;
+    number: number;
+    workerId: string;
+    workerInstanceId: string;
+    ownerEpoch: number;
+    ownerSessionId: string | null;
+    status: "leased" | "succeeded" | "failed" | "lease_lost" | "cancelled" | "uncertain";
+    leaseAcquiredAt: string;
+    leaseExpiresAt: string;
+    lastHeartbeatAt: string | null;
+    finishedAt: string | null;
+    error: {
+        kind: "aborted" | "retryable" | "terminal" | "unknown";
+        code: string | null;
+        message: string;
+        retryable: boolean;
+        occurredAt: string | null;
+        detailsRef: null;
+    } | null;
 }
 
 export interface RepositoryHealth {
@@ -86,13 +116,20 @@ export interface CosmosRepository {
         sourceId: string;
         idempotencyKey?: string;
     }): Promise<JobSnapshot>;
-    getJob(jobId: string): Promise<JobSnapshot | null>;
     startRun(runId: string, lease?: JobLease): Promise<RunSnapshot>;
     getRun(runId: string): Promise<RunSnapshot | null>;
+    getJob(jobId: string): Promise<JobSnapshot | null>;
+    listWorkflowAttempts(jobId: string): Promise<readonly WorkflowAttemptSnapshot[]>;
+    getWorkflowAttempt(attemptId: string): Promise<WorkflowAttemptSnapshot | null>;
     getCheckpoint(sourceId: string): Promise<string | null>;
+    getCheckpointSnapshot(sourceId: string): Promise<{
+        cursor: string | null;
+        revision: number;
+    }>;
     claimNextJob(input: {
         owner: string;
         leaseMs: number;
+        acceptedKinds: readonly string[];
     }): Promise<{
         id: string;
         runId: string | null;
@@ -126,6 +163,23 @@ export interface CosmosRepository {
         runId: string;
         item: NormalizedIngestItem;
     }): Promise<PersistIngestItemResult>;
+    persistWorkflowIngestItem(input: {
+        sourceId: string;
+        workflowRunId: string;
+        triggerKind: "manual" | "schedule";
+        item: NormalizedIngestItem;
+        fence: HostActionExecutionFence;
+        idempotencyKey: string;
+    }): Promise<PersistIngestItemResult>;
+    setWorkflowIngestCheckpoint(input: {
+        sourceId: string;
+        workflowRunId: string;
+        cursor: string | null;
+        expectedRevision: number;
+        itemCount: number;
+        fence: HostActionExecutionFence;
+        idempotencyKey: string;
+    }): Promise<SourceCheckpointOutput>;
     setCheckpoint(sourceId: string, cursor: string | null): Promise<void>;
     completeRun(input: {
         runId: string;
@@ -191,6 +245,8 @@ export interface IngestConnector {
     fetchItems(input: {
         source: SourceSnapshot;
         cursor: string | null;
+        idempotencyKey?: string;
+        signal?: AbortSignal;
     }): Promise<{
         items: readonly NormalizedIngestItem[];
         nextCursor: string | null;
@@ -638,6 +694,8 @@ export interface IngestionWorkerOptions {
     pollIntervalMs?: number;
     now?: () => Date;
     probe?: ConnectorProbeService;
+    /** Disable legacy schedule enqueue while Workflow envelopes own scheduling. */
+    schedule?: boolean;
     logger?: LoggerPort;
 }
 
@@ -667,10 +725,13 @@ export class IngestionWorker {
     }
 
     async pollOnce(): Promise<WorkerJobResult | null> {
-        await this.queueScheduledSources();
+        if (this.options.schedule !== false) {
+            await this.queueScheduledSources();
+        }
         const job = await this.repository.claimNextJob({
             owner: this.options.owner,
             leaseMs: this.options.leaseMs,
+            acceptedKinds: ["source-ingest", "source-probe"],
         });
         if (!job) {
             return null;

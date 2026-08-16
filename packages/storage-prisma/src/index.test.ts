@@ -362,12 +362,14 @@ describe("PrismaCosmosRepository", () => {
             const originalLease = await repository.claimNextJob({
                 owner: "worker-a",
                 leaseMs: -1,
+                acceptedKinds: ["source-ingest", "source-probe"],
             });
             expect(originalLease?.attempts).toBe(1);
 
             const takeover = await repository.claimNextJob({
                 owner: "worker-b",
                 leaseMs: 60_000,
+                acceptedKinds: ["source-ingest", "source-probe"],
             });
             expect(takeover?.attempts).toBe(2);
 
@@ -387,6 +389,7 @@ describe("PrismaCosmosRepository", () => {
             const retry = await repository.claimNextJob({
                 owner: "worker-b",
                 leaseMs: 60_000,
+                acceptedKinds: ["source-ingest", "source-probe"],
             });
             expect(retry?.attempts).toBe(3);
             expect(await repository.completeJob({
@@ -400,6 +403,59 @@ describe("PrismaCosmosRepository", () => {
                 afterSequence: 0,
                 limit: 100,
             })).some((event) => event.type === "job.succeeded.v1")).toBe(true);
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("keeps workflow activity jobs out of legacy claims", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-accepted-kinds-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const source = await repository.createSource({
+                name: "Accepted kinds fixture",
+                kind: "fixture-rss",
+                config: {},
+                enabled: true,
+            });
+            await repository.prisma.job.create({
+                data: {
+                    kind: "workflow-activity",
+                    status: "queued",
+                    payloadJson: JSON.stringify({ runId: "workflow-run-1" }),
+                    idempotencyKey: "workflow-activity-1",
+                },
+            });
+            const run = await repository.createQueuedRun({
+                sourceId: source.id,
+                triggerKind: "manual",
+            });
+
+            await expect(repository.claimNextJob({
+                owner: "legacy-worker",
+                leaseMs: 60_000,
+                acceptedKinds: [],
+            })).resolves.toBeNull();
+            const claimed = await repository.claimNextJob({
+                owner: "legacy-worker",
+                leaseMs: 60_000,
+                acceptedKinds: ["source-ingest", "source-probe"],
+            });
+
+            expect(claimed?.kind).toBe("source-ingest");
+            expect(claimed?.runId).toBe(run.id);
+            expect(await repository.getJob((await repository.prisma.job.findUniqueOrThrow({
+                where: { idempotencyKey: "workflow-activity-1" },
+                select: { id: true },
+            })).id)).toMatchObject({
+                kind: "workflow-activity",
+                status: "queued",
+            });
         } finally {
             await repository.close();
         }
@@ -443,11 +499,13 @@ describe("PrismaCosmosRepository", () => {
         await expect(repository.claimNextJob({
             owner: "worker-logging",
             leaseMs: 5_000,
+            acceptedKinds: ["source-ingest", "source-probe"],
         })).resolves.toBeNull();
         candidate.attempts = candidate.maxAttempts;
         await expect(repository.claimNextJob({
             owner: "worker-logging",
             leaseMs: 5_000,
+            acceptedKinds: ["source-ingest", "source-probe"],
         })).resolves.toBeNull();
 
         expect(records).toContainEqual(expect.objectContaining({
@@ -758,6 +816,95 @@ describe("PrismaCosmosRepository", () => {
 
             expect(result?.status).toBe("succeeded");
             expect(await repository.getCheckpoint(source.id)).toBe("schedule-cursor");
+        } finally {
+            await repository.close();
+        }
+    });
+    it("commits Workflow checkpoint revisions only under the current dual fence", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-checkpoint-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        const workflowRunId = "workflow-checkpoint-run";
+        const jobId = "workflow-checkpoint-job";
+        await repository.prisma.workflowRun.create({
+            data: {
+                id: workflowRunId,
+                stateJson: JSON.stringify({ runId: workflowRunId, status: "running", revision: 1 }),
+                kernelRevision: 1,
+                status: "running",
+                resumeRequired: false,
+                definitionKey: "cosmos.ingest",
+                definitionVersion: "1",
+                manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v1",
+                idempotencyKey: "workflow-checkpoint-command",
+                inputSnapshotJson: "{}",
+                productRunJson: "{}",
+                runLeaseOwner: "worker-checkpoint",
+                runLeaseToken: "run-fence",
+                runLeaseExpiresAt: new Date(Date.now() + 60_000),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+        });
+        await repository.prisma.sourceInstance.create({
+            data: { id: "source-checkpoint", name: "Checkpoint", kind: "fixture-rss", configJson: "{}" },
+        });
+        await repository.prisma.job.create({
+            data: {
+                id: jobId,
+                workflowRunId,
+                kind: "workflow-activity",
+                status: "leased",
+                idempotencyKey: "workflow-checkpoint-job-key",
+                attempts: 1,
+                maxAttempts: 3,
+                payloadJson: JSON.stringify({
+                    activity: {
+                        key: "source.checkpoint",
+                        path: "root",
+                        seq: 0,
+                        kind: "action",
+                        fingerprint: "sha256:checkpoint",
+                    },
+                }),
+                leaseOwner: "worker-checkpoint",
+                leaseToken: "job-fence",
+                leaseExpiresAt: new Date(Date.now() + 60_000),
+                workflowKernelRevision: 1,
+            },
+        });
+        try {
+            await expect(repository.setWorkflowIngestCheckpoint({
+                sourceId: "source-checkpoint",
+                workflowRunId,
+                cursor: "cursor-1",
+                expectedRevision: 0,
+                itemCount: 0,
+                fence: {
+                    workflowRunId,
+                    kernelRevision: 1,
+                    activity: {
+                        key: "source.checkpoint",
+                        path: "root",
+                        seq: 0,
+                        kind: "action",
+                        fingerprint: "sha256:checkpoint",
+                    },
+                    jobId,
+                    attempt: 1,
+                    jobLeaseToken: "job-fence",
+                    runLeaseToken: "run-fence",
+                },
+                idempotencyKey: "workflow-checkpoint-action-key",
+            })).resolves.toEqual({
+                sourceId: "source-checkpoint",
+                cursor: "cursor-1",
+                revision: 1,
+                committed: true,
+            });
+            await expect(repository.getCheckpointSnapshot("source-checkpoint"))
+                .resolves.toEqual({ cursor: "cursor-1", revision: 1 });
         } finally {
             await repository.close();
         }

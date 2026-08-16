@@ -1,0 +1,15 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@cosmos/application": ["../../packages/application/dist/index.d.ts"],
+            "@cosmos/application/*": ["../../packages/application/dist/*.d.ts"],
+            "@cosmos/worker-admin": ["../../packages/worker-admin/dist/index.d.ts"]
+        }
+    },
+    "exclude": [
+        "dist",
+        "src/**/*.test.ts"
+    ]
+}

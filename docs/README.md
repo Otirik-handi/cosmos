@@ -15,38 +15,24 @@
   Worker Gateway、HTTPS long-poll 和 Action execution placement 的稳定决定。
 - `research/`：外部项目、数据源、算法和技术验证材料。
 - `tasks/`：重大任务的持续 walkthrough，记录计划、实现、验证、偏差和实现级后续。
-- `tasks/06-nb-workflow-kernel-convergence/README.md`：后续在独立任务中把固定
-  Ingest 从 Cosmos 平行脚本 Runtime 收敛到 `nb-workflow` Kernel 的实施入口；
-  当前设计已同步、实现暂停，阻塞于 `nb-workflow` 稳定门禁。
-- `tasks/06-nb-workflow-kernel-convergence/walkthrough.md`：记录本轮文档收口、
-  当前实现偏差、三份未来输入和停止边界。
+- `tasks/06-nb-workflow-kernel-convergence/README.md`：`nb-workflow@0.2.0` 已稳定发布，
+  Kernel 稳定门禁解除，执行权转交 Task 07；Cosmos Host、固定 Ingest parity、
+  manifest-only API 和 Worker Admin 仍按阶段门禁推进。
+- `tasks/06-nb-workflow-kernel-convergence/walkthrough.md`：记录历史文档收口、
+  实现偏差、未来输入和停止边界。
 - `tasks/07-deferred-workflow-host/README.md`：leader-controlled 的实现治理 Task，
   记录 nb-workflow Deferred Activity、Cosmos Host、固定 Ingest parity 和 Worker
-  Admin 的阶段门禁；当前尚未开始 Cosmos Host 代码实施。
+  Admin 的阶段门禁；PR A / PR #9 已合并到 `b678fb5`，PR B Activity Host 当前为
+  dirty、未提交、未验证 WIP。
 - `tasks/07-deferred-workflow-host/walkthrough.md`：记录跨仓库基线、代理边界、
   每轮验证和偏差；历史 Spike 证据与当前验证严格分开。
 
-当前文档状态分层：
+根状态基线（2026-08-15）：PR #5 `96e27fd`、PR #6 `498018e`、T04 parity `dc78f05`、
+T04 runtime `9fe84f2`、T05 `d0b8e03` 和 `t07-action-contract-convergence@61ed21e`
+均为保护区或只读重建来源；两个 dirty t07 worktree 的文件内容 hash 尚未登记或验证。
 
-```text
-Accepted ADR
--> 稳定架构决定
-
-docs/api Draft v0.2
--> 已审查、尚未实现的 API/DTO 目标合同
-
-Task 04
--> 未合并 Workflow Runtime Spike 的历史证据
-
-Task 06
--> 实现暂停；先稳定 nb-workflow，再实现 Cosmos Worker/Host
-
-Task 07
--> leader-controlled；先稳定 nb-workflow Deferred Activity，再实现 Cosmos Host
-```
-
-后续顺序是 `nb-workflow` Kernel/conformance → Cosmos 本地 Worker/Durable Host
-→ Worker Admin → 远程 Worker Gateway。Draft、Spike 和目标架构都不能写成当前
-已交付能力。
+后续顺序是 `nb-workflow` Kernel/conformance → Activity Host durable recovery → 固定
+`cosmos.ingest@1` parity → manifest-only Product API → Worker Admin → 远程 Worker
+Gateway。Draft、Spike 和 dirty WIP 都不能写成当前已交付能力。
 
 读取顺序通常是：需求原文 → `CONTEXT.md` 中的产品共同语言 → 当前 PRD → 当前架构 → 对应 Task → 相关 ADR / Research。

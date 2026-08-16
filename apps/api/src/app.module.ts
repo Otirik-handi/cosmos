@@ -1,9 +1,10 @@
 import { Module } from "@nestjs/common";
-import { ConnectorRegistry } from "@cosmos/application";
+import { createBuiltinManifestCatalog } from "@cosmos/application/catalog";
+import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import { createLogger } from "@cosmos/logging";
-import { createBuiltInConnectorRegistry } from "@cosmos/plugin-collectors";
 import {
     PrismaCosmosRepository,
+    PrismaWorkflowHostStore,
 } from "@cosmos/storage-prisma";
 
 import { AppController } from "./app.controller.js";
@@ -16,16 +17,33 @@ export const cosmosLogger = createLogger({
 export const cosmosRepository = new PrismaCosmosRepository({
     logger: cosmosLogger,
 });
-export const cosmosConnectorRegistry = createBuiltInConnectorRegistry({
-    workspaceRoot: process.env.COSMOS_WORKSPACE_ROOT ?? process.cwd(),
+export const cosmosCatalog = createBuiltinManifestCatalog();
+export const cosmosWorkflowStore = new PrismaWorkflowHostStore(cosmosRepository.prisma, {
     logger: cosmosLogger,
+});
+export const cosmosIngestControl = new IngestWorkflowControlService({
+    store: cosmosWorkflowStore,
+    getSourceExecutionSnapshot: async (sourceId) => {
+        const source = await cosmosRepository.getSource(sourceId);
+        if (!source) return null;
+        return {
+            id: source.id,
+            name: source.name,
+            kind: source.kind,
+            config: source.config,
+            enabled: source.enabled,
+            createdAt: source.createdAt,
+            updatedAt: source.updatedAt,
+        };
+    },
+    getCheckpointSnapshot: (sourceId) => cosmosRepository.getCheckpointSnapshot(sourceId),
 });
 
 @Module({
     controllers: [AppController],
     providers: [
         {
-            provide: PrismaCosmosRepository,
+            provide: "COSMOS_PRODUCT_PORT",
             useValue: cosmosRepository,
         },
         {
@@ -33,8 +51,16 @@ export const cosmosConnectorRegistry = createBuiltInConnectorRegistry({
             useValue: cosmosLogger,
         },
         {
-            provide: ConnectorRegistry,
-            useValue: cosmosConnectorRegistry,
+            provide: "COSMOS_CATALOG",
+            useValue: cosmosCatalog,
+        },
+        {
+            provide: "COSMOS_WORKFLOW_CONTROL",
+            useValue: cosmosIngestControl,
+        },
+        {
+            provide: "COSMOS_WORKFLOW_STORE",
+            useValue: cosmosWorkflowStore,
         },
         SourceProbeService,
     ],

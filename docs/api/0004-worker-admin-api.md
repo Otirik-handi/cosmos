@@ -1,7 +1,10 @@
 # Worker Admin API 草案
 
-> 状态：Draft v0.2；本地 Worker 稳定后的实现参考，当前未实现
->
+> 状态：Convergence draft v0.2；`feat/t07-activity-host` dirty worktree 已实现 direct mode
+> 的独立 loopback Admin host、探针、状态、能力、指标和 drain；当前仍未 commit/merge。
+> 2026-08-16 的 focused/full 验证和最终 Node durable smoke PASS 已记录在 Task 07 文档；Docker、
+> browser/e2e 和真实来源仍未完成；Gateway/remote Worker 仍未实现。
+
 > 基础路径：`/admin/v1`
 >
 > 公共约定：[`0001-common-contracts.md`](0001-common-contracts.md)
@@ -126,7 +129,9 @@ type WorkerStatusSnapshot = {
     lastHeartbeatAt: string | null;
     lanes: WorkerLaneStatus[];
     activeAttempts: WorkerActiveAttemptSummary[];
+    /** Only explicitly registered runtime Attempts; active polls remain separate. */
     activeAttemptCount: number;
+    activePollCount: number;
     recentErrors: FailureSnapshot[];
     drain: WorkerDrainSnapshot | null;
     timestamp: string;
@@ -178,6 +183,8 @@ type WorkerDrainSnapshot = {
         | "failed";
     reason: string;
     activeAttemptIds: string[];
+    /** Polls still inside beginPoll/endPoll; not an Attempt identity. */
+    activePollCount: number;
     acceptedAt: string;
     deadlineAt: string | null;
     finishedAt: string | null;
@@ -190,6 +197,20 @@ type WorkerDrainSnapshot = {
 `ComponentHealth`、`FailureSnapshot` 和 `HashRef` 从无 Product 依赖的 common
 contracts 复用；Worker Admin 放在独立 package，不能因此依赖 Product DTO、Web 或
 NestJS。
+
+### 4.1 Active poll 与 Attempt identity
+
+`activePollCount` 是 Worker Admin 对 `beginPoll` 到 `endPoll` 生命周期的观测：它统计仍在
+执行的 poll，不表示已经领取了 Attempt。`activeAttemptCount`、`activeAttempts` 和 drain
+快照中的 `activeAttemptIds` 只来自 runtime 明确注册的真实 Attempt，不能由 poll、slot、
+Job ID 或计数推造。
+
+当前 `apps/worker` 的 `pollOnce` 接口不暴露可安全注册的 Attempt identity，因此生产
+状态中可能出现 `activePollCount > 0` 而 `activeAttemptCount = 0`；这是有意的保守边界，
+不是漏报。Drain 原子停止新 poll，然后等待 active poll 与显式注册 Attempt；deadline
+到达仍有任一项时返回 `timed_out`、保持 `resourcesClosed=false`，并保留剩余 poll 计数和
+真实 Attempt IDs。没有真实 identity 时不得伪造 Attempt ID，也不得声称 drain 等待某个
+Attempt。
 
 ## 5. Readiness 语义
 
@@ -258,6 +279,7 @@ Drain 不主动把外部副作用伪装成失败。若 Action 已开始外部操
 cosmos_worker_ready
 cosmos_worker_accepting_work
 cosmos_worker_active_attempts{lane,action_ref}
+cosmos_worker_active_polls{lane}
 cosmos_worker_claim_total{lane,result}
 cosmos_worker_attempt_total{action_ref,status}
 cosmos_worker_attempt_duration_seconds{action_ref,status}
@@ -281,14 +303,46 @@ Job/Run 精确关联留在结构化日志和 Product Query。
 
 Admin Error 不回传 stack、token、Action input 或上游正文。
 
-## 9. 当前实现差距
+## 9. 当前实现与验证边界
 
-当前 Worker 已有 Supervisor、slot、heartbeat、registration 和 shutdown/drain
-Controller，但没有 HTTP Server。现有 shutdown 主要由 SIGINT/SIGTERM 和测试 IPC
-触发。实现顺序应是：
+当前 dirty `feat/t07-activity-host` 已有 direct mode 的独立 loopback HTTP Admin host、
+`/healthz`、`/readyz`、status、capability、metrics 和 drain；实现不依赖 Product API、
+Prisma 或 Connector executable。当前 contract regression 为 4 files/47 tests，full
+Vitest 为 23 files/165 tests；最终 Node durable smoke 也 PASS，但这些证据仍不是 Docker、
+browser/e2e、真实来源或 Task 07 完成证明。
 
-1. 抽出只读 `WorkerStatusProvider` 和 `DrainApplicationService`；
-2. 行为测试状态快照与重复 drain；
-3. 增加可关闭的轻量 HTTP Admin host；
-4. 接入容器探针；
-5. 单独验证 Node production、SIGTERM、deadline 和有活跃 Attempt 的 drain。
+最终 Node smoke 的完整命令与边界如下：
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\Users\notnotype\Documents\CodeRepository\GithubProjects\cosmos\.worktree\t07-activity-host\scripts\smoke-node.ps1'"
+cwd=C:/Users/notnotype/Documents/CodeRepository/GithubProjects/cosmos/.worktree/t07-activity-host
+exitCode=0 wallTime=7.04s
+fresh db:migrate: 6 migrations applied
+  20260808003247_phase1_foundation
+  20260808150000_collector_jobs
+  20260810020829_normalized_content_model
+  20260813160000_workflow_run_backend
+  20260814090000_workflow_activity_host
+  20260815090000_workflow_ingest
+healthWorker=ready queuedStatus=queued durableRunStatus=succeeded durableRunSourceId=<source>
+feedItems=3 searchItems=1 storyTitle=Fixture media metadata
+sseHasRunEvent=true sseHasFeedEvent=true
+apiStructuredRecords=21 workerStructuredRecords=33 durableLaneCompletedRecords=1
+requestIdBridgedToDurableRun=1 requestIdBridgedToProbe=1 probeWorkerRecords=6
+notFoundStatus=404 validationStatus=400
+```
+
+终端 JSON 成功输出表示 log redaction/serialized `undefined` 断言通过。`run.queued.v1` 是由
+当前 build 后的 dist 持久化并经 SSE 回放的新 durable event；此前缺 event 是 stale dist 的
+历史失败证据，不能归因于当前代码。
+
+状态/Drain 中的 `activePollCount` 是 `beginPoll` 到 `endPoll` 的在途 poll 数量；
+`activeAttemptCount`、`activeAttempts` 和 `activeAttemptIds` 只表示 runtime 明确注册并提供
+真实 identity 的 Attempt。当前 `apps/worker` 的 `pollOnce` 不暴露安全 Attempt identity，所以
+不能伪造 ID，也不能把 active poll 解释为 active Attempt。Drain 停止新 poll，等待 active poll
+和显式注册 Attempt；deadline 到达仍有任一项时为 `timed_out`、`resourcesClosed=false`，保留
+剩余计数/真实 ID。
+
+最终 Node smoke 不改变上述 API 功能合同，也不覆盖 SIGTERM、活跃 Attempt deadline、Docker、
+browser/e2e、真实来源、Gateway 或远程认证；这些仍需单独验证。当前 worktree 仍 dirty、未
+提交、未 merge，不标记 Task 07 或生产完成。

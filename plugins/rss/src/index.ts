@@ -57,7 +57,7 @@ export function createRssConnector(
                 throw new Error("RSS source is missing config.feedUrl.");
             }
         },
-        async fetchItems({ source }) {
+        async fetchItems({ source, signal }) {
             const feedUrl = source.config.feedUrl;
             if (!feedUrl) {
                 throw new Error("RSS source is missing config.feedUrl.");
@@ -70,7 +70,7 @@ export function createRssConnector(
             });
             let response: Response;
             try {
-                response = await fetcher(feedUrl);
+                response = await fetcher(feedUrl, signal ? { signal } : undefined);
             } catch (error) {
                 options.logger?.error("connector.transport.failed", {
                     connectorId: rssConnectorId,

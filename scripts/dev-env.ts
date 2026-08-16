@@ -6,7 +6,8 @@ export function createWorkspaceDevEnvironment(
 ): NodeJS.ProcessEnv {
     const configuredDataRoot = environment.COSMOS_DATA_ROOT?.trim();
     return {
-        ...environment,
+        COSMOS_WORKFLOW_HOST_ENABLED:
+            environment.COSMOS_WORKFLOW_HOST_ENABLED ?? "true",
         COSMOS_WORKSPACE_ROOT: rootDirectory,
         COSMOS_DATA_ROOT: resolve(
             rootDirectory,

@@ -141,4 +141,78 @@ describe("AppController source probe", () => {
             status: "queued",
         });
     });
+
+    it("projects attempts without exposing lease tokens", async () => {
+        const attempt = {
+            id: "job-1:attempt:1",
+            jobId: "job-1",
+            number: 1,
+            workerId: "worker-1",
+            workerInstanceId: "worker-1",
+            ownerEpoch: 0,
+            ownerSessionId: null,
+            status: "succeeded" as const,
+            leaseAcquiredAt: "2026-08-08T00:00:00.000Z",
+            leaseExpiresAt: "2026-08-08T00:01:00.000Z",
+            lastHeartbeatAt: null,
+            finishedAt: "2026-08-08T00:00:01.000Z",
+            error: null,
+        };
+        const repository = {
+            listWorkflowAttempts: vi.fn().mockResolvedValue([attempt]),
+            getWorkflowAttempt: vi.fn().mockResolvedValue(attempt),
+        };
+        const controller = new AppController(repository as never, {} as never);
+
+        const page = await controller.attempts("job-1");
+        expect(page.items).toEqual([attempt]);
+        expect(page).toMatchObject({ nextCursor: null });
+        expect(page.items[0]).not.toHaveProperty("leaseToken");
+        await expect(controller.attempt("job-1:attempt:1")).resolves.toEqual(attempt);
+    });
+});
+
+describe("AppController WorkflowRun projection", () => {
+    it("maps internal waiting and completed states to the Product Run contract", async () => {
+        const store = {
+            loadWorkflowEnvelope: vi.fn(),
+        };
+        const controller = new AppController(
+            {} as never,
+            {} as never,
+            undefined,
+            undefined,
+            store as never,
+        );
+        const base = {
+            runId: "workflow-run-1",
+            idempotencyKey: "run-1",
+            definition: {
+                key: "cosmos.ingest",
+                version: "1",
+                manifestHash: "builtin:ingest",
+            },
+            inputSnapshot: {},
+            productRun: {
+                sourceId: "source-1",
+                triggerKind: "manual",
+            },
+            resumeRequired: false,
+            createdAt: "2026-08-16T00:00:00.000Z",
+            updatedAt: "2026-08-16T00:00:01.000Z",
+            startedAt: "2026-08-16T00:00:00.100Z",
+            finishedAt: null,
+        };
+        store.loadWorkflowEnvelope.mockResolvedValue({ ...base, status: "waiting" });
+        await expect(controller.run("workflow-run-1")).resolves.toMatchObject({ status: "running" });
+        store.loadWorkflowEnvelope.mockResolvedValue({
+            ...base,
+            status: "completed",
+            finishedAt: "2026-08-16T00:00:01.000Z",
+        });
+        await expect(controller.run("workflow-run-1")).resolves.toMatchObject({
+            status: "succeeded",
+            finishedAt: "2026-08-16T00:00:01.000Z",
+        });
+    });
 });

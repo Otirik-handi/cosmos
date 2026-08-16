@@ -17,6 +17,7 @@ export interface BlobStoreConfig {
 
 export interface StoredBlob {
     key: string;
+    hash: string;
     byteSize: number;
     mimeType: string | null;
 }
@@ -54,6 +55,7 @@ export class FileBlobStore {
         } = {},
     ): Promise<StoredBlob> {
         const digest = createHash("sha256").update(content).digest("hex");
+        const hash = `sha256:${digest}`;
         const key = `sha256/${digest.slice(0, 2)}/${digest.slice(2)}`;
         const path = resolveBlobKey(this.config, key);
 
@@ -70,6 +72,7 @@ export class FileBlobStore {
 
         return {
             key,
+            hash,
             byteSize: content.byteLength,
             mimeType: options.mimeType ?? null,
         };
@@ -93,3 +96,9 @@ export class FileBlobStore {
 }
 
 export { BlobWorkflowValueStore } from "./workflow-value-store.js";
+export {
+    BlobIntegrityError,
+    BlobRefNotFoundError,
+    readVerifiedBlob,
+    type BlobRefLike,
+} from "./verify-blob-ref.js";

@@ -1,10 +1,10 @@
 # Task 06：`nb-workflow` Kernel 与 Cosmos Host 收敛
 
-> 状态：Design synchronized / implementation paused
+> 状态：`@notnotype/nb-workflow@0.2.0` 稳定发布门禁已完成；Cosmos 收敛由 Task 07 承接，本 Task 不直接实现 Cosmos Host。
 >
-> 阻塞：Blocked on `nb-workflow` stabilization
+> 阻塞：已解除（不等于 Cosmos Activity Host、Ingest parity、Product API 或 Worker Admin 已完成）
 >
-> 日期：2026-08-11
+> 日期：2026-08-15
 >
 > 总体架构：[`../../architecture/0001-cosmos-foundation.md`](../../architecture/0001-cosmos-foundation.md)
 >
@@ -39,20 +39,19 @@ Child Workflow replay 实现。
 
 ### 1.1 当前实施门禁与输入
 
-本 Task 当前只保存目标合同，不启动运行时代码调整。后续实现必须按顺序使用三份
-输入：
+本 Task 已完成 `nb-workflow` 稳定性前置收口，不在 Cosmos worktree 直接启动运行时代码调整。后续实现继续按顺序使用三份输入：
 
 1. 独立 `nb-workflow` 任务产出的稳定 Kernel API、Memory Backend 和 conformance
-   suite；
-2. Task 04 Cosmos Runtime Spike 已验证的恢复、lease、Outbox、Worker 接管、
-   固定 Ingest parity 和生产证据；
+   suite；`@notnotype/nb-workflow@0.2.0` 已发布，稳定性阻塞解除，但其证据不等同
+   Cosmos durable host 或跨进程生产恢复。
+2. Task 04 Cosmos Runtime Spike 已验证的恢复、lease、Outbox、Worker 接管、固定
+   Ingest parity 和生产证据；它只作为行为证据与回滚基线。
 3. [`docs/api/`](../../api/README.md) Draft v0.2 的 Product Service、Worker Admin
    和 Worker Gateway 边界。
 
-`nb-workflow` 的 Activity identity/fingerprint、replay、`map/all`、wait/resume、
-cancel 和 Backend capability conformance 未稳定前，本 Task 不继续扩展 Cosmos
-平行 Runtime，也不开始 Cosmos Worker/Host convergence。Task 04 是证据与回滚
-基线，不是规范 Kernel。
+`nb-workflow` 的稳定发布门禁已由独立任务完成；Cosmos Backend/Host convergence、
+Activity Job、固定 Ingest parity、Product API 和 Worker Admin 由 Task 07 承接。
+本 Task 不把这些后续能力写成已实现，也不在 Cosmos 内继续扩展平行 Runtime。
 
 ## 2. 背景与当前偏差
 
@@ -196,7 +195,8 @@ Client，也不直接提交 Observation、Entry、FTS 或 checkpoint。
 - 固定两边当前 public API、journal shape 和 failure/replay 行为。
 - 记录现有 285-test/Node/browser 证据是否仍是最新；过期证据不得复用为新结果。
 - 不在 dirty `master` 上直接做架构重写。
-- 当前停止在文档收口；在独立 `nb-workflow` 任务完成前不执行后续 Step。
+- 前置 `nb-workflow` 发布和 consumer 门禁已由独立任务完成；Cosmos Backend/Host
+  convergence 由 Task 07 接续，本 Task 不直接修改 Cosmos 运行时代码。
 
 ### Step 1：独立 `nb-workflow` 任务——语义核心与 Port
 
@@ -215,7 +215,8 @@ Client，也不直接提交 Observation、Entry、FTS 或 checkpoint。
   crash/replay harness。
 - Backend 能力不足时明确拒绝。
 - conformance suite 可以被 Cosmos Prisma Backend 复用。
-- Step 1–2 的公共 API 和 conformance 通过稳定门禁后，才开始 Cosmos Step 3。
+- Step 1–2 的公共 API 和 conformance 稳定门禁已完成；Cosmos Step 3 及之后的
+  Backend/Host 实现由 Task 07 承接。
 
 ### Step 3：Cosmos Backend Adapter
 
@@ -359,14 +360,18 @@ Prisma Host、领域 Command、Job/Lease/Outbox、Worker Supervisor 和 fencing 
 
 ## 9. 当前状态
 
-本轮只完成架构、API/DTO、ADR、Task 和项目入口文档收口：
+本 Task 已完成 `nb-workflow` 稳定性前置和文档合同收口；Cosmos 实现责任已转交
+Task 07：
 
-- 尚未创建 `nb-workflow` 实施分支/worktree；
-- 尚未修改两个仓库的运行时代码；
-- Task 06 当前暂停并阻塞于 `nb-workflow` 稳定门禁；
-- 尚未实现 Backend Port、TaskStore/WakeupBus、Migrator 或 manifest-only API；
-- 已形成并经五路只读审查修订的 Product Service、Worker Admin、Worker Gateway
-  和 DTO/场景 Draft v0.2，尚未进入 `@cosmos/contracts` 或宿主实现；
-- 本轮没有运行代码测试、Node、浏览器、Docker、真实来源或 Harness 验收；
+- `@notnotype/nb-workflow@0.2.0` 已发布并通过独立任务记录的行为、package 和
+  Registry consumer 门禁；这只证明 Kernel 包边界，不证明 Cosmos durable host。
+- 稳定阻塞已解除；Task 07 负责 Prisma Backend/ValueStore 之后的 Activity Host、
+  固定 `cosmos.ingest@1` parity、Product API manifest-only 和 Worker Admin。
+- 本 Task 不声称 Activity Host/Ingest parity/API/Admin 已完成，也不把 Task 04
+  Spike 源码或其 migration 复制为实现。
+- Cosmos 当前合并基线、PR A/#9 和 `t07-activity-host` dirty WIP 的事实，统一以
+  Task 07 README 与 walkthrough 为准。
+- 本 Task 未在本轮运行代码测试、Node、浏览器、Docker、真实来源或 Harness
+  验收；后续门禁必须分别记录 focused、full、typecheck/build 和生产范围。
 - Task 04 的固定 Ingest Spike 继续作为 parity 与回滚基线，不再作为未来平行
   Runtime 的扩展入口。

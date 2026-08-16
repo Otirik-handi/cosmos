@@ -2,17 +2,27 @@
 
 Cosmos 是一个面向单个本地用户、可编排的信息聚合与个人情报工作台。它持续从用户配置的渠道收集信息，把已录入的正文、图片、附件和来源关系保存在本地，再通过可配置看板、Agent 深入研究和后续消息推送，把“到处浏览”变成“集中理解和行动”。
 
-`origin/master` 已完成 Phase 1 最小服务器闭环，并建立 Web、API、Worker、公共包
-和服务器部署入口。当前未合并的 Task 04 worktree 另有一套固定 Ingest Workflow
-Runtime Spike；它提供恢复、lease、Outbox、Ingest parity、Node 和浏览器证据，
-但不是目标规范 Kernel，也尚不建议合并。
+`master = origin/master = b678fb5` 已完成 Phase 1 最小服务器闭环，并包含已合并的
+Cosmos Prisma Workflow Backend 与 Blob ValueStore（PR A / PR #9）。
+`@notnotype/nb-workflow@0.2.0` 已稳定发布并作为当前 Kernel package；这不等于
+Cosmos Activity Host 已完成。
+
+> 状态同步：2026-08-15。Task 07 PR B 位于独立 `feat/t07-activity-host` worktree，
+> 当前为 13 个 modified、10 个 untracked 的 dirty、未提交、未验证 Activity Host WIP。
+
+PR #5（审计源 `96e27fd`）和 PR #6（审计源 `498018e`），以及 T04 parity/runtime
+（`dc78f05` / `9fe84f2`）和 T05（`d0b8e03`）均为保护区或历史证据，只能重建其
+有用行为，不能写成当前完成能力。固定 `cosmos.ingest@1` parity、完整 Activity Host
+recovery、manifest-only Product API 和 Worker Admin 仍未完成；两个 dirty t07
+worktree 的文件内容 hash 尚未登记或验证。
 
 目标架构使用 `nb-workflow` 作为唯一规范脚本 Kernel、Cosmos 作为 Durable Host。
-后续先独立稳定 `nb-workflow`，再参考 Task 04 Spike 和 `docs/api/` Draft v0.2
-实现 Cosmos 本地 Worker/Host。Product Service、Worker Admin、Worker Gateway
-和 DTO 草案已完成五路只读审查，但仍是待实现合同，不是当前路由清单。
+PR B 通过阶段门禁后，才继续固定 Ingest parity、manifest-only API 和 Worker Admin；
+远程 Worker Gateway 继续后置。Product Service、Worker Admin、Worker Gateway 和
+DTO 草案仍是目标合同，不是当前路由清单。
 
-Cosmos 按 [GNU Affero General Public License v3.0 only](LICENSE) 发布；贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+Cosmos 按 [GNU Affero General Public License v3.0 only](LICENSE) 发布；贡献流程见
+[CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 为什么做 Cosmos
 
@@ -59,18 +69,16 @@ flowchart LR
 
 `Source`、`Trigger`、`Workflow` 和 `Action` 相互独立。相同来源既可以手动抓取，
 也可以定时运行；自定义 Trigger 可以检测邮箱或网站变化；Action 可以运行
-Connector、自定义代码或受控 Agent。当前 API 手动触发与 schedule 已统一运行
-固定 `cosmos.ingest@1` Workflow，底层具备持久 Run/StepRun/Action Job、租约、
-重试和恢复；Probe 暂时保留旧持久 Job。插件安装、用户自定义 Definition/Action、
-管理 API 和 Graph 编辑器尚未完成，因此当前不是完整的 Workflow 产品平台。
+Connector、自定义代码或受控 Agent。现有旧路径仍可运行固定 `cosmos.ingest@1`，
+但新的 Activity Host WIP 尚未替换默认路径，也尚未证明固定 Ingest parity。
 
-后续脚本语义由 `nb-workflow` 统一提供：Activity fingerprint/replay、`map/all`、
-等待和 Child Workflow 不在 Cosmos 中维护第二套实现。Cosmos 继续负责持久
-Run/Journal、TaskStore、Job/Attempt/Lease、Outbox、Worker 和领域事务。当前
-固定 Ingest Runtime 是收敛时的 parity/回滚基线，不代表新组装已经落地。
+`nb-workflow@0.2.0` 提供规范脚本/Activity replay 语义；Cosmos PR A 保留 Prisma
+Backend 与 Blob ValueStore。Activity Host 的 Job/lease/recovery、固定 Ingest parity、
+manifest-only API 和 Worker Admin 必须分别通过后续门禁，不能从 dirty WIP 推断为已完成。
+插件安装、用户自定义 Definition/Action、管理 API 和 Graph 编辑器尚未完成，因此
+当前不是完整的 Workflow 产品平台。
 
 ### 不依赖 URL 的本地信息库
-
 网页链接只是可选属性。Telegram 消息、群聊、邮件和公众号内容使用结构化来源定位，并拥有稳定的 Cosmos 内部地址。原始记录保持不可变，来源编辑通过新版本追加。
 
 ### 信息条目、事件、话题与相关内容
@@ -134,10 +142,12 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 - SQL TaskStore 是 Job、retry 和 lease 的唯一真相；本地默认自适应 polling。
   WakeupBus/Redis Streams 只做可选通知、限流和缓存，Worker 收到通知后仍回 SQL
   claim。
-- `nb-workflow` 目标提供规范脚本 Kernel 和可选 Backend；Cosmos Workflow Host
-  提供 Prisma 持久化、Worker、Outbox 和领域事务。先在独立 `nb-workflow` 任务
-  中稳定 API/conformance，再开始 Cosmos Host/Worker convergence；具体包拆分、
-  发布和依赖方式不在本文档提前冻结。
+- `nb-workflow@0.2.0` 提供规范脚本 Kernel；Cosmos 已合并 Prisma Backend 与 Blob
+  ValueStore。当前 `feat/t07-activity-host` 只包含未提交、未验证的 Activity Host WIP，
+  不能写成已落地的生产组装。
+- manifest-only Product API、固定 `cosmos.ingest@1` parity 和 Worker Admin 尚未完成；
+  API/Worker 的 executable ownership 仍待后续阶段收口。
+- 具体包拆分、远程 Worker Gateway 和多主机存储仍按各自 Task/门禁推进。
 - 多主机目标是 PostgreSQL + S3/MinIO + 可选 Redis；不通过共享 SQLite 网络盘
   实现。远程 Worker 通过 Gateway 主动连接，不直接访问数据库或 Data Root。
 - Gateway Attempt owner 目标使用 Session/owner epoch/lease token/expiry 的持久
@@ -185,17 +195,10 @@ Workspace Update 使用 `queued`、`running`、`waiting`、`succeeded`、`failed
 | Phase 4：推荐与广度 | 接入推荐页、关注账号和搜索来源，建立非 LLM 默认排序与反馈 |
 | Phase 5：摘要与推送 | 生成一致的网页/图片摘要，可靠投递到 Telegram、Email、QQ 等渠道 |
 
-`origin/master` 已完成 Phase 0 文档基线和 Phase 1 最小闭环。当前未合并 Task 04
-worktree 还验证了固定 `cosmos.ingest@1`、Workflow Run/StepRun/Action Job、
-Source execution snapshot、Node 和浏览器链路；这些属于 Spike 证据，不表示
-Kernel convergence 已完成。
-
-下一工程工作是单独规划并稳定 `nb-workflow`，不是继续扩展 Cosmos 平行 Runtime。
-Kernel 门禁通过后再实现 Cosmos 本地 Worker/Durable Host，然后实现 Worker Admin；
-远程 Worker Gateway、Docker 实际验收、真实 RSS/RSSHub、跨平台、长时间恢复和
-通用自定义 Workflow 产品面继续单独处理。Cosmos 公开仓库位于
-[notnotype/cosmos](https://github.com/notnotype/cosmos)；本轮没有为
-`nb-workflow` 创建远端、发布包或固定依赖。
+下一工程工作是审查并验证 Task 07 的 dirty PR B Activity Host；其后才是固定
+`cosmos.ingest@1` parity、manifest-only Product API 和 Worker Admin。未通过阶段门禁
+前保留旧 Ingest 路径。真实来源、Node/browser、Docker、长时间恢复和远程 Gateway
+继续分别验证；本轮根文档不执行远端 Git、发布或部署操作。
 
 ## 脚手架开发
 
@@ -225,7 +228,7 @@ bun run dev
   的稳定决定。
 - [Workflow Runtime Task](docs/tasks/04-workflow-runtime/README.md)：后续 Workflow、Connection、Research 和 Adapter 基础建设的持续 walkthrough。
 - [Kernel Convergence Task](docs/tasks/06-nb-workflow-kernel-convergence/README.md)：
-  当前处于文档已同步、实现暂停状态；先在独立 `nb-workflow` 任务中稳定脚本
-  语义，再保持 Cosmos 固定 Ingest、Prisma/lease 与产品 parity。
+  `nb-workflow@0.2.0` 的稳定门禁已解除，执行权转交 Task 07；Cosmos Host、固定
+  Ingest parity、manifest-only API 和 Worker Admin 仍按阶段门禁推进。
 - [初始调研](docs/research/2026-08-06-daily-digest-research.md)：从远端研究项目归档的参考材料。
 - [贡献指南](CONTRIBUTING.md) 与 [Agent 约定](AGENTS.md)：后续开发和文档演进流程。

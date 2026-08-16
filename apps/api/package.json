@@ -11,10 +11,8 @@
     },
     "dependencies": {
         "@cosmos/application": "workspace:*",
-        "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",
         "@cosmos/logging": "workspace:*",
-        "@cosmos/plugin-collectors": "workspace:*",
         "@cosmos/storage-prisma": "workspace:*",
         "@nestjs/common": "11.0.0",
         "@nestjs/core": "11.0.0",

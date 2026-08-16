@@ -13,9 +13,19 @@ import {
     RequestLoggingInterceptor,
 } from "./request-logging.js";
 
+interface ProbeResponse {
+    status(code: number): ProbeResponse;
+    json(body: unknown): void;
+}
+
+type ProbeHttpAdapter = {
+    get(path: string, handler: (request: unknown, response: ProbeResponse) => void): void;
+};
+
 async function bootstrap(): Promise<void> {
     const startedAt = Date.now();
     let app: Awaited<ReturnType<typeof NestFactory.create>> | null = null;
+    let apiReady = false;
     let shuttingDown = false;
     try {
         cosmosLogger.info("api.bootstrap.started");
@@ -30,10 +40,27 @@ async function bootstrap(): Promise<void> {
         app.useGlobalInterceptors(new RequestLoggingInterceptor(cosmosLogger));
         app.useGlobalFilters(new RequestExceptionFilter(cosmosLogger));
 
+        const probeHttp = app.getHttpAdapter().getInstance() as ProbeHttpAdapter;
+        probeHttp.get("/healthz", (_request, response) => {
+            response.status(200).json({
+                status: "ok",
+                service: "cosmos-api",
+                timestamp: new Date().toISOString(),
+            });
+        });
+        probeHttp.get("/readyz", (_request, response) => {
+            response.status(apiReady ? 200 : 503).json({
+                status: apiReady ? "ready" : "starting",
+                service: "cosmos-api",
+                timestamp: new Date().toISOString(),
+            });
+        });
+
         const port = Number(process.env.COSMOS_API_PORT ?? "4310");
-        const host = process.env.COSMOS_API_HOST ?? "0.0.0.0";
+        const host = process.env.COSMOS_API_HOST ?? "127.0.0.1";
 
         await app.listen(port, host);
+        apiReady = true;
         cosmosLogger.info("api.started", {
             host,
             port,
@@ -46,7 +73,7 @@ async function bootstrap(): Promise<void> {
                 return;
             }
             shuttingDown = true;
-            cosmosLogger.info("api.stopping", { signal });
+            apiReady = false;
             let shutdownFailed = false;
             try {
                 await app?.close();
