@@ -1,8 +1,10 @@
 # Cosmos API 与 DTO 草案
 
-> 状态：Draft v0.2，已完成文档审查；实现暂停，允许在后续 conformance 中调整
+> 状态：Draft v0.2；Product API 的已实现 catalog/当前路由、`@notnotype/nb-workflow@0.2.0` Durable Host
+> 和 direct Worker Admin 以合入基线 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 的源码/测试为准；本文件仍不是
+> 稳定公共合同，Gateway/Planned/Reserved 能力继续保持草案或未来边界
 >
-> 日期：2026-08-11
+> 日期：2026-08-16
 >
 > 总体架构：[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md)
 >
@@ -10,7 +12,9 @@
 >
 > 稳定边界：[`../adr/0003-service-worker-api-boundaries.md`](../adr/0003-service-worker-api-boundaries.md)
 >
-> 后续实施入口：[`../tasks/06-nb-workflow-kernel-convergence/README.md`](../tasks/06-nb-workflow-kernel-convergence/README.md)
+> 已实现规格入口：[`../spec/README.md`](../spec/README.md)
+>
+> Task 07 实施与未验证边界：[`../tasks/07-deferred-workflow-host/README.md`](../tasks/07-deferred-workflow-host/README.md)
 
 ## 1. 文档职责
 
@@ -24,8 +28,9 @@
 - 在不暴露 Prisma、SQLite、Data Root、Secret 或进程内对象的前提下，让 Web、
   CLI、Desktop、插件和远程 Worker 使用同一语义合同。
 
-本目录不是 OpenAPI 生成物，也不是当前代码行为的过度声明。字段和路径只有在进入
-`@cosmos/contracts`、通过行为测试并接入宿主后，才成为已实现合同。
+本目录不是 OpenAPI 生成物，也不是当前代码行为的过度声明。Draft 字段和路径不是当前公共合同；
+当前实现的 Product 路由、manifest catalog 和 Worker Admin direct surface 以合入源码/测试及
+[`../spec/README.md`](../spec/README.md) 标识，未接入宿主或没有行为证据的内容仍保持 Draft。
 
 ## 2. 三个 API 面
 
@@ -78,12 +83,10 @@ Product Service 与 Worker Gateway 初期可以由同一个 NestJS 进程承载�
 
 ## 4. 成熟度标记
 
-端点和 DTO 使用以下实现成熟度标记。它们不等于 PRD 的产品 Phase：
-
 | 标记 | 含义 |
 | --- | --- |
-| `Current` | 当前分支已有等价生产路由或合同；路径或 DTO 仍可能在 v1 收敛前迁移 |
-| `Convergence` | 未来 Host/Worker 收敛必须满足的合同；不代表本轮或同一批次实现 |
+| `Current` | 当前合入基线已有等价生产路由或合同；当前 Product API catalog、Run projection、SSE 和 Worker Admin direct surface 均以源码/测试为准，路径或 DTO 仍可能在 v1 收敛前迁移 |
+| `Convergence` | 本地 Durable Host、manifest-only 控制面或 Worker Admin 的后续收敛合同；只有已列明并由源码/测试覆盖的切片才是当前实现 |
 | `Planned` | 原始需求或 PRD 已要求，但当前尚未实现；具体产品 Phase 另行标注 |
 | `Reserved` | 为避免封死架构而保留的能力位，产品行为尚未确认 |
 
@@ -95,12 +98,12 @@ Product Service 与 Worker Gateway 初期可以由同一个 NestJS 进程承载�
 
 | 产品范围 | 当前状态 |
 | --- | --- |
-| Phase 1 最小服务器闭环 | 已实现并有 focused/Node/browser 证据 |
+| Phase 1 最小服务器闭环 | 已实现并有 focused/Node 证据；完整 browser/e2e 和真实来源仍未验证 |
 | Phase 1 完整产品范围 | 尚缺 Source 删除、最小定时采集计划、Source health/checkpoint 诊断、完整 Run/Step 产品面、真实 RSS/Docker/长时间恢复等 |
-| `nb-workflow` 前置门禁 | 尚未实施；先独立稳定 Kernel API、Memory Backend 和 conformance |
-| Phase 1C / Cosmos 本地 convergence | Kernel 门禁通过后实现 Durable Host、本地 Worker、固定 Ingest parity、manifest-only API 和独立 Migrator |
-| Worker Admin | Draft v0.2 已审查；在本地 Worker 稳定后实现 |
-| Worker Gateway | Draft v0.2 已审查；远程执行和 fake conformance 后置，不进入下一轮本地 Worker |
+| `nb-workflow` 前置门禁 | `@notnotype/nb-workflow@0.2.0` 已发布并接入当前固定 Ingest Durable Host；更广泛 Kernel/Backend conformance 仍按组件规格和后续任务演进 |
+| Phase 1C / Cosmos 本地 convergence | 固定 Ingest Durable Host、manifest-only Product API catalog 和 direct Worker Admin 已有实现切片；完整 parity、跨进程 recovery、独立 Migrator、Gateway/Redis/多主机仍未实现或未验证 |
+| Worker Admin | direct mode 的独立 loopback host、探针、status、capabilities、metrics 和 drain 已实现；Gateway mode、远程认证和 SIGTERM/活跃 Attempt deadline 仍未完成或验证 |
+| Worker Gateway | Draft v0.2 已审查；远程执行和 fake conformance 后置，不进入当前本地 Worker 能力 |
 | Phase 2–5 | 按 PRD 保持 `Planned`，不由本草案提前宣称实现 |
 
 ## 5. 从需求反推的能力面
@@ -124,53 +127,58 @@ Product Service 与 Worker Gateway 初期可以由同一个 NestJS 进程承载�
 
 ## 6. 当前代码与目标差异
 
-当前 NestJS 已提供 Source、Probe、Ingest Run、Feed、Search、Story、Entry、
-Revision、Asset、Worker discovery 和 SSE。当前 Worker 是轮询进程，没有 HTTP
-Admin Server。当前主要差异：
+当前 NestJS 已提供 Source、Probe、Ingest Run、Feed、Search、Story、Entry、Revision、Asset、
+manifest catalog 和 SSE。当前 Product API 已有 `api/v1` catalog 路由，catalog/probe 只读取
+manifest、schema、capability 和 hash；当前 Worker 默认启动 `@notnotype/nb-workflow@0.2.0`
+Durable Host，并由独立 loopback Worker Admin host 暴露运维端点。以下仍是目标差异或未验证边界：
 
-1. NestJS Controller 仍直接依赖 Prisma Repository。
-2. API 仍加载 Connector/Action executable，并通过 executable Registry 生成
-   `/connectors`。
-3. `RunSnapshot` 和 `JobSnapshot` 仍偏固定 Source Ingest，不能表达通用
-   Workflow/Activity/Attempt/Receipt。
-4. `/health` 混合 API readiness 和 Worker availability；Worker 停止不应阻止用户
-   读取已保存内容。
-5. Worker Admin、Worker Gateway、Connection、CollectionPlan、Knowledge、
-   Research、Workspace、Publication 等尚未实现。
-6. HTTP Client 尚未覆盖全部当前路由，也没有通用 Command/Query Transport。
-7. 当前 Product API 无认证、默认可绑定 `0.0.0.0`，Compose 直接发布 API 端口；
-   它只能视为本机/受信网络验收入口，不是公网部署模板。
-8. 当前 fixture Source 可配置绝对 `fixturePath`，而 API 又允许创建 Source；在
-   远程暴露前必须收紧为受控 fixture root、拒绝绝对路径/遍历/symlink escape。
-9. 当前 Source/Job/Asset public projection 仍可能携带内部 config/result/
-   `storageKey`；Controller 迁移时必须建立白名单 DTO，不能直接返回 Repository
+1. NestJS Controller 仍直接依赖 Application 提供的 Prisma-backed ports；进一步的 Service/
+   Application port 分层和认证仍待后续收敛。
+2. `RunSnapshot`、Job/Attempt 和通用 Workflow 产品 projection 仍在收敛；当前固定 Ingest
+   Run 已有 Durable Host envelope，并将内部 `waiting` 映射为公开 `running`、`completed`
+   映射为公开 `succeeded`。
+3. Worker Gateway、Connection、CollectionPlan、Knowledge、Research、Workspace、Publication
+   等仍未实现；Gateway/remote Worker、Redis、多主机和独立 Migrator 保持未来边界。
+4. HTTP Client 尚未覆盖全部当前路由，也没有通用 Command/Query Transport。
+5. 当前 Product API 无认证；默认绑定 `127.0.0.1`，Compose 可显式绑定 `0.0.0.0` 并发布 API
+   端口，因此只能视为本机/受信网络验收入口，不是公网部署模板。
+6. fixture Source 的路径和远程暴露安全收紧仍是后续 gate；必须保持受控 fixture root，拒绝
+   绝对路径、遍历和 symlink escape。
+7. 当前公开 Source/Run/Job/Asset/Workflow projection 已按白名单过滤 lease token、Secret、
+   storage key、绝对路径和任意内部 payload；后续 Controller 演进不能退回直接返回 Repository
    对象。
-10. 当前 Compose healthcheck 仍使用产品 health，尚未实现独立 `/healthz`、
-    `/readyz` 和 Worker Admin。
+8. API 已有独立 `/healthz`、`/readyz`，Worker Admin 已有独立 `/healthz`、`/readyz`、status、
+   capabilities、metrics 和 drain；Compose healthcheck 仍使用产品 `/api/v1/health`，独立
+   Worker Admin 容器探针尚未在 Docker 中验证。
 
-因此实现时应先建立合同和 Application Port，再迁移 Controller；不能把当前
-Prisma 方法直接包装成未来公共 API。
+实现规格和源码/测试锚点见 [`../spec/README.md`](../spec/README.md) 及其
+[`interfaces/0002-product-api-http.md`](../spec/interfaces/0002-product-api-http.md)、
+[`application/0004-manifest-catalog.md`](../spec/application/0004-manifest-catalog.md)、
+[`application/0007-workflow-host-contract.md`](../spec/application/0007-workflow-host-contract.md)、
+[`runtime/0003-worker-admin.md`](../spec/runtime/0003-worker-admin.md)。
 
 ## 7. 实施顺序与门禁
 
-本目录保存后续实现输入，不拥有 Workflow Kernel，也不是当前路由清单。工程顺序
-固定为：
+本目录保存后续实现输入和已实现接口的导航，不拥有 Workflow Kernel，也不是完整当前路由清单。
+`docs/spec/` 才是合入实现行为的重建合同；本 Draft 保留 Product/Gateway/Worker Admin 的
+设计边界和 conformance 场景，任何字段或路径只有在源码、测试和宿主接线均存在时才标记
+`Current`。
+
+当前本地 direct 顺序已完成固定 Ingest Durable Host、manifest-only Product API catalog 和
+Worker Admin；后续顺序仍为补齐 parity/恢复与独立 Migrator，再考虑远程 Worker Gateway：
 
 ```text
-稳定 nb-workflow Kernel 与 conformance
--> 参考 Task 04 Spike 的恢复、lease、Outbox 和 Ingest parity 证据
--> 按本目录实现 Cosmos 本地 Worker / Durable Host 与 Product API 收敛
--> 实现 Worker Admin
+固定 Ingest Durable Host / manifest catalog / direct Worker Admin
+-> 完整 parity、跨进程 recovery、独立 Migrator 与运维验证
 -> 最后考虑远程 Worker Gateway
 ```
 
-下一轮本地 Worker 不实现 Gateway Session、远程 Secret、owner handoff 或公网
-Transport。Gateway DTO 和失败场景继续保留，用于防止本地 Host/Worker 设计封死
-远程边界，但不得作为当前能力或下一轮交付承诺。
+Gateway DTO 和失败场景继续保留，用于防止本地 Host/Worker 设计封死远程边界，但不得作为
+当前能力或下一轮交付承诺。
 
-Draft v0.2 尚未进入 `@cosmos/contracts` 公共 Zod schema、NestJS Controller、
-Worker Admin Server 或 Worker Gateway。实现时如 conformance 暴露矛盾，先记录
-失败场景和证据，再修订 Draft。
+Draft v0.2 尚未成为完整 `@cosmos/contracts` API schema 或完整 Gateway Server；已进入
+源码/测试的 Product catalog、固定 Ingest Run projection 和 direct Worker Admin 仅按
+`docs/spec/` 对应组件规格解释。实现如 conformance 暴露矛盾，先记录失败场景和证据，再修订 Draft。
 
 ## 8. 已确认的设计决定
 

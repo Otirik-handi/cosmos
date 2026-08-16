@@ -1,6 +1,6 @@
 # Task 07 Walkthrough：Deferred Workflow、Cosmos Host 与本地 Worker 收敛
 
-> 状态：Phase 1 `nb-workflow@0.2.0` 发布门禁已通过；PR A/#9 已合并到 `b678fb5`；Activity Host 仅存在于 `feat/t07-activity-host` dirty、未提交、未 merge worktree。Round 8 保留其历史 focused/full、typecheck/build、数据库、fencing 和 PowerShell 兼容性失败证据；Round 9 已记录当前编译产物下的最终 Node durable smoke PASS。Docker/browser/真实来源及完整 Task 07 门禁仍未完成。
+> 状态：Phase 1 `nb-workflow@0.2.0` 发布门禁已通过；Task 07 实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 快进合入，父基线为 `b678fb5`；`origin/master` 尚未 push。Round 0–10 保留全部历史 focused/full、typecheck/build、数据库、fencing 和 PowerShell 兼容性记录，Round 11 记录归档、合入、功能验证与规格范围。Docker/browser/真实来源及完整 Task 07 门禁仍未完成。
 
 > Task：[`README.md`](README.md)
 
@@ -435,7 +435,7 @@ Round 8 leader 判定（历史）：继续；当时只确认 focused/full、type
 generate/validate、migration 测试边界和 two-client fencing 证据，不能解除后续 parity、
 recovery、生产运行时和人工验收门禁。
 
-## Round 9：2026-08-16 final Node durable smoke PASS（当前结果，仍未合并）
+## Round 9：2026-08-16 final Node durable smoke PASS（合入前历史结果，仍未合并）
 
 日期：2026-08-16
 
@@ -483,7 +483,7 @@ notFoundStatus=404 validationStatus=400
 Round 9 leader 判定：最终 Node durable smoke PASS；继续保留剩余 parity、recovery、生产运行时
 和人工验收门禁。
 
-## Round 10：2026-08-16 质量审查合同修复与最终门禁（当前结果，仍未合并）
+## Round 10：2026-08-16 质量审查合同修复与最终门禁（合入前历史结果，仍未合并）
 
 目标：收口质量审查发现的六项 P1/P2 合同缺口，并在当前源码与编译产物上重新执行全量门禁和 Node durable smoke。共享 `master = origin/master = b678fb5` 未改动；本 worktree 仍 dirty、未提交、未 merge。
 
@@ -514,6 +514,88 @@ scripts/smoke-node.ps1            -> exitCode=0, wallTime=7.04s
 首次 smoke 在状态映射修复后按旧的 `completed` 断言失败；该失败暴露脚本与 Product API 合同不一致，已将 smoke 断言改为 `succeeded`，随后原场景通过。Docker CLI 不可用，Docker/Compose、browser/e2e、真实 RSS/Bilibili/OpenCLI、完整 parity、跨进程 recovery、长时双 Worker fencing、Worker Admin SIGTERM/活跃 Attempt deadline、Gateway/Redis/多主机仍未验证。
 
 Round 10 leader 判定：六项质量审查缺口已修复并有 focused/full、类型、构建、数据库和 Node smoke 证据；Task 07 仍不可标记完成，不进入 commit/PR/merge。
+
+## Round 11：Task 07 本地快进合入与实现规格化
+
+日期：2026-08-16
+
+目标：在保留 Round 0–10 全部历史记录的前提下，记录旧 `packages/worker-admin` 草稿的仓库外
+归档、Task 07 实现提交和 `master` 快进合入，并把合入后可重建规格的范围与未验证边界固定下来。
+
+范围：Cosmos 主工作区、Task 07 实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`、
+`docs/spec/` 规格索引及其组件范围。未创建文档提交，不 push、不创建 PR，不清理任何 worktree；
+本轮不把 Draft、Planned、Reserved API 或历史 Spike 当作实现证据。
+
+### 归档与合入事实
+
+主工作区旧草稿已完整归档到仓库外：
+
+```text
+C:\Users\notnotype\Documents\CodeRepository\cosmos-worker-admin-draft-20260816-100755Z
+```
+
+源目录与归档目录的文件集合、字节数和 SHA-256 已逐项一致；归档清单中的两份源码为：
+
+```text
+src/index.ts       33749 bytes  sha256 88b8c87d02258b728fc39b2d6bd7ee55b886fdf588f69eed9af19dd63f0e469a
+src/index.test.ts   6186 bytes  sha256 e8470eeb4939525f432cdfecd87df21178e2a8bb4e0b51dbf736010423412bb0
+```
+
+旧草稿未移植进实现、未进入 Git；采用的是 Task 07 完整实现版本。实现提交信息为
+`feat: add durable activity host and worker admin`。本地 `master` 从 `b678fb5` 通过
+`git merge --ff-only feat/t07-activity-host` 快进到
+`5ce628690ab0110b0525e8ebcbacbe673ced9c55`；`origin/master` 仍为 `b678fb5`，本地结果尚未
+push。`git diff --name-only b678fb5fe1fb10d4b177957be2f2ad0a6bd2dbde..5ce628690ab0110b0525e8ebcbacbe673ced9c55 | wc -l`
+结果为 `61`，即实现合入涉及 61 个文件；没有把文档提交 SHA 倒填到本轮记录。
+
+### 功能验证命令与实际结果
+
+以下结果来自合入前 Task 07 实现树，并作为合入提交的行为证据；本轮没有把它们扩大解释为
+完整 Task 07 或发布验收：
+本轮文档编辑未重跑 Vitest、typecheck、lint:web、build、db:generate、db:validate 或 Node smoke；
+上面列出的工程结果均是合入前实现树的既有实际结果，不能写成本文档编辑重新验证的结果。
+
+```text
+bunx vitest run packages/application/src/workflow-ingest.test.ts packages/application/src/workflow-host-runtime.test.ts apps/api/src/app.controller.test.ts packages/storage-prisma/src/workflow-host-store.test.ts
+  4 files / 47 tests passed / 0 failed
+bunx vitest run
+  23 files / 165 tests passed / 0 failed
+bun run typecheck       -> passed
+bun run lint:web        -> passed
+bun run build           -> passed
+bun run db:generate     -> passed
+bun run db:validate     -> passed
+git diff --check         -> passed
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1
+  exitCode=0; wallTime=7.04s; 6 migrations applied; healthWorker=ready; queuedStatus=queued;
+  durableRunStatus=succeeded; feedItems=3; searchItems=1; storyTitle=Fixture media metadata;
+  sseHasRunEvent=true; sseHasFeedEvent=true;
+  apiStructuredRecords=21; workerStructuredRecords=33; durableLaneCompletedRecords=1;
+  requestIdBridgedToDurableRun=1; requestIdBridgedToProbe=1; probeWorkerRecords=6;
+  notFoundStatus=404; validationStatus=400;
+  structured-log redaction and serialized undefined checks passed
+
+### 规格范围与当前边界
+
+实现规格统一归入 `docs/spec/`。`docs/spec/README.md` 固定规格职责分工、阅读顺序、统一模板、
+canonical 术语、生产源码覆盖表、测试锚点和未验证边界；组件范围按索引分为 contracts/domain
+（2）、application（8）、storage（6）、interfaces（5）、runtime（4）以及
+connectors/operations（4），共 29 个组件规格路径。规格正文只描述
+`5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已合入实现的可观察行为；索引中的
+`Planned for this documentation pass` 仅表示文档尚待收口，绝不表示代码能力为 Planned，
+源码核对补充：合入树虽提供 manifest/catalog/control 增量，但 `apps/api/src/app.controller.ts`
+仍保留 `/connectors` executable SourceProbe 路由，`packages/transport-http` 仍有
+`listConnectors` 对应 `/api/v1/connectors` 调用；因此本轮不把 Product API 写成已完成
+manifest-only clean cutover，旧兼容路径的收口仍是后续边界。
+
+未运行或未完成的验收仍包括：Docker/Compose 容器、browser/e2e、真实 RSS/Bilibili/OpenCLI、
+完整 Ingest parity、跨进程 recovery、长时双 Worker fencing、Worker Admin SIGTERM/活跃
+Attempt deadline、Gateway、Redis/WakeupBus、远程/多主机运行及其它真实来源/生产人工验收。
+因此本地快进合入不等于 push、PR、worktree 清理或 Task 07 完成；后续在本地 `master` 上继续
+按这些边界补证据，保留旧路径作为回滚边界。
+
+Round 11 leader 判定：Task 07 实现已形成本地唯一合入基线，规格范围已指向 `docs/spec/`；
+剩余 parity、recovery、Docker/browser、真实来源和分布式边界继续标记为未验证，不得升格为已实现。
 
 ## 后续轮次模板
 

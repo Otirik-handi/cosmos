@@ -1,8 +1,8 @@
 # Cosmos 总体架构设计
 
-> 状态：Draft v0.22
+> 状态：Draft v0.23
 >
-> 最后更新：2026-08-11
+> 最后更新：2026-08-16
 >
 > 原始需求真相源：[`../requirements/0001-original-requirements.md`](../requirements/0001-original-requirements.md)
 >
@@ -17,6 +17,8 @@
 > API 与 DTO 草案：[`../api/README.md`](../api/README.md)
 >
 > API 边界 ADR：[`../adr/0003-service-worker-api-boundaries.md`](../adr/0003-service-worker-api-boundaries.md)
+>
+> 已合入实现规格：[`../spec/README.md`](../spec/README.md)
 
 本文是可持续调整的总体设计，不是不可修改的最终合同。用户的新需求先逐字追加到 requirements，再在本文中解释、建模和调整；稳定且改回成本高的决定再提炼为 ADR。
 本文正式使用 `Workflow`。旧文档中的 `Flow` 只作为原始需求措辞或历史迁移说明保留，不再作为现行架构合同。
@@ -119,42 +121,55 @@ flowchart LR
 - 不承诺所有平台都能完整下载图片、视频或受保护正文。
 - 不让 LLM 直接成为原始事实、权限或外部副作用的最终裁决者。
 - 不把第三方平台推荐结果视为客观质量；系统需要记录其发现来源并建立自己的展示排序。
-- 第一版不建设细粒度权限 UI 或不可信插件沙箱。
-
 ### 2.3 当前实现与设计合同
 
-当前代码已经完成 Phase 1/1B 的采集切片，以及第一条固定 Ingest Workflow
-生产接线。API 手动触发和 schedule 通过版本化 `cosmos.ingest@1` 创建带
-definition/input/correlation 快照的 `WorkflowRun`；Worker 依次执行
-`source.fetch@1`、`library.ingest@1[]` 和 `source.checkpoint@1` Action Job，
-写入 Observation、Entry/Revision、Asset、最小 Story、FTS、DomainEvent/Outbox
-和 checkpoint。Probe 与兼容入口仍保留旧 Source Job。脚本式 Runtime、Prisma
-Store、Worker lane、Registry、parent-wake 和 capability projection seam 已存在，
-但通用自定义 Workflow 的安装、配置与稳定管理 API 还不是完整产品能力。
+当前实现基线为 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`，依赖
+`@notnotype/nb-workflow@0.2.0`。固定的 `cosmos.ingest@1` 已接入
+`nb-workflow` Durable Host：Cosmos 提供 Prisma Workflow Backend、Host Store、
+Value Store、Event Sink、Action Registry 和三条本地 lane（Run、Activity、Completion），
+Worker 默认启用该 Host；只有显式设置
+`COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退到保留的 legacy IngestionWorker 路径。
 
-当前 Spike 没有依赖 `nb-workflow`，而是在
-`packages/workflow-runtime` 中独立实现了脚本路径、replay、等待和 Child Workflow。
-这条链路是固定 Ingest、双 lease fencing、Prisma 恢复和生产验收的重要证据，
-但不是目标脚本内核。后续必须通过独立的
-[`06-nb-workflow-kernel-convergence`](../tasks/06-nb-workflow-kernel-convergence/README.md)
-Task 把可复用语义收敛到 `nb-workflow`，保留 Cosmos 的持久 Host 和领域事务，
-而不是继续扩展两套平行 Runtime。
+API 手动触发和 schedule 通过版本化 `cosmos.ingest@1` 创建带 definition、input、
+correlation 和 Source execution snapshot 的 `WorkflowRun`；Worker 依次执行
+`source.fetch@1`、`library.ingest@1[]` 和 `source.checkpoint@1` Activity Job，写入
+Observation、Entry/Revision、Asset、最小 Story、FTS、DomainEvent/Outbox 和 checkpoint。
+Run/Job/Completion 的 lease、幂等、重试和双重 fencing 由 Host/SQL 持久边界负责；Probe
+与 legacy Source Job 仍保留为兼容/回退 lane。通用自定义 Workflow 的安装、配置和稳定
+管理 API 仍不是完整产品能力。
+
+Product API 当前通过静态 Manifest Catalog 读取 Source、Workflow 和 Action 定义、schema、
+capability 及 hash；Controller 的 catalog 路由和 Source probe 不加载或执行 executable，
+executable 只在 Worker 执行面注册。公开投影使用白名单，不能把 lease token、Secret、
+storage key、绝对路径或任意内部 payload 作为 Product DTO 返回。
+
+Worker Admin 当前由 Worker 进程提供独立的 Node `http` loopback host，默认
+`127.0.0.1:9091`，提供 `/healthz`、`/readyz`、`/metrics` 以及
+`/admin/v1/status`、`/admin/v1/capabilities` 和 drain 端点；direct mode 的 poll、readiness、
+manifest evidence、错误脱敏、幂等 drain 和 active poll/Attempt 分离已有 focused 测试。
+非 loopback 绑定必须显式提供授权回调；Gateway/remote Worker 仍未实现。
+
+实现行为的可重建合同见 [`docs/spec/README.md`](../spec/README.md) 及其
+[`application/0007-workflow-host-contract.md`](../spec/application/0007-workflow-host-contract.md)、
+[`application/0008-workflow-host-runtime.md`](../spec/application/0008-workflow-host-runtime.md)、
+[`application/0004-manifest-catalog.md`](../spec/application/0004-manifest-catalog.md)、
+[`interfaces/0002-product-api-http.md`](../spec/interfaces/0002-product-api-http.md) 和
+[`runtime/0003-worker-admin.md`](../spec/runtime/0003-worker-admin.md)。Task 07 的 focused/full
+测试和 Node durable smoke 已有证据；Docker、browser/e2e、真实来源、跨进程 recovery、
+长时双 Worker fencing、Worker Admin SIGTERM/活跃 Attempt deadline、Gateway/Redis/多主机仍未验证
+或未实现。
 
 以下内容是本架构确认的设计合同，但不是当前已经交付的能力：
 
-- `nb-workflow` 的 Core/Runtime/Backend Port 拆分、Cosmos Prisma Backend 适配和
-  固定 Ingest convergence；`nb-workflow` 当前包结构仍是草案，实际调整必须在其
-  独立 Task、分支和 worktree 中完成；
-- `TaskStore + WakeupBus` 公共抽象、自适应轮询和可选 Redis Streams Adapter；
-  当前 SQLite 表已经承担 TaskStore 事实，但尚无正式 WakeupBus Port；
-- 通用自定义 Workflow 的插件加载、稳定管理 API、Trigger/Binding 产品模型和
-  production 运维面；底层脚本 Runtime、等待/Child Workflow、持久恢复和 Worker
-  lane 已有实现，但不能据此宣称用户自定义平台已完成；
+- TaskStore + WakeupBus 的正式公共 Port、自适应唤醒和可选 Redis Streams Adapter；当前
+  SQLite TaskStore 与 fallback polling 已能支撑本地 Host，但 Redis/WakeupBus 不是当前实现；
+- 通用自定义 Workflow 的插件加载、稳定管理 API、Trigger/Binding 产品模型和完整生产运维面；
 - Connection、SecretStore、ConnectorStateStore、多个采集计划和 Source Operation 的完整持久模型；
-- 将固定 Ingest 已验证的双 lease fencing 扩展到未来 Knowledge、Research、
-  Artifact、Delivery 等全部领域写入和外部副作用；
-- Knowledge Workflow、KnowledgeSignal、ResearchRequest、Research Workflow、Trigger Consumer 和循环保护；
-- Outbox 的完整投递/消费恢复链路；
+- 将固定 Ingest 已验证的双 lease fencing 扩展到未来 Knowledge、Research、Artifact、Delivery
+  等全部领域写入和外部副作用；
+- Knowledge Workflow、KnowledgeSignal、ResearchRequest、Research Workflow、Trigger Consumer
+  和循环保护；
+- Outbox 的完整投递/消费恢复链路、独立 Migrator、Gateway/remote Worker、多主机和可选 Redis；
 - `neuro-agent-harness`/`nb-memory` Adapter、Knowledge Manager Web/CLI 和个性化配置生成。
 
 Round 98–105 已把固定 Ingest 从 focused seam 接到 API、schedule 和生产 Worker：
@@ -228,20 +243,12 @@ Cosmos 需要兼容三种运行形态：
 
 控制面与执行面还必须进一步解耦：
 
-- API 只加载 Workflow/Action/Adapter manifest、schema 和 capability，负责
-  Command、Query、Run 控制、Signal、SSE 和远程 Worker Gateway；不加载 Connector
-  executable，不执行 Workflow，也不访问外部平台。
-- Worker 加载 Workflow 脚本、Action/Connector executable 和 Agent Extension，
-  注册 manifest evidence，领取 Job 并执行 Activity。
-- 独立 Migrator 在 API/Worker 启动前执行数据库迁移；Worker 不应因“等待 API
-  顺便迁移”而绑定 API 生命周期。
-- Worker 可以暴露 `/healthz`、`/readyz`、`/capabilities`、`/metrics` 和
-  `/drain` 等内部控制端点，但可靠任务仍通过 TaskStore 领取，不通过同步 HTTP
-  调用形成第二套调度真相。
+- API 当前只加载 Workflow/Action/Adapter manifest、schema 和 capability，负责 Command、Query、Run 控制、SSE 和 catalog/probe；它不加载 Connector executable、不执行 Workflow，也不访问外部平台。实现锚点见 [`interfaces/0002-product-api-http.md`](../spec/interfaces/0002-product-api-http.md)。
+- Worker 加载 Workflow 脚本、Action/Connector executable 和 Agent Extension，注册 manifest evidence，领取 Job 并执行 Activity；当前 direct Worker 的组合锚点见 [`runtime/0001-worker-process.md`](../spec/runtime/0001-worker-process.md)。
+- 独立 Migrator 在 API/Worker 启动前执行数据库迁移仍是目标运维边界；当前 Compose 仍由 API 启动命令执行 migration，不能把独立 Migrator 写成已实现能力。
+- Worker Admin 已由 Worker 进程的独立 loopback Node `http` host 提供；可靠任务仍通过 TaskStore 领取，不通过同步 HTTP 调用形成第二套调度真相。
 
-当前代码尚未完全满足这个目标：API 构建仍加载部分 Connector/Action executable，
-Compose migration 仍由 API 启动命令承担。这些是 convergence 后的宿主拆分项，
-不能把目标边界误报成现状。
+当前合入代码已满足 manifest-only Product API 和 direct Worker Admin 的本地切片；API/Worker 仍共享 SQLite/Data Root，未认证 Product API 只适用于本机或明确受信网络。Compose 的公网绑定、Docker、Gateway、Redis 和多主机部署仍是后续或未验证边界。
 
 对外 API 正式拆成三个面：
 
@@ -1861,33 +1868,25 @@ Phase 1B 扩展 API 与 Worker 的采集能力，但不改变 Phase 1 的模块�
 
 ### Phase 1C：Workflow Kernel convergence 与宿主解耦
 
-这是进入更多自定义 Workflow、Knowledge/Research 或 Agent 前的工程门：
+固定 Ingest 的本地 direct 实现切片已随 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`
+合入：
 
-- 第一阶段只在 `nb-workflow` 独立 Task/分支中稳定通用脚本 Kernel、Runtime
-  Port、Memory Backend 和 Backend conformance suite；具体包拆分、发布方式和
-  持久实现不在 Cosmos 文档中提前冻结。
-- `nb-workflow` 只有在 Kernel API、Activity identity/fingerprint、replay、
-  `map/all`、wait/resume、cancel 和 Backend capability conformance 稳定后，
-  才允许进入 Cosmos Worker/Host 实施。
-- 在 Cosmos 建立 Durable Backend/Host Adapter，复用现有 Prisma
-  Run/Job/Lease/Outbox、双 lease fencing、Source snapshot 和 checkpoint CAS。
-- 让固定 `cosmos.ingest@1` 由 `nb-workflow` Kernel 执行，保持 Node、浏览器、
-  migration、重启接管和领域结果不变，再删除 Cosmos 重复 replay 内核。
-- 固定 `TaskStore + WakeupBus` Port；Local Durable 使用 SQLite + 自适应
-  polling，不要求 Redis。Redis/PostgreSQL/S3 只保留 Adapter 边界，不在本阶段
-  实现分布式部署。
-- API 收敛为 manifest-only 控制面，Worker 独占 executable；拆出独立 Migrator。
-- Agent Extension 只保留 Port，不接入尚未稳定的 Harness。
-- Task 04 的 Cosmos Runtime Spike 只提供恢复、lease、Outbox、Ingest parity 和
-  生产验收证据；它不是继续扩展的规范 Kernel。
-- `docs/api/` Draft v0.2 是后续 Product/Worker Transport 的实现输入。先完成本地
-  Worker/Durable Host，再实现 Worker Admin；远程 Worker Gateway 继续作为后续
-  分布式边界，不属于下一轮本地 Worker 实施。
+- `@notnotype/nb-workflow@0.2.0` 作为规范脚本 Kernel；Cosmos 提供 Prisma Durable
+  Backend/Host、SQL TaskStore、Action、ValueStore、EventSink 和 Run/Activity/Completion
+  lanes，不再扩展独立的 Cosmos replay 内核；
+- 固定 `cosmos.ingest@1` 通过该 Kernel 执行，保留 Source snapshot、checkpoint CAS、
+  Run/Job 双 lease fencing、幂等和重试；
+- Product API 使用 manifest-only Catalog，Worker 独占 executable；
+- Worker Admin 使用独立 loopback host，提供 liveness/readiness/status/capability/metrics/drain。
 
-完成标准见
-[`Task 06`](../tasks/06-nb-workflow-kernel-convergence/README.md)：同一固定 Ingest
-通过规范 Kernel 后仍满足 fingerprint、恢复、双 lease、Node 和用户链路验收，
-Cosmos 不再拥有平行脚本 replay 实现。
+上述是已实现的本地 direct mode 和固定 Ingest 范围，不等于通用自定义 Workflow 平台已完成。
+TaskStore 的正式 WakeupBus/Redis Adapter、独立 Migrator、完整 parity、跨进程 recovery、
+长时 fencing、真实来源、Gateway/remote Worker 和多主机部署仍未实现或未验证。Task 04 的
+Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和生产验收证据，不是继续
+扩展的规范 Kernel。
+
+实现合同和测试锚点见 [`docs/spec/README.md`](../spec/README.md)；Task 07 的过程、验证和
+未验证边界见 [`../tasks/07-deferred-workflow-host/README.md`](../tasks/07-deferred-workflow-host/README.md)。
 
 ### Phase 2：信息组织与可配置看板
 
@@ -2130,14 +2129,15 @@ API/DTO 能力，并确认：
    [`docs/api/`](../api/README.md)，并显式标记 Current、Convergence、Planned 和
    Reserved，不把未来资源伪装成当前实现。
 
-这些决定由
-[`ADR-0003`](../adr/0003-service-worker-api-boundaries.md) 固定。当前代码仍没有
-Worker Admin/Gateway，API 仍直接依赖部分 Prisma/executable；草案完成不等于实现。
+这些决定由 [`ADR-0003`](../adr/0003-service-worker-api-boundaries.md) 固定。以下是 2026-08-11
+文档快照的历史状态；合入后的当前实现以本节 2.3、Phase 1C 和 [`../spec/README.md`](../spec/README.md)
+为准：Product API 已使用 manifest-only Catalog，Worker Admin 已有 direct mode 的独立 loopback host；
+Gateway/remote Worker 仍未实现，API/Worker 的持久化边界仍是 Prisma + SQLite/Data Root。
 
 ### 20.10 2026-08-11：文档收口与 Kernel-first 实施门禁
 
 本轮只收口已经讨论并审查的架构、API/DTO 和 Task 状态，不修改 Cosmos 或
-`nb-workflow` 运行时代码。后续工程顺序固定为：
+`nb-workflow` 运行时代码。历史工程顺序固定为：
 
 ```text
 文档收口
@@ -2149,13 +2149,13 @@ Worker Admin/Gateway，API 仍直接依赖部分 Prisma/executable；草案完�
 -> 最后考虑远程 Worker Gateway
 ```
 
-Task 04 保留为历史 Spike 和 parity/回滚证据，不再作为未来脚本 Runtime 的扩展
-入口。API Draft v0.2 保留可调整的目标合同身份；它尚未进入公共 Zod schema、
-NestJS Controller、Worker Admin Server 或 Gateway 实现。`nb-workflow` 的包拆分、
-远端、发布方式、Cosmos 依赖方式和 Attempt 物理表继续留给独立实施任务验证。
+Task 04 保留为历史 Spike 和 parity/回滚证据，不再作为未来脚本 Runtime 的扩展入口。API Draft
+v0.2 保留可调整的目标合同身份；以下“尚未进入”的描述属于 2026-08-11 历史记录。当前已实现
+的 Product API catalog、Durable Host 和 Worker Admin direct mode 只以 [`docs/spec/README.md`](../spec/README.md)
+及其组件规格为实现依据。`nb-workflow` 后续包拆分、远端 Gateway、发布方式、独立 Migrator 和
+Attempt 物理表继续留给后续任务验证。
 
 ## 21. 架构不变量
-
 后续实现和重构必须持续验证：
 
 1. 新算法不能改写原始 Observation。
@@ -2219,11 +2219,17 @@ NestJS Controller、Worker Admin Server 或 Gateway 实现。`nb-workflow` 的�
 59. Direct/Gateway Transport 的差异不能改变 Job 状态机、retry、Receipt、取消或迟到结果处理。
 60. lease 丢失后的 late evidence 只能追加 external `unknown` 审计，不能取得 owner、Secret、terminal 或领域写入能力。
 61. 并发 Gateway claim 必须在 TaskStore 中原子保留 Session/lane capacity；Worker 上报 slot 和进程内 long-poll 都不是容量权威。
-62. `nb-workflow` Kernel API 和 conformance 稳定前，不继续扩展 Cosmos 平行
-    replay 内核；Task 04 Spike 与 API Draft 只能作为后续 Host/Worker 的输入，
-    不能被误报为 convergence 已完成。
+62. `nb-workflow@0.2.0` Kernel API 已用于当前 Cosmos Durable Host 固定 Ingest；后续扩展仍须通过 Kernel/Backend conformance。Task 04 Spike 与 API Draft 只能作为 Host/Worker 边界和历史证据，不能被误报为 Gateway 或其它未实现能力。
 
 ## 22. 变更记录
+
+### v0.23 - 2026-08-16
+
+- 记录 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 合入后的实现事实：
+  `@notnotype/nb-workflow@0.2.0` Durable Host、manifest-only Product API catalog 和
+  direct Worker Admin loopback host 已存在并有源码/测试锚点。
+- 保留完整 parity、跨进程 recovery、Docker/browser/真实来源、Gateway/Redis/多主机和
+  独立 Migrator 的未实现或未验证边界；实现规格统一从 [`../spec/README.md`](../spec/README.md) 进入。
 
 ### v0.22 - 2026-08-11
 

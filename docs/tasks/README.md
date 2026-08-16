@@ -23,5 +23,8 @@
 - [`03-runtime-logging/`](03-runtime-logging/)：API、Worker、Connector、存储和 Web 服务端的结构化运行日志。
 - [`04-workflow-runtime/`](04-workflow-runtime/)：后续 Durable Workflow、Job 恢复、Connection/Adapter、Knowledge/Research 和 Harness 边界；其 Spike 仅作保护区/parity 证据。
 - [`05-normalized-content-model/`](05-normalized-content-model/)：`NormalizedIngestItem`、Publisher、ContentKind、ContentMetrics 和 TemporalValue 的实现合同；worktree 为保护区。
-- [`06-nb-workflow-kernel-convergence/`](06-nb-workflow-kernel-convergence/)：`nb-workflow@0.2.0` Kernel 稳定门禁已解除，执行权转交 Task 07；Cosmos Host convergence 仍未完成。
-- [`07-deferred-workflow-host/`](07-deferred-workflow-host/)：由 leader agent 协调的 Deferred Activity、Cosmos Host、Activity Job、固定 Ingest parity 和 Worker Admin 实施 Task；PR A / PR #9 已合并到 `b678fb5`，PR B Activity Host 当前 dirty、未提交、未验证。
+- [`06-nb-workflow-kernel-convergence/`](06-nb-workflow-kernel-convergence/)：`nb-workflow@0.2.0` Kernel 稳定门禁已解除，执行权转交 Task 07；当前 Kernel 行为以合入实现源码/测试为准。
+- [`07-deferred-workflow-host/`](07-deferred-workflow-host/)：Deferred Activity、Cosmos Durable Host、Activity Job、固定 Ingest parity 和 Worker Admin 实施 Task；已以 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 本地合入 `master`，未 push、未创建远端 PR。当前代码/测试证明 Durable Host、固定 ingest durable path 和 direct loopback Admin 的已实现边界；完整 parity、跨进程 recovery、长时 fencing、SIGTERM 活跃 Attempt deadline、Docker/browser/真实来源及 Gateway/Redis/多主机仍未完成或未验证。
+
+实现规格入口：[`../spec/README.md`](../spec/README.md)。先读 spec 索引与公共合同，再按组件读取
+spec 和测试锚点；Task walkthrough 记录过程与偏差，不替代已合入实现规格。

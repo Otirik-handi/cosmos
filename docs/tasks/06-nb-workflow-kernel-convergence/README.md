@@ -1,10 +1,12 @@
 # Task 06：`nb-workflow` Kernel 与 Cosmos Host 收敛
 
-> 状态：`@notnotype/nb-workflow@0.2.0` 稳定发布门禁已完成；Cosmos 收敛由 Task 07 承接，本 Task 不直接实现 Cosmos Host。
+> 状态：`@notnotype/nb-workflow@0.2.0` 稳定发布门禁已完成；Cosmos 收敛由 Task 07 承接，本 Task 不直接实现 Cosmos Host。Task 07 实现提交
+> `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 Cosmos `master` 快进合入，规格范围见
+> [`../../spec/README.md`](../../spec/README.md)。
 >
-> 阻塞：已解除（不等于 Cosmos Activity Host、Ingest parity、Product API 或 Worker Admin 已完成）
+> 阻塞：已解除（不等于 Cosmos Activity Host、完整 Ingest parity、Product API、Worker Admin 或生产边界已完成）
 >
-> 日期：2026-08-15
+> 日期：2026-08-16
 >
 > 总体架构：[`../../architecture/0001-cosmos-foundation.md`](../../architecture/0001-cosmos-foundation.md)
 >
@@ -52,6 +54,12 @@ Child Workflow replay 实现。
 `nb-workflow` 的稳定发布门禁已由独立任务完成；Cosmos Backend/Host convergence、
 Activity Job、固定 Ingest parity、Product API 和 Worker Admin 由 Task 07 承接。
 本 Task 不把这些后续能力写成已实现，也不在 Cosmos 内继续扩展平行 Runtime。
+
+Task 07 实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 合入；
+这只更新 Cosmos 的实现基线，不改变本 Task 的职责边界。`origin/master@b678fb5` 尚未
+push；Task 07 的 focused/full、typecheck、lint:web、build、db generate/validate 和 Node
+smoke 结果见 Task 07 Round 11，未把这些结果扩大为 Docker/browser/真实来源、跨进程
+recovery、长时双 Worker fencing、Gateway/Redis/多主机或完整 parity 验收。
 
 ## 2. 背景与当前偏差
 
@@ -216,7 +224,8 @@ Client，也不直接提交 Observation、Entry、FTS 或 checkpoint。
 - Backend 能力不足时明确拒绝。
 - conformance suite 可以被 Cosmos Prisma Backend 复用。
 - Step 1–2 的公共 API 和 conformance 稳定门禁已完成；Cosmos Step 3 及之后的
-  Backend/Host 实现由 Task 07 承接。
+  Backend/Host 实现由 Task 07 承接，Task 07 的实现基线为本地合入的
+  `5ce628690ab0110b0525e8ebcbacbe673ced9c55`。
 
 ### Step 3：Cosmos Backend Adapter
 
@@ -366,12 +375,14 @@ Task 07：
 - `@notnotype/nb-workflow@0.2.0` 已发布并通过独立任务记录的行为、package 和
   Registry consumer 门禁；这只证明 Kernel 包边界，不证明 Cosmos durable host。
 - 稳定阻塞已解除；Task 07 负责 Prisma Backend/ValueStore 之后的 Activity Host、
-  固定 `cosmos.ingest@1` parity、Product API manifest-only 和 Worker Admin。
+  固定 `cosmos.ingest@1` parity、Product API manifest/catalog/control 收敛和 Worker Admin；
+  当前合入树仍保留 `/connectors` executable SourceProbe 路由，manifest-only clean cutover 未完成。
 - 本 Task 不声称 Activity Host/Ingest parity/API/Admin 已完成，也不把 Task 04
   Spike 源码或其 migration 复制为实现。
-- Cosmos 当前合并基线、PR A/#9 和 `t07-activity-host` dirty WIP 的事实，统一以
-  Task 07 README 与 walkthrough 为准。
-- 本 Task 未在本轮运行代码测试、Node、浏览器、Docker、真实来源或 Harness
-  验收；后续门禁必须分别记录 focused、full、typecheck/build 和生产范围。
-- Task 04 的固定 Ingest Spike 继续作为 parity 与回滚基线，不再作为未来平行
-  Runtime 的扩展入口。
+- Cosmos 当前本地实现基线为 `master@5ce628690ab0110b0525e8ebcbacbe673ced9c55`，其父基线
+  为 `origin/master@b678fb5`；Task 07 的归档、合入、验证和规格范围统一以 Task 07 README
+  与 walkthrough Round 11 为准。
+- 本 Task 未在本轮运行代码测试、Node、浏览器、Docker、真实来源或 Harness 验收；Task 07
+  合入前功能证据不能替代这些独立门禁，后续必须分别记录 focused、full、typecheck/build
+  和生产范围。
+- Task 04 的固定 Ingest Spike 继续作为 parity 与回滚基线，不再作为未来平行 Runtime 的扩展入口。

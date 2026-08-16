@@ -1,13 +1,18 @@
 # Worker Admin API 草案
 
-> 状态：Convergence draft v0.2；`feat/t07-activity-host` dirty worktree 已实现 direct mode
-> 的独立 loopback Admin host、探针、状态、能力、指标和 drain；当前仍未 commit/merge。
+> 状态：Convergence draft v0.2；`5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已合入 direct mode
+> 的独立 loopback Admin host、探针、状态、能力、指标和 drain；本文件保留未来 Gateway mode
+> 与认证/部署边界，不等于稳定公共合同。
 > 2026-08-16 的 focused/full 验证和最终 Node durable smoke PASS 已记录在 Task 07 文档；Docker、
-> browser/e2e 和真实来源仍未完成；Gateway/remote Worker 仍未实现。
+> browser/e2e、真实来源、跨进程 recovery、Worker Admin SIGTERM/活跃 Attempt deadline 和
+> Gateway/remote Worker 仍未完成或未验证。
 
 > 基础路径：`/admin/v1`
 >
 > 公共约定：[`0001-common-contracts.md`](0001-common-contracts.md)
+>
+> 合入实现规格：[`../spec/README.md`](../spec/README.md)；Worker Admin 组件规格：
+> [`../spec/runtime/0003-worker-admin.md`](../spec/runtime/0003-worker-admin.md)
 
 ## 1. 责任
 
@@ -32,29 +37,29 @@ Worker Admin API 是单个 Worker 进程的内部运维面，供容器探针、�
 
 ## 2. 暴露方式
 
-- Worker Admin 使用独立端口，不能与 Product API 共用 Router。
-- 默认绑定 loopback；容器模式可显式绑定 pod/container 内部地址。
-- `/healthz` 和 `/readyz` 可以供探针访问。
-- `/admin/v1/*` 和 `/metrics` 的远程认证策略后置，但实现时必须保留独立 middleware
-  边界，不能假定它们永远暴露公网。
-- 非 loopback/container-internal 绑定必须显式配置认证和网络策略；Product API 的
-  身份不能自动获得 Admin drain 权限。
-- 配置关闭 Admin Server 时，Worker 执行能力不受影响；但生产编排必须使用其它可
-  验证的探针。
+- Worker Admin 使用独立 Node `http` 端口，不能与 Product API 共用 Router；Worker 生产入口默认
+  `127.0.0.1:9091`，可由 `COSMOS_WORKER_ADMIN_HOST`、`COSMOS_WORKER_ADMIN_PORT` 覆盖。
+- 默认绑定 loopback；绑定到 loopback 之外时 `createWorkerAdminServer` 要求显式授权回调，
+  当前 Worker 入口通过可选 `COSMOS_WORKER_ADMIN_TOKEN` 提供 Bearer 校验。
+- `/healthz`、`/readyz` 和 `/metrics` 以及 `/admin/v1/*` 由该独立 host 提供，不能假定它们
+  与 Product API 的全局 prefix 或认证中间件共享。
+- 当前 direct mode Worker Admin 已接线；Gateway mode、远程认证策略和容器编排探针仍是后置
+  设计/验证边界。
+- 配置关闭 Admin Server 时，Worker 执行能力不受影响；但生产编排必须使用其它可验证的探针。
 
 ## 3. 端点
 
 | 成熟度 | Method | Path | 结果 |
 | --- | --- | --- | --- |
-| Convergence | `GET` | `/healthz` | `WorkerLivenessSnapshot` |
-| Convergence | `GET` | `/readyz` | `WorkerReadinessSnapshot`；未 ready 返回 `503` |
-| Convergence | `GET` | `/admin/v1/status` | `WorkerStatusSnapshot` |
-| Convergence | `GET` | `/admin/v1/capabilities` | `WorkerCapabilitySnapshot` |
-| Convergence | `GET` | `/admin/v1/drains` | 当前/近期 drain page |
-| Convergence | `POST` | `/admin/v1/drains` | `202 WorkerDrainSnapshot` |
-| Convergence | `GET` | `/admin/v1/drains/{id}` | drain 进度 |
+| Current · direct mode | `GET` | `/healthz` | `WorkerLivenessSnapshot` |
+| Current · direct mode | `GET` | `/readyz` | `WorkerReadinessSnapshot`；未 ready 返回 `503` |
+| Current · direct mode | `GET` | `/admin/v1/status` | `WorkerStatusSnapshot` |
+| Current · direct mode | `GET` | `/admin/v1/capabilities` | `WorkerCapabilitySnapshot` |
+| Current · direct mode | `GET` | `/admin/v1/drains` | 当前/近期 drain page |
+| Current · direct mode | `POST` | `/admin/v1/drains` | `202 WorkerDrainSnapshot`；幂等重放可返回 `200` |
+| Current · direct mode | `GET` | `/admin/v1/drains/{id}` | drain 进度 |
 | Reserved | `POST` | `/admin/v1/drains/{id}/deadline-extensions` | 受控延长期限 |
-| Convergence | `GET` | `/metrics` | Prometheus text exposition |
+| Current · direct mode | `GET` | `/metrics` | Prometheus text exposition |
 
 不提供 `resume`。默认 drain 成功后 Worker 退出，由服务管理器重新启动；如果未来
 需要不退出的 pause/resume，应建立独立状态机和决定，不能把 drain 语义改掉。
@@ -294,55 +299,34 @@ Job/Run 精确关联留在结构化日志和 Product Query。
 
 ## 8. 错误与幂等
 
-- Admin 写操作使用 `Idempotency-Key`。
-- `409 drain_in_progress`：已有不同 drain 正在执行。
-- `409 already_stopped`：进程已进入不可逆 stop。
-- `503 not_ready`：状态可查询，但当前不能承担执行。
-- `503 backend_unavailable` / `gateway_unavailable`：按 mode 区分。
-- `504 drain_timeout`：返回持久/内存 DrainSnapshot，不只返回字符串。
+- 已实现 direct HTTP 行为：缺少/失败授权返回 `401`；无效 JSON、缺少 `Idempotency-Key`、非法 drain
+  参数返回 `400`；未知端点或 drain 返回 `404`；不同 drain/已停止返回 `409`；请求体超过上限返回
+  `413`；未 ready 的 `/readyz` 返回 `503`。当前 drain 超时记录在 `WorkerDrainSnapshot.status=
+  "timed_out"`，不由已实现的 HTTP host伪造 `504`。
+- `503 backend_unavailable`、`gateway_unavailable` 和 `504 drain_timeout` 可作为未来 mode/Transport
+  约定保留，但不是当前 direct HTTP 实现的必然响应。
 
 Admin Error 不回传 stack、token、Action input 或上游正文。
 
 ## 9. 当前实现与验证边界
 
-当前 dirty `feat/t07-activity-host` 已有 direct mode 的独立 loopback HTTP Admin host、
-`/healthz`、`/readyz`、status、capability、metrics 和 drain；实现不依赖 Product API、
-Prisma 或 Connector executable。当前 contract regression 为 4 files/47 tests，full
-Vitest 为 23 files/165 tests；最终 Node durable smoke 也 PASS，但这些证据仍不是 Docker、
-browser/e2e、真实来源或 Task 07 完成证明。
+合入基线 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已包含 direct mode 的独立 loopback HTTP
+Admin host、`/healthz`、`/readyz`、status、capability、metrics 和 drain；实现位于独立
+`@cosmos/worker-admin` package，不依赖 Product API、Prisma 或 Connector executable。Worker
+入口默认监听 `127.0.0.1:9091`，通过 `beginPoll/endPoll` 观测 poll，通过显式 Attempt 注册观测
+真实 Attempt；没有 identity 时不得伪造 Attempt ID。Worker 默认 Durable Host、manifest evidence
+和 Admin 装配见 `apps/worker/src/main.ts`。
 
-最终 Node smoke 的完整命令与边界如下：
+Task 07 的 focused contract regression 为 4 files/47 tests，full Vitest 为 23 files/165 tests，
+typecheck/lint/build/db gates 和最终 Node durable smoke 已记录 PASS。实现规格和测试锚点见
+[`../spec/runtime/0003-worker-admin.md`](../spec/runtime/0003-worker-admin.md) 与
+[`../spec/README.md`](../spec/README.md)。
 
-```text
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\Users\notnotype\Documents\CodeRepository\GithubProjects\cosmos\.worktree\t07-activity-host\scripts\smoke-node.ps1'"
-cwd=C:/Users/notnotype/Documents/CodeRepository/GithubProjects/cosmos/.worktree/t07-activity-host
-exitCode=0 wallTime=7.04s
-fresh db:migrate: 6 migrations applied
-  20260808003247_phase1_foundation
-  20260808150000_collector_jobs
-  20260810020829_normalized_content_model
-  20260813160000_workflow_run_backend
-  20260814090000_workflow_activity_host
-  20260815090000_workflow_ingest
-healthWorker=ready queuedStatus=queued durableRunStatus=succeeded durableRunSourceId=<source>
-feedItems=3 searchItems=1 storyTitle=Fixture media metadata
-sseHasRunEvent=true sseHasFeedEvent=true
-apiStructuredRecords=21 workerStructuredRecords=33 durableLaneCompletedRecords=1
-requestIdBridgedToDurableRun=1 requestIdBridgedToProbe=1 probeWorkerRecords=6
-notFoundStatus=404 validationStatus=400
-```
+最终 Node smoke 的可观察结果包括：6 条 migration 应用成功，`healthWorker=ready`、
+`queuedStatus=queued`、`durableRunStatus=succeeded`、`feedItems=3`、`searchItems=1`、Run/Feed
+SSE 事件、requestId bridge 以及 HTTP `404`/`400`；日志脱敏和无 serialized `undefined` 断言通过。
 
-终端 JSON 成功输出表示 log redaction/serialized `undefined` 断言通过。`run.queued.v1` 是由
-当前 build 后的 dist 持久化并经 SSE 回放的新 durable event；此前缺 event 是 stale dist 的
-历史失败证据，不能归因于当前代码。
-
-状态/Drain 中的 `activePollCount` 是 `beginPoll` 到 `endPoll` 的在途 poll 数量；
-`activeAttemptCount`、`activeAttempts` 和 `activeAttemptIds` 只表示 runtime 明确注册并提供
-真实 identity 的 Attempt。当前 `apps/worker` 的 `pollOnce` 不暴露安全 Attempt identity，所以
-不能伪造 ID，也不能把 active poll 解释为 active Attempt。Drain 停止新 poll，等待 active poll
-和显式注册 Attempt；deadline 到达仍有任一项时为 `timed_out`、`resourcesClosed=false`，保留
-剩余计数/真实 ID。
-
-最终 Node smoke 不改变上述 API 功能合同，也不覆盖 SIGTERM、活跃 Attempt deadline、Docker、
-browser/e2e、真实来源、Gateway 或远程认证；这些仍需单独验证。当前 worktree 仍 dirty、未
-提交、未 merge，不标记 Task 07 或生产完成。
+以下仍未验证或未实现：Docker 容器、browser/e2e、真实 RSS/Bilibili/OpenCLI、完整 parity、跨进程
+recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline、Gateway/remote
+Worker、Redis、多主机和远程认证。`activePollCount` 与真实 Attempt 分离、drain timeout 的
+`resourcesClosed=false` 语义已由 focused Worker Admin 测试覆盖，但不替代这些边界验证。

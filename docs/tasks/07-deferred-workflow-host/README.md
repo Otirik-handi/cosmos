@@ -1,10 +1,8 @@
 # Task 07：Deferred Workflow、Cosmos Host 与本地 Worker 收敛
-> 状态：PR A（Prisma Backend/Blob ValueStore）已 squash 合并到 `origin/master@b678fb5`；PR B Activity Host 仍仅存在于 `feat/t07-activity-host` 的 dirty、未提交、未 merge worktree，不视为已完成。
+> 状态：Task 07 实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 通过 `git merge --ff-only feat/t07-activity-host` 快进合入；`origin/master` 仍为 `b678fb5`。本地未 push、未创建 PR，也未清理 worktree；该合入不等于 Task 07 全部完成。
 >
-> 当前日期：2026-08-16。当前 dirty worktree 的 focused/full、typecheck、build、Prisma
-> generate/validate、fencing 以及最终 Node durable smoke PASS 证据已记录，但 Docker/browser/
-> 真实来源及完整 Task 07 门禁仍未完成；不得把本段证据写成生产完成或 Task 07 完成。
-
+> 当前日期：2026-08-16。合入输入已通过 focused/full、typecheck、lint:web、build、Prisma
+> generate/validate 与最终 Node durable smoke；Docker/browser/真实来源、完整 parity/recovery 等仍未验证。
 > 本 Task 是实现阶段的总指挥文档。后续由一个 leader agent 按本文件协调多个
 > 子代理；子代理不能自行扩大范围、改变架构决定或直接合并彼此的工作。
 
@@ -45,10 +43,11 @@ Durable Host、固定 Ingest parity 和 Worker Admin API。
 
 ### 2.1 Cosmos
 
-当前共享基线为：
+当前本地合入基线为：
 
 ```text
-master = origin/master = b678fb5
+local master = 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+origin/master = b678fb5
 ```
 
 `master` 已经有：
@@ -58,38 +57,46 @@ master = origin/master = b678fb5
 - Observation、Entry、Revision、Asset、最小 Story、FTS5/BM25；
 - Feed、Search、Story/Entry/Revision 查询、SSE 和运行日志。
 
-PR A 已合并到上述基线，包含 `PrismaWorkflowBackend`、`BlobWorkflowValueStore`、
+PR A 已合并到上述 `origin/master@b678fb5`，包含 `PrismaWorkflowBackend`、`BlobWorkflowValueStore`、
 forward-only migration `20260813160000_workflow_run_backend` 及
-`@notnotype/nb-workflow@0.2.0` 的稳定依赖接入。该合并只覆盖 Backend/ValueStore，
-不等于 Activity Host、固定 Ingest parity、Product API 或 Worker Admin 已进入共享基线。
+`@notnotype/nb-workflow@0.2.0` 的稳定依赖接入。Task 07 实现提交
+`5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 快进合入，并在此基础上带入
+Activity Host、固定 Ingest fixture、manifest/catalog/control 增量和 Worker Admin；Product API 仍保留
+`/connectors` executable SourceProbe 路由，manifest-only clean cutover 尚未完成。实现提交的验证
+范围与未验证边界见 Round 11；它不等于全部 parity、恢复或生产验收完成。
 
-当前 Worker 的准确定位是：
+当前本地合入树的 Worker 定位是：
 
-> 共享基线仍有固定 Ingest Worker；`feat/t07-activity-host` dirty worktree 已实现 direct mode 的独立 loopback Worker Admin，当前有 focused Admin 证据，最终 Node HTTP/durable smoke 也已 PASS，但尚未 commit/merge，不视为已完成。
+> `master` 已包含 Durable Host 默认路径与 direct mode 独立 loopback Worker Admin；`origin/master`
+> 尚未包含该本地提交，因为本轮未 push。代码合入、功能验证和 Task 07 完成是三个不同门禁。
 
-当前 dirty worktree 已有、但尚未形成共享基线的能力：
+当前本地 `master` 已包含、但仍需按独立门禁解释的实现：
 
 - Activity Host、Activity Job/Attempt/Lease 和 durable Ingest fixture vertical smoke；
-- API manifest-only catalog/control 路径、workflow run 查询和健康探针；
+- API manifest/catalog/control 路径、workflow run 查询和健康探针；旧 `/connectors` executable
+  SourceProbe 路由仍存在，不能把 Product API 写成已完成 clean cutover；
 - Worker Admin `/healthz`、`/readyz`、status、capability、metrics、drain API。
 
 仍未完成或未完整验证的能力：
 
-- 完整固定 Ingest parity、跨进程恢复、双 Worker takeover 和中断/修订/多媒体矩阵；
-- Product API 与真实 Worker 不可用、Node/browser/Docker 的分开验收；
+- 完整固定 Ingest parity、跨进程 recovery、双 Worker takeover 和中断/修订/多媒体矩阵；
+- Product API 与 Worker 不可用边界、Node/browser/Docker 的分开验收；
 - Worker Gateway、远程 Worker、Redis 和多主机运行。
 
-PR B 的当前实现只存在于 dirty worktree：
+`.worktree/t07-activity-host` 及其它已有 worktree 仍是保护区；本轮不声称 worktree 已清理，
+也不把旧 worktree 状态、Draft/Planned API 或历史 Spike 当作当前实现证据。
 
-- worktree：`.worktree/t07-activity-host`，分支 `feat/t07-activity-host`；
-- 基线：`b678fb5`；当前包含 dirty WIP，未提交、未创建/合并 PR，相关门禁尚未完整
-  运行；
-- 该 worktree 及其实现只能作为待审查输入，不得写成 Activity Host 已完成或已验证。
+### 2.1.1 合入后状态与规格边界
 
-### 2.1.1 2026-08-16 当前 dirty worktree 验证记录
+Round 11 记录了归档、提交、快进合入和功能验证的可审计事实。本地 `master` 的实现规格范围
+统一放在 [`docs/spec/README.md`](../../spec/README.md) 及其组件规格路径中；规格只描述已合入
+实现的外部行为。`docs/api` 中的 Draft、Planned、Reserved 合同，Gateway、Redis、跨主机和其它
+后续设计仍不等于实现；组件规格表中的 `Planned for this documentation pass` 只表示文档尚待
+编写，不表示代码能力已计划或已完成。
 
-以下是 `.worktree/t07-activity-host` 当前实现的最新证据，不改写后文保留的历史
-Round；实现仍 dirty、未提交、未 merge，不能作为共享基线或 Task 07 完成证明。
+### 2.1.2 2026-08-16 当前 dirty worktree 验证记录（合入前历史）
+以下是 `.worktree/t07-activity-host` 在本地合入前的实现证据，不改写后文保留的历史
+Round；它记录的是合入输入，不是当前 worktree 状态，也不能单独作为 Task 07 完成证明。
 
 ```text
 bunx vitest run packages/application/src/workflow-ingest.test.ts packages/application/src/workflow-host-runtime.test.ts apps/api/src/app.controller.test.ts packages/storage-prisma/src/workflow-host-store.test.ts
@@ -403,8 +410,9 @@ Activity pending、resume、cancel 和 duplicate completion。
 - fresh DB、master DB upgrade、已有 Workflow 数据读取分别验证；
 - 旧固定 Run/Job 数据需要兼容读取时，增加明确 adapter，不隐式重写历史。
 
-状态：PR A/#9 的 Backend/ValueStore 部分已合并到 `b678fb5`，并不表示 Activity
-Host、Job/Attempt/Lease、completion recovery 或后续 Product/Worker 能力已完成。
+状态：Phase 2 的 Backend/ValueStore 已随实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`
+在本地 `master` 合入；它不表示 Activity Host、完整 durable recovery、双 Worker fencing 或
+后续 Product/Worker 能力的全部门禁已完成。
 
 ### Phase 3：Activity Job、Attempt、Lease 和 Completion
 
@@ -434,10 +442,12 @@ reference 幂等。Action 已成功时重放只读结果；Job 仍在 queued/lea
 - Workflow state revision；
 - Run 未取消或已终止。
 
-状态：Phase 3 当前实现仍只有 `feat/t07-activity-host` dirty、未提交、未 merge 的 WIP。其
-focused runtime/storage、full Vitest、typecheck/build、Prisma generate/validate 以及最终
-Node durable smoke 已通过，但这不能声称 Activity Host、完整 durable recovery、双 Worker
-fencing 或 completion 门禁已完成；Docker/browser/真实来源及完整生产验收仍未验证。
+状态：Activity Host、Job/Attempt/Lease、Completion、固定 Ingest fixture、manifest/catalog/control
+Product API 增量和 direct mode Worker Admin 已随 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`
+在本地 `master` 合入；旧 `/connectors` executable SourceProbe 路由仍存在，manifest-only clean
+cutover 尚未完成。Round 11 记录了合入输入的 focused/full、typecheck、lint:web、build、Prisma
+和 Node smoke 结果。完整 durable recovery、双 Worker fencing、完整 parity、Docker/browser/
+真实来源及完整生产验收仍未完成或未验证。
 
 旧 Worker、过期 lease 和迟到 completion 不能写：
 
@@ -805,18 +815,23 @@ nb-workflow Deferred Activity conformance 通过
 
 ## 14. 下一步
 
-Task 07 当前的下一步不是把 dirty WIP 写成完成，而是由 leader 按剩余阶段门禁继续：
+Task 07 当前的下一步不是把本地合入写成全部完成，而是由 leader 按剩余阶段门禁继续：
 
-1. 保持 `b678fb5` 与 PR A/#9 合并结果为唯一 Cosmos 共享基线；PR #5/#6 旧 base
-   只能重建，不能直接合并。
-2. 对 `t07-activity-host` 补齐固定 `cosmos.ingest@1` parity：重复/修订/媒体、
-   abort/takeover、Feed/Search/Story 回归、跨进程 recovery 和双 Worker fencing。
+1. 保持本地 `master@5ce628690ab0110b0525e8ebcbacbe673ced9c55` 为当前实现基线，记录
+   `origin/master@b678fb5` 仍未 push；PR #5/#6 旧 base 只能重建，不能直接合并。
+2. 在已合入 Host 上补齐固定 `cosmos.ingest@1` parity：重复/修订/媒体、abort/takeover、
+   Feed/Search/Story 回归、跨进程 recovery 和双 Worker fencing。
 3. 单独验收 Product API 与 Worker 不可用边界、Worker Admin SIGTERM/活跃 Attempt deadline、
    migration、Node 生产边界、browser/Docker 和真实来源；最终 Node durable smoke 已 PASS，
-   但不能替代这些验收。当前 full Vitest 23 files/165 tests、contract regression 4 files/47 tests、
-   typecheck/build、db generate/validate 和 two-client fencing 证据仍不等于完整门禁。
-4. 所有恢复、parity、生产和只读审查门禁通过后，才决定是否删除旧回滚路径、更新状态文档并进入
-   commit/PR/merge；在此之前保留旧 Ingest 路径作为回滚基线。
+   但不能替代这些验收。当前 full Vitest 23 files/165 tests、contract regression 4 files/47
+   tests、typecheck/lint:web/build、db generate/validate 和 two-client fencing 证据仍不等于
+   完整门禁。
+4. 所有恢复、parity、生产和只读审查门禁通过后，才决定是否删除旧回滚路径；在此之前保留旧
+   Ingest 路径。不得把本地合入写成 push、PR、worktree 清理或 Docker/browser/真实来源完成。
 
-本 Task 不把当前 dirty worktree 的 focused/full/package、Node smoke 证据写成共享基线或
-Task 07 完成；剩余门禁通过前继续保留旧 Ingest 路径。
+本 Task 的实现规格范围统一由 [`docs/spec/README.md`](../../spec/README.md) 索引；Draft、Planned、
+Reserved API、Gateway、Redis、跨主机和其它后续设计仍不等于实现。本文档本轮没有创建文档提交，
+也不记录文档提交 SHA。
+
+本 Task 不把合入前 dirty worktree 的 focused/full/package、Node smoke 证据写成完整门禁或 Task 07 完成；
+剩余门禁通过前继续保留旧 Ingest 路径。
