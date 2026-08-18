@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文记录 API request
+当前实现规格；后续代码变化应同步更新本文。本文记录 API request
 context、请求日志和异常响应的当前行为；结构化日志底层完整合同归
 [Structured Logging](../runtime/0004-structured-logging.md)，公共错误 DTO 归
 [Public Contracts](../contracts/0001-public-contracts.md)。
@@ -20,6 +20,18 @@ Nest `HttpException` 或未知异常规范化为有限大小的 `ServiceError`�
 
 该组件没有业务控制权、查询副作用或持久化账本；日志只帮助关联 HTTP 行为，不能代替
 Domain Event、Job/Run 状态或 SSE replay。
+
+### 在系统中的位置与作用
+它是 API 请求链路上的横切层，由 middleware、interceptor 和 exception filter 包住 Controller，并把上下文交给结构化 logger。
+
+### 解决的问题
+它统一生成/传播 request id、记录请求与 SSE 生命周期、规范化异常响应，帮助定位一次 HTTP 失败而不篡改业务状态。
+
+### 使用方式
+API 组合根安装 middleware/interceptor/filter；调用方可读取 `X-Request-Id` 并用它关联日志，业务代码不直接把该层当作 DomainEvent 或审计账本。
+
+### 典型情景
+排查 API 400/404/500、关联一次长 SSE 请求，或需要在日志中区分并发请求时，依赖本组件提供的 request context 和错误投影。
 
 ## 概念与定义
 
@@ -209,4 +221,4 @@ middleware。
   query；具体 logger regex 可能比本节列举更广。
 - SSE/stream headers 已发送后的错误不保证 ServiceError JSON；这是当前 fail-closed 传输
   语义。
-- 浏览器、Docker、跨进程和生产日志收集器未在本基线完成端到端验收。
+- 浏览器、Docker、跨进程和生产日志收集器未在当前实现中完成端到端验收。

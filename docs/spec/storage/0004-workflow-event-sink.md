@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文只描述 Prisma EventSink 的当前写入与 fencing 行为；Workflow event 输入/校验由 `@notnotype/nb-workflow` 以及 [`../application/0007-workflow-host-contract.md`](../application/0007-workflow-host-contract.md) 所有，DomainEvent 查询/replay 由 [`0001-prisma-repository.md`](0001-prisma-repository.md) 所有。
+当前实现规格；后续代码变化应同步更新本文。本文只描述 Prisma EventSink 的当前写入与 fencing 行为；Workflow event 输入/校验由 `@notnotype/nb-workflow` 以及 [`../application/0007-workflow-host-contract.md`](../application/0007-workflow-host-contract.md) 所有，DomainEvent 查询/replay 由 [`0001-prisma-repository.md`](0001-prisma-repository.md) 所有。
 
 ## 最后更新
 
@@ -11,6 +11,19 @@
 ## 组件定位
 
 `PrismaWorkflowEventSink` 是 Kernel/Host 运行时使用的 Workflow 事件持久适配器。它把已校验的事件写入 `DomainEvent`，并把 Run lease 作为写入前和事务内的 fail-closed fence。它只负责 durable append/idempotency，不负责向外部 broker 发布、SSE 连接、outbox 投递或事件消费。
+
+### 在系统中的位置与作用
+它是 Kernel/Host 到 `DomainEvent` 表的持久事件适配器，位于事件产生方与 Repository 的事件查询/replay 之间。
+
+### 解决的问题
+它在 Run lease fence 内完成 canonical payload 的 durable append 和幂等冲突判断，避免重复执行把同一事件身份写成不同事实。
+
+### 使用方式
+Kernel 或 Host 带着 runId、lease owner/token 和 idempotency key 调用 append；先由 Host Store 获取 lease，之后由 Repository 负责查询/replay，不把本组件当外部 broker。
+
+### 典型情景
+Workflow step 产生需要持久保存的 DomainEvent，或重试同一 idempotency key 需要得到原事件结果时，使用本 EventSink。
+
 
 ## 概念与定义
 

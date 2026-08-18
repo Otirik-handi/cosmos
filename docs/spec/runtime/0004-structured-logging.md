@@ -1,6 +1,6 @@
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -13,6 +13,19 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 application 层通过 `LoggerPort` 使用日志能力。logger 为可选依赖；未注入时 wiring 提供 noop 实现，使 application 用例无需条件分支。noop 不写文件、不写标准流、不缓冲记录，也不拥有任何日志存储。
 
 日志记录是运行与诊断信息，不是 `DomainEvent`，不构成业务事实、审计账本或可重放状态。
+
+
+### 在系统中的位置与作用
+它是 Node 进程内的共享日志基础设施，为 API、Worker 和 application 层提供 `LoggerPort` 实现。
+
+### 解决的问题
+它统一上下文传播、级别过滤、字段清洗、JSONL 输出、文件轮转和失败降级，使诊断信息可关联且不把日志误当业务事实。
+
+### 使用方式
+组合根创建 logger 并注入 `LoggerPort`，在请求/Worker scope 中传播 context；未注入时使用 wiring 提供的 noop logger，不需要业务代码到处判断。
+
+### 典型情景
+本地或部署进程需要按级别输出结构化 API/Worker 日志、保留滚动文件，或在可选日志依赖缺失时保持 application 正常运行时，选择本组件。
 
 ## 概念与定义
 
@@ -123,7 +136,7 @@ application 依赖 `LoggerPort` 抽象及 noop wiring，不依赖文件布局、
 
 - `packages/logging/src/index.ts`：schema、类型、配置解析、module-global `AsyncLocalStorage`、RuntimeLogger、清洗与截断、RotatingFileSink、失败降级和 close。
 - `packages/logging/src/index.test.ts`：config root、context/level、redaction/error bound、size/date rotation、retention/max total、record truncation、file fallback、stdout failure。
-- application 基线中的 `LoggerPort` 及其 noop 默认 wiring：验证可选注入与无存储所有权边界。
+- application 代码中的 `LoggerPort` 及其 noop 默认 wiring：验证可选注入与无存储所有权边界。
 - `smoke-node`：仅作为端到端验收锚点，覆盖指定 `logRoot`、API 与 Worker records、requestId bridge、敏感 key 和 undefined 检查。
 
 ## 非目标/边界
@@ -132,4 +145,4 @@ application 依赖 `LoggerPort` 抽象及 noop wiring，不依赖文件布局、
 - 不提供强一致 retention；prune 发生在 append 后，且 active 永不删除，因此总量可持续高于 `maxBytes`。
 - 不构建审计账本，不承诺不可篡改、不可抵赖、完整历史或业务重放。
 - 日志不是 `DomainEvent`，不能替代领域事件发布、持久化或消费。
-- 容器运行、browser 运行和真实来源验证不在该基线的已验证范围内；`sourceId`、`connectorId` 等仅为调用方提供的关联值，不证明来源真实性。
+- 容器运行、browser 运行和真实来源验证不在当前测试的已验证范围内；`sourceId`、`connectorId` 等仅为调用方提供的关联值，不证明来源真实性。

@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文只记录合入基线中可从 Nest API 进程观察到的启动、组合、探针和关闭行为；它不是部署目标或未来服务合同。
+当前实现规格；后续代码变化应同步更新本文。本文只记录当前实现中可从 Nest API 进程观察到的启动、组合、探针和关闭行为；它不是部署目标或未来服务合同。
 
 ## 最后更新
 
@@ -13,6 +13,18 @@
 Product API Runtime 是 Cosmos 的 API 进程入口与组合根。它在一个 Node 进程内创建 Nest 应用，把 `PrismaCosmosRepository`、静态 manifest catalog、工作流入队控制、Workflow Host store 和日志器注入 `AppController`，并提供进程级 liveness/readiness 探针。
 
 它只负责进程资源和依赖的生命周期，不拥有 Source、Run、Job 或内容的第二份状态；这些状态分别由 Application port 和持久化组件拥有。HTTP 资源、公开 DTO、SSE 和 400/404 语义见 [Product API HTTP](0002-product-api-http.md)，request id 与异常日志见 [API Observability](0003-api-observability.md)。
+
+### 在系统中的位置与作用
+它是 API 进程的启动与组合根，位于 `main.ts`、Nest `AppController` 和 Repository/应用端口实现之间。
+
+### 解决的问题
+它集中创建进程资源、绑定依赖并提供 liveness/readiness，让 HTTP 层不需要自己初始化 Prisma、catalog、Workflow Host store 或 logger。
+
+### 使用方式
+API 入口调用 runtime bootstrap；组合根注入各 port 后启动 Nest，关闭时按既定顺序释放应用和数据库资源，探针由 runtime 暴露给进程管理者。
+
+### 典型情景
+启动本地 API、重建测试组合根或检查进程是否可接收请求时使用本 runtime；具体路由和 DTO 仍查看 Product API HTTP。
 
 ## 概念与定义
 

@@ -1,6 +1,6 @@
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -23,6 +23,19 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 - [Workflow Host Contract](../application/0007-workflow-host-contract.md)
 - [Action Registry](../application/0003-action-registry.md)
 - [Worker Process](0001-worker-process.md)
+
+
+### 在系统中的位置与作用
+它是 Worker 内 Workflow Host 的组合根，位于 Worker main 与 Host Store、Kernel Backend、ValueStore、Definition/Action registry 之间。
+
+### 解决的问题
+它集中校验并连接 Workflow 执行所需依赖，确保 Run、Activity、Completion lanes 使用同一组 registry 和 durable adapters。
+
+### 使用方式
+Worker 传入非空 definitions、Action catalog 以及 backend/values 等依赖调用 `createWorkflowHost`；返回的 host 再交给 Worker runtime 轮询，业务语义仍由 Definition/Action owner 实现。
+
+### 典型情景
+启动一个包含内置 ingest workflow 的 Worker，或在嵌入/测试场景替换明确的 runner factory 时，使用本组合入口；它不提供 Gateway 执行链路。
 
 ## 概念与定义
 

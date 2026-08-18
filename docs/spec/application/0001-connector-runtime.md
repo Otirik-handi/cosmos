@@ -2,7 +2,7 @@
 
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -17,6 +17,18 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 - `IngestionService`：执行由旧 SQL Run 模型承载的单来源采集，将获取结果交给 Repository 持久化，并推进 Run 与 Checkpoint。
 
 组件处于连接器实现、领域持久化接口和调用方之间。它负责调用编排和错误传播，但不拥有领域数据真相，也不提供跨进程工作流语义。
+
+### 在系统中的位置与作用
+它位于具体 Connector、领域/Repository 端口和应用调用方之间，提供连接器解析、只读探测以及旧 SQL Run 采集的编排。
+
+### 解决的问题
+它把“按 Source kind 找到连接器、校验配置、抓取结果、推进 Run/Checkpoint”串成一致入口，并集中传播连接器和持久化错误；它不替代 Workflow Host。
+
+### 使用方式
+组合根先注册 `ConnectorRegistry`；调用方通过 registry 解析连接器，探测走 `ConnectorProbeService`，旧采集走 `IngestionService`，后者按既有端口把结果交给 Repository 并推进 Run/Checkpoint。
+
+### 典型情景
+API 需要探测一个已保存 Source，或 legacy worker 需要执行一次 `source-ingest`/`source-probe` 时，使用这里的服务，不让 Connector 直接访问 Prisma。
 
 ## 概念与定义
 

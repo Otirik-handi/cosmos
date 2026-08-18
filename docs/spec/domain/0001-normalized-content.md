@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -13,6 +13,18 @@
 `@cosmos/domain` 是来源采集结果进入 Cosmos 内容模型前的纯规范化和身份投影层。它定义 `NormalizedIngestItem`、Publisher、TemporalValue、ContentMetrics、Asset input，以及 external key、修订 fingerprint 和最小 Story projection 的语义。
 
 Connector 调用这些纯函数生成规范化 item；application 只负责 Connector/Workflow 边界和 JSON/Blob 转换；storage 负责把观察、Entry、修订、Asset、Story 和事件写入事务。本组件不拥有公共 Zod DTO；跨 Workflow 的 JSON-safe wire shape 由[公共合同](../contracts/0001-public-contracts.md)唯一规定。domain 的接口和算法是语义层，不能替代 contracts 的边界解析，也不反向调用 contracts schema。
+
+### 在系统中的位置与作用
+它位于 Connector 输出与 storage 领域写入之间，是不依赖网络和数据库的内容语义层，负责规范化内容并投影稳定身份。
+
+### 解决的问题
+它统一 Publisher、时间、指标、Asset、external key、修订 fingerprint 和 Story projection 的解释，避免不同来源把同一内容处理成互不兼容的领域记录。
+
+### 使用方式
+Connector 先把来源数据交给本组件的纯函数生成 `NormalizedIngestItem`；application 负责边界 JSON/Blob 转换，storage 再按这些结果写入观察、Entry、Revision、Asset、Story 和事件。
+
+### 典型情景
+接入新来源、处理同一来源的修订或生成 Feed 所需的最小 Story 投影时，选择这里的规范化和身份算法，而不是在 Connector 或 Repository 中复制规则。
 
 ## 概念与定义
 

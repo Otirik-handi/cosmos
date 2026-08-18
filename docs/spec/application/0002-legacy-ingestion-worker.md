@@ -2,7 +2,7 @@
 
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -17,6 +17,18 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 它不是 Workflow Kernel，不创建或推进 Workflow Envelope、Kernel Activity 或 Completion。
 
 共享的 [Job](../contracts/0001-public-contracts.md)、[Run](../contracts/0001-public-contracts.md) 和 [Source](../contracts/0001-public-contracts.md) 采用公共合同中的 canonical 定义；本文不复制这些定义。
+
+### 在系统中的位置与作用
+它是 `packages/application/src/index.ts` 中面向旧 SQL Run/Job 模型的后台轮询器，连接 Repository Job、旧采集服务和到期 Source 调度。
+
+### 解决的问题
+它在旧模型下完成 Job 租约、支持的 source ingest/probe 执行以及到期 Source 的入队，同时明确与 Workflow Kernel 的边界。
+
+### 使用方式
+Worker 主循环按周期调用 `pollOnce`；本组件先 claim 旧 Job，再按 job kind 调用 `IngestionService` 或 `ConnectorProbeService`，需要时创建旧 SQL Run/Job，最后释放或完成租约。
+
+### 典型情景
+仍运行 legacy ingestion 的 Worker 需要消费 `source-ingest` 或 `source-probe` Job 时选择它；Workflow Envelope、Activity 或 Completion 应改走 Workflow Host 路径。
 
 ## 概念与定义
 

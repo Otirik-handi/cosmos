@@ -1,6 +1,6 @@
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -14,6 +14,18 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 - `createBuiltinManifestCatalog`：创建包含内置 Source、Workflow、Action 和 Connector 的 `StaticCatalog`。
 
 该组件只负责清单存储与查询，不负责 Action executable 的注册或执行。Action executable 的职责见 [Action Registry](0003-action-registry.md)。
+
+### 在系统中的位置与作用
+它是组合根内的进程内清单查询层，保存 Source、Workflow、Action 和 Connector 的 manifest，供产品边界或诊断读取。
+
+### 解决的问题
+它把“系统宣称有哪些能力”和“如何执行这些能力”分开，提供稳定的清单查询而不把 executable、handler 或 Workflow runtime 对象暴露给调用方。
+
+### 使用方式
+启动组合根时创建 `StaticCatalog` 或 `createBuiltinManifestCatalog`，把它注入需要读取清单的 API/应用端口；Action executable 仍必须单独注册到 [Action Registry](0003-action-registry.md)。
+
+### 典型情景
+API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程组合时需要一份 builtin manifest 清单时，选择本组件。
 
 ## 概念与定义
 

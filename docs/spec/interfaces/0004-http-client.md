@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文记录
+当前实现规格；后续代码变化应同步更新本文。本文记录
 `@cosmos/transport-http` 的当前无状态 HTTP/SSE 适配行为；服务端路由和 DTO 的 canonical
 定义分别见 [Product API HTTP](0002-product-api-http.md) 与 [Public Contracts](../contracts/0001-public-contracts.md)。
 
@@ -18,6 +18,18 @@
 
 它不缓存数据、不重试、不实现认证、不访问 Prisma/Blob、不执行 Connector/Workflow；SSE
 只包装可注入的 EventSource-like 对象并校验收到的 event envelope。
+
+### 在系统中的位置与作用
+它是 Web/Node 调用 Product API 的无状态 transport，位于页面或其他客户端与 Product API HTTP 之间。
+
+### 解决的问题
+它集中处理路径拼接、请求 body/header、成功响应 schema 校验、非 2xx 错误和 SSE envelope，避免每个客户端重复实现边界转换。
+
+### 使用方式
+创建 `HttpCosmosClient` 时提供 base URL、fetcher 和 EventSource factory，再调用已封装的 API 方法；响应先经 contracts schema，失败通过 `CosmosTransportError` 处理。
+
+### 典型情景
+Web 页面读取 Feed/Source/Health、触发 Source 操作或订阅 SSE，或 Node 客户端需要同样的 DTO 校验时，选择本 transport。
 
 ## 概念与定义
 

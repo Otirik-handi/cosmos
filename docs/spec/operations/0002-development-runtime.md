@@ -1,6 +1,6 @@
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -15,7 +15,21 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 - `scripts/dev-service.ts`：启动单个 `api` 或 `worker` 开发服务，并处理服务停止。
 - `scripts/dev.ts`：按固定顺序启动 `web`、`api`、`worker`，管理开发进程生命周期。
 - `scripts/prisma.ts`：在工作区根目录和 `.cosmos` 数据目录下转发 Prisma 数据库命令。
-- `scripts/smoke-node.ps1`：开发运行时的验收锚点脚本，仅用于验证构建后的 Node API 与 worker 行为，不是产品组件。
+- `scripts/smoke-node.ps1`：开发运行时的验收锚点脚本，仅用于验证构建后的 Node API 与 Worker 行为，不是产品组件。
+- `scripts/e2e/helpers.ts`、`controlled-rss.ts`、`web-stack.ts`：Node/浏览器 E2E 的隔离根、动态端口、进程树清理和受控 RSS/Web Stack 边界。
+
+
+### 在系统中的位置与作用
+它是本地开发命令的协调层，连接工作区环境、端口分配、子进程生命周期和 Prisma 命令转发。
+
+### 解决的问题
+它把 web、api、worker 的启动顺序、数据目录、临时端口和停止行为统一起来，减少每位开发者手工拼接环境变量或命令的差异。
+
+### 使用方式
+开发者运行 `scripts/dev.ts` 或对应脚本；脚本依次准备环境和端口、启动服务，`scripts/prisma.ts` 在指定工作区/数据目录转发数据库命令，`smoke-node.ps1` 仅作验收锚点。
+
+### 典型情景
+本地启动完整 Cosmos、单独调试 API/Worker、准备 Prisma 数据库，或执行构建后 Node 行为验收时，选择相应脚本而不是手工启动一组不一致的进程。
 
 ## 概念与定义
 
@@ -169,11 +183,10 @@ file:<databasePath with slash>
 - 执行 `bun run db:migrate`。
 - 直接使用 `Start-Process` 启动：
   - `node apps/api/dist/main.js`
-  - worker 的 dist 入口
 - 轮询 API health。
 - 验证 fixture source、run、feed、search、story、SSE 和日志断言。
 - 最终使用 `Stop-Process -Force` 停止进程。
-- 仅作为验收脚本，不定义产品运行时能力。
+- 仅作为验收脚本，不定义产品运行时能力；当前 smoke 已在 Windows 通过。
 
 ## 输入
 
@@ -379,7 +392,7 @@ NEXT_PUBLIC_COSMOS_API_URL=http://localhost:<port>
 
 **环境解析**
 
-- 未定义的环境覆盖边界、额外变量复制规则和额外解析规则不在本实现基线中推断。
+- 未定义的环境覆盖边界、额外变量复制规则和额外解析规则不属于当前实现的已验证行为。
 - `createWorkspaceDevEnvironment` 的返回值固定限制为三项环境变量。
 
 **端口**
@@ -412,12 +425,12 @@ NEXT_PUBLIC_COSMOS_API_URL=http://localhost:<port>
 - `DATABASE_URL` 存在时优先使用；其余覆盖规则不作推断。
 - 数据库文件仅在不存在时创建；已有文件不因 wrapper 启动而被清空或截断。
 - Prisma `spawnSync` 的非零 `status` 直接透传，不在脚本层重写为成功。
-
 **smoke**
 
 - smoke 断言失败表示验收失败。
 - `Stop-Process -Force` 是验收清理动作，不是服务优雅关闭证据。
 - smoke 不能用于推断 Docker、browser、真实来源或跨进程 recovery 能力。
+- Docker/真实来源分别由 `bun run test:docker` 与 `bun run test:real:*` 显式执行，不属于默认开发或 CI 门禁。
 
 ## 依赖
 
@@ -525,7 +538,7 @@ packages/storage-prisma/prisma/schema.prisma
 - 给定：Prisma 子进程返回非零 status；观察：`scripts/prisma.ts` 以相同 status 退出；且不发生：把非零 status 转换为成功。
 - 给定：执行 `scripts/smoke-node.ps1`；观察：在 `TEMP` 隔离 root、data、log、api、worker 环境中完成迁移，直接启动 API 与 worker dist，轮询 health 并执行 source、run、feed、search、story、SSE、日志断言，最后强制停止进程；且不发生：将 smoke 脚本当作产品组件或开发进程管理器。
 - 给定：执行 `scripts/smoke-node.ps1` 的最后清理；观察：使用 `Stop-Process -Force`；且不发生：以该动作证明产品服务实现了优雅 shutdown。
-- 给定：依据本实现基线重建系统；观察：可以验证本规格列出的开发环境、端口、服务、编排、Prisma 和 smoke 行为；且不发生：把 smoke 结果解释为 Docker、browser、e2e、真实来源或跨进程 recovery 证据。
+- 给定：依据当前实现重建系统；观察：可以验证本规格列出的开发环境、端口、服务、编排、Prisma 和 smoke 行为；且不发生：把 smoke 结果解释为 Docker、browser、e2e、真实来源或跨进程 recovery 证据。
 
 ## 实现与测试锚点
 

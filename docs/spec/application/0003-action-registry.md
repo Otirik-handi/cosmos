@@ -2,7 +2,7 @@
 
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -18,6 +18,18 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 - `ActionExecutionError`：Action 查找、校验与执行失败的统一错误类型。
 
 合同类型及其 canonical 定义以 [`ActionDefinition`、`ActionDescriptor`、action ref、execution placement、retry policy 和 action error schema](../contracts/0001-public-contracts.md) 为准；本文只描述本模块的运行时行为。
+
+### 在系统中的位置与作用
+它位于 Workflow Host/Runner 与具体 Action handler 之间，是进程内 versioned Action 的注册、解析和执行入口。
+
+### 解决的问题
+它统一处理 Action ref 查找、descriptor 校验、执行 placement、retry policy、执行上下文和 host fence，避免 Runner 直接耦合 handler。
+
+### 使用方式
+组合根先注册 `ActionDefinition`；Runner 或 Host 通过 ref 调用 registry 的描述/执行入口，并传入 `ActionExecutionContext`，需要宿主 fence 的 Action 使用 `HostActionExecutionFence`。
+
+### 典型情景
+工作流 Activity 要执行本地 Action、需要按版本解析 handler，或要把 Action 失败转换成统一 `ActionExecutionError` 时，使用本组件。
 
 ## 概念与定义
 

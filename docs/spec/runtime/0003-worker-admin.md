@@ -1,10 +1,10 @@
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
-2026-08-16。本文仅描述代码基线 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 中可验证的当前行为。
+2026-08-16。本文仅描述当前代码中可验证的行为。
 
 ## 组件定位
 
@@ -13,6 +13,19 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 同一源码提供基于 `node:http` 的独立 Admin server。它监听独立主机和端口，不复用任务处理或其他服务端口，并将 HTTP 请求映射到 `WorkerAdminService`。
 
 Worker main 默认将 Admin server 绑定到 `127.0.0.1`，可用静态 Bearer token 授权，并通过 `onDrain` 回调触发 main shutdown。该集成不等同于跨进程管理、远程控制或完整的进程终止协调。
+
+
+### 在系统中的位置与作用
+它是 Worker 进程内的管理与观测入口，提供 `WorkerAdminService` 状态模型及独立 `node:http` Admin server。
+
+### 解决的问题
+它把健康、lane 计数、活跃 Attempt、能力证据、排空状态和 Prometheus 文本指标集中暴露，并为受控 shutdown 提供 drain 回调。
+
+### 使用方式
+Worker main 创建 service 并启动独立 Admin server；管理方按实际配置访问其 HTTP 端口，可用 Bearer token，发起 drain 后由 main 处理 shutdown。
+
+### 典型情景
+运维或本地开发需要查看 Worker 状态、读取指标或在更新前排空工作时使用它；它不是跨进程 Gateway 或完整远程终止协调器。
 
 ## 概念与定义
 

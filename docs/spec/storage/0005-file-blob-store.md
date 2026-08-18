@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文描述当前本地文件 Blob 适配器和 BlobRefLike 读取校验；Asset/Observation 如何决定何时写 Blob 由 [`0001-prisma-repository.md`](0001-prisma-repository.md) 和[规范化内容](../domain/0001-normalized-content.md)定义。Workflow JSON 中的 BlobRef wire shape 由[公共合同](../contracts/0001-public-contracts.md)定义；本文只拥有 bytes、hash、key 和 Blob Root containment 验证。
+当前实现规格；后续代码变化应同步更新本文。本文描述当前本地文件 Blob 适配器和 BlobRefLike 读取校验；Asset/Observation 如何决定何时写 Blob 由 [`0001-prisma-repository.md`](0001-prisma-repository.md) 和[规范化内容](../domain/0001-normalized-content.md)定义。Workflow JSON 中的 BlobRef wire shape 由[公共合同](../contracts/0001-public-contracts.md)定义；本文只拥有 bytes、hash、key 和 Blob Root containment 验证。
 
 ## 最后更新
 
@@ -11,6 +11,19 @@
 ## 组件定位
 
 `FileBlobStore` 在受控 Blob Root 中保存和读取二进制字节，以 SHA-256 内容寻址；`readVerifiedBlob` 为已有 BlobRefLike 做缺失与内容完整性检查。它不保存数据库 metadata、不提供目录索引、不负责垃圾回收，不把 mimeType 当作文件内容校验字段。
+
+### 在系统中的位置与作用
+它是受控 Blob Root 下的二进制存储层，为 Repository 的 raw/Asset 内容和 ValueStore 的 canonical JSON 提供内容寻址文件读写。
+
+### 解决的问题
+它用 SHA-256 key 管理字节并在读取时验证 hash、大小和路径 containment，避免大字节或损坏内容进入上层状态；数据库 metadata 仍由其他组件拥有。
+
+### 使用方式
+调用方通过 `put` 保存 bytes，并把返回的 ref/metadata 交给对应 owner；读取已有引用时调用 `readVerifiedBlob`，不要自行拼接 Blob Root 路径或把 mimeType 当内容校验。
+
+### 典型情景
+保存抓取到的 raw payload/Asset，或让 Workflow ValueStore 把 JSON value 放到文件而非 Workflow state 中时，选择本组件。
+
 
 ## 概念与定义
 

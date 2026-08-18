@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文只记录当前 `WorkflowBackend` 实现；WorkflowRun 的通用 DTO 与 Kernel 语义由 [`../application/0007-workflow-host-contract.md`](../application/0007-workflow-host-contract.md) / `@notnotype/nb-workflow` 拥有，本文件只补充 Prisma 持久化合同。
+当前实现规格；后续代码变化应同步更新本文。本文只记录当前 `WorkflowBackend` 实现；WorkflowRun 的通用 DTO 与 Kernel 语义由 [`../application/0007-workflow-host-contract.md`](../application/0007-workflow-host-contract.md) / `@notnotype/nb-workflow` 拥有，本文件只补充 Prisma 持久化合同。
 
 ## 最后更新
 
@@ -11,6 +11,19 @@
 ## 组件定位
 
 `PrismaWorkflowBackend` 是 `@notnotype/nb-workflow` 的 durable `WorkflowBackend` 适配器。它把一个合法 `WorkflowRunState` 规范化为 `WorkflowRun.stateJson`，同步维护可查询的 status/revision/definition/finishedAt projection，并以 CAS 防止同一 Run 的旧 revision 覆盖新状态。Workflow Host 的 Envelope、Run lease、Activity Job、Completion 和 EventSink 是相邻组件，不由本 Backend 生成或调度。
+
+### 在系统中的位置与作用
+它是 Workflow Kernel 使用的 durable `WorkflowBackend`，位于 Kernel Runner 与 `WorkflowRun.stateJson` 的 Prisma 持久化之间。
+
+### 解决的问题
+它规范化并保存合法 Kernel state，同时以 revision CAS 防止旧执行结果覆盖新状态，并维护查询所需的状态投影。
+
+### 使用方式
+Host 组合根把它提供给 Kernel Runner；Runner 先 load，再以期望 revision save，marker Envelope、Run lease、Activity/Completion 和事件写入分别通过 Host Store/EventSink 完成。
+
+### 典型情景
+Workflow 开始、恢复、重放或并发执行需要读取/保存 Kernel state 时使用它；不要用它代替 Host lease 或事件适配器。
+
 
 ## 概念与定义
 

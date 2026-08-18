@@ -2,7 +2,7 @@
 
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -13,6 +13,18 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 `IngestWorkflowControlService` 位于 `packages/application/src/workflow-control.ts`，负责将一次 ingest 请求转换为可排队的工作流输入快照，并通过 `WorkflowHostStore` 创建 queued 状态的工作流信封。
 
 该服务只负责 ingest 入队控制、输入快照捕获和幂等校验；后续 Run、Job、Activity 的执行与生命周期由 [WorkflowHostStore / Workflow Host contract](0007-workflow-host-contract.md) 及其 runtime 管理。
+
+### 在系统中的位置与作用
+它是 ingest 请求进入 durable Workflow Host 前的应用入口，位于 API/调用方与 `WorkflowHostStore` 之间。
+
+### 解决的问题
+它在执行开始前捕获 Source 快照、规范化工作流输入并处理幂等键，确保排队的 Envelope 不依赖之后变化的 Source 行。
+
+### 使用方式
+调用方提交 ingest 请求后调用该服务；服务读取 `SourceExecutionSnapshot`，构造 `cosmos.ingest@1` 的 Envelope 并请求 Host Store 创建 queued 记录，之后由 Host runtime 负责 Run/Job/Activity 执行。
+
+### 典型情景
+用户手动触发一次 Source ingest，或 API 收到带 Idempotency-Key 的重复请求时，使用本组件而不是直接写 WorkflowRun 表。
 
 ## 概念与定义
 

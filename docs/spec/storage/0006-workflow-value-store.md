@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文描述 Blob-backed Workflow ValueStore 的 canonical JSON、ValueRef 生成和读取完整性边界；ValueRef 的公共 wire shape 由[公共合同](../contracts/0001-public-contracts.md)定义，本组件拥有 canonical JSON 编码、实际引用校验和 ValueStore 错误；底层文件 containment/BlobRefLike 错误由 [`0005-file-blob-store.md`](0005-file-blob-store.md)所有。
+当前实现规格；后续代码变化应同步更新本文。本文描述 Blob-backed Workflow ValueStore 的 canonical JSON、ValueRef 生成和读取完整性边界；ValueRef 的公共 wire shape 由[公共合同](../contracts/0001-public-contracts.md)定义，本组件拥有 canonical JSON 编码、实际引用校验和 ValueStore 错误；底层文件 containment/BlobRefLike 错误由 [`0005-file-blob-store.md`](0005-file-blob-store.md)所有。
 
 ## 最后更新
 
@@ -11,6 +11,19 @@
 ## 组件定位
 
 `BlobWorkflowValueStore` 实现 `@notnotype/nb-workflow` 的 `ValueStore`：把 JSON-safe Workflow value 编码为 canonical JSON，以 `application/json` 写入 `FileBlobStore`，返回可放入 Workflow JSON 的 ValueRef；读取时拒绝缺失、错误引用、篡改 bytes 和非 JSON 内容，并返回 structured clone。它不把 `Uint8Array` 或 Blob bytes 放入 Workflow state，不访问 Prisma，也不拥有 Value 的业务生命周期。
+
+### 在系统中的位置与作用
+它是 Workflow Kernel 的 `ValueStore` 适配器，位于 Runner 的 JSON-safe value 与 `FileBlobStore` 的文件字节之间。
+
+### 解决的问题
+它把 Workflow value 编成 canonical JSON 并以 ValueRef 引用，避免把二进制或较大结构直接塞进 state，同时在读取时做四重完整性校验。
+
+### 使用方式
+Runner/Kernel 通过 `ValueStore` 的 put/get 使用本组件；put 返回的 ValueRef 放进 Workflow JSON，get 依赖 `FileBlobStore` 验证 mediaType、hash、byteSize、key 后再解析 JSON。
+
+### 典型情景
+Workflow 跨步骤保存 JSON-safe 中间值、需要恢复时读取外置 value，或要检测引用指向的 bytes 被篡改时，选择本 Store。
+
 
 ## 概念与定义
 

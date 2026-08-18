@@ -2,11 +2,11 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文是 Prisma Host 持久边界的实现合同；Run/Activity/Completion 公共类型与状态名以 [`../application/0007-workflow-host-contract.md`](../application/0007-workflow-host-contract.md) 为唯一 owner，本文只说明 SQL 条件、事务、fence、投影和恢复行为。
+当前实现规格；后续代码变化应同步更新本文。本文是 Prisma Host 持久边界的实现合同；Run/Activity/Completion 公共类型与状态名以 [`../application/0007-workflow-host-contract.md`](../application/0007-workflow-host-contract.md) 为唯一 owner，本文只说明 SQL 条件、事务、fence、投影和恢复行为。
 
 ## 最后更新
 
-2026-08-16
+2026-08-18
 
 ## 组件定位
 
@@ -14,9 +14,22 @@
 
 legacy `Run`/`Job` lane 仍由 `PrismaCosmosRepository` 拥有；本组件只处理 `WorkflowRun` 关联且 `kind = "workflow-activity"` 的 Job，不会把 Activity Job 交给 legacy claim。`PrismaWorkflowBackend` 负责同一 WorkflowRun 的 Kernel state CAS，本组件只在需要时读取/验证它并保存 Host projection。
 
+### 在系统中的位置与作用
+它是 Workflow Host 的 durable source of truth，负责把 Envelope、Run lease、Activity Job 和 Completion 落到 Prisma 表，并服务于 Runner、Activity worker、Completion dispatcher。
+
+### 解决的问题
+它让工作在进程重启后仍有可查询的领取、租约、重排和恢复依据，并以 token/expiry fencing 阻止过期持有者继续写入。
+
+### 使用方式
+Host runtime 按 port 先 claim，再在 lease 内 renew/complete/requeue；Kernel state CAS 交给 `PrismaWorkflowBackend`，一般 Workflow event 交给 `PrismaWorkflowEventSink`，legacy Job 仍由 Repository 管理。
+
+### 典型情景
+Worker 启动后领取 queued Run、Activity 或 Completion，或需要根据 durable 行恢复未完成工作时，选择本组件。
+
+
 ## 概念与定义
 
-- **Envelope（Workflow 外壳）**：`WorkflowRun` 中的 runId、Definition key/version/manifestHash、immutable inputSnapshot、productRun snapshot、Host status/resumeRequired/时间和可选 idempotencyKey；Kernel 采用前由 marker 占据 stateJson。
+- **Envelope（Workflow 外壳）**：`WorkflowRun` 中的 runId、Definition key/version/manifestHash、immutable inputSnapshot、productRun snapshot、Host status/resumeRequired/时间、可选 idempotencyKey、可选 `sourceInstanceId` 和失败时的 `errorMessage`；Kernel 采用前由 marker 占据 stateJson。
 - **Run claim**：`claimRun` 获得 `{runId, owner, leaseToken, leaseExpiresAt}`。`purpose` 有 `execution`、`activity`、`completion` 三类；三者共享同一 Run lease 字段，但候选和可否改变 status 不同。
 - **Activity Job/Attempt**：Job 是一个 pending Activity 的 durable SQL 行；每次 claim 递增 attempts 并产生一个 lease，生命周期事件由 `DomainEvent` 投影为 Attempt。Job payload 只含可 JSON 序列化的 Activity identity、Action ref、input、options、idempotencyKey 和可选 retryPolicy。
 - **Completion**：每个 terminal Activity Job 至多一个 `WorkflowCompletion`（`jobId`、receipt 唯一），是单消费者 durable delivery record，不等于 Kernel 已接受；dispatcher 只有观察到 state 中相同 completion 且持有当前 Run lease 后才能标记 delivered。
@@ -27,7 +40,7 @@ legacy `Run`/`Job` lane 仍由 `PrismaCosmosRepository` 拥有；本组件只处
 
 ### Envelope
 
-`createWorkflowEnvelope(input)` 立即校验 runId、可选 idempotencyKey、Definition 三元组、inputSnapshot/productRun JSON 和 createdAt。事务内先按 idempotencyKey 查找，再按 runId 查找：同一 identity 返回已有 Envelope；同 key 绑定其它 identity 或同 runId 已存在其它 identity 抛 `WorkflowHostConflictError`。新行写入精确 marker `{"kind":"cosmos.workflow-envelope","version":1,"runId}`、status=`queued`、kernelRevision=0、无 lease，并在同一事务写一次 `run.queued.v1`，其 idempotency key 为 `workflow-run:<runId>:queued`。
+`createWorkflowEnvelope(input)` 立即校验 runId、可选 idempotencyKey、Definition 三元组、inputSnapshot/productRun JSON、可选 `sourceId` 和 createdAt。事务内先按 idempotencyKey 查找，再按 runId 查找：同一 identity 返回已有 Envelope；同 key 绑定其它 identity 或同 runId 已存在其它 identity 抛 `WorkflowHostConflictError`。新行写入精确 marker `{"kind":"cosmos.workflow-envelope","version":1,"runId"}`、status=`queued`、kernelRevision=0、无 lease，并在同一事务写一次 `run.queued.v1`，其 idempotency key 为 `workflow-run:<runId>:queued`。`sourceId` 归一化后写入 `WorkflowRun.sourceInstanceId`，供来源状态投影使用。
 
 唯一键竞争后会重新读取 winner 并重新校验 identity；找不到 durable winner 则抛 `WorkflowHostError("unavailable")`。`findWorkflowEnvelopeByIdempotencyKey` 缺失返回 null。`loadWorkflowEnvelope` 可读取 marker 或 adopted Kernel row，但会解析 state/projection 并在损坏时 fail closed；`hasWorkflowKernelState` 在 row 存在且 state 不是精确 marker 时返回 true。
 
@@ -47,7 +60,7 @@ legacy `Run`/`Job` lane 仍由 `PrismaCosmosRepository` 拥有；本组件只处
 
 `claimActivityJob({owner, leaseMs, now?})` 只扫描 `workflow-activity`、所属 WorkflowRun 非 terminal 且 status 为 due queued/retry_wait 或已过期 leased 的 Job。若 Run 有其它 owner 的有效 Run lease，候选跳过；若 state 是 envelope marker，或 `pendingActivities` 中不存在同时匹配 key/path/seq/kind/fingerprint/reference/receipt 的条目，Job 留在 queued，不执行 orphan Activity。Activity payload/state JSON 损坏会抛 `serialization`，事务回滚且不会把该 Job 交给 worker。
 
-若 attempts 已达到 maxAttempts，claim 在同一 transaction 中将 Job 置为 `failed_terminal`、errorCode=`max_attempts`、保存当前 kernelRevision，并创建一个 status=`queued` 的失败 Completion；同时写 `workflow.activity.failed_terminal.v1`。否则 update 条件包含原 status 和旧 lease（若候选原来 leased），成功后 status=`leased`、attempts 加一、保存当前 WorkflowRun.kernelRevision、owner/token/expiry，并写 `workflow.activity.leased.v1`。更新竞争失败跳过该候选。返回的 claim 包含 payload、kernelRevision、attempts/maxAttempts 和 lease，但 fence 不写入 payload。
+若 attempts 已达到 maxAttempts，claim 在同一事务中将 Job 写为 `failed_terminal`，创建 status=`queued` 的失败 Completion，追加 `workflow.activity.failed_terminal.v1`，然后继续处理其它候选；该 Job 不作为 leased claim 返回。其它候选 update 条件包含原 status 和旧 lease（若候选原来 leased），成功后 status=`leased`、attempts 加一、保存当前 WorkflowRun.kernelRevision、owner/token/expiry，并写 `workflow.activity.leased.v1`。更新竞争失败跳过该候选。返回的 claim 包含 payload、kernelRevision、attempts/maxAttempts 和 lease，但 fence 不写入 payload。
 
 `heartbeatActivityJob` 要求 Job kind/status、owner/token 匹配且 expiry > now，成功延长 expiry；`releaseActivityJob` 同样要求未过期当前 lease，成功后将 Job 置 `queued`、清 lease、nextAttemptAt=now，可写 errorCode=`lease_unavailable`/reason，并追加 `workflow.activity.released.v1`。旧 owner 返回 false。
 
@@ -66,11 +79,10 @@ Job lease 失效、Run lease 失效、Run terminal、revision 改变、pending i
 
 ### Completion dispatcher
 
-`claimWorkflowCompletion` 扫描 availableAt <= now 且 status=`queued` 或 leased expiry 已到期的 Completion，按 availableAt/createdAt/id 升序。attempts >= maxAttempts 时条件更新为 `dead_letter`、清 lease并跳过；否则 attempts 加一、status=`leased`、生成 owner/token/expiry。`heartbeatWorkflowCompletion` 只接受当前 completion owner/token 且 expiry > now。
-
-`deliverWorkflowCompletion` 必须同时携带 Completion lease 和同 workflowRunId 的 current Run lease。事务内要求 Completion 仍 leased、owner/token/expiry 匹配；读取 WorkflowRun state 并以 current kernelRevision 检查 `activityCompletions` 中相同 activityKey/receipt/reference/fingerprint/status/result/error fingerprint。Kernel 已接受则把 Completion 置 `delivered` 并清 lease，返回 true；任一 fence/state 检查失败返回 false，保留 leased 行。即使 Run 已变成 terminal，只要 completion 已先被 Kernel 接受且 Run lease 仍有效，delivery 仍可成功。
-
-`requeueWorkflowCompletion` 只接受当前未过期 Completion lease；未达 maxAttempts 时清 lease、status=`queued`、写 lastError、availableAt 默认按 attempt 指数退避（1s、2s、4s…上限 30s），也可传显式时间；达到上限直接 dead_letter。`deadLetterWorkflowCompletion` 要求当前未过期 lease，写 dead_letter/lastError 并清 lease。`markResumeRequired` 只在非 terminal Run 的 current Run lease 下把 resumeRequired 设为 true。`listRunsForRecovery` 默认 limit=100，按 updatedAt/id 返回 queued/running/waiting 中 marker 行或 resumeRequired 行。
+`claimWorkflowCompletion` 扫描 availableAt <= now 且 status=`queued` 或 leased expiry 已到期的 Completion，按 availableAt/createdAt/id 升序。达到 attempts 上限的记录仍由 dispatcher 领取；dispatcher 取得对应 Run lease 后调用 `deadLetterWorkflowCompletion`，再以当前 Run lease 调用 `failWorkflowRun`，避免 claim 阶段丢失 Run 失败投影。
+`heartbeatWorkflowCompletion` 只接受当前 completion owner/token 且 expiry > now。`deliverWorkflowCompletion` 必须同时验证 Completion lease、当前 Run lease 和 Kernel 已接受的 completion identity；CAS false 返回 false，不得报告为成功。
+`requeueWorkflowCompletion` 只接受当前未过期 Completion lease；未达 maxAttempts 时清 lease、status=`queued`、写 lastError、availableAt 默认按 attempt 指数退避（1s、2s、4s…上限 30s），也可传显式时间；达到上限由 dispatcher 的 dead-letter 路径处理。`deadLetterWorkflowCompletion` 要求当前未过期 lease，写 dead_letter/lastError 并清 lease。`failWorkflowRun({ runLease, error, now? })` 仅在 owner/token 未过期且 Run 非终态时 CAS 写入 `status=failed`、`errorMessage`、`finishedAt`，清除 lease 并幂等追加 `run.failed.v1`；stale lease/CAS false 不改变其它 owner。
+`markResumeRequired` 只在非 terminal Run 的 current Run lease 下把 resumeRequired 设为 true。`listRunsForRecovery` 默认 limit=100，按 updatedAt/id 返回 queued/running/waiting 中 marker 行或 resumeRequired 行。
 
 ## 输入
 
@@ -92,12 +104,15 @@ Job lease 失效、Run lease 失效、Run terminal、revision 改变、pending i
 
 | 表 | 关键字段 | 持久关系/约束 |
 | --- | --- | --- |
-| `WorkflowRun` | id、stateJson、kernelRevision、status、resumeRequired、definitionKey/version/manifestHash、idempotencyKey 唯一、inputSnapshotJson、productRunJson、runLeaseOwner/token/expires、startedAt/finishedAt、created/updatedAt | 拥有 Workflow Job、Completion、Checkpoint、Workflow observations、Workflow events |
+| `WorkflowRun` | id、stateJson、kernelRevision、status、resumeRequired、definitionKey/version/manifestHash、idempotencyKey 唯一、inputSnapshotJson、productRunJson、`sourceInstanceId`、`errorMessage`、runLeaseOwner/token/expires、startedAt/finishedAt、created/updatedAt | 可选关联 SourceInstance；拥有 Workflow Job、Completion、Checkpoint、Workflow observations、Workflow events |
 | `Job` | workflowRunId、workflowKernelRevision、kind/status、payload/result、idempotencyKey 全局唯一、attempts/maxAttempts、lease owner/token/expiry、nextAttemptAt/error | Activity Job 与 WorkflowRun 级联；legacy run/step 关联仍存在，legacy claim 通过 kind 白名单隔离 |
 | `WorkflowCompletion` | id、workflowRunId、jobId 唯一、activityKey、receipt 唯一、reference/fingerprint、completionJson、status、attempts/maxAttempts、availableAt、lease/error/time | WorkflowRun/Job 删除级联；status/availableAt 和 workflowRunId 有索引 |
 | `DomainEvent` | sequence、eventId、type/version/payload、aggregate、workflowRunId、idempotencyKey | `(workflowRunId,idempotencyKey)` 唯一；Activity lifecycle 和 queued event 使用它 |
 
-WorkflowRun marker 的 stateJson 与 Host snapshot 是两个阶段：marker 表示 envelope-only；Kernel Backend adoption 后同一行 stateJson 变为实际 state，但 Host snapshot/lease 字段仍由本组件维护。
+WorkflowRun marker 的 stateJson 与 Host snapshot 是两个阶段：marker 表示 envelope-only；Kernel Backend adoption 后同一行 stateJson 变为实际 state，但 Host snapshot、source projection、errorMessage 和 lease 字段仍由本组件维护。
+## WorkflowRun 来源投影
+
+`WorkflowRun.sourceInstanceId` 是 nullable 的 durable 来源身份；创建 ingest envelope 时从 `sourceId` 写入。`toSourceSnapshot()` 同时读取 legacy `Run` 与 durable `WorkflowRun`，按创建/更新时间选择较新的 Run 投影，并从 `WorkflowRun.errorMessage` 读取 `lastError`。因此来源查询不会只依赖 legacy Run，也不会把错误文本从 Kernel `stateJson` 猜出。Migration `20260818000000_workflow_run_source_projection` 在 fresh 数据库和已有 Host 数据上 forward-only 增加 `sourceInstanceId`、`errorMessage` 及来源/时间索引。
 
 ## 状态转换
 
@@ -107,7 +122,7 @@ WorkflowRun marker 的 stateJson 与 Host snapshot 是两个阶段：marker 表�
 
 ### Activity Job
 
-`queued → leased → succeeded | retry_wait | failed_terminal | cancelled`；`retry_wait` 到 nextAttemptAt 后可再次 leased；leased expiry 后可被其它 owner 接管。`releaseActivityJob` 是 leased → queued。orphan/marker/pending identity 不匹配时保持 queued。maxAttempts claim 直接把 queued/retry_wait/到期 leased 候选安全 terminalize 为 failed_terminal 并生成失败 Completion。
+`queued → leased → succeeded | retry_wait | failed_terminal | cancelled`；`retry_wait` 到 nextAttemptAt 后可再次 leased；leased expiry 后可被其它 owner 接管。`releaseActivityJob` 是 leased → queued。orphan/marker/pending identity 不匹配时保持 queued。Activity maxAttempts 的失败 Job 在 claim 阶段转为 `failed_terminal` 并创建 queued 失败 Completion，不在 claim 阶段返回 leased。
 
 ### Completion
 
@@ -139,7 +154,7 @@ Envelope key、Activity Job idempotencyKey、Completion jobId/receipt 和 Domain
 
 ## 配置
 
-构造参数接收 PrismaClient、可选 LoggerPort 和 `actionRetryPolicies: Record<ActionRef, RetryPolicy>`。未找到 ref policy 时 Activity Job 使用 maxAttempts=3；Completion maxAttempts 固定为 5。leaseMs、retryDelayMs、completion availableAt 由调用者传入或使用实现默认（Activity retry 30 秒、Completion backoff 1/2/4…秒上限 30 秒）。数据库必须先应用 `20260814090000_workflow_activity_host` migration；没有独立环境变量或跨数据库配置。
+构造参数接收 PrismaClient、可选 LoggerPort 和 `actionRetryPolicies: Record<ActionRef, RetryPolicy>`。未找到 ref policy 时 Activity Job 使用 maxAttempts=3；Completion maxAttempts 固定为 5。leaseMs、retryDelayMs、completion availableAt 由调用者传入或使用实现默认（Activity retry 30 秒、Completion backoff 固定 1 秒）。数据库必须先应用 Host migrations，包括 `20260814090000_workflow_activity_host`、`20260815090000_workflow_ingest` 和 `20260818000000_workflow_run_source_projection`；没有独立环境变量或跨数据库配置。
 
 ## 重建验收
 
@@ -155,9 +170,8 @@ Envelope key、Activity Job idempotencyKey、Completion jobId/receipt 和 Domain
 
 ## 实现与测试锚点
 
-- `packages/storage-prisma/src/workflow-host-store.ts:84-112`：组件边界/构造；`:114-256`：Envelope 创建、idempotency、marker、Kernel state 查询；`:258-424`：三类 Run claim、heartbeat、release；`:426-518`：startAction、retry policy 和 Job identity；`:520-751`：Activity claim/heartbeat/release；`:753-927`：双 fence terminal completion；`:929-1213`：Completion claim/heartbeat/delivery/requeue/dead-letter/resumeRequired；`:1215-1251`：recovery list；`:1330-1673`：输入、payload、completion 规范化；`:1748-2160`：projection、pending identity、event、lease fence helper；`:2166-2248`：JSON/date/lease/backoff 错误 helper。
+- `packages/storage-prisma/prisma/migrations/20260814090000_workflow_activity_host/migration.sql`：Host snapshot/lease 字段、workflow Job link、kernel revision、Workflow Event idempotency unique、WorkflowCompletion 表；`20260815090000_workflow_ingest/migration.sql`：Workflow provenance/checkpoint 扩展；`20260818000000_workflow_run_source_projection/migration.sql`：`sourceInstanceId`、`errorMessage` 与来源/时间索引。
 - `packages/storage-prisma/prisma/schema.prisma:76-135`：Job/DomainEvent 字段与索引；`:251-303`：WorkflowRun/WorkflowCompletion 字段、唯一约束和关系。
-- `packages/storage-prisma/prisma/migrations/20260814090000_workflow_activity_host/migration.sql`：Host snapshot/lease 字段、workflow Job link、kernel revision、Workflow Event idempotency unique、WorkflowCompletion 表；`20260815090000_workflow_ingest/migration.sql`：Workflow provenance/checkpoint 扩展。
 - `packages/storage-prisma/src/workflow-host-store.test.ts:45-130`：迁移、EventSink lease、旧数据库升级；`:132-212`：两个 Prisma client 竞争与旧 Completion lease；`:214-374`：Envelope idempotency、terminal/lost revision completion；`:376-478`：orphan Job、Run takeover、resumeRequired；`:480-650`：Activity idempotency、success/retry、旧 lease；`:652-727`：crash window reclaim、Completion max attempts；`:729-885`：stale delivery、requeue/dead-letter、terminal Run delivery；`:887-941`：ingest lookup、retry policy 持久化、max Activity attempts completion。
 
 ## 非目标/边界

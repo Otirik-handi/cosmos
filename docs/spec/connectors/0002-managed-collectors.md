@@ -2,15 +2,15 @@
 
 ## 状态
 
-Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
+当前实现规格；后续代码变化应同步更新本文。
 
-本文档仅描述实现基线 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 中 `plugins/collectors/src/index.ts` 与 `plugins/collectors/src/index.test.ts` 可观察到的实际行为。范围限定为一个组件：受管 Bilibili/OpenCLI 采集器、AI HOT 采集器及 builtin Connector registry。
+本文档仅描述当前实现中 `plugins/collectors/src/index.ts` 与 `plugins/collectors/src/index.test.ts` 可观察到的实际行为。范围限定为一个组件：受管 Bilibili/OpenCLI 采集器、AI HOT 采集器及 builtin Connector registry。
 
-本文不是未来设计，不承诺基线之外的功能。
+本文不是未来设计，不承诺当前实现之外的功能。
 
 ## 最后更新
 
-实现基线：`5ce628690ab0110b0525e8ebcbacbe673ced9c55`。
+按当前实现与测试校准。
 
 ## 组件定位
 
@@ -22,6 +22,19 @@ Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55
 - RSS 与 `fixture-rss` 的具体行为由 [RSS Connector 规格](./0001-rss.md) 定义，本文只规定它们在 registry 中的注册关系。
 
 组件只负责获取、解析和标准化，不直接持久化领域对象、Blob 或 checkpoint。后续持久化属于 Worker/Application 与 Connector runtime 的职责。
+
+
+### 在系统中的位置与作用
+它是 builtin connector registry 中的受管 Bilibili/OpenCLI 与 AI HOT 连接器，和 RSS connector 一起为 Source kind 提供来源适配。
+
+### 解决的问题
+它把外部命令或公共 HTTP API 的返回转换为共同的 connector 输出和 domain 规范化结果，让上层不需要理解各来源协议；不直接持久化。
+
+### 使用方式
+组合根加载 builtin registry；runtime 按 Source kind 解析连接器，先校验配置，再调用相应 fetch，后续写入、Blob 和 checkpoint 交给 Application/Workflow/Storage。
+
+### 典型情景
+Source 配置选择 Bilibili feed/hot 或 AI HOT 分页来源时，使用这里的 connector；RSS/fixture-rss 的细节继续遵循 [RSS Connector](0001-rss.md)。
 
 ## 概念与定义
 
@@ -84,7 +97,7 @@ browser-bridge
 
 通过前两项选出的外部可执行文件若以 `.cmd` 或 `.bat` 结尾，则以 shell 模式执行。
 
-默认 timeout 为 `120000` 毫秒，默认 `maxBufferBytes` 为 `4 * 1024 * 1024`。基线实现中，`maxBufferBytes` 只存在于 runner 接口和默认值中，没有传给 `execFileAsync`；源码只将 timeout 和 signal 作为对应执行控制项传入。因此，4 MiB 不是当前实际生效的子进程输出上限。
+默认 timeout 为 `120000` 毫秒，默认 `maxBufferBytes` 为 `4 * 1024 * 1024`。当前实现中，`maxBufferBytes` 只存在于 runner 接口和默认值中，没有传给 `execFileAsync`；源码只将 timeout 和 signal 作为对应执行控制项传入。因此，4 MiB 不是当前实际生效的子进程输出上限。
 
 默认 `checkVersion=true`。每个 Bilibili connector 实例只进行一次版本检查。`--version` 必须以退出码 `0` 完成，且输出必须可识别为 semver major `1`；否则 fetch 以不可重试的 `unsupported_version` 失败。
 
@@ -352,7 +365,7 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 
 组件级默认值如下：
 
-| 配置 | 默认值 | 基线行为 |
+| 配置 | 默认值 | 当前行为 |
 | --- | --- | --- |
 | OpenCLI executable | `options.executable`，其次 `COSMOS_OPENCLI_PATH`，最后 Node 加包入口 | 构造 runner 时确定 |
 | OpenCLI timeout | `120000ms` | 传给 `execFileAsync` |
@@ -363,7 +376,7 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 | config schema version | `1` | Bilibili 与 AI HOT 均默认 |
 | AI HOT endpoint | `https://aihot.virxact.com/api/v1/items` | 固定且不可由 Source config 覆盖 |
 
-`configVersion=v1` 是 connector descriptor 版本；config 中的 `schemaVersion` 是正整数且默认 `1`。基线没有在本文中建立二者必须数值相等的额外规则。
+`configVersion=v1` 是 connector descriptor 版本；config 中的 `schemaVersion` 是正整数且默认 `1`。当前实现没有在本文中建立二者必须数值相等的额外规则。
 
 ## 重建验收
 
@@ -383,12 +396,12 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 14. 给定合法 AI HOT fixture 响应，必须可逐字段断言 content fallback、URL fallback、UTC 时间、publisher、source locator、image asset、metrics、raw payload 和 MIME。
 15. AI HOT 对 `page.nextCursor` 必须按实现的文本读取规则返回：非空字符串原样返回，数字或布尔值返回其文本形式，空字符串、缺失值或对象/数组等其他类型返回 `null`。
 16. 以 stub runner 和 stub fetch 完成上述验收时，只证明解析、映射和编排行为；不得将 fixture 成功表述为真实 Bilibili、OpenCLI、Browser Bridge 或 AI HOT 可用性验收。
-17. 在重建实现中检查子进程调用选项时，必须确认 timeout 和 signal 已传入，同时确认 `maxBufferBytes` 没有被错误宣称为基线中已生效的 `execFile` 限制。
+17. 在重建实现中检查子进程调用选项时，必须确认 timeout 和 signal 已传入，同时确认 `maxBufferBytes` 没有被错误宣称为当前实现中已生效的 `execFile` 限制。
 18. 对日志采集结果进行断言时，日志可包含状态、字节数、数量、耗时和错误码，但不得包含 fixture payload 正文。
 
 ## 实现与测试锚点
 
-代码证据以基线提交中的以下文件为准：
+代码证据以当前实现中的以下文件为准：
 
 - `plugins/collectors/src/index.ts`
   - 常量锚点：`bilibiliConnectorId`、`aiHotConnectorId`、`openCliExecutableEnv`、`aiHotItemsUrl`、`supportedOpenCliMajor`。
@@ -404,7 +417,7 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
   - builtin descriptor 顺序、四项且仅四项注册，以及 `opencli` 不受支持的场景。
   - 版本不兼容、OpenCLI exit 66/69/77、超时、其他子进程错误、Bilibili JSON 包装形态和完整 metrics 映射等其余分支虽由生产源码实现，但当前测试文件没有逐项断言；不得把它们写成已通过测试。
 
-研究文档、外部产品说明和人工推测不是本组件行为的代码证据。发生冲突时，以指定基线的 `index.ts` 实现和 `index.test.ts` 可执行断言为准。
+研究文档、外部产品说明和人工推测不是本组件行为的代码证据。发生冲突时，以当前实现中的 `index.ts` 实现和 `index.test.ts` 可执行断言为准。
 
 ## 非目标/边界
 
@@ -414,8 +427,8 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 - 不允许 AI HOT 自定义 endpoint、header 或认证。
 - 不在 connector 内执行数据库、领域仓库、Blob 或 checkpoint 持久化。
 - 不在 connector 内实现调度、重试循环、退避、跨进程恢复或 cursor 持久化。
-- 不保证 `maxBufferBytes=4 MiB` 已限制子进程输出；基线没有将其传给 `execFileAsync`。
+- 不保证 `maxBufferBytes=4 MiB` 已限制子进程输出；当前实现没有将其传给 `execFileAsync`。
 - 不将真实网络异常全部归类为 connector 内部错误；上层 runtime 可以继续归类。
 - 不保证真实 AI HOT、Bilibili、OpenCLI、Browser Bridge、网络限流或认证环境可用。
 - 不验证 OpenCLI 版本检查状态的跨进程恢复。
-- 基线测试中的 stub、fixture 和模拟响应不构成真实来源、真实 Browser Bridge、真实限流或端到端持久化验收。
+- 当前测试中的 stub、fixture 和模拟响应不构成真实来源、真实 Browser Bridge、真实限流或端到端持久化验收。

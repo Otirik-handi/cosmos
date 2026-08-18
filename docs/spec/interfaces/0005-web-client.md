@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文记录当前 Phase 1
+当前实现规格；后续代码变化应同步更新本文。本文记录当前 Phase 1
 Next.js Web 页面和其 Product API 调用行为；不把尚未实现的浏览器/e2e 验收、认证、
 Gateway 或 Draft API 写成当前能力。
 
@@ -25,6 +25,18 @@ Root。服务端路由和共享 DTO 详见 [Product API HTTP](0002-product-api-h
 错误与 schema 校验详见 [HTTP Client](0004-http-client.md)。Catalog page、CapabilitiesResponse、
 AttemptSnapshot/AttemptPage 与 Asset download 虽由 API 提供，但当前 `HttpCosmosClient`
 没有对应方法；本页面也不调用这些边界。
+
+### 在系统中的位置与作用
+它是 Cosmos 面向用户的 Next.js 展示层，位于浏览器页面与 `HttpCosmosClient` 之间，负责把 Product API 数据组织成信息聚合工作台。
+
+### 解决的问题
+它提供 Feed/Source/Health、搜索、Story 展开、手动 Source Run 和 SSE 刷新等可见交互，同时把数据库、Blob 和 API 细节留在服务端/transport。
+
+### 使用方式
+浏览器加载 `page.tsx` 后由 client component 调用 `HttpCosmosClient`；需要刷新时监听 SSE，创建 fixture 或触发 Run 也通过已有 client 方法和 API 路由完成，不直接访问 Prisma。
+
+### 典型情景
+本地浏览内容、检查 Source/Health，验证搜索分页或观察一次手动 ingest 的页面刷新时，使用该页面；尚未封装的 Catalog、Attempt 或 Asset download 不由它承担。
 
 ## 概念与定义
 
@@ -235,5 +247,4 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   fixture-rss。
 - 不把 EventSource unavailable 后“服务恢复会重新连接”文案写成已实现自动 reconnect；
   当前代码只显示 unavailable，后续连接依赖页面重新挂载或上层操作。
-- Browser visual/e2e、Docker、真实网络来源和跨进程 recovery 未在当前代码/测试基线中
-  验证；本规格的验收步骤需在相应运行环境中单独执行。
+- Browser visual/e2e、Docker、真实网络来源和跨进程 recovery 未在当前代码和测试中验证；本规格的验收步骤需在相应运行环境中单独执行。

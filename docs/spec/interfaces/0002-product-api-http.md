@@ -2,13 +2,13 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`。本文是当前
+当前实现规格；后续代码变化应同步更新本文。本文是当前
 `AppController` 的 HTTP/SSE 重建合同，不是 `docs/api/` 中 Draft、Planned 或 Reserved
 路由的实现声明。
 
 ## 最后更新
 
-2026-08-16。
+2026-08-18。
 
 ## 组件定位
 
@@ -22,6 +22,18 @@ SSE 的共享 DTO、枚举和 Zod schema 由 [`@cosmos/contracts` 公共合同](
 拥有；但本 Controller 当前还返回三类没有 contracts schema 的 HTTP 局部投影：Catalog page、
 CapabilitiesResponse 和 AttemptSnapshot/AttemptPage。本文件是这些 HTTP 投影的唯一字段定义，
 它们不是 `@cosmos/contracts` DTO，也没有被 `HttpCosmosClient` 封装。
+
+### 在系统中的位置与作用
+它是面向产品客户端的 HTTP/SSE 边界，位于 `AppController` 与 Application、Repository、Catalog port 之间。
+
+### 解决的问题
+它把查询、Source 控制、Run 投影、诊断和 SSE 统一投影为公开路径与状态，隔离客户端与 Prisma、Blob 及 Worker claim/complete 细节。
+
+### 使用方式
+客户端请求 `/api/v1` 下的已实现路由（健康根路径除外）；Controller 调用注入的 port，响应字段和错误按本文件及公共 contracts 解析，SSE 使用对应 event envelope。
+
+### 典型情景
+读取 Feed/Search/Story、创建或触发 Source、查询 Run/Job，或订阅 SSE 刷新页面时选择该 HTTP 接口；Draft/Planned/Reserved 路由不从本文推导为已实现。
 
 ## 概念与定义
 
@@ -139,9 +151,7 @@ Action manifests；这些是当前实现锚点，不是允许客户端执行的�
 `feedUrl`、`scheduleIntervalMs`；Bilibili 另外保留 `mode`、`limit`、`profile`、
 `schemaVersion`。不会把其它配置值原样回显。
 
-`Idempotency-Key` 在 Controller 中按 trim 后使用；Source run 的 Workflow Control 会
-按 key 复用同一 envelope，并在同 key 指向其它 source/trigger 时失败。HTTP 层没有单独
-声明 Idempotency-Key 的长度 schema；下游入队合同要求非空。
+`Idempotency-Key` 在 Controller 中按 trim 后使用；Source run 的 Workflow Control 会按 key 复用同一 envelope，并在同 key 指向其它 source、trigger 或不可兼容快照时抛出 `WorkflowHostConflictError`。HTTP 将该类型映射为 `409 Conflict`，响应 `ServiceError` 的 `code` 为 `conflict`、`retryable` 为 `false`，并不把冲突降级为 400 或解析错误消息文本。下游入队合同要求 key 非空。
 
 ### Run、Job、Attempt
 
@@ -286,7 +296,6 @@ Controller 本身无持久状态；SSE 的 cursor、poll timer 和 keepalive 时
   脱敏规则不由 Controller 重复实现。
 
 ## 错误与降级
-
 ### 400
 
 - Create/Update Source body、Source kind/config、Search/Entries query 违反 Zod 合同；
@@ -303,6 +312,12 @@ Controller 本身无持久状态；SSE 的 cursor、poll timer 和 keepalive 时
 Source、Source definition、Workflow/Action definition、Run、Job、Attempt、Story、Entry、
 Revision、Asset 查询找不到目标时返回 `NotFoundException`，错误码 `not_found`、
 `retryable: false`。`workflow-runs/:id` 与 `runs/:id` 共享该语义。
+
+### 409
+
+同一 `Idempotency-Key` 绑定不同 Source、trigger 或 Workflow 输入快照时，Application 抛出
+`WorkflowHostConflictError`，Controller 返回 HTTP `409`，body 为 `{ code: "conflict", retryable: false, ... }`。
+同一 key 与同一 identity 的重放仍返回原 Workflow Run，不创建第二个 durable envelope。
 
 ### 其它错误
 

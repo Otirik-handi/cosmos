@@ -2,7 +2,7 @@
 
 ## 状态
 
-`Implemented @ 5ce628690ab0110b0525e8ebcbacbe673ced9c55`
+当前实现规格；后续代码变化应同步更新本文。
 
 ## 最后更新
 
@@ -13,6 +13,18 @@
 `packages/application/src/workflow-ingest.ts` 注册并实现一个工作流 Definition `cosmos.ingest@1`，以及三个 Action：`source.fetch@1`、`library.ingest@1`、`source.checkpoint@1`。
 
 该组件负责协调来源分页抓取、逐项入库和来源 checkpoint 提交。它不拥有领域模型或持久化 schema；相关 canonical 定义见[标准化内容模型](../domain/0001-normalized-content.md)、[公共合同](../contracts/0001-public-contracts.md)和[文件 Blob Store](../storage/0005-file-blob-store.md)。
+
+### 在系统中的位置与作用
+它是 Workflow Host 中的 ingest 业务定义层，向 registry 提供 `cosmos.ingest@1` 及其三个 runtime Action。
+
+### 解决的问题
+它把来源分页抓取、逐项入库和 checkpoint 提交组织成可恢复的工作流步骤，同时把领域规则和持久化实现留给各自 owner。
+
+### 使用方式
+组合根注册该 Definition 与 `source.fetch@1`、`library.ingest@1`、`source.checkpoint@1`；入队由 [Ingest Workflow Control](0005-ingest-workflow-control.md) 完成，执行由 Host runtime 按 Action ref 调用。
+
+### 典型情景
+需要把一次来源同步拆成可重试的 fetch、ingest、checkpoint 顺序，或重建内置 Workflow catalog 时，选择本组件。
 
 ## 概念与定义
 
