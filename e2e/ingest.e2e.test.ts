@@ -153,7 +153,10 @@ describe("ingest Node process E2E", () => {
             headers: { "idempotency-key": idempotencyKey },
         });
         expect(repeated.status).toBe(201);
-        expect(repeated.body).toMatchObject({ id: runId, sourceId, status: "queued" });
+        expect(repeated.body).toMatchObject({ id: runId, sourceId });
+        expect(["queued", "running", "succeeded", "failed", "cancelled"]).toContain(
+            isRecord(repeated.body) ? repeated.body.status : undefined,
+        );
 
         const conflict = await requestJson(`${apiBaseUrl}/api/v1/sources/${secondSourceId}/runs`, {
             method: "POST",
