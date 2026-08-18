@@ -1,100 +1,66 @@
 # Cosmos Project Status
 
-> 截至 2026-08-16。
+> 截至 2026-08-18；以下验证针对 `master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`，已提交、已 push、未部署。
 
 ## 一句话结论
 
-Task 07 已在本地 `master` 快进合入提交
-`5ce628690ab0110b0525e8ebcbacbe673ced9c55`（`feat: add durable activity host and worker
-admin`），其父提交为 `b678fb5`。本地 `master` 相对 `origin/master = b678fb5` ahead 1；
-本轮未 push、未创建远端 PR，也未清理 worktree。
+本轮完成 Worker 稳定化与分层测试体系：Worker 配置 fail-fast、四 lane 隔离、recovery priority、Attempt 生命周期、shutdown deadline/force path、WorkflowRun 来源与错误持久化、completion dead-letter → Run failed、HTTP 409 冲突映射均已实现。默认离线门禁已通过：数据库/类型、属性/单元、构建、Node 进程 E2E、Playwright 浏览器 E2E 和 Windows smoke。
 
-`@notnotype/nb-workflow@0.2.0` 已发布。当前合入代码包含 Cosmos Durable Host、固定
-`cosmos.ingest@1` durable 执行路径、Prisma Backend、Blob ValueStore 和 Worker Admin
-direct loopback HTTP 实现。Focused 4 files / 47 tests、full 23 files / 165 tests、
-typecheck、build、Prisma generate/validate 以及 Node durable smoke 均有通过证据；这些
-证据描述当前代码和测试边界，不等于完整生产门禁或完整 parity。
+实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing.md`](docs/testing.md)。本轮新增 `.github/workflows/ci.yml`，将质量、Node E2E、浏览器 E2E 和 Windows smoke 分为独立 job；Docker 与真实来源保持显式可选。
 
-固定 Ingest 的完整 parity 矩阵、跨进程 durable recovery、双 Worker 长时 fencing、Worker
-Admin SIGTERM/活跃 Attempt deadline、Docker/browser/真实 RSS/Bilibili/OpenCLI 来源验收
-仍未完成或未验证。Gateway、Redis、多主机和远程 Worker 仍不是当前实现；旧
-IngestionWorker 路径保留为显式回滚/兼容边界。
+当前实现提交基线：`master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`。本轮稳定化交付拆为 Worker 生产实现、分层测试/CI、稳定化规格和 E2E 竞态回归四个提交；四者均已推送。
 
-实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，其唯一实现基线是
-`5ce6286`；需求、架构、ADR、API Draft 与 Task 继续各自承担原职责。
-
-## 2026-08-16 Task 07 合入后的验证记录
-
-以下记录的是已合入 `master` 的实现证据；不把单条 fixture、focused/full 测试或 Node
-smoke 扩大为完整 parity、跨进程 recovery、部署验收或真实来源验收。
-
-### 已验证
+## 已验证（2026-08-18）
 
 ```text
-bunx vitest run packages/application/src/workflow-ingest.test.ts packages/application/src/workflow-host-runtime.test.ts apps/api/src/app.controller.test.ts packages/storage-prisma/src/workflow-host-store.test.ts
-  4 test files / 47 tests passed / 0 failed
-
-bunx vitest run
-  23 test files / 165 tests passed / 0 failed
-
-bun run typecheck
-  passed
-bun run lint:web
-  passed
-bun run build
-  passed
-bun run db:generate
-  passed
 bun run db:validate
   passed
+bun run db:generate
+  passed（首次因共享调试进程占用 Prisma query engine 得到 Windows EPERM，停止该进程后重试通过）
+bun run typecheck
+  passed
+bun run test:property
+  2 property files / 3 tests passed
+bun run test
+  28 test files / 185 tests passed
+bun run build && bun run lint:web
+  passed
+bun run test:e2e
+  4 Node process E2E files / 4 tests passed
+bun run test:browser
+  1 Playwright browser test passed
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1
+  passed：healthWorker=ready、durableRunStatus=succeeded、Feed=3、Search=1、SSE Run/Feed、requestId bridge、400/404、日志脱敏
 git diff --check
   passed
 ```
 
-Focused parity 是单条 durable fixture vertical（1/1）；runtime recovery 与 storage fencing
-测试分别覆盖当前测试列出的行为，Admin 测试覆盖 direct loopback 状态、drain、错误和授权
-边界。Storage 测试还覆盖 fresh migration、pre-host 数据升级保留和两个 Prisma client
-之间的 lease/completion fencing；它们不是完整生产验收。
+`vitest.e2e.config.ts` 和 `vitest.property.config.ts` 独立声明 include，仅收集各自层级，不扫描 workspace 依赖测试。Node E2E 使用真实构建产物、隔离 SQLite、动态 API/Admin 端口和结构化日志；跨进程 recovery 使用受控 RSS 请求与 lease expiry。浏览器流程从真实页面完成来源创建、录入、Feed 和 Story 展开。
 
-Node durable smoke 在隔离 Data Root 上通过：应用 6 条 migration，得到
-`healthWorker=ready`、`queuedStatus=queued`、`durableRunStatus=succeeded`、Feed 3、
-Search 1、run/feed SSE、requestId bridge、400/404 和脱敏日志结果。该 smoke 不替代
-Docker、browser/e2e、真实来源、跨进程恢复或长时双 Worker 验收。
+## 未运行的可选门禁
 
-### 当前运维与安全边界
+- `bun run test:docker` 已验证前置检查，但本机没有 Docker CLI，因此 Docker Compose build/health/fixture 流程未运行。
+- `bun run test:real:rss` 因缺少 `COSMOS_REAL_RSS_URL` 未运行。
+- `bun run test:real:aihot`、`bun run test:real:bilibili` 因缺少显式联网许可及对应 endpoint/OpenCLI/Browser Bridge 前置未运行。
+- 真实来源、Docker、长时双 Worker 压力、发布/部署和公网安全均不由默认门禁证明。
 
-- Worker Admin 的 `activePollCount` 只统计 `beginPoll` 到 `endPoll` 的 poll；
-  `activeAttemptCount`/`activeAttempts`/`activeAttemptIds` 只统计 runtime 明确登记的真实
-  Attempt，不制造假 identity。Drain 停止新 poll 后等待 active poll 与登记 Attempt；
-  deadline 到达仍有资源时返回 `timed_out` 且 `resourcesClosed=false`。
-- Admin direct loopback 代码和 focused 测试已合入；Worker Admin SIGTERM 下的活跃 Attempt
-  deadline 仍未完成人工/长时验收。
-- Docker CLI 当前不可用，Docker/Compose 未验证；browser/e2e 配置或工具不可用，未验证；
-  真实 RSS、Bilibili、OpenCLI 来源未运行。
+## 当前运维边界
+
+- Worker Admin 的 `activePollCount` 只统计 `beginPoll` 到 `endPoll` 的 poll；`activeAttemptCount` 只统计 runtime 明确登记的真实 Attempt。Drain 等待 active poll/Attempt，deadline 到达返回 `timed_out` 且 `resourcesClosed=false`。
+- `SIGINT`、`SIGTERM` 和 Admin drain 共用 WorkerRuntime shutdown 状态机；正常退出码为 0，force/failed shutdown 为 1。
+- WorkflowRun 的 `sourceInstanceId`、`errorMessage` 是 durable projection 字段；来源查询同时考虑 legacy Run 和 WorkflowRun，不从 Kernel stateJson 猜错误文本。
+- 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
 
 ## 当前真相分层
 
-- `master = 5ce628690ab0110b0525e8ebcbacbe673ced9c55`：Task 07 已本地合入；父提交为
-  `b678fb5`，相对 `origin/master` ahead 1，未 push、未创建 PR。
-- `@notnotype/nb-workflow@0.2.0`：已发布并被当前 Cosmos consumer 使用；它与 Cosmos
-  Durable Host 是两个层次，不能由 package 发布推断所有产品门禁完成。
-- Task 07 合入内容提供 Durable Host、Activity Job/lease/completion fencing、固定
-  `cosmos.ingest@1` 执行和 Worker Admin direct loopback；完整 parity、跨进程 recovery、
-  长时 fencing、SIGTERM 活跃 Attempt deadline 和部署/真实来源验收仍未完成或未验证。
-- PR A / PR #9 的历史基线已成为本地合入父提交的组成部分；PR #5 `96e27fd`、PR #6
-  `498018e`、T04 parity `dc78f05`、T04 runtime `9fe84f2`、T05 `d0b8e03` 以及
-  `t07-action-contract-convergence@61ed21e` 仍是保护区或历史重建来源，不是本次实现基线。
-- 旧 IngestionWorker 路径继续保留；当前 Worker 默认使用 Durable Host，只有显式
-  `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。
-- Task 06 的 `nb-workflow` 稳定门禁已解除，执行权已转交 Task 07；Task 07 已合入但其
-  完整 parity/生产边界仍按后续验证门禁推进。
+当前工作树已提交并 push 到 `master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`；未部署。
+- 已验证层级分别为数据库/类型、属性/单元、构建、Node 进程 E2E、Playwright 浏览器 E2E 和 Windows smoke；每层证据只覆盖自身合同。
+- Docker/真实来源保持显式可选。Docker CLI 缺失导致 Compose 流程未运行；真实 RSS、AI HOT、Bilibili/OpenCLI 因外部前置缺失未运行。
+- 完整 Ingest parity、长时间双 Worker 压力、生产部署、多主机、Gateway、Redis 和远程 Worker 不由当前门禁证明。
 
 ## 当前下一步
 
-补齐固定 `cosmos.ingest@1` 的重复/修订/媒体/abort/takeover/Feed/Search/Story 矩阵、
-跨进程 recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline、
-Docker/browser 和真实来源验收。Gateway、Redis、多主机和远程 Worker 继续后置；本轮根
-文档不执行远端 Git、发布或部署操作。
+可选后续是提供 Docker daemon、真实来源 endpoint/凭据和 OpenCLI/Browser Bridge 后分别运行对应显式命令；不应把缺少这些外部前置写成离线 Worker 回归。
 
 ## 已完成
 
