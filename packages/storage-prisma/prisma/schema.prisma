@@ -17,6 +17,7 @@ model SourceInstance {
     updatedAt    DateTime      @updatedAt
     observations Observation[]
     runs         Run[]
+    workflowRuns WorkflowRun[]
     checkpoint   Checkpoint?
     entries      Entry[]
 }
@@ -254,6 +255,8 @@ model WorkflowRun {
     kernelRevision     Int                   @default(0)
     status             String
     resumeRequired     Boolean               @default(false)
+    sourceInstanceId   String?
+    errorMessage       String?
     definitionKey      String
     definitionVersion  String
     manifestHash       String
@@ -267,6 +270,7 @@ model WorkflowRun {
     finishedAt         DateTime?
     createdAt          DateTime
     updatedAt          DateTime
+    sourceInstance     SourceInstance?      @relation(fields: [sourceInstanceId], references: [id], onDelete: SetNull)
     checkpoints        Checkpoint[]
     workflowObservations Observation[] @relation("WorkflowRunObservations")
     jobs               Job[]
@@ -274,6 +278,7 @@ model WorkflowRun {
     events             DomainEvent[]         @relation("WorkflowRunEvents")
 
     @@index([status, updatedAt])
+    @@index([sourceInstanceId, createdAt])
 }
 
 model WorkflowCompletion {

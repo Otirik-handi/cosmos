@@ -46,6 +46,7 @@ import {
     type WorkflowRunLease,
     type WorkflowRunStatus,
     type LoggerPort,
+    type FailWorkflowRunInput,
 } from "@cosmos/application";
 
 import {
@@ -170,6 +171,8 @@ export class PrismaWorkflowHostStore implements WorkflowHostStore {
                         kernelRevision: 0,
                         status: "queued",
                         resumeRequired: false,
+                        sourceInstanceId: normalized.sourceId,
+                        errorMessage: null,
                         definitionKey: normalized.definition.key,
                         definitionVersion: normalized.definition.version,
                         manifestHash: normalized.definition.manifestHash,
@@ -974,30 +977,6 @@ export class PrismaWorkflowHostStore implements WorkflowHostStore {
             for (const candidate of candidates) {
                 const completionRow = candidate as WorkflowCompletionRow;
                 const completion = toCompletion(completionRow);
-                if (completionRow.attempts >= completionRow.maxAttempts) {
-                    const exhausted = await tx.workflowCompletion.updateMany({
-                        where: {
-                            id: candidate.id,
-                            status: candidate.status,
-                            ...previousCompletionLeaseGuard(completionRow),
-                        },
-                        data: {
-                            status: "dead_letter",
-                            lastError: completionRow.lastError
-                                ?? "Workflow completion exceeded maximum delivery attempts.",
-                            leaseOwner: null,
-                            leaseToken: null,
-                            leaseExpiresAt: null,
-                        },
-                    });
-                    if (exhausted.count === 1) {
-                        this.logger?.warn("workflow.completion.max_attempts", {
-                            completionId: candidate.id,
-                            workflowRunId: candidate.workflowRunId,
-                        });
-                    }
-                    continue;
-                }
                 const leaseToken = randomUUID();
                 const leaseExpiresAt = new Date(now.getTime() + input.leaseMs);
                 const updated = await tx.workflowCompletion.updateMany({
@@ -1179,6 +1158,48 @@ export class PrismaWorkflowHostStore implements WorkflowHostStore {
         return updated.count === 1;
     }
 
+    async failWorkflowRun(input: FailWorkflowRunInput): Promise<boolean> {
+        const now = input.now ?? new Date();
+        assertValidDate(now, "now");
+        const runLease = normalizeRunLease(input.runLease);
+        const error = requireNonEmptyString(input.error, "error");
+        return this.prisma.$transaction(async (tx) => {
+            const run = await tx.workflowRun.findUnique({
+                where: { id: runLease.runId },
+            });
+            if (!run || isTerminalRunStatus(run.status)
+                || !hasCurrentRunLease(run as WorkflowRunRow, runLease, now)) {
+                return false;
+            }
+            const finishedAt = now;
+            const updated = await tx.workflowRun.updateMany({
+                where: {
+                    id: runLease.runId,
+                    status: run.status,
+                    runLeaseOwner: runLease.owner,
+                    runLeaseToken: runLease.leaseToken,
+                    runLeaseExpiresAt: { gt: now },
+                },
+                data: {
+                    status: "failed",
+                    errorMessage: error,
+                    finishedAt,
+                    updatedAt: now,
+                    runLeaseOwner: null,
+                    runLeaseToken: null,
+                    runLeaseExpiresAt: null,
+                    resumeRequired: false,
+                },
+            });
+            if (updated.count !== 1) return false;
+            await appendWorkflowRunFailedEvent(tx, {
+                workflowRunId: runLease.runId,
+                error,
+            });
+            return true;
+        });
+    }
+
 
     async markResumeRequired(input: MarkResumeRequiredInput): Promise<boolean> {
         const now = input.now ?? new Date();
@@ -1263,6 +1284,8 @@ type WorkflowRunRow = {
     kernelRevision: number;
     status: string;
     resumeRequired: boolean;
+    sourceInstanceId: string | null;
+    errorMessage: string | null;
     definitionKey: string;
     definitionVersion: string;
     manifestHash: string;
@@ -1333,6 +1356,7 @@ function normalizeEnvelopeInput(input: CreateWorkflowEnvelopeInput): {
     definition: WorkflowDefinitionReference;
     inputSnapshot: JsonValue;
     productRun: JsonValue;
+    sourceId: string | null;
     createdAt: Date;
 } {
     if (!input || typeof input !== "object") {
@@ -1342,6 +1366,9 @@ function normalizeEnvelopeInput(input: CreateWorkflowEnvelopeInput): {
     const idempotencyKey = input.idempotencyKey == null
         ? null
         : requireNonEmptyString(input.idempotencyKey, "idempotencyKey");
+    const sourceId = input.sourceId == null
+        ? null
+        : requireNonEmptyString(input.sourceId, "sourceId");
     const definition = normalizeDefinition(input.definition);
     assertJsonValue(input.inputSnapshot);
     assertJsonValue(input.productRun);
@@ -1354,6 +1381,7 @@ function normalizeEnvelopeInput(input: CreateWorkflowEnvelopeInput): {
         definition,
         inputSnapshot: structuredClone(input.inputSnapshot),
         productRun: structuredClone(input.productRun),
+        sourceId,
         createdAt,
     };
 }
@@ -2144,6 +2172,42 @@ function assertCurrentRunLease(
             "lease_lost",
             `Workflow run lease ${lease.runId} is no longer current.`,
         );
+    }
+}
+
+async function appendWorkflowRunFailedEvent(
+    tx: Prisma.TransactionClient,
+    input: { workflowRunId: string; error: string },
+): Promise<void> {
+    const idempotencyKey = `workflow-run:${input.workflowRunId}:failed`;
+    const payloadJson = canonicalJson({
+        runId: input.workflowRunId,
+        status: "failed",
+        error: input.error,
+    });
+    const existing = await tx.domainEvent.findFirst({
+        where: {
+            workflowRunId: input.workflowRunId,
+            idempotencyKey,
+        },
+    });
+    if (existing) return;
+    try {
+        await tx.domainEvent.create({
+            data: {
+                eventId: randomUUID(),
+                type: "run.failed.v1",
+                version: "v1",
+                payloadJson,
+                aggregateType: "WorkflowRun",
+                aggregateId: input.workflowRunId,
+                runId: null,
+                workflowRunId: input.workflowRunId,
+                idempotencyKey,
+            },
+        });
+    } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
     }
 }
 

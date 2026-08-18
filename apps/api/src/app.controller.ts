@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import {
     BadRequestException,
+    ConflictException,
     Bind,
     Controller,
     Get,
@@ -25,6 +26,7 @@ import { z, ZodError } from "zod";
 
 import {
     createHealthSnapshot,
+    WorkflowHostConflictError,
     type CosmosRepository,
     type WorkflowEnvelope,
     type WorkflowHostStore,
@@ -46,6 +48,10 @@ import { SourceProbeService } from "./source-probe.service.js";
 const productRunSchema = z.object({
     sourceId: z.string().nullable().optional(),
     triggerKind: z.enum(["manual", "schedule"]).optional(),
+    itemCount: z.number().int().nonnegative().optional(),
+    createdEntryCount: z.number().int().nonnegative().optional(),
+    revisedEntryCount: z.number().int().nonnegative().optional(),
+    error: z.string().nullable().optional(),
 }).passthrough();
 
 function validationError(error: unknown): never {
@@ -258,19 +264,30 @@ export class AppController {
         }
         const key = idempotencyKey?.trim() || `manual:${sourceId}:${randomUUID()}`;
         if (this.workflowControl) {
-            const envelope = await this.workflowControl.enqueue({
-                sourceId,
-                triggerKind: "manual",
-                idempotencyKey: key,
-            });
-            const result = toPublicWorkflowRun(envelope);
-            this.logger?.info("workflow.run.queued", {
-                runId: result.id,
-                sourceId,
-                triggerKind: result.triggerKind,
-                status: result.status,
-            });
-            return result;
+            try {
+                const envelope = await this.workflowControl.enqueue({
+                    sourceId,
+                    triggerKind: "manual",
+                    idempotencyKey: key,
+                });
+                const result = toPublicWorkflowRun(envelope);
+                this.logger?.info("workflow.run.queued", {
+                    runId: result.id,
+                    sourceId,
+                    triggerKind: result.triggerKind,
+                    status: result.status,
+                });
+                return result;
+            } catch (error) {
+                if (error instanceof WorkflowHostConflictError) {
+                    throw new ConflictException({
+                        code: "conflict",
+                        message: error.message,
+                        retryable: false,
+                    });
+                }
+                throw error;
+            }
         }
         const run = await this.repository.createQueuedRun({
             sourceId,
@@ -619,12 +636,12 @@ function toPublicWorkflowRun(envelope: WorkflowEnvelope) {
         sourceId: productRun.sourceId ?? null,
         triggerKind,
         status: toProductWorkflowRunStatus(envelope.status),
-        definition: envelope.definition,
-        idempotencyKey: envelope.idempotencyKey,
-        resumeRequired: envelope.resumeRequired,
         createdAt: envelope.createdAt,
-        updatedAt: envelope.updatedAt,
         startedAt: envelope.startedAt,
         finishedAt: envelope.finishedAt,
+        itemCount: productRun.itemCount ?? 0,
+        createdEntryCount: productRun.createdEntryCount ?? 0,
+        revisedEntryCount: productRun.revisedEntryCount ?? 0,
+        error: productRun.error ?? null,
     };
 }

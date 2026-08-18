@@ -38,6 +38,7 @@ import {
     type WorkflowEnvelope,
     type WorkflowHostStore,
     type WorkflowRunLease,
+    type WorkflowRuntimeAttempt,
 } from "./workflow-host.js";
 
 /**
@@ -112,6 +113,9 @@ export interface WorkflowActivityWorkerOptions
     /** Base delay used when a retryable action reaches retry_wait. */
     retryDelayMs?: number | ((job: WorkflowActivityJobClaim, error: unknown) => number);
     maxRetryDelayMs?: number;
+    /** Worker-owned runtime visibility; failures here must not change the Job outcome. */
+    onAttemptStarted?: (attempt: WorkflowRuntimeAttempt) => void;
+    onAttemptFinished?: (attemptId: string) => void;
 }
 
 export interface WorkflowCompletionDispatcherOptions
@@ -330,6 +334,7 @@ export class WorkflowRunLane {
     private readonly leaseMs: number;
     private readonly heartbeatMs: number;
     private readonly logger: LoggerPort;
+    private readonly active = new Map<AbortController, { runId: string; runner?: WorkflowRunnerLike }>();
 
     constructor(private readonly options: WorkflowRunLaneOptions) {
         this.store = options.store;
@@ -339,17 +344,28 @@ export class WorkflowRunLane {
         this.logger = loggerFor(options.logger);
     }
 
-    async pollOnce(): Promise<WorkflowRunLaneResult> {
+    abortActive(reason: unknown): void {
+        for (const [controller, active] of this.active) {
+            if (controller.signal.aborted) continue;
+            controller.abort(reason);
+            abortRunner(active.runner, active.runId, controller.signal, this.logger);
+        }
+    }
+
+    async pollOnce(input: { runId?: string } = {}): Promise<WorkflowRunLaneResult> {
         const lease = await this.store.claimRun({
             owner: this.owner,
             leaseMs: this.leaseMs,
             purpose: "execution",
+            ...(input.runId === undefined ? {} : { runId: input.runId }),
             now: nowFor(this.options),
         });
         if (!lease) return null;
 
         const runLogger = this.logger.child({ runId: lease.runId });
         const controller = new AbortController();
+        const active = { runId: lease.runId } as { runId: string; runner?: WorkflowRunnerLike };
+        this.active.set(controller, active);
         let runner: WorkflowRunnerLike | undefined;
         const heartbeat = createHeartbeat(
             this.heartbeatMs,
@@ -372,6 +388,7 @@ export class WorkflowRunLane {
                 lease,
                 envelope.createdAt,
             );
+            active.runner = runner;
             const hasKernelState = await this.store.hasWorkflowKernelState(lease.runId);
             const execution = !hasKernelState
                 ? this.begin(runner, definition, envelope, controller.signal)
@@ -380,6 +397,7 @@ export class WorkflowRunLane {
                 execution,
                 heartbeat.lost,
                 leaseLostError("Run", lease.runId),
+                controller.signal,
             );
             if (isTerminalRunStatus(view.status)) {
                 runLogger.debug("workflow_run_execution_finished", { status: view.status });
@@ -388,9 +406,12 @@ export class WorkflowRunLane {
         } catch (error) {
             if (heartbeat.wasLost || isLeaseLostError(error)) {
                 runLogger.warn("workflow_run_lease_lost", { error: errorMessage(error) });
+            } else if (controller.signal.aborted) {
+                runLogger.info("workflow_run_shutdown_aborted", { error: errorMessage(error) });
             }
             throw error;
         } finally {
+            this.active.delete(controller);
             await heartbeat.stop();
             await this.store.releaseRun({ ...lease, now: nowFor(this.options) }).catch((error) => {
                 runLogger.warn("workflow_run_release_failed", { error: errorMessage(error) });
@@ -437,6 +458,7 @@ export class WorkflowActivityWorker {
     private readonly leaseMs: number;
     private readonly heartbeatMs: number;
     private readonly logger: LoggerPort;
+    private readonly active = new Map<AbortController, WorkflowRuntimeAttempt>();
 
     constructor(private readonly options: WorkflowActivityWorkerOptions) {
         this.owner = ownerFor(options);
@@ -444,6 +466,17 @@ export class WorkflowActivityWorker {
         this.heartbeatMs = heartbeatMsFor(options, this.leaseMs);
         this.logger = loggerFor(options.logger);
     }
+
+    abortActive(reason: unknown): void {
+        for (const [controller, attempt] of this.active) {
+            if (controller.signal.aborted) continue;
+            controller.abort(reason);
+            const cancellationRequested = { ...attempt, cancellationRequested: true };
+            this.active.set(controller, cancellationRequested);
+            this.notifyAttemptStarted(cancellationRequested);
+        }
+    }
+
     async pollOnce(): Promise<WorkflowActivityWorkerResult> {
         const job = await this.options.store.claimActivityJob({
             owner: this.owner,
@@ -510,14 +543,27 @@ export class WorkflowActivityWorker {
                     now: nowFor(this.options),
                 }),
             ],
-            () => {
-                controller.abort(leaseLostError("Activity", job.id));
-            },
+            () => controller.abort(leaseLostError("Activity", job.id)),
         );
 
+        let attempt: WorkflowRuntimeAttempt | null = null;
         try {
             const request = this.actionRequest(job, controller.signal);
             const action = this.options.actions.resolve(request.reference);
+            attempt = {
+                attemptId: `${job.id}:attempt:${job.attempts}`,
+                jobId: job.id,
+                runId: job.workflowRunId,
+                actionRef: request.reference,
+                lane: "workflow-activity",
+                slot: 0,
+                startedAt: nowFor(this.options).toISOString(),
+                leaseExpiresAt: job.leaseExpiresAt ?? runLease.leaseExpiresAt ?? nowFor(this.options).toISOString(),
+                cancellationRequested: false,
+            };
+            this.active.set(controller, attempt);
+            this.notifyAttemptStarted(attempt);
+
             const retryPolicy = job.payload.retryPolicy ?? action.definition.execution.retryPolicy;
             const effectiveJob = retryPolicy === null
                 ? job
@@ -550,6 +596,7 @@ export class WorkflowActivityWorker {
                         ),
                     heartbeat.lost,
                     leaseLostError("Activity", job.id),
+                    controller.signal,
                 );
                 if (!isJsonValue(output)) {
                     throw new ActionExecutionError(
@@ -564,18 +611,27 @@ export class WorkflowActivityWorker {
                 };
             } catch (error) {
                 if (heartbeat.wasLost || isLeaseLostError(error)) throw error;
+                // A process shutdown leaves the durable Job for lease-expiry
+                // recovery. It is not a user-visible Activity cancellation.
+                if (controller.signal.aborted) throw error;
                 terminal = this.failureResult(effectiveJob, error, controller.signal);
             }
             const completion = terminal.status === "retry_wait"
                 ? undefined
                 : this.activityCompletion(job, terminal);
-            return await this.complete(job, jobLease, runLease, terminal, completion);
+            return await this.complete(jobLease, runLease, terminal, completion);
         } finally {
+            if (attempt) {
+                this.active.delete(controller);
+                this.notifyAttemptFinished(attempt.attemptId);
+            }
+            await heartbeat.stop();
             await this.options.store.releaseRun({ ...runLease, now: nowFor(this.options) }).catch((error) => {
                 workerLogger.warn("workflow_activity_run_release_failed", { error: errorMessage(error) });
             });
         }
     }
+
     private async hostFence(
         job: WorkflowActivityJobClaim,
         jobLease: ActivityJobLease,
@@ -596,10 +652,9 @@ export class WorkflowActivityWorker {
                 `Kernel revision is required before executing Activity Job ${job.id}.`,
             );
         }
-        const resolvedKernelRevision = kernelRevision;
         return {
             workflowRunId: job.workflowRunId,
-            kernelRevision: resolvedKernelRevision,
+            kernelRevision,
             activity: job.payload.activity,
             jobId: job.id,
             attempt: job.attempts,
@@ -689,8 +744,8 @@ export class WorkflowActivityWorker {
                 : {}),
         };
     }
+
     private async complete(
-        _job: WorkflowActivityJobClaim,
         jobLease: ActivityJobLease,
         runLease: WorkflowRunLease,
         result: ActivityJobTerminalResult,
@@ -704,6 +759,28 @@ export class WorkflowActivityWorker {
             now: nowFor(this.options),
         });
     }
+
+    private notifyAttemptStarted(attempt: WorkflowRuntimeAttempt): void {
+        try {
+            this.options.onAttemptStarted?.(attempt);
+        } catch (error) {
+            this.logger.warn("workflow_activity_attempt_start_observer_failed", {
+                attemptId: attempt.attemptId,
+                error: errorMessage(error),
+            });
+        }
+    }
+
+    private notifyAttemptFinished(attemptId: string): void {
+        try {
+            this.options.onAttemptFinished?.(attemptId);
+        } catch (error) {
+            this.logger.warn("workflow_activity_attempt_finish_observer_failed", {
+                attemptId,
+                error: errorMessage(error),
+            });
+        }
+    }
 }
 
 /**
@@ -715,12 +792,19 @@ export class WorkflowCompletionDispatcher {
     private readonly leaseMs: number;
     private readonly heartbeatMs: number;
     private readonly logger: LoggerPort;
+    private readonly active = new Set<AbortController>();
 
     constructor(private readonly options: WorkflowCompletionDispatcherOptions) {
         this.owner = ownerFor(options);
         this.leaseMs = leaseMsFor(options);
         this.heartbeatMs = heartbeatMsFor(options, this.leaseMs);
         this.logger = loggerFor(options.logger);
+    }
+
+    abortActive(reason: unknown): void {
+        for (const controller of this.active) {
+            if (!controller.signal.aborted) controller.abort(reason);
+        }
     }
 
     async pollOnce(): Promise<WorkflowCompletionDispatcherResult> {
@@ -750,6 +834,7 @@ export class WorkflowCompletionDispatcher {
         }
 
         const controller = new AbortController();
+        this.active.add(controller);
         const dispatcherLogger = this.logger.child({
             runId: completion.workflowRunId,
             jobId: completion.jobId,
@@ -787,6 +872,7 @@ export class WorkflowCompletionDispatcher {
                     ),
                     heartbeat.lost,
                     leaseLostError("Completion", completion.id),
+                    controller.signal,
                 );
                 if (heartbeat.wasLost) throw leaseLostError("Completion", completion.id);
                 const delivered = await this.options.store.deliverWorkflowCompletion({
@@ -803,6 +889,8 @@ export class WorkflowCompletionDispatcher {
                     await this.requeueOrDeadLetter(
                         completion,
                         "Workflow completion delivery was not accepted by the durable fence.",
+                        undefined,
+                        runLease,
                     );
                     return null;
                 }
@@ -815,10 +903,17 @@ export class WorkflowCompletionDispatcher {
                     });
                     return null;
                 }
-                await this.requeueOrDeadLetter(completion, errorMessage(error), error);
+                if (controller.signal.aborted) {
+                    dispatcherLogger.info("workflow_completion_shutdown_aborted", {
+                        completionId: completion.id,
+                    });
+                    return null;
+                }
+                await this.requeueOrDeadLetter(completion, errorMessage(error), error, runLease);
                 return null;
             }
         } finally {
+            this.active.delete(controller);
             await heartbeat.stop();
             await this.options.store.releaseRun({ ...runLease, now: nowFor(this.options) }).catch((error) => {
                 dispatcherLogger.warn("workflow_completion_run_release_failed", { error: errorMessage(error) });
@@ -830,14 +925,14 @@ export class WorkflowCompletionDispatcher {
         completion: WorkflowCompletionClaim,
         error: string,
         cause?: unknown,
+        runLease?: WorkflowRunLease,
     ): Promise<void> {
         if (this.shouldDeadLetter(completion, cause)) {
-            await this.deadLetter(completion, error);
+            await this.deadLetter(completion, error, runLease);
             return;
         }
         await this.requeue(completion, error);
     }
-
     private shouldDeadLetter(completion: WorkflowCompletionClaim, error: unknown): boolean {
         const maxAttempts = this.options.maxCompletionAttempts ?? 5;
         if (!Number.isSafeInteger(maxAttempts) || maxAttempts <= 0) {
@@ -859,14 +954,36 @@ export class WorkflowCompletionDispatcher {
         });
     }
 
-    private async deadLetter(completion: WorkflowCompletionClaim, error: string): Promise<void> {
-        await this.options.store.deadLetterWorkflowCompletion({
+    private async deadLetter(
+        completion: WorkflowCompletionClaim,
+        error: string,
+        runLease?: WorkflowRunLease,
+    ): Promise<void> {
+        const deadLettered = await this.options.store.deadLetterWorkflowCompletion({
             completionId: completion.id,
             leaseToken: completion.leaseToken,
             owner: completion.leaseOwner,
             error,
             now: nowFor(this.options),
         });
+        if (!deadLettered || !this.options.store.failWorkflowRun) return;
+        const currentRunLease = runLease ?? await this.options.store.claimRun({
+            owner: this.owner,
+            leaseMs: this.leaseMs,
+            runId: completion.workflowRunId,
+            purpose: "completion",
+            now: nowFor(this.options),
+        });
+        if (!currentRunLease) return;
+        await this.options.store.failWorkflowRun({
+            runLease: currentRunLease,
+            error,
+            now: nowFor(this.options),
+        });
+        if (runLease === undefined) {
+            await this.options.store.releaseRun({ ...currentRunLease, now: nowFor(this.options) })
+                .catch(() => undefined);
+        }
     }
 
     private retryDelayMs(completion: WorkflowCompletionClaim, error: unknown): number {
@@ -1039,17 +1156,30 @@ async function raceWithLease<T>(
     execution: Promise<T>,
     leaseLost: Promise<void>,
     error: WorkflowHostError,
+    signal?: AbortSignal,
 ): Promise<T> {
     // A runner may not observe AbortSignal (rerun() in Kernel 0.2.0 has no
-    // signal parameter), so the lane must stop waiting as soon as the fence is
-    // known stale. Attaching a rejection handler prevents a late runner error
-    // from becoming an unhandled rejection after the race has settled.
+    // signal parameter), so the lane must stop waiting as soon as a lease or
+    // process shutdown is known stale. A rejection handler prevents a late
+    // runner error from becoming an unhandled rejection after the race settles.
     execution.catch(() => undefined);
+    const aborted = signal === undefined
+        ? new Promise<never>(() => undefined)
+        : new Promise<never>((_, reject) => {
+            if (signal.aborted) {
+                reject(signal.reason ?? new Error("Workflow runtime aborted."));
+                return;
+            }
+            signal.addEventListener("abort", () => {
+                reject(signal.reason ?? new Error("Workflow runtime aborted."));
+            }, { once: true });
+        });
     return Promise.race([
         execution,
         leaseLost.then(() => {
             throw error;
         }),
+        aborted,
     ]);
 }
 

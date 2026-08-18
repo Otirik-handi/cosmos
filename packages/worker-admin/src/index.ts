@@ -165,6 +165,7 @@ export interface WorkerAdminOptions {
     connectorEvidence?: readonly WorkerManifestEvidence[];
     limits?: Partial<WorkerCapabilitySnapshot["limits"]>;
     onDrain?: (snapshot: WorkerDrainSnapshot) => Promise<void>;
+    onDrainTimeout?: (snapshot: WorkerDrainSnapshot) => Promise<void>;
 }
 
 export interface CreateDrainCommand {
@@ -647,6 +648,12 @@ export class WorkerAdminService {
                     false,
                     this.now(),
                 );
+                try {
+                    await this.options.onDrainTimeout?.(cloneDrain(record.snapshot));
+                } catch (error) {
+                    this.recentErrors.unshift(toFailure(error, this.now()));
+                    this.recentErrors.splice(10);
+                }
                 this.drainEvents.emit(`drain:${record.snapshot.id}`);
                 return;
             }

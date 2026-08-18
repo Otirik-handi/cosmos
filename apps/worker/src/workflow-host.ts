@@ -13,6 +13,7 @@ import {
     type WorkflowActivityWorkerOptions,
     type WorkflowCompletionDispatcherOptions,
     type WorkflowRunLaneOptions,
+    type WorkflowRuntimeAttempt,
 } from "@cosmos/application";
 import {
     BlobWorkflowValueStore,
@@ -37,6 +38,8 @@ export interface WorkflowHostCompositionOptions {
     heartbeatIntervalMs?: number;
     logger?: LoggerPort;
     now?: () => Date;
+    onAttemptStarted?: (attempt: WorkflowRuntimeAttempt) => void;
+    onAttemptFinished?: (attemptId: string) => void;
 }
 
 export interface WorkflowHostComposition {
@@ -94,9 +97,10 @@ export function createWorkflowHost(
     const activityOptions = {
         ...laneOptions,
         actions,
+        onAttemptStarted: options.onAttemptStarted,
+        onAttemptFinished: options.onAttemptFinished,
     } satisfies WorkflowActivityWorkerOptions;
     const completionOptions = laneOptions satisfies WorkflowCompletionDispatcherOptions;
-
     return {
         backend,
         store,

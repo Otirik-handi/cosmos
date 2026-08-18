@@ -10,7 +10,11 @@ import {
     type IdGenerator,
     type JsonValue,
 } from "@notnotype/nb-workflow";
-import type { WorkflowEnvelope, WorkflowHostStore } from "./workflow-host.js";
+import {
+    WorkflowHostConflictError,
+    type WorkflowEnvelope,
+    type WorkflowHostStore,
+} from "./workflow-host.js";
 
 export const ingestWorkflowDefinitionReference = "cosmos.ingest@1" as const;
 export const ingestWorkflowManifestHash = "builtin:cosmos.ingest@1:source-snapshot-v1";
@@ -54,7 +58,9 @@ export class IngestWorkflowControlService {
             if (!existingInput.success
                 || existingInput.data.source.id !== sourceId
                 || existingInput.data.triggerKind !== triggerKind) {
-                throw new Error(`Idempotency key ${idempotencyKey} conflicts with another source run.`);
+                throw new WorkflowHostConflictError(
+                    `Idempotency key ${idempotencyKey} conflicts with another source run.`,
+                );
             }
             return existing;
         }
@@ -82,6 +88,7 @@ export class IngestWorkflowControlService {
                 triggerKind,
                 idempotencyKey,
             }),
+            sourceId,
         });
     }
 }

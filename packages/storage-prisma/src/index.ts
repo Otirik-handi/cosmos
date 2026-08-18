@@ -45,10 +45,8 @@ import type {
     WorkflowAttemptSnapshot,
 } from "@cosmos/application";
 import { FileBlobStore } from "@cosmos/blob-store";
-import {
-    PrismaClient,
-    type Prisma,
-} from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
+import { workflowRunError } from "./workflow-run-projection.js";
 
 export interface StorageRoots {
     dataRoot: string;
@@ -1828,10 +1826,31 @@ export class PrismaCosmosRepository implements CosmosRepository {
     private async toSourceSnapshot(
         source: Prisma.SourceInstanceGetPayload<{}>,
     ): Promise<SourceSnapshot> {
-        const latestRun = await this.prisma.run.findFirst({
-            where: { sourceInstanceId: source.id },
-            orderBy: { createdAt: "desc" },
-        });
+        const [latestRun, latestWorkflowRun] = await Promise.all([
+            this.prisma.run.findFirst({
+                where: { sourceInstanceId: source.id },
+                orderBy: { createdAt: "desc" },
+            }),
+            this.prisma.workflowRun.findFirst({
+                where: { sourceInstanceId: source.id },
+                orderBy: { createdAt: "desc" },
+            }),
+        ]);
+        const legacyProjection = latestRun
+            ? {
+                at: latestRun.finishedAt ?? latestRun.createdAt,
+                error: latestRun.errorMessage,
+            }
+            : null;
+        const workflowProjection = latestWorkflowRun
+            ? {
+                at: latestWorkflowRun.finishedAt ?? latestWorkflowRun.createdAt,
+                error: latestWorkflowRun.errorMessage,
+            }
+            : null;
+        const latest = legacyProjection && workflowProjection
+            ? legacyProjection.at >= workflowProjection.at ? legacyProjection : workflowProjection
+            : legacyProjection ?? workflowProjection;
         return {
             id: source.id,
             name: source.name,
@@ -1840,10 +1859,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
             enabled: source.enabled,
             createdAt: source.createdAt.toISOString(),
             updatedAt: source.updatedAt.toISOString(),
-            lastRunAt: latestRun?.finishedAt?.toISOString()
-                ?? latestRun?.createdAt.toISOString()
-                ?? null,
-            lastError: latestRun?.errorMessage ?? null,
+            lastRunAt: latest?.at.toISOString() ?? null,
+            lastError: latest?.error ?? null,
         };
     }
 

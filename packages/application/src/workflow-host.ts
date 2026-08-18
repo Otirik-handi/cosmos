@@ -56,6 +56,7 @@ export interface CreateWorkflowEnvelopeInput {
     definition: WorkflowDefinitionReference;
     inputSnapshot: JsonValue;
     productRun: JsonValue;
+    sourceId?: string | null;
     createdAt?: string;
 }
 
@@ -152,6 +153,23 @@ export interface WorkflowActivityJobClaim extends Omit<
     status: "leased";
     leaseOwner: string;
     leaseToken: string;
+}
+
+/**
+ * An in-memory Activity execution visible to Worker Admin. This is deliberately
+ * separate from the durable Job attempt: it exposes process liveness only and
+ * never carries a lease token.
+ */
+export interface WorkflowRuntimeAttempt {
+    attemptId: string;
+    jobId: string;
+    runId: string;
+    actionRef: string;
+    lane: "workflow-activity";
+    slot: number;
+    startedAt: string;
+    leaseExpiresAt: string;
+    cancellationRequested: boolean;
 }
 
 export interface ClaimActivityJobInput {
@@ -319,6 +337,12 @@ export interface MarkResumeRequiredInput {
     now?: Date;
 }
 
+export interface FailWorkflowRunInput {
+    runLease: WorkflowRunLease;
+    error: string;
+    now?: Date;
+}
+
 export interface RecoveryRunsInput {
     limit?: number;
 }
@@ -353,6 +377,9 @@ export interface WorkflowHostStore
 
     /** Set only through the current Run lease; used by crash recovery. */
     markResumeRequired(input: MarkResumeRequiredInput): Promise<boolean>;
+
+    /** Terminalize a non-terminal Run through the current Run lease. */
+    failWorkflowRun(input: FailWorkflowRunInput): Promise<boolean>;
 
     /** Returns envelope-only or Kernel-running Runs needing `rerun()`. */
     listRunsForRecovery(
