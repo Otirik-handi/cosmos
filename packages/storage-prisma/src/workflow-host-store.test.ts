@@ -49,6 +49,12 @@ describe("PrismaWorkflowHostStore", () => {
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('WorkflowRun', 'WorkflowCompletion', 'Job') ORDER BY name",
         );
         expect(tables.map((table) => table.name)).toEqual(["Job", "WorkflowCompletion", "WorkflowRun"]);
+        const columns = await store.prisma.$queryRawUnsafe<readonly { name: string }[]>(
+            "PRAGMA table_info(\"WorkflowRun\")",
+        );
+        expect(columns.map((column) => column.name)).toEqual(
+            expect.arrayContaining(["sourceInstanceId", "errorMessage"]),
+        );
         await expect(store.prisma.workflowRun.count()).resolves.toBe(0);
         await expect(store.prisma.workflowCompletion.count()).resolves.toBe(0);
     });
@@ -124,7 +130,13 @@ describe("PrismaWorkflowHostStore", () => {
         const store = new PrismaWorkflowHostStore(client);
         databasePaths.set(store, databasePath);
         await expect(client.workflowRun.findUnique({ where: { id: "old-run" } }))
-            .resolves.toMatchObject({ id: "old-run", status: "running", resumeRequired: true });
+            .resolves.toMatchObject({
+                id: "old-run",
+                status: "running",
+                resumeRequired: true,
+                sourceInstanceId: null,
+                errorMessage: null,
+            });
         await expect(store.loadWorkflowEnvelope("old-run"))
             .resolves.toMatchObject({ runId: "old-run", status: "running" });
     });
@@ -702,7 +714,7 @@ describe("PrismaWorkflowHostStore", () => {
             .resolves.toMatchObject({ status: "delivered", attempts: 2 });
     });
 
-    it("dead-letters a completion that reaches its maximum delivery attempts", async () => {
+    it("claims an exhausted completion for dispatcher-owned dead-letter handling", async () => {
         const store = await createStore();
         const run = await createRunningRun(store, "workflow-run-completion-exhausted", "activity");
         const request = activityRequest(run.runId, "completion-exhausted");
@@ -721,9 +733,17 @@ describe("PrismaWorkflowHostStore", () => {
             where: { jobId: job.id },
             data: { attempts: 5, maxAttempts: 5 },
         });
-        expect(await store.claimWorkflowCompletion({ owner: "dispatcher", leaseMs: 10_000 })).toBeNull();
+        const completion = await store.claimWorkflowCompletion({ owner: "dispatcher", leaseMs: 10_000 });
+        expect(completion).toMatchObject({ attempts: 6, maxAttempts: 5, status: "leased" });
+        if (!completion) throw new Error("expected exhausted completion claim");
+        expect(await store.deadLetterWorkflowCompletion({
+            completionId: completion.id,
+            leaseToken: completion.leaseToken,
+            owner: completion.leaseOwner,
+            error: "completion exhausted",
+        })).toBe(true);
         await expect(store.prisma.workflowCompletion.findUnique({ where: { jobId: job.id } }))
-            .resolves.toMatchObject({ status: "dead_letter", attempts: 5 });
+            .resolves.toMatchObject({ status: "dead_letter", attempts: 6 });
     });
 
     it("rejects delivery with a stale Run lease or stale Kernel state", async () => {

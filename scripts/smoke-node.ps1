@@ -310,7 +310,8 @@ try {
         $apiRecords = @(Read-SmokeStructuredLog -Path $apiStructuredLog)
         $workerRecords = @(Read-SmokeStructuredLog -Path $workerStructuredLog)
         $durableLaneRecords = @($workerRecords | Where-Object {
-            $_.event -eq "workflow.lanes.polled" -and $_.completionStatus -eq "completed"
+            ($_.event -eq "workflow.lanes.polled" -or $_.event -eq "worker.poll.completed") `
+                -and $_.completionStatus -eq "completed"
         })
         $probeBridgeRecords = @($apiRecords | Where-Object {
             $_.event -eq "job.queued" `

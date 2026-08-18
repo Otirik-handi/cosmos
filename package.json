@@ -46,6 +46,13 @@
         "lint:web": "bun run --cwd apps/web lint",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:property": "vitest run --config vitest.property.config.ts",
+        "test:e2e": "bun run build:api && bun run build:worker && vitest run --config vitest.e2e.config.ts",
+        "test:browser": "bun run build && playwright test --config playwright.config.ts",
+        "test:docker": "bun run scripts/e2e/docker-flow.ts",
+        "test:real:rss": "bun run scripts/e2e/real-source.ts rss",
+        "test:real:aihot": "bun run scripts/e2e/real-source.ts aihot",
+        "test:real:bilibili": "bun run scripts/e2e/real-source.ts bilibili",
         "db:validate": "bun run scripts/prisma.ts validate",
         "db:generate": "bun run scripts/prisma.ts generate",
         "db:migrate": "bun run scripts/prisma.ts migrate deploy",
@@ -53,9 +60,12 @@
         "db:status": "bun run scripts/prisma.ts migrate status"
     },
     "devDependencies": {
+        "@playwright/test": "^1.62.1",
+        "@prisma/client": "6.19.3",
         "@types/node": "^24.0.0",
-        "typescript": "^5.0.0",
+        "fast-check": "^4.9.0",
         "tsx": "^4.20.3",
+        "typescript": "^5.0.0",
         "vitest": "^3.2.4"
     },
     "dependencies": {

@@ -1,6 +1,41 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConflictException } from "@nestjs/common";
 
+import { WorkflowHostConflictError } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
+describe("AppController workflow conflicts", () => {
+    it("maps an idempotency identity conflict to HTTP 409", async () => {
+        const repository = {
+            getSource: vi.fn().mockResolvedValue({
+                id: "source-1",
+                name: "Fixture",
+                kind: "fixture-rss",
+                config: {},
+                enabled: true,
+            }),
+        };
+        const workflowControl = {
+            enqueue: vi.fn().mockRejectedValue(
+                new WorkflowHostConflictError("Idempotency key already belongs to another source run."),
+            ),
+        };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            workflowControl as never,
+        );
+
+        const error = await controller.runSource("source-1", "run-key").catch((value) => value);
+
+        expect(error).toBeInstanceOf(ConflictException);
+        expect(error.getStatus()).toBe(409);
+        expect(error.getResponse()).toMatchObject({
+            code: "conflict",
+            retryable: false,
+        });
+    });
+});
 
 describe("AppController SSE", () => {
     afterEach(() => {

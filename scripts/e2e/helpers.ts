@@ -1,0 +1,357 @@
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import {
+    appendFile,
+    mkdir,
+    mkdtemp,
+    readFile,
+    readdir,
+    rm,
+} from "node:fs/promises";
+import { createServer } from "node:http";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { findAvailablePort as findAvailablePortFromDevTools } from "../dev-port.js";
+
+const scriptsDirectory = resolve(dirname(fileURLToPath(import.meta.url)));
+export const repositoryRoot = resolve(scriptsDirectory, "../..");
+const e2eTmpRoot = resolve(repositoryRoot, ".agent", "tmp");
+const maxCapturedBytes = 64 * 1024;
+
+export interface IsolatedStackRoot {
+    root: string;
+    dataRoot: string;
+    blobRoot: string;
+    logRoot: string;
+}
+
+export async function createIsolatedStackRoot(prefix: string): Promise<IsolatedStackRoot> {
+    await mkdir(e2eTmpRoot, { recursive: true });
+    const safePrefix = prefix.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 40) || "e2e";
+    const root = await mkdtemp(join(e2eTmpRoot, `${safePrefix}-${randomUUID()}-`));
+    const dataRoot = join(root, "data");
+    const blobRoot = join(root, "blobs");
+    const logRoot = join(root, "logs");
+    await Promise.all([
+        mkdir(dataRoot, { recursive: true }),
+        mkdir(blobRoot, { recursive: true }),
+        mkdir(logRoot, { recursive: true }),
+    ]);
+    return { root, dataRoot, blobRoot, logRoot };
+}
+
+export function databaseUrl(dataRoot: string): string {
+    return `file:${resolve(dataRoot, "cosmos.sqlite").replaceAll("\\", "/")}`;
+}
+
+export function applyMigrations(dataRoot: string): void {
+    const environment: NodeJS.ProcessEnv = {
+        ...process.env,
+        COSMOS_DATA_ROOT: dataRoot,
+        DATABASE_URL: databaseUrl(dataRoot),
+    };
+    const result = spawnSync(
+        process.env.BUN_BINARY?.trim() || "bun",
+        ["run", "scripts/prisma.ts", "migrate", "deploy"],
+        {
+            cwd: repositoryRoot,
+            env: environment,
+            encoding: "utf8",
+            windowsHide: true,
+        },
+    );
+    if (result.error || result.status !== 0) {
+        throw new Error([
+            `Prisma migration failed for ${dataRoot}.`,
+            result.error instanceof Error ? result.error.stack ?? result.error.message : "",
+            result.stdout ?? "",
+            result.stderr ?? "",
+        ].filter(Boolean).join("\n"));
+    }
+}
+
+export async function findAvailablePort(preferredPort: number, host = "127.0.0.1"): Promise<number> {
+    return findAvailablePortFromDevTools(preferredPort, host);
+}
+
+export interface ManagedProcess {
+    readonly name: string;
+    readonly child: ChildProcess;
+    readonly pid: number;
+    readonly stdout: string;
+    readonly stderr: string;
+    readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+    waitForExit(timeoutMs?: number): Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+}
+
+export interface SpawnServiceOptions {
+    name: string;
+    command: string;
+    args: readonly string[];
+    cwd?: string;
+    env: NodeJS.ProcessEnv;
+}
+
+export function spawnService(options: SpawnServiceOptions): ManagedProcess {
+    const child = spawn(options.command, [...options.args], {
+        cwd: options.cwd ?? repositoryRoot,
+        env: { ...options.env },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+    });
+    if (!child.pid) {
+        throw new Error(`Could not start ${options.name}.`);
+    }
+
+    let stdout = "";
+    let stderr = "";
+    const appendCaptured = (current: string, chunk: Buffer): string => {
+        const next = current + chunk.toString("utf8");
+        return next.length > maxCapturedBytes ? next.slice(-maxCapturedBytes) : next;
+    };
+    child.stdout?.on("data", (chunk: Buffer) => {
+        stdout = appendCaptured(stdout, chunk);
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+        stderr = appendCaptured(stderr, chunk);
+    });
+
+    let exitResult: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+    let resolveExit!: (result: { code: number | null; signal: NodeJS.Signals | null }) => void;
+    const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolveExitPromise) => {
+        resolveExit = resolveExitPromise;
+    });
+    child.once("exit", (code, signal) => {
+        exitResult = { code, signal };
+        resolveExit(exitResult);
+    });
+
+    const managed: ManagedProcess = {
+        name: options.name,
+        child,
+        pid: child.pid,
+        get stdout() {
+            return stdout;
+        },
+        get stderr() {
+            return stderr;
+        },
+        exited,
+        async waitForExit(timeoutMs = 10_000) {
+            if (exitResult) return exitResult;
+            return withTimeout(exited, timeoutMs, `${options.name} did not exit in time.`);
+        },
+    };
+    return managed;
+}
+
+export async function stopManagedProcess(
+    managed: ManagedProcess,
+    mode: "graceful" | "force" = "graceful",
+    timeoutMs = 10_000,
+): Promise<void> {
+    if (managed.child.exitCode !== null || managed.child.signalCode !== null || managed.child.killed) {
+        return;
+    }
+    if (mode === "graceful") {
+        managed.child.kill("SIGTERM");
+        try {
+            await managed.waitForExit(timeoutMs);
+            return;
+        } catch {
+            // Fall through to a tree kill. A test must never leak a service.
+        }
+    }
+    if (process.platform === "win32") {
+        spawnSync("taskkill", ["/pid", String(managed.pid), "/t", "/f"], {
+            stdio: "ignore",
+            windowsHide: true,
+        });
+    } else {
+        try {
+            process.kill(-managed.pid, "SIGKILL");
+        } catch {
+            managed.child.kill("SIGKILL");
+        }
+    }
+    await managed.waitForExit(5_000).catch(() => undefined);
+}
+
+export async function disposeIsolatedStack(root: string): Promise<void> {
+    await rm(root, { recursive: true, force: true });
+}
+
+export async function waitForHttp(
+    url: string,
+    expectedStatus = 200,
+    timeoutMs = 10_000,
+): Promise<unknown> {
+    let lastError: unknown;
+    const attempts = Math.max(1, Math.ceil(timeoutMs / 200));
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+            const response = await fetch(url);
+            if (response.status !== expectedStatus) {
+                throw new Error(`Expected ${expectedStatus} from ${url}, got ${response.status}.`);
+            }
+            const contentType = response.headers.get("content-type") ?? "";
+            return contentType.includes("json") ? await response.json() : await response.text();
+        } catch (error) {
+            lastError = error;
+            await delay(200);
+        }
+    }
+    throw new Error(`Timed out waiting for ${url}: ${errorMessage(lastError)}`);
+}
+
+export async function waitForCondition(
+    description: string,
+    predicate: () => boolean | Promise<boolean>,
+    timeoutMs = 10_000,
+    intervalMs = 100,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    let lastError: unknown;
+    while (Date.now() < deadline) {
+        try {
+            if (await predicate()) return;
+        } catch (error) {
+            lastError = error;
+        }
+        await delay(intervalMs);
+    }
+    throw new Error(`Timed out waiting for ${description}.${lastError ? ` ${errorMessage(lastError)}` : ""}`);
+}
+
+export async function readStructuredLogs(logRoot: string): Promise<readonly Record<string, unknown>[]> {
+    const files = await collectFiles(logRoot);
+    const records: Record<string, unknown>[] = [];
+    for (const file of files.filter((candidate) => candidate.endsWith(".jsonl"))) {
+        const text = await readFile(file, "utf8");
+        for (const line of text.split(/\r?\n/).filter(Boolean)) {
+            const parsed: unknown = JSON.parse(line);
+            if (!isRecord(parsed)) throw new Error(`Structured log line is not an object: ${file}`);
+            records.push(parsed);
+        }
+    }
+    return records;
+}
+
+export function assertLogsRedacted(records: readonly Record<string, unknown>[]): void {
+    const forbidden = /^(?:token|authorization|cookie|contentText|prompt|stdout|stderr|payload)$/i;
+    const inspect = (value: unknown, path: string): void => {
+        if (!isRecord(value)) {
+            if (typeof value === "string" && value.includes("undefined")) {
+                throw new Error(`Structured logs contain serialized undefined at ${path}.`);
+            }
+            return;
+        }
+        for (const [key, child] of Object.entries(value)) {
+            if (forbidden.test(key)) {
+                throw new Error(`Structured logs contain forbidden field ${path}.${key}.`);
+            }
+            inspect(child, `${path}.${key}`);
+        }
+    };
+    for (const [index, record] of records.entries()) inspect(record, `record[${index}]`);
+}
+
+export function environmentForStack(
+    base: NodeJS.ProcessEnv,
+    stack: IsolatedStackRoot,
+    overrides: NodeJS.ProcessEnv = {},
+): NodeJS.ProcessEnv {
+    return {
+        ...base,
+        DATABASE_URL: databaseUrl(stack.dataRoot),
+        COSMOS_DATA_ROOT: stack.dataRoot,
+        COSMOS_BLOB_ROOT: stack.blobRoot,
+        COSMOS_LOG_ROOT: stack.logRoot,
+        COSMOS_LOG_OUTPUT: "both",
+        COSMOS_LOG_LEVEL: "debug",
+        ...overrides,
+    };
+}
+
+export function formatProcessFailure(processValue: ManagedProcess): string {
+    return [
+        `${processValue.name} exited unexpectedly (pid=${processValue.pid}).`,
+        `stdout:\n${processValue.stdout}`,
+        `stderr:\n${processValue.stderr}`,
+    ].join("\n");
+}
+
+export async function appendFailureLog(root: string, processValue: ManagedProcess): Promise<void> {
+    const path = join(root, `${processValue.name}.failure.log`);
+    await mkdir(dirname(path), { recursive: true });
+    await appendFile(path, formatProcessFailure(processValue), "utf8");
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function collectFiles(directory: string): Promise<string[]> {
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    const files: string[] = [];
+    for (const entry of entries) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) files.push(...await collectFiles(path));
+        else files.push(path);
+    }
+    return files.map((path) => resolve(path));
+}
+
+export function relativeToRepository(path: string): string {
+    return relative(repositoryRoot, path);
+}
+
+export function delay(milliseconds: number): Promise<void> {
+    return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, description: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise<T>((_, reject) => {
+                timer = setTimeout(() => reject(new Error(description)), timeoutMs);
+            }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+export function createHealthServer(): {
+    server: ReturnType<typeof createServer>;
+    listen(): Promise<number>;
+    close(): Promise<void>;
+} {
+    const server = createServer((_request, response) => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ status: "ok" }));
+    });
+    return {
+        server,
+        listen: () => new Promise((resolveListen, reject) => {
+            server.once("error", reject);
+            server.listen(0, "127.0.0.1", () => {
+                const address = server.address();
+                if (!address || typeof address === "string") {
+                    reject(new Error("Health server did not expose a TCP port."));
+                    return;
+                }
+                resolveListen(address.port);
+            });
+        }),
+        close: () => new Promise((resolveClose, reject) => {
+            server.close((error) => error ? reject(error) : resolveClose());
+        }),
+    };
+}

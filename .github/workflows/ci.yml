@@ -1,0 +1,77 @@
+name: CI
+
+on:
+    push:
+        branches: [master]
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: cosmos-ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    BUN_VERSION: 1.3.14
+
+jobs:
+    quality:
+        name: Quality
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+            - run: bun install --frozen-lockfile
+            - run: bun run db:validate
+            - run: bun run db:generate
+            - run: bun run typecheck
+            - run: bun run test
+            - run: bun run lint:web
+            - run: bun run build
+
+    node-e2e:
+        name: Node process E2E
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        needs: quality
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+            - run: bun install --frozen-lockfile
+            - run: bun run test:e2e
+
+    browser-e2e:
+        name: Browser E2E
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        needs: quality
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+            - run: bun install --frozen-lockfile
+            - run: bunx playwright install --with-deps chromium
+            - run: bun run test:browser
+
+    windows-smoke:
+        name: Windows Node smoke
+        runs-on: windows-latest
+        timeout-minutes: 30
+        needs: quality
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+            - run: bun install --frozen-lockfile
+            - run: bun run build
+            - shell: pwsh
+              run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1
