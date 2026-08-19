@@ -1886,7 +1886,7 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 扩展的规范 Kernel。
 
 实现合同和测试锚点见 [`docs/spec/README.md`](../spec/README.md)；Task 07 的过程、验证和
-未验证边界见 [`../tasks/07-deferred-workflow-host/README.md`](../tasks/07-deferred-workflow-host/README.md)。
+未验证边界见 [`.agents/tasks/07-deferred-workflow-host/README.md`](../../.agents/tasks/07-deferred-workflow-host/README.md)。
 
 ### Phase 2：信息组织与可配置看板
 

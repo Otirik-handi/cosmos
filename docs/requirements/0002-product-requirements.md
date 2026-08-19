@@ -10,9 +10,9 @@
 >
 > 信息领域模型：[`../architecture/0002-information-model.md`](../architecture/0002-information-model.md)
 >
-> Workflow Runtime Task：[`../tasks/04-workflow-runtime/README.md`](../tasks/04-workflow-runtime/README.md)
+> Workflow Runtime Task：[`.agents/tasks/04-workflow-runtime/README.md`](../../.agents/tasks/04-workflow-runtime/README.md)
 >
-> Kernel Convergence Task：[`../tasks/06-nb-workflow-kernel-convergence/README.md`](../tasks/06-nb-workflow-kernel-convergence/README.md)
+> Kernel Convergence Task：[`.agents/tasks/06-nb-workflow-kernel-convergence/README.md`](../../.agents/tasks/06-nb-workflow-kernel-convergence/README.md)
 >
 > API 与 DTO 草案：[`../api/README.md`](../api/README.md)
 

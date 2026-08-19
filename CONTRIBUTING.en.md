@@ -6,14 +6,9 @@ Cosmos already has a Phase 1 baseline containing the Web app, NestJS API, fixed 
 
 ## Before You Start
 
-Choose the entry point that matches the change:
+Use the [repository workflow admission table](docs/standards/repository-workflow.md#准入决策表) as the sole source for whether a change requires a Proposal, public Issue, Task walkthrough, or `PROJECT-STATUS.md` update. Do not promote a purely mechanical migration solely because it touches multiple files, and do not downgrade a behavior, data, or external-commitment change to a mechanical migration.
 
-- Typo fixes, broken links, and small documentation corrections that do not change meaning may go directly to a PR.
-- A well-defined bug should reference an existing issue. If none exists, start with the bug-report form.
-- New features, cross-module changes, data-shape changes, runtime-contract changes, extension-protocol changes, and expensive refactors require a feature request and maintainer scope confirmation. Start implementation after the issue is marked `status: ready`.
-- Contributors who plan to implement an issue should confirm that it is not already claimed. Wait for maintainer authorization (`status: claimed`) before starting to avoid duplicate work.
-- Improvements to Source, Trigger, Flow, Action, Agent, Board Block, SDK, or other extension assets should use the extension/Agent asset form or a feature request.
-- Use the support form for installation and usage questions. Do not open a public issue or PR for a security vulnerability; follow the [security policy](.github/SECURITY.md).
+When a public Issue is required, use the appropriate form. Contributors who plan to implement it must wait for maintainer authorization via `status: claimed` to avoid duplicate work. Use the extension and Agent asset form or a feature request for Source, Trigger, Flow, Action, Agent, Board Block, SDK, or other extension assets. Use the support form for installation and usage questions. Report security vulnerabilities privately through the [security policy](.github/SECURITY.md), not a public Issue or PR.
 
 Acceptance of an issue confirms a direction and scope for discussion; it does not promise a particular implementation or delivery date. Complex or expensive requests may first be reduced to a smaller, independently verifiable slice.
 
@@ -21,8 +16,8 @@ Acceptance of an issue confirms a direction and scope for discussion; it does no
 
 For implementation work, follow this sequence:
 
-1. **Confirm the entry point**: identify the issue, user request, or documentation scope and read the relevant requirements, architecture, task, and tests. The goal, non-goals, and affected contracts must be clear.
-2. **Record the design**: update the task, requirements, architecture, or ADR before cross-module or contract changes. The implementation must be traceable and undecided items must remain marked as undecided.
+1. **Confirm the entry point**: use the [admission table](docs/standards/repository-workflow.md#准入决策表) to determine the user request, Issue, Proposal, Task, and documentation scope, then read the relevant requirements, architecture, and tests. The goal, non-goals, and affected contracts must be clear.
+2. **Record the design**: when a Proposal is required, complete its review first; after acceptance, update requirements, architecture, or an ADR and create or reuse a Task. Route other changes through the table instead of maintaining a second set of exceptions here.
 3. **Isolate the work**: check the dirty worktree; when a remote exists, run `git fetch origin`, then create `.worktree/<slug>` and a topic branch from the latest target branch. Existing changes, branch, and task-file boundaries must be clear.
 4. **Complete a vertical slice**: finish one verifiable path from input to user result before extending the same layer. Code, contracts, persistence, and recovery paths must agree.
 5. **Run layered verification**: run focused tests, type checking, the full baseline, and browser/real-source/real-Agent acceptance when risk requires it. Each check needs its exact command, outcome, or a “not run” note.
@@ -59,9 +54,12 @@ Read the sources relevant to the task before making changes:
 | [`docs/requirements/0002-product-requirements.md`](docs/requirements/0002-product-requirements.md) | Current product scope, requirement IDs, and acceptance criteria |
 | [`CONTEXT.md`](CONTEXT.md) | Shared product language, current interpretations, and open decisions |
 | [`docs/architecture/`](docs/architecture/) | Current system design and domain boundaries |
-| [`docs/tasks/`](docs/tasks/README.md) | Goals, decisions, process, evidence, and deviations for major work |
+| [`.agents/tasks/`](.agents/tasks/README.md) | Goals, decisions, process, evidence, and deviations for major work |
 | [`docs/adr/`](docs/adr/) | Stable architecture decisions that must remain available |
 | [`docs/research/`](docs/research/README.md) | Research and implementation evidence |
+| [`docs/proposals/`](docs/proposals/README.md) | Product or engineering proposals that are not yet in effect |
+| [`docs/standards/`](docs/standards/README.md) | Repository maintenance and cross-cutting engineering workflows |
+| [`docs/testing/`](docs/testing/README.md) | Test layers, isolation rules, acceptance, and evidence boundaries |
 
 Search the related implementation, tests, tasks, and architecture first. Do not infer a complete contract from an issue title or one code path.
 
@@ -116,15 +114,9 @@ Every open issue should keep exactly one `type:*` label and one `status:*` label
 
 `.github/labels.yml` is the source of truth for labels. Use `help wanted` and `good first issue` only with `status: ready`; a good first issue must also be small, self-contained, and independently verifiable. `source: agent` means an issue was drafted by a coding agent; it does not mean maintainers accepted it.
 
-| Change | Issue | Task walkthrough | `PROJECT-STATUS.md` |
-| --- | --- | --- | --- |
-| Typo or small documentation fix | Optional | Not needed | Not needed |
-| Localized bug or small feature | Required | Usually update a related task | Not needed if module state is unchanged |
-| Medium feature or cross-component change | Required and accepted | Maintainer decides whether to reuse or create one | Update when status changes |
-| Cross-module, architectural, or long-running work | Required | Required | Required |
-| Release, installation, migration, or data lifecycle | Required | Reuse the relevant task | Required |
+Use the [admission table](docs/standards/repository-workflow.md#准入决策表) for Proposal, Issue, Task, and project-status record requirements.
 
-Contributors should not allocate task numbers by default. When a new task is needed, check `docs/tasks/` and have the maintainer confirm the number. Continue updating the original task for later changes to the same feature. A task records at least its goal, scope, non-goals, current state, decisions, verification, implementation process, deviations, and follow-ups. Until a remote issue tracker exists, cross-task product TODOs remain in `PROJECT-STATUS.md`.
+Contributors should not allocate task numbers by default. When a new task is needed, check `.agents/tasks/` and have the maintainer confirm the number. Continue updating the original task for later changes to the same feature. A task records at least its goal, scope, non-goals, current state, decisions, verification, implementation process, deviations, and follow-ups. Until a remote issue tracker exists, cross-task product TODOs remain in `PROJECT-STATUS.md`.
 
 ## Git and Commits
 

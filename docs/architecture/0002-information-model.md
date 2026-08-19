@@ -10,7 +10,7 @@
 >
 > 原始需求：[`../requirements/0001-original-requirements.md`](../requirements/0001-original-requirements.md)
 >
-> Workflow Runtime：[`../tasks/04-workflow-runtime/README.md`](../tasks/04-workflow-runtime/README.md)
+> Workflow Runtime：[`.agents/tasks/04-workflow-runtime/README.md`](../../.agents/tasks/04-workflow-runtime/README.md)
 
 本文专门回答四个问题：
 
@@ -92,7 +92,7 @@
 
 ## 2.1 信息模型与运行时边界
 
-本文只定义 Entry、Story、Topic、Workspace、Artifact、关系、来源证据和用户状态等信息模型，不重复定义完整 Workflow Runtime。Workflow、Run、Step、Job、Trigger、Action、Connection、Secret、State、Outbox 和恢复语义以 [`0001-cosmos-foundation.md`](0001-cosmos-foundation.md) 为总体架构合同，并由 [`04-workflow-runtime`](../tasks/04-workflow-runtime/README.md) 持续实施。
+本文只定义 Entry、Story、Topic、Workspace、Artifact、关系、来源证据和用户状态等信息模型，不重复定义完整 Workflow Runtime。Workflow、Run、Step、Job、Trigger、Action、Connection、Secret、State、Outbox 和恢复语义以 [`0001-cosmos-foundation.md`](0001-cosmos-foundation.md) 为总体架构合同，并由 [`04-workflow-runtime`](../../.agents/tasks/04-workflow-runtime/README.md) 持续实施。
 
 当前已实现的是固定 Source Ingest/Probe Job 和一个最小 Story projection；通用 Workflow Runtime、Knowledge Workflow、Research Workflow、Connection/Secret/State 仍未实现。这里描述的关系应被理解为领域投影边界，而不是已经存在的同名 Prisma 表。
 

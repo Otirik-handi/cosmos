@@ -4,15 +4,15 @@
 >
 > 本 Task 统一记录 Cosmos 后续 Workflow 基础建设，不把运行时拆成多个互相漂移的碎片 Task。
 >
-> 总体架构：[`../../architecture/0001-cosmos-foundation.md`](../../architecture/0001-cosmos-foundation.md)
+> 总体架构：[`../../../docs/architecture/0001-cosmos-foundation.md`](../../../docs/architecture/0001-cosmos-foundation.md)
 >
-> Durable Workflow ADR：[`../../adr/0001-durable-workflow-runtime.md`](../../adr/0001-durable-workflow-runtime.md)
+> Durable Workflow ADR：[`../../../docs/adr/0001-durable-workflow-runtime.md`](../../../docs/adr/0001-durable-workflow-runtime.md)
 >
-> Kernel/Host ADR：[`../../adr/0002-nb-workflow-kernel-cosmos-host.md`](../../adr/0002-nb-workflow-kernel-cosmos-host.md)
+> Kernel/Host ADR：[`../../../docs/adr/0002-nb-workflow-kernel-cosmos-host.md`](../../../docs/adr/0002-nb-workflow-kernel-cosmos-host.md)
 >
 > 后续收敛 Task：[`../06-nb-workflow-kernel-convergence/README.md`](../06-nb-workflow-kernel-convergence/README.md)
 >
-> 产品需求：[`../../requirements/0002-product-requirements.md`](../../requirements/0002-product-requirements.md)
+> 产品需求：[`../../../docs/requirements/0002-product-requirements.md`](../../../docs/requirements/0002-product-requirements.md)
 >
 > 当前实现状态：[`../../../PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)
 

@@ -2,19 +2,19 @@
 
 > 状态：`@notnotype/nb-workflow@0.2.0` 稳定发布门禁已完成；Cosmos 收敛由 Task 07 承接，本 Task 不直接实现 Cosmos Host。Task 07 实现提交
 > `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 Cosmos `master` 快进合入，规格范围见
-> [`../../spec/README.md`](../../spec/README.md)。
+> [`../../../docs/spec/README.md`](../../../docs/spec/README.md)。
 >
 > 阻塞：已解除（不等于 Cosmos Activity Host、完整 Ingest parity、Product API、Worker Admin 或生产边界已完成）
 >
 > 日期：2026-08-16
 >
-> 总体架构：[`../../architecture/0001-cosmos-foundation.md`](../../architecture/0001-cosmos-foundation.md)
+> 总体架构：[`../../../docs/architecture/0001-cosmos-foundation.md`](../../../docs/architecture/0001-cosmos-foundation.md)
 >
-> 稳定决定：[`../../adr/0002-nb-workflow-kernel-cosmos-host.md`](../../adr/0002-nb-workflow-kernel-cosmos-host.md)
+> 稳定决定：[`../../../docs/adr/0002-nb-workflow-kernel-cosmos-host.md`](../../../docs/adr/0002-nb-workflow-kernel-cosmos-host.md)
 >
-> API 边界：[`../../adr/0003-service-worker-api-boundaries.md`](../../adr/0003-service-worker-api-boundaries.md)
+> API 边界：[`../../../docs/adr/0003-service-worker-api-boundaries.md`](../../../docs/adr/0003-service-worker-api-boundaries.md)
 >
-> API/DTO 草案：[`../../api/README.md`](../../api/README.md)
+> API/DTO 草案：[`../../../docs/api/README.md`](../../../docs/api/README.md)
 >
 > 前序 Spike：[`../04-workflow-runtime/README.md`](../04-workflow-runtime/README.md)
 >
@@ -48,7 +48,7 @@ Child Workflow replay 实现。
    Cosmos durable host 或跨进程生产恢复。
 2. Task 04 Cosmos Runtime Spike 已验证的恢复、lease、Outbox、Worker 接管、固定
    Ingest parity 和生产证据；它只作为行为证据与回滚基线。
-3. [`docs/api/`](../../api/README.md) Draft v0.2 的 Product Service、Worker Admin
+3. [`docs/api/`](../../../docs/api/README.md) Draft v0.2 的 Product Service、Worker Admin
    和 Worker Gateway 边界。
 
 `nb-workflow` 的稳定发布门禁已由独立任务完成；Cosmos Backend/Host convergence、
@@ -259,7 +259,7 @@ cosmos.ingest@1
 
 ### Step 5：本地宿主与控制面解耦
 
-- 先按 [`docs/api`](../../api/README.md) 建立公共 Zod schema 和 Transport
+- 先按 [`docs/api`](../../../docs/api/README.md) 建立公共 Zod schema 和 Transport
   conformance，不从 Prisma model 反向生成公共 DTO。
 - Product Service、Worker Admin 和 Worker Gateway 继续保持独立
   package/module、路径、版本和 consumer 合同；本步骤只实现本地 Host/Worker

@@ -6,7 +6,7 @@
 
 本轮完成 Worker 稳定化与分层测试体系：Worker 配置 fail-fast、四 lane 隔离、recovery priority、Attempt 生命周期、shutdown deadline/force path、WorkflowRun 来源与错误持久化、completion dead-letter → Run failed、HTTP 409 冲突映射均已实现。默认离线门禁已通过：数据库/类型、属性/单元、构建、Node 进程 E2E、Playwright 浏览器 E2E 和 Windows smoke。
 
-实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing.md`](docs/testing.md)。本轮新增 `.github/workflows/ci.yml`，将质量、Node E2E、浏览器 E2E 和 Windows smoke 分为独立 job；Docker 与真实来源保持显式可选。
+实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)。本轮新增 `.github/workflows/ci.yml`，将质量、Node E2E、浏览器 E2E 和 Windows smoke 分为独立 job；Docker 与真实来源保持显式可选。
 
 当前实现提交基线：`master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`。本轮稳定化交付拆为 Worker 生产实现、分层测试/CI、稳定化规格和 E2E 竞态回归四个提交；四者均已推送。
 
@@ -189,6 +189,8 @@ git diff --check
 - 将 neuro-book 的通用协作流程去领域化迁移到 Cosmos：补充双语贡献指南、Issue 分流、标签清单、PR 模板和安全报告入口；未复制依赖 neuro-book 运行时代码、发布脚本或产品专用 CI 的 workflow。
 - 确认 Cosmos 按 GNU Affero General Public License v3.0 only（AGPL-3.0-only）发布，并复制许可证全文到根目录 `LICENSE`。
 - 补足协作主路径、远端同步、Windows worktree 清理、RSS/RSSHub 首条切片和公开贡献权利说明；GitHub Actions 仍按本阶段决定保持不变。
+- 将开发治理资料收敛到 `.agents/`：原 `docs/tasks/` 的 11 个 Markdown 文件完整迁入 `.agents/tasks/`，历史编号和正文保留，活跃链接一次性切换；新增 `.local/` 用户本地资产边界，以及 `docs/proposals/`、`docs/standards/`、`docs/testing/` 三个治理入口。
+- 新增无外部依赖的 `bun run docs:check` 并接入 CI quality job；审查后补齐 Proposal/Issue/Task 准入矩阵、Task 证据唯一写入位置、动态状态单一真相源、Agent 治理入口可达性以及 POSIX/Windows 绝对路径和治理文档扫描。2026-08-19 本地验证 `failures=[]`、`checkedFiles=256`，聚焦治理测试 1 个文件 / 8 个测试、全仓类型检查和全量单元测试 29 个文件 / 193 个测试均通过。该治理变更未运行 build、Node E2E、浏览器、Docker 或真实来源验收。
 
 ## 当前架构基线
 

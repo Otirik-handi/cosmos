@@ -8870,7 +8870,7 @@ Receipt/Value/Secret/result/replacement/drain，以及产品、故障和 Transpo
 | DTO/Zod/兼容 | `dto.final.md` | 成功 |
 
 实际成功数：5/5。代理均未修改仓库文件。结果文件和 SHA-256 记录在
-[`docs/api/0007-review-findings.md`](../../api/0007-review-findings.md)。
+[`docs/api/0007-review-findings.md`](../../../docs/api/0007-review-findings.md)。
 
 ### 主审与 v0.2 修订
 

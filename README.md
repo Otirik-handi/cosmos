@@ -210,14 +210,19 @@ bun run dev
 - [原始需求记录](docs/requirements/0001-original-requirements.md)：按时间追加用户原文，不做改写。
 - [总体架构设计](docs/architecture/0001-cosmos-foundation.md)：当前可调整的领域、运行时、存储和扩展设计。
 - [信息领域模型](docs/architecture/0002-information-model.md)：Entry、Story、Topic、相关推荐、热点与 Workspace 的详细边界。
-- [已实现规格入口](docs/spec/README.md)：以 `5ce6286` 合入代码和行为测试为唯一实现基线，按组件导航当前输入、输出、状态、副作用、失败语义和可判定验收。
-- [API 与 DTO 草案](docs/api/README.md)：Product Service、Worker Admin、Worker Gateway、公共 DTO、故障场景和五路审查 disposition；草案不自动等于当前路由。
+- [已实现规格入口](docs/spec/README.md)：按组件导航当前输入、输出、状态、副作用、失败语义和可判定验收。
+- [API 与 DTO 草案](docs/api/README.md)：Product Service、Worker Admin、Worker Gateway、公共 DTO、故障场景和审查结论；草案不自动等于当前路由。
+- [测试与验收](docs/testing/README.md)：测试层级、隔离规则、可选验收和证据边界。
+- [项目提案](docs/proposals/README.md)：尚未生效、需要评审的长期方案。
+- [工程标准](docs/standards/README.md)：仓库维护和跨功能域工程流程。
+- [Agent 治理](.agents/README.md)：开发 Agent 的版本化治理入口、Task 规则和本地资产边界。
+- [Task Walkthroughs](.agents/tasks/README.md)：重大实现的过程、验证、偏差和交接；Task 不替代当前实现规格。
 - [项目状态](PROJECT-STATUS.md)：本地合入基线、已验证能力、未验证边界和下一步。
-- [Foundation Task](docs/tasks/01-foundation/README.md)：本轮建立仓库与设计基线的过程和验证。
-- [Phase 1 Task](docs/tasks/02-rss-ingestion/README.md)：RSS/RSSHub + fixture 录入、离线查询和最小 Story projection 的实现 walkthrough。
+- [Foundation Task](.agents/tasks/01-foundation/README.md)：本轮建立仓库与设计基线的过程和验证。
+- [Phase 1 Task](.agents/tasks/02-rss-ingestion/README.md)：RSS/RSSHub + fixture 录入、离线查询和最小 Story projection 的实现 walkthrough。
 - [Durable Workflow Runtime ADR](docs/adr/0001-durable-workflow-runtime.md)：Job + Workflow、脚本优先执行语义和恢复边界。
 - [`nb-workflow` Kernel 与 Cosmos Host ADR](docs/adr/0002-nb-workflow-kernel-cosmos-host.md)：规范脚本 Kernel、可选 Backend、TaskStore/WakeupBus、多宿主和 Agent Extension 的稳定决定。
-- [Workflow Runtime Task](docs/tasks/04-workflow-runtime/README.md)：后续 Workflow、Connection、Research 和 Adapter 基础建设的持续 walkthrough。
-- [Kernel Convergence Task](docs/tasks/06-nb-workflow-kernel-convergence/README.md)：`nb-workflow@0.2.0` 的稳定门禁已解除并转交 Task 07；当前 Durable Host、固定 Ingest 和 Worker Admin 状态以 `5ce6286` 合入代码、测试及实现规格为准。
+- [Workflow Runtime Task](.agents/tasks/04-workflow-runtime/README.md)：后续 Workflow、Connection、Research 和 Adapter 基础建设的持续 walkthrough。
+- [Kernel Convergence Task](.agents/tasks/06-nb-workflow-kernel-convergence/README.md)：`nb-workflow@0.2.0` 的稳定门禁已解除并转交 Task 07；当前状态以合入代码、测试及实现规格为准。
 - [初始调研](docs/research/2026-08-06-daily-digest-research.md)：从远端研究项目归档的参考材料。
 - [贡献指南](CONTRIBUTING.md) 与 [Agent 约定](AGENTS.md)：后续开发和文档演进流程。

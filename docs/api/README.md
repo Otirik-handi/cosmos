@@ -14,7 +14,7 @@
 >
 > 已实现规格入口：[`../spec/README.md`](../spec/README.md)
 >
-> Task 07 实施与未验证边界：[`../tasks/07-deferred-workflow-host/README.md`](../tasks/07-deferred-workflow-host/README.md)
+> Task 07 实施与未验证边界：[`.agents/tasks/07-deferred-workflow-host/README.md`](../../.agents/tasks/07-deferred-workflow-host/README.md)
 
 ## 1. 文档职责
 

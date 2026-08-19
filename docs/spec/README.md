@@ -25,10 +25,10 @@
 | [`docs/architecture/`](../architecture/) | 系统分层、设计方向、跨模块取舍和演进边界 | 不能替代当前组件输入/错误/状态合同 |
 | [`docs/adr/`](../adr/) | 已接受且改回成本高的架构决定 | 不能把未来决定升级成实现证据 |
 | [`docs/api/`](../api/) | Product API、Worker Admin、Gateway、DTO 的目标草案和 conformance 场景 | Draft 字段/路径不是当前 API |
-| [`docs/tasks/`](../tasks/) | 实施过程、决定、偏差、验证记录和后续工作 | Task 叙述不是组件运行时合同 |
+| [`.agents/tasks/`](../../.agents/tasks/) | 实施过程、决定、偏差、验证记录和后续工作 | Task 叙述不是组件运行时合同 |
 | `docs/spec/` | 当前实现的组件外部行为及可重建验收 | 不拥有新需求、不设计未来 API、不记录实施日记 |
 
-相关入口：[`docs/README.md`](../README.md)、[`docs/api/README.md`](../api/README.md)、[`docs/tasks/07-deferred-workflow-host/README.md`](../tasks/07-deferred-workflow-host/README.md)、[`docs/architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md)、[`docs/adr/0002-nb-workflow-kernel-cosmos-host.md`](../adr/0002-nb-workflow-kernel-cosmos-host.md) 和 [`docs/adr/0003-service-worker-api-boundaries.md`](../adr/0003-service-worker-api-boundaries.md)。
+相关入口：[`docs/README.md`](../README.md)、[`docs/api/README.md`](../api/README.md)、[`.agents/tasks/07-deferred-workflow-host/README.md`](../../.agents/tasks/07-deferred-workflow-host/README.md)、[`docs/architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md)、[`docs/adr/0002-nb-workflow-kernel-cosmos-host.md`](../adr/0002-nb-workflow-kernel-cosmos-host.md) 和 [`docs/adr/0003-service-worker-api-boundaries.md`](../adr/0003-service-worker-api-boundaries.md)。
 
 ### 1.3 对陌生 Agent 的阅读顺序
 

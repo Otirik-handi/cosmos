@@ -7,7 +7,7 @@
 >
 > 关联架构：[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md)
 >
-> 后续实施：[`../tasks/04-workflow-runtime/README.md`](../tasks/04-workflow-runtime/README.md)
+> 后续实施：[`.agents/tasks/04-workflow-runtime/README.md`](../../.agents/tasks/04-workflow-runtime/README.md)
 
 ## Supersession scope
 
@@ -20,7 +20,7 @@ ADR-0002 取代本 ADR 中以下历史判断：
 新的决定是：`nb-workflow` 拥有规范脚本/Activity replay 语义，Cosmos 提供
 Durable Backend/Host；Activity 是 journal 单元，Job/Attempt 承担宿主执行，
 Step 是可选投影。对应 convergence 由
-[`Task 06`](../tasks/06-nb-workflow-kernel-convergence/README.md) 单独实施。
+[`Task 06`](../../.agents/tasks/06-nb-workflow-kernel-convergence/README.md) 单独实施。
 
 本 ADR 的其余决定继续有效：`Job + Workflow` 组合、Cosmos 持有
 Run/Journal/Job/Lease/Outbox 和领域 durable truth、双 lease fencing、输入快照、

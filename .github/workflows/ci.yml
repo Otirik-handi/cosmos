@@ -27,6 +27,7 @@ jobs:
               with:
                   bun-version: ${{ env.BUN_VERSION }}
             - run: bun install --frozen-lockfile
+            - run: bun run docs:check
             - run: bun run db:validate
             - run: bun run db:generate
             - run: bun run typecheck

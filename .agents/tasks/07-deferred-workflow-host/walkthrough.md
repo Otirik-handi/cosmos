@@ -1,6 +1,6 @@
 # Task 07 Walkthrough：Deferred Workflow、Cosmos Host 与本地 Worker 收敛
 
-> 状态：Phase 1 `nb-workflow@0.2.0` 发布门禁已通过；Task 07 实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 快进合入，父基线为 `b678fb5`；`origin/master` 尚未 push。Round 0–10 保留全部历史 focused/full、typecheck/build、数据库、fencing 和 PowerShell 兼容性记录，Round 11 记录归档、合入、功能验证与规格范围。Docker/browser/真实来源及完整 Task 07 门禁仍未完成。
+> 本文件按 Round 追加 Task 07 的实施过程、历史基线、验证结果、偏差和 leader 判定；不得覆盖既有 Round。仓库当前提交、已验证能力和未完成边界以 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md) 为准，稳定目标与完成定义见 [`README.md`](README.md)。
 
 > Task：[`README.md`](README.md)
 
@@ -614,3 +614,45 @@ leader 判定：继续 / 停止 / 请求决策
 ```
 
 任何“通过”都必须标明 focused、full、typecheck/build、Node、browser、Docker 或真实来源范围。
+
+## Round 12：README 动态状态收敛
+
+日期：2026-08-19
+
+目标：落实 Task 治理的唯一写入分工，使 README 只保留稳定目标、范围、阶段门禁和完成定义；过程、偏差、验证和历史基线只在 walkthrough 按 Round 追加，当前仓库状态只由 `PROJECT-STATUS.md` 维护。
+
+范围：Task 07 README、本 walkthrough，以及治理准入入口的唯一决策表收敛；不改运行时代码、测试、依赖、数据库、migration、版本、发布或部署状态。
+
+实际修改：
+
+- README 顶部改为稳定职责说明并链接 walkthrough、实现规格和项目状态；
+- 删除 README 第 2 节复制的 SHA、worktree、阶段结果和验证矩阵；这些事实已由 Round 0–11 保留；
+- 删除 Phase 0–3 中的动态完成状态和基线 SHA，把阶段内容保留为门禁合同；
+- 将动态“下一步”改为由 leader 从阶段门禁、验收矩阵和完成定义选择最小未满足切片；
+- walkthrough 顶部不再缓存当前状态，只声明 append-only 职责和权威状态入口；
+- `repository-workflow.md` 建立 Proposal、公开 Issue、Task 和项目状态要求的唯一准入决策表，贡献指南与 Proposal 入口删除各自矩阵和例外正文，只链接该表。
+
+关键决定：README 不记录当前 SHA、push/PR/worktree 状态、最近测试数字或未完成清单；这些事实分别归 `PROJECT-STATUS.md`、`docs/spec/` 和本 walkthrough 所有。历史 Round 不改写。准入规则只在仓库流程决策表维护。
+
+与计划的偏差：治理审查后的第一轮修复只更新了未来写入规则并统一了多处措辞，没有迁移 Task 07 现有双写状态，也没有把准入矩阵真正收敛为唯一正文；本 Round 补齐这两项遗漏。
+
+验证命令与结果（第一次完整验证，随后因本段写入而对最终文件状态复跑）：
+
+```text
+bun run docs:check
+  failures=[]; checkedFiles=256
+bun run test -- scripts/check-documentation.test.ts
+  1 test file / 8 tests passed
+bun run typecheck
+  packages 与 apps 全部通过，exit code 0
+bun run test
+  29 test files / 193 tests passed
+git diff --check
+  exit code 0，无输出
+```
+
+上述验证段写入后，对最终文件状态复跑同一组命令：`docs:check` 仍为 `failures=[]`、`checkedFiles=256`；聚焦测试 1 文件 / 8 测试通过；typecheck 退出码 0；全量测试 29 文件 / 193 测试通过；`git diff --check` 退出码 0、无输出。
+
+未验证和风险：build、Node E2E、浏览器、Docker、真实来源和发布验收不属于本次文档职责收敛，不由本 Round 证明。
+
+leader 判定：Task 07 README 动态状态与治理准入矩阵收敛完成，最终五项门禁通过。

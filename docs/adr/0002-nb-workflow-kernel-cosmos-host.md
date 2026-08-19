@@ -6,7 +6,7 @@
 >
 > 关联架构：[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md)
 >
-> 后续实施：[`../tasks/06-nb-workflow-kernel-convergence/README.md`](../tasks/06-nb-workflow-kernel-convergence/README.md)
+> 后续实施：[`.agents/tasks/06-nb-workflow-kernel-convergence/README.md`](../../.agents/tasks/06-nb-workflow-kernel-convergence/README.md)
 >
 > 部分取代：[`ADR-0001`](0001-durable-workflow-runtime.md)
 

@@ -235,7 +235,7 @@ SourceInstance
 - 后续 Story 跨来源聚类需要 StoryMembership；推荐需要区分外部候选、Admission 和 Cosmos Ranking，普通 Feed 不能依赖在线 LLM。
 - 本轮确认知识管理者是共享 `nb-memory` 之上的高权限系统角色，可以通过 Web Chat、`cosmos cli` 和 ingest/research Workflow 参与；它不是单一 Session。
 - 个性化配置方向是“Agent 记忆 + Cosmos 观察到的用户行为 + 未来其它信号 → 程序可读配置”，当前不要求逐字段 provenance，也不把平台推荐信号独立建模为用户偏好。
-- `nb-memory` 调研已记录在 [`docs/research/2026-08-08-nb-memory-research.md`](../../research/2026-08-08-nb-memory-research.md)；接入、Node 生产兼容性和行为映射均后置，不扩大本 Task。
+- `nb-memory` 调研已记录在 [`docs/research/2026-08-08-nb-memory-research.md`](../../../docs/research/2026-08-08-nb-memory-research.md)；接入、Node 生产兼容性和行为映射均后置，不扩大本 Task。
 
 这些方向暂不扩大本 Task 的实现范围。继续增加平台 Adapter 前，应先单独建立 Connection/Secret/State、脚本优先的 Workflow API、持久子任务、Knowledge Workflow、Research Request/Trigger 和 `nb-memory` Adapter 的实现 Task。
 

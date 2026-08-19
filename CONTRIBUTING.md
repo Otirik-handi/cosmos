@@ -6,14 +6,9 @@ Cosmos 已有 Phase 1 的 Web、NestJS API、固定 Ingest Worker、Prisma/SQLit
 
 ## 开始之前
 
-请选择与改动规模相符的入口：
+改动是否需要 Proposal、公开 Issue、Task walkthrough 或 `PROJECT-STATUS.md`，只按[仓库流程的准入决策表](docs/standards/repository-workflow.md#准入决策表)判断。不要因修改跨多个文件就把纯机械迁移升级为产品变更，也不要把行为、数据或对外承诺变化降级为机械迁移。
 
-- 拼写、失效链接和不改变含义的小型文档修正可以直接提交 PR。
-- 边界明确的 Bug 应关联现有 Issue；没有对应 Issue 时，先提交错误报告。
-- 新功能、跨模块修改、数据结构调整、运行时合同变化、扩展协议变化和高成本重构，先提交功能建议并等待维护者确认范围。标记为 `status: ready` 后再开始实现。
-- 计划实现并提交 PR 的贡献者，应先确认 Issue 没有被认领；选择实现时等待维护者添加 `status: claimed`，避免重复工作。
-- Source、Trigger、Flow、Action、Agent、Board Block、SDK 或其它扩展资产的改进，使用扩展与 Agent 资产表单或功能建议。
-- 安装和使用问题使用支持表单；安全漏洞不要创建公开 Issue 或 PR，按[安全政策](.github/SECURITY.md)私密报告。
+需要公开 Issue 时使用对应表单；计划实现的贡献者等待维护者添加 `status: claimed` 后再开始，避免重复工作。Source、Trigger、Flow、Action、Agent、Board Block、SDK 或其它扩展资产使用扩展与 Agent 资产表单或功能建议。安装和使用问题使用支持表单；安全漏洞不要创建公开 Issue 或 PR，按[安全政策](.github/SECURITY.md)私密报告。
 
 Issue 被接受表示方向和范围可以继续讨论，不承诺特定实现或完成时间。冷门、高成本或跨边界需求会先讨论更小的可验证切片。
 
@@ -21,8 +16,8 @@ Issue 被接受表示方向和范围可以继续讨论，不承诺特定实现�
 
 实现类改动按以下顺序推进：
 
-1. **确认入口**：确定 Issue、用户请求或文档修正的范围，读取相关需求、架构、Task 和测试；完成后应能说清目标、不在范围内和受影响的合同。
-2. **记录设计**：跨模块或合同变化先更新 Task、需求、架构或 ADR；完成后实现可以追溯到稳定文档，未决定内容仍明确标注。
+1. **确认入口**：按[准入决策表](docs/standards/repository-workflow.md#准入决策表)确定用户请求、Issue、Proposal、Task 和文档范围，读取相关需求、架构和测试；完成后应能说清目标、不在范围内和受影响的合同。
+2. **记录设计**：需要 Proposal 时先完成评审；接受后再更新需求、架构或 ADR 并创建或复用 Task。其它改动按表进入对应记录，不在贡献指南维护第二套例外。
 3. **隔离实现**：检查 dirty worktree，有远端时执行 `git fetch origin`，再从最新目标分支创建 `.worktree/<slug>` 和任务分支；完成后既有改动、分支和任务文件边界清楚。
 4. **完成垂直链路**：先实现一条从输入到用户结果的可验证链路，再扩展同层能力；完成后代码、合同、持久化和恢复路径一致。
 5. **分层验证**：按风险运行聚焦测试、类型检查、全量基线和需要的浏览器/真实来源/真实 Agent 验收；完成后每项都有完整命令、结果或“未运行”说明。
@@ -59,9 +54,12 @@ Cosmos 已有运行时代码和依赖。开始修改前先读取 PROJECT-STATUS.
 | [`docs/requirements/0002-product-requirements.md`](docs/requirements/0002-product-requirements.md) | 当前产品范围、需求编号和验收条件 |
 | [`CONTEXT.md`](CONTEXT.md) | 产品共同语言、当前解释和待决问题 |
 | [`docs/architecture/`](docs/architecture/) | 当前系统设计和领域边界 |
-| [`docs/tasks/`](docs/tasks/README.md) | 重大任务的目标、决策、过程、证据和偏差 |
+| [`.agents/tasks/`](.agents/tasks/README.md) | 重大任务的目标、决策、过程、证据和偏差 |
 | [`docs/adr/`](docs/adr/) | 稳定、需要长期保留的架构决定 |
 | [`docs/research/`](docs/research/README.md) | 调研和实现证据 |
+| [`docs/proposals/`](docs/proposals/README.md) | 尚未生效、需要评审的产品或工程方案 |
+| [`docs/standards/`](docs/standards/README.md) | 仓库维护和跨功能域工程流程 |
+| [`docs/testing/`](docs/testing/README.md) | 测试层级、隔离规则、验收和证据边界 |
 
 先搜索相关实现、测试、Task 和架构，再决定修改范围。不要只依据 Issue 标题或一个代码路径推断完整合同。
 
@@ -116,15 +114,9 @@ Issue 负责公开问题和需求分流；Task walkthrough 负责重大实现的
 
 `.github/labels.yml` 是标签清单真相源。`help wanted` 和 `good first issue` 只用于 `status: ready` 的 Issue；后者还必须范围小、上下文完整并有可独立验证的验收条件。`source: agent` 只表示 Issue 由开发 Agent 起草，不表示它已经被维护者接受。
 
-| 改动类型 | Issue | Task walkthrough | `PROJECT-STATUS.md` |
-| --- | --- | --- | --- |
-| 拼写或小型文档修正 | 可选 | 不需要 | 不需要 |
-| 单点 Bug 或小功能 | 需要 | 通常更新已有相关 Task | 模块状态未变化时不需要 |
-| 中型功能或跨组件修改 | 需要且已接受 | 由维护者决定复用或创建 | 模块状态改变时更新 |
-| 跨模块、架构或长期任务 | 必须 | 必须 | 必须 |
-| 发布、安装、迁移或数据生命周期 | 必须 | 复用相关 Task | 必须 |
+Proposal、Issue、Task 和项目状态的记录要求以[准入决策表](docs/standards/repository-workflow.md#准入决策表)为准。
 
-外部贡献者默认不自行分配 Task 编号。需要新建时，先检查 `docs/tasks/` 并由维护者确认编号；同一功能的后续调整继续更新原 Task。Task 至少记录目标、范围、不在范围内、当前状态、关键决定、验证、实现过程、偏差和后续事项。跨 Task 的产品 TODO 在远端 Issue 系统可用后迁移到 Issue；在此之前由 `PROJECT-STATUS.md` 汇总。
+外部贡献者默认不自行分配 Task 编号。需要新建时，先检查 `.agents/tasks/` 并由维护者确认编号；同一功能的后续调整继续更新原 Task。Task 至少记录目标、范围、不在范围内、当前状态、关键决定、验证、实现过程、偏差和后续事项。跨 Task 的产品 TODO 在远端 Issue 系统可用后迁移到 Issue；在此之前由 `PROJECT-STATUS.md` 汇总。
 
 ## Git 与提交
 

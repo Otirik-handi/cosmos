@@ -145,7 +145,7 @@ Worker 默认 Host 和 Admin 均启用；poll/lease 为 `30000/120000`；shutdow
 - `apps/worker/src/runtime.ts`：单飞 poll、recovery priority、四 lane 隔离、shutdown deadline、Attempt 等待和 force cancellation。
 - `apps/worker/src/main.ts`：环境读取、heartbeat、scheduled enqueue、bootstrap、Admin 组合和信号入口。
 - `apps/worker/src/runtime.test.ts`、`apps/worker/src/runtime.property.test.ts`、`apps/worker/src/config.test.ts`：配置、lane 隔离、recovery、shutdown deadline 和 property 行为。
-- `e2e/ingest.e2e.test.ts`、`e2e/worker-admin.e2e.test.ts`、`e2e/recovery.e2e.test.ts`、`e2e/scheduling.e2e.test.ts`：真实 dist/API/Worker/SQLite 的四个 Node E2E；浏览器入口见 [`docs/testing.md`](../../testing.md)。
+- `e2e/ingest.e2e.test.ts`、`e2e/worker-admin.e2e.test.ts`、`e2e/recovery.e2e.test.ts`、`e2e/scheduling.e2e.test.ts`：真实 dist/API/Worker/SQLite 的四个 Node E2E；浏览器入口见 [`docs/testing/README.md`](../../testing/README.md)。
 
 ## 非目标/边界
 

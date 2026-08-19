@@ -44,9 +44,11 @@ Leader 的阶段判断不等于外部操作授权。commit、push、创建 PR、
 ## 文档
 
 - `PROJECT-STATUS.md` 记录仓库现状、风险和未完成边界；`docs/README.md` 是文档入口。
-- `docs/requirements/` 保存需求，`docs/architecture/` 保存当前设计，`docs/adr/` 保存稳定决定，`docs/research/` 保存调研，`docs/tasks/` 保存重大任务 walkthrough；当前 Phase 1 入口是 [`docs/tasks/02-rss-ingestion/README.md`](docs/tasks/02-rss-ingestion/README.md)。
-- 需求变更按固定顺序维护：原话追加到 `docs/requirements/0001-original-requirements.md`，解释和待决问题记录到 `CONTEXT.md`，确认后更新 PRD，最后调整架构和 Task。
-- 原始需求保留措辞、数字、示例和不确定性；解释、取舍和重命名进入 PRD、架构或 Task，不反向改写原文。
+- `docs/requirements/` 保存需求，`docs/architecture/` 保存当前设计，`docs/adr/` 保存稳定决定，`docs/research/` 保存调研，`.agents/tasks/` 保存重大任务 walkthrough；当前 Phase 1 入口是 [`.agents/tasks/02-rss-ingestion/README.md`](.agents/tasks/02-rss-ingestion/README.md)。
+- 需求变更按固定顺序维护：原话追加到 `docs/requirements/0001-original-requirements.md`；存在产品歧义或长期取舍时先按 [`docs/proposals/README.md`](docs/proposals/README.md) 评审；接受后更新 PRD、架构或 ADR 并创建或复用 Task；代码与测试落地后更新 `docs/spec/`。
+- 创建、推进或审查 Task 时读取 [`.agents/tasks/README.md`](.agents/tasks/README.md) 与 [`.agents/tasks/AGENTS.md`](.agents/tasks/AGENTS.md)；测试、fixture、验收或临时数据改动时读取 [`docs/testing/README.md`](docs/testing/README.md)。
+- 新功能、期望不明确的 Bug 或长期行为变化读取 [`docs/proposals/README.md`](docs/proposals/README.md)；Git、Issue、Task、PR、合并或发布读取 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+- 原始需求保留措辞、数字、示例和不确定性；解释、取舍和重命名进入 PRD、Proposal、架构或 Task，不反向改写原文。
 - `CONTEXT.md` 是工作台，不是稳定合同；候选名称和工作假设不能伪装成已确认决定。
 - 重大任务持续更新同一个 walkthrough，至少记录目标、范围、不在范围内、当前状态、决定、实施过程、验证、偏差和后续事项。
 - 影响数据、扩展协议、持久化、权限或外部副作用的决定，先更新架构设计；稳定后写 ADR。

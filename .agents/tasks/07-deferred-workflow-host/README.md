@@ -1,18 +1,13 @@
 # Task 07：Deferred Workflow、Cosmos Host 与本地 Worker 收敛
-> 状态：Task 07 实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 通过 `git merge --ff-only feat/t07-activity-host` 快进合入；`origin/master` 仍为 `b678fb5`。本地未 push、未创建 PR，也未清理 worktree；该合入不等于 Task 07 全部完成。
->
-> 当前日期：2026-08-16。合入输入已通过 focused/full、typecheck、lint:web、build、Prisma
-> generate/validate 与最终 Node durable smoke；Docker/browser/真实来源、完整 parity/recovery 等仍未验证。
-> 本 Task 是实现阶段的总指挥文档。后续由一个 leader agent 按本文件协调多个
-> 子代理；子代理不能自行扩大范围、改变架构决定或直接合并彼此的工作。
+> 本文件只维护 Task 07 的稳定目标、范围、阶段门禁和完成定义。实施过程、偏差、验证结果与历史基线追加到 [`walkthrough.md`](walkthrough.md)；仓库当前提交、已验证能力和未完成边界以 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md) 为准。
 
-总体架构：[`../../architecture/0001-cosmos-foundation.md`](../../architecture/0001-cosmos-foundation.md)
+总体架构：[`../../../docs/architecture/0001-cosmos-foundation.md`](../../../docs/architecture/0001-cosmos-foundation.md)
 
-Kernel/Host 决定：[`../../adr/0002-nb-workflow-kernel-cosmos-host.md`](../../adr/0002-nb-workflow-kernel-cosmos-host.md)
+Kernel/Host 决定：[`../../../docs/adr/0002-nb-workflow-kernel-cosmos-host.md`](../../../docs/adr/0002-nb-workflow-kernel-cosmos-host.md)
 
-API 边界：[`../../adr/0003-service-worker-api-boundaries.md`](../../adr/0003-service-worker-api-boundaries.md)
+API 边界：[`../../../docs/adr/0003-service-worker-api-boundaries.md`](../../../docs/adr/0003-service-worker-api-boundaries.md)
 
-API/DTO 草案：[`../../api/README.md`](../../api/README.md)
+API/DTO 草案：[`../../../docs/api/README.md`](../../../docs/api/README.md)
 
 前序 Spike：[`../04-workflow-runtime/README.md`](../04-workflow-runtime/README.md)
 
@@ -39,186 +34,15 @@ Durable Host、固定 Ingest parity 和 Worker Admin API。
 - 何时可以删除旧的平行 Runtime；
 - 人工和自动化分别验收什么。
 
-## 2. 当前状态
+## 2. 状态与证据读取
 
-### 2.1 Cosmos
+- 仓库当前提交、已验证能力、未完成边界和跨任务下一步：[`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)。
+- 已实现、可观察且可重建的组件行为：[`docs/spec/README.md`](../../../docs/spec/README.md) 及对应代码和行为测试。
+- Task 07 的实施过程、历史基线、验证命令、实际结果、偏差与 leader 判定：[`walkthrough.md`](walkthrough.md)。
+- Draft、Planned、Reserved API、历史 Spike 和保护区 worktree 不能作为当前实现证据。
+- Task 07 只有满足第 13 节全部完成定义后才可标记完成；局部门禁通过、代码合入或单次 smoke 均不能替代完整验收。
 
-当前本地合入基线为：
-
-```text
-local master = 5ce628690ab0110b0525e8ebcbacbe673ced9c55
-origin/master = b678fb5
-```
-
-`master` 已经有：
-
-- Next.js Web、NestJS API 和一个固定 Ingest Worker 进程；
-- Prisma + SQLite、Source、Run、Job、RSS/fixture Connector；
-- Observation、Entry、Revision、Asset、最小 Story、FTS5/BM25；
-- Feed、Search、Story/Entry/Revision 查询、SSE 和运行日志。
-
-PR A 已合并到上述 `origin/master@b678fb5`，包含 `PrismaWorkflowBackend`、`BlobWorkflowValueStore`、
-forward-only migration `20260813160000_workflow_run_backend` 及
-`@notnotype/nb-workflow@0.2.0` 的稳定依赖接入。Task 07 实现提交
-`5ce628690ab0110b0525e8ebcbacbe673ced9c55` 已在本地 `master` 快进合入，并在此基础上带入
-Activity Host、固定 Ingest fixture、manifest/catalog/control 增量和 Worker Admin；Product API 仍保留
-`/connectors` executable SourceProbe 路由，manifest-only clean cutover 尚未完成。实现提交的验证
-范围与未验证边界见 Round 11；它不等于全部 parity、恢复或生产验收完成。
-
-当前本地合入树的 Worker 定位是：
-
-> `master` 已包含 Durable Host 默认路径与 direct mode 独立 loopback Worker Admin；`origin/master`
-> 尚未包含该本地提交，因为本轮未 push。代码合入、功能验证和 Task 07 完成是三个不同门禁。
-
-当前本地 `master` 已包含、但仍需按独立门禁解释的实现：
-
-- Activity Host、Activity Job/Attempt/Lease 和 durable Ingest fixture vertical smoke；
-- API manifest/catalog/control 路径、workflow run 查询和健康探针；旧 `/connectors` executable
-  SourceProbe 路由仍存在，不能把 Product API 写成已完成 clean cutover；
-- Worker Admin `/healthz`、`/readyz`、status、capability、metrics、drain API。
-
-仍未完成或未完整验证的能力：
-
-- 完整固定 Ingest parity、跨进程 recovery、双 Worker takeover 和中断/修订/多媒体矩阵；
-- Product API 与 Worker 不可用边界、Node/browser/Docker 的分开验收；
-- Worker Gateway、远程 Worker、Redis 和多主机运行。
-
-`.worktree/t07-activity-host` 及其它已有 worktree 仍是保护区；本轮不声称 worktree 已清理，
-也不把旧 worktree 状态、Draft/Planned API 或历史 Spike 当作当前实现证据。
-
-### 2.1.1 合入后状态与规格边界
-
-Round 11 记录了归档、提交、快进合入和功能验证的可审计事实。本地 `master` 的实现规格范围
-统一放在 [`docs/spec/README.md`](../../spec/README.md) 及其组件规格路径中；规格只描述已合入
-实现的外部行为。`docs/api` 中的 Draft、Planned、Reserved 合同，Gateway、Redis、跨主机和其它
-后续设计仍不等于实现；组件规格表中的 `Planned for this documentation pass` 只表示文档尚待
-编写，不表示代码能力已计划或已完成。
-
-### 2.1.2 2026-08-16 当前 dirty worktree 验证记录（合入前历史）
-以下是 `.worktree/t07-activity-host` 在本地合入前的实现证据，不改写后文保留的历史
-Round；它记录的是合入输入，不是当前 worktree 状态，也不能单独作为 Task 07 完成证明。
-
-```text
-bunx vitest run packages/application/src/workflow-ingest.test.ts packages/application/src/workflow-host-runtime.test.ts apps/api/src/app.controller.test.ts packages/storage-prisma/src/workflow-host-store.test.ts
-  4 test files / 47 tests passed / 0 failed (contract regression)
-
-bunx vitest run
-  23 test files / 165 tests passed / 0 failed
-
-bun run typecheck       -> passed
-bun run build           -> passed
-bun run db:generate     -> passed
-bun run db:validate     -> passed
-git diff --check         -> passed
-```
-
-Storage focused tests cover fresh migration, pre-host migration upgrade while retaining old
-WorkflowRun/old data, and two-client lease/completion fencing. The terminal-Run late Activity
-completion test now reuses one isolated Prisma store/client across its `completed` and
-`cancelled` cases and uses a 30-second timeout, avoiding a second Windows migration/client/root
-startup; this is a test-runtime fix, not a production completion claim.
-
-The Worker process defaults the durable Host to enabled; setting
-`COSMOS_WORKFLOW_HOST_ENABLED=false` is the only disable switch. `scripts/dev.ts`/
-`scripts/dev-env.ts`, `scripts/smoke-node.ps1`, and `docker/compose.yml` also set the explicit
-`true` value. This keeps API enqueue and Worker execution on the same default path. Worker Admin
-`activePollCount` counts polls from `beginPoll` until `endPoll`; active Attempt fields count only
-runtime Attempts explicitly registered with a real identity. The current `apps/worker` `pollOnce`
-interface does not expose a safe Attempt identity, so the implementation must not invent Attempt
-IDs or claim that an active poll is an active Attempt. Drain stops new polls, waits for active polls
-plus explicitly registered Attempts, and on deadline keeps `timed_out`/`resourcesClosed=false` with
-the remaining poll/Attempt counts.
-
-Node durable smoke 最终 PASS。命令在目标 worktree 的 cwd 执行：
-
-```text
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& 'C:\Users\notnotype\Documents\CodeRepository\GithubProjects\cosmos\.worktree\t07-activity-host\scripts\smoke-node.ps1'"
-cwd=C:/Users/notnotype/Documents/CodeRepository/GithubProjects/cosmos/.worktree/t07-activity-host
-exitCode=0 wallTime=7.04s
-fresh db:migrate: 6 migrations applied
-  20260808003247_phase1_foundation
-  20260808150000_collector_jobs
-  20260810020829_normalized_content_model
-  20260813160000_workflow_run_backend
-  20260814090000_workflow_activity_host
-  20260815090000_workflow_ingest
-healthWorker=ready queuedStatus=queued durableRunStatus=succeeded durableRunSourceId=<source>
-feedItems=3 searchItems=1 storyTitle=Fixture media metadata
-sseHasRunEvent=true sseHasFeedEvent=true
-apiStructuredRecords=21 workerStructuredRecords=33 durableLaneCompletedRecords=1
-requestIdBridgedToDurableRun=1 requestIdBridgedToProbe=1 probeWorkerRecords=6
-notFoundStatus=404 validationStatus=400
-```
-
-终端 JSON 成功输出表示 log redaction/serialized `undefined` 断言通过。新的持久化
-`run.queued.v1` event 由当前 build 后的 dist 经 SSE 回放；此前缺 event 是 stale dist 的
-历史失败/已修复产物问题，不能写成当前代码失败。Docker CLI 不可用，Docker/browser/e2e
-未验证，真实 RSS/Bilibili/OpenCLI 未运行。
-
-### 2.2 PR #5/#6 保护区与重建边界
-
-PR #5 和 PR #6 都基于落后于当前 `b678fb5` 的旧提交，不能直接合并：
-
-- PR #5：ActionDefinition、ActionRegistry、Connector Action Adapter；只读审计来源
-  `96e27fd`。其旧的未版本化 Action 合同已与当前基线分叉，只能在当前基线上重建并
-  重新通过门禁；
-- PR #6：OpenCLI 执行器抽成独立插件；只读审计来源 `498018e`。它不是本四阶段的
-  前置依赖，保留为保护区和后续重建参考。
-
-两者的有用行为可按当前合同重建，但不把旧 diff、旧 base 或未重新验证的实现当作
-已验收能力。
-
-### 2.3 Cosmos Spike
-
-以下 worktree 属于历史或未合并工作，不得被 leader 或子代理清理、重置或覆盖：
-
-- `feat/t04-ingest-workflow-convergence`，HEAD `dc78f05`；
-- `chore/t04-workflow-runtime-spike`，HEAD `9fe84f2`；
-- `feat/t05-normalized-content-contract`，继续保留其既有边界。
-
-T04 Spike 的定位是行为证据和回归参考。它已经提供过以下有价值的证据：
-
-- Workflow Run、Action Job、lease、retry 和 Worker 接管；
-- Source execution snapshot、checkpoint CAS；
-- Observation/Revision/Asset/Story/FTS 事务；
-- DomainEvent、Outbox、receipt 和部分 unknown/recovery；
-- Node、浏览器和固定 Ingest 端到端链路。
-
-Spike 不作为生产源码整体搬运。尤其不整体复制：
-
-- Cosmos 自有的 `packages/workflow-runtime` Kernel；
-- Spike 的全部 migration；
-- 大量 catalog、projection、Gateway 和远程执行代码；
-- 未经当前基线验证的 Worker bootstrap。
-
-### 2.4 nb-workflow
-
-nb-workflow 实施基线：
-
-```text
-origin/master = af162ea
-本地 dirty master = cf34d15（保护区，不能作为实现起点）
-Task 03 Deferred Activity 发布合并提交 = af162ea114c2fddddf3e1cde2c654d357b217fb2
-Registry package = @notnotype/nb-workflow@0.2.0
-```
-
-`@notnotype/nb-workflow@0.2.0` 已包含 Deferred Activity 公开符号。Task 03 已通过真实 Registry Node/Bun runtime 与 TypeScript declaration consumer；但这些证据仍不等同 Cosmos durable host、跨进程 waiting 恢复或生产集成。
-
-### Phase 1 门禁结果（2026-08-13）
-
-| 证据层 | 当前结果 | 边界 |
-| --- | --- | --- |
-| 行为合同 | focused：9 pass / 0 fail / 24 expect；conformance：21 pass / 0 fail / 2 expect；full：118 pass / 0 fail / 306 expect；typecheck/build passed | 使用 deterministic Memory fixture，不等同 durable Backend 或多进程恢复 |
-| 真实 tarball | `bun run verify:package` 输出 `NODE_PACKAGE_SMOKE_OK`、`TARBALL_DECLARATION_CONSUMER_OK`、`ISOLATED_PACKAGE_SMOKE_OK` | 验证 Node/TypeScript 包边界和 Deferred 行为，不验证 Cosmos |
-| npm Registry consumer | `@notnotype/nb-workflow@0.2.0` 已可安装；`REGISTRY_CONSUMER_OK version=0.2.0 exports=6`、`BUN_REGISTRY_IMPORT_OK function function`、TypeScript tsc passed | 证明公开包可被 Node/Bun/TypeScript consumer 使用，不证明 durable host |
-
-Phase 1 的 nb-workflow 行为、package 和 Registry consumer 门禁已通过；Task 06 的
-稳定阻塞已解除，Cosmos Backend/Host 收敛由本 Task 承接。该结果仍不证明 Cosmos
-durable host、跨进程 waiting 恢复、Activity Host、固定 Ingest parity、Product API
-或 Worker Admin。
-
-`nb-workflow` dirty master 及其它外部 worktree 继续属于保护区；本 Task 不直接修改
-其 dirty `master`，也不复制 Task 04 Spike 的 Kernel 或 migration。
+已有 worktree 和用户改动继续受根 [`AGENTS.md`](../../../AGENTS.md) 保护；本 Task 不授权清理、重置或覆盖它们。
 
 ## 3. Goal
 
@@ -361,12 +185,10 @@ flowchart LR
 
 1. 从最新 `origin/master` 建立实现分支；
 2. 重新审查 PR #5/#6 的依赖关系和变更边界；
-3. 不直接合并落后 base 的旧 PR；只在 `b678fb5` 上重建经当前合同验证的有用行为；
+3. 不直接合并落后基线的旧 PR；只在 leader 指定的当前基线上重建经合同验证的有用行为；
 4. 运行 focused/full tests、typecheck、build 和 `git diff --check`；
 5. 保存 master、PR、Spike 和 dirty worktree 的 hash 基线。
 
-状态：PR A/#9 已合并并冻结 `b678fb5`；PR #5/#6 仍是落后基线的保护区来源，需
-重建而非直接合并。Phase 0 的文档基线已收口，不表示后续 Host/API/Admin 门禁已通过。
 
 本阶段不修改任何 T04 Spike worktree，也不开始 Kernel convergence。
 
@@ -379,12 +201,8 @@ flowchart LR
 - 外部 completion 的 idempotency 和 identity 验证；
 - cancel、timeout、late completion 和 failure 传播；
 - Backend conformance、跨进程 load/replay、Node package smoke；
-- 发布包含 Deferred Activity 合同的稳定版本；当前版本为
-  `@notnotype/nb-workflow@0.2.0`。
+- 发布包含 Deferred Activity 合同的稳定版本。
 
-状态：Phase 1 的发布、package 和 Registry consumer 门禁已通过；Task 06 的稳定
-阻塞已解除。该状态不替代 Cosmos durable Backend/Activity Host、固定 Ingest parity、
-Product API 或 Worker Admin 验证。
 
 进入 Phase 2 的门禁：Kernel 能在不依赖 Cosmos/Prisma/domain 类型的情况下表达
 Activity pending、resume、cancel 和 duplicate completion。
@@ -410,9 +228,6 @@ Activity pending、resume、cancel 和 duplicate completion。
 - fresh DB、master DB upgrade、已有 Workflow 数据读取分别验证；
 - 旧固定 Run/Job 数据需要兼容读取时，增加明确 adapter，不隐式重写历史。
 
-状态：Phase 2 的 Backend/ValueStore 已随实现提交 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`
-在本地 `master` 合入；它不表示 Activity Host、完整 durable recovery、双 Worker fencing 或
-后续 Product/Worker 能力的全部门禁已完成。
 
 ### Phase 3：Activity Job、Attempt、Lease 和 Completion
 
@@ -442,12 +257,6 @@ reference 幂等。Action 已成功时重放只读结果；Job 仍在 queued/lea
 - Workflow state revision；
 - Run 未取消或已终止。
 
-状态：Activity Host、Job/Attempt/Lease、Completion、固定 Ingest fixture、manifest/catalog/control
-Product API 增量和 direct mode Worker Admin 已随 `5ce628690ab0110b0525e8ebcbacbe673ced9c55`
-在本地 `master` 合入；旧 `/connectors` executable SourceProbe 路由仍存在，manifest-only clean
-cutover 尚未完成。Round 11 记录了合入输入的 focused/full、typecheck、lint:web、build、Prisma
-和 Node smoke 结果。完整 durable recovery、双 Worker fencing、完整 parity、Docker/browser/
-真实来源及完整生产验收仍未完成或未验证。
 
 旧 Worker、过期 lease 和迟到 completion 不能写：
 
@@ -656,7 +465,7 @@ await wf.callAction("source.fetch@1", input);
 
 ### 9.4 版本化 Action 与 SQL fencing 候选执行合同
 
-Round 5 冻结以下后续实现候选；它们约束执行侧边界，不伪造当前 dirty WIP 已满足：
+以下为执行侧候选合同；它们约束后续实现边界，不单独构成已实现或已验收能力：
 
 - `ActionRef` 固定为 `namespace.operation@positive-integer`；
 - `ActionDefinition` 携带 executable Zod input/output schema，`ActionDescriptor`/
@@ -813,24 +622,8 @@ nb-workflow Deferred Activity conformance 通过
 - 只通过 API 文档存在；
 - 只通过“GitHub 可合并”。
 
-## 14. 下一步
+## 14. 下一步选择规则
 
-Task 07 当前的下一步不是把本地合入写成全部完成，而是由 leader 按剩余阶段门禁继续：
+leader 从第 7 节阶段门禁、第 10 节验收矩阵和第 13 节完成定义中选择仍未满足的最小垂直切片，并把精确范围、负责人、验证结果、偏差与下一步追加到 [`walkthrough.md`](walkthrough.md)。仓库当前状态和跨任务优先级只在 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md) 维护。
 
-1. 保持本地 `master@5ce628690ab0110b0525e8ebcbacbe673ced9c55` 为当前实现基线，记录
-   `origin/master@b678fb5` 仍未 push；PR #5/#6 旧 base 只能重建，不能直接合并。
-2. 在已合入 Host 上补齐固定 `cosmos.ingest@1` parity：重复/修订/媒体、abort/takeover、
-   Feed/Search/Story 回归、跨进程 recovery 和双 Worker fencing。
-3. 单独验收 Product API 与 Worker 不可用边界、Worker Admin SIGTERM/活跃 Attempt deadline、
-   migration、Node 生产边界、browser/Docker 和真实来源；最终 Node durable smoke 已 PASS，
-   但不能替代这些验收。当前 full Vitest 23 files/165 tests、contract regression 4 files/47
-   tests、typecheck/lint:web/build、db generate/validate 和 two-client fencing 证据仍不等于
-   完整门禁。
-4. 所有恢复、parity、生产和只读审查门禁通过后，才决定是否删除旧回滚路径；在此之前保留旧
-   Ingest 路径。不得把本地合入写成 push、PR、worktree 清理或 Docker/browser/真实来源完成。
-
-本 Task 的实现规格范围统一由 [`docs/spec/README.md`](../../spec/README.md) 索引；Draft、Planned、Reserved API、Gateway、Redis、跨主机和其它后续设计仍不等于实现。
-本轮已创建并推送到 master 的文档提交为 `d8e1360`（完整提交消息为 `docs: add reconstructable component specifications`）；该提交完成 `docs/spec/` 索引、29 个可重建组件规格及相关事实同步，并通过规格结构、链接和字节级检查。
-
-本 Task 不把合入前 dirty worktree 的 focused/full/package、Node smoke 证据写成完整门禁或 Task 07 完成；
-剩余门禁通过前继续保留旧 Ingest 路径。
+所有恢复、parity、生产和审查门禁通过前，保留旧 Ingest 路径作为回滚边界；不得把局部测试、代码合入、push、PR 或单层验收写成 Task 07 完成。
