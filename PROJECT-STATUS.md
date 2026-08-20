@@ -1,48 +1,62 @@
 # Cosmos Project Status
 
-> 截至 2026-08-18；以下验证针对 `master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`，已提交、已 push、未部署。
+> 更新于 2026-08-20。最近一次由完整 runtime 门禁覆盖的实现基线是 `3af886a0099bc778c32475513740b6562bb6e31f`，已提交、已 push、未部署；后续治理提交未改变产品运行时。
 
 ## 一句话结论
 
-本轮完成 Worker 稳定化与分层测试体系：Worker 配置 fail-fast、四 lane 隔离、recovery priority、Attempt 生命周期、shutdown deadline/force path、WorkflowRun 来源与错误持久化、completion dead-letter → Run failed、HTTP 409 冲突映射均已实现。默认离线门禁已通过：数据库/类型、属性/单元、构建、Node 进程 E2E、Playwright 浏览器 E2E 和 Windows smoke。
+产品运行时能力仍以 `3af886a` 的分层验证为基线。本轮在基于 `origin/master=a3b962f1aa42c51ecbf6c7abcdb67d4042554818` 的隔离分支收敛 Agent Skills 开发生命周期，并修复该远端提交的已知 Quality 红灯：默认 Vitest 现在从源码解析 `@cosmos/worker-admin`，unit 与 property 收集真实分离，Quality 显式执行两层测试。
 
-实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)。本轮新增 `.github/workflows/ci.yml`，将质量、Node E2E、浏览器 E2E 和 Windows smoke 分为独立 job；Docker 与真实来源保持显式可选。
+本轮本地 Quality 全序列已通过；改动尚未 commit、push 或创建 PR，因此远端 CI 未重跑，不能写成远端恢复绿色。实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-当前实现提交基线：`master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`。本轮稳定化交付拆为 Worker 生产实现、分层测试/CI、稳定化规格和 E2E 竞态回归四个提交；四者均已推送。
-
-## 已验证（2026-08-18）
+## 本轮本地已验证（2026-08-20）
 
 ```text
+bun install --frozen-lockfile
+  passed；lockfile 无变化
+bun run docs:check
+  passed；checkedFiles=256，failures=[]
 bun run db:validate
   passed
 bun run db:generate
-  passed（首次因共享调试进程占用 Prisma query engine 得到 Windows EPERM，停止该进程后重试通过）
+  passed；Prisma Client 6.19.3
 bun run typecheck
   passed
-bun run test:property
-  2 property files / 3 tests passed
+bunx vitest run apps/worker/src/runtime.test.ts
+  passed；1 file / 6 tests
+bun run test -- scripts/check-documentation.test.ts
+  RED：新增根 README SHA 防漂移案例按预期失败
+  GREEN：1 file / 9 tests passed
 bun run test
-  28 test files / 185 tests passed
-bun run build && bun run lint:web
+  passed；26 unit files / 190 tests，未收集 *.property.test.ts
+bun run test:property
+  passed；3 property files / 4 tests
+  apps/worker/src/runtime.property.test.ts
+  packages/application/src/workflow-control.property.test.ts
+  packages/storage-prisma/src/workflow-host-store.property.test.ts
+bun run lint:web
   passed
-bun run test:e2e
-  4 Node process E2E files / 4 tests passed
-bun run test:browser
-  1 Playwright browser test passed
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1
-  passed：healthWorker=ready、durableRunStatus=succeeded、Feed=3、Search=1、SSE Run/Feed、requestId bridge、400/404、日志脱敏
-git diff --check
-  passed
+bun run build
+  passed；packages、API、Worker 与 Next Web 生产构建完成
 ```
 
-`vitest.e2e.config.ts` 和 `vitest.property.config.ts` 独立声明 include，仅收集各自层级，不扫描 workspace 依赖测试。Node E2E 使用真实构建产物、隔离 SQLite、动态 API/Admin 端口和结构化日志；跨进程 recovery 使用受控 RSS 请求与 lease expiry。浏览器流程从真实页面完成来源创建、录入、Feed 和 Story 展开。
+`vitest.config.ts` 通过 `configDefaults.exclude` 保留 Vitest 默认排除项并追加 `**/*.property.test.ts`；`vitest.property.config.ts` 独立收集 `packages/**` 与 `apps/**` 下的 property 文件。原 CI 失败路径不再依赖预先存在的 `packages/worker-admin/dist/index.js`。
 
-## 未运行的可选门禁
+## 远端 CI 与治理边界
 
-- `bun run test:docker` 已验证前置检查，但本机没有 Docker CLI，因此 Docker Compose build/health/fixture 流程未运行。
-- `bun run test:real:rss` 因缺少 `COSMOS_REAL_RSS_URL` 未运行。
-- `bun run test:real:aihot`、`bun run test:real:bilibili` 因缺少显式联网许可及对应 endpoint/OpenCLI/Browser Bridge 前置未运行。
-- 真实来源、Docker、长时双 Worker 压力、发布/部署和公网安全均不由默认门禁证明。
+- 远端 `a3b962f` 的 CI run `32241661044` 仍为 failure：Linux clean install 后 `apps/worker/src/runtime.test.ts` 无法解析 `@cosmos/worker-admin`，后续 Node process E2E、Browser E2E 和 Windows Node smoke 因依赖 Quality 被跳过。
+- 2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空。用户选择本轮只修改仓库内流程；未创建或修改 branch protection/ruleset。
+- 因此 `.github/workflows/ci.yml` 定义了检查内容，但当前远端没有强制这些检查阻止直接 push 或合并。是否改变远端治理需要单独决策。
+- 本轮没有 commit、push、PR、merge、Issue 关闭、worktree 清理、发布或部署授权，这些操作均未执行。
+
+## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
+
+2026-08-18 已验证：数据库/类型、属性/单元、构建、4 个 Node process E2E、1 个 Playwright browser test 和 Windows smoke。该证据继续证明当时的产品运行时合同；本轮治理与测试配置改动没有重跑这些 runtime 层，也不扩大其证明范围。
+
+## 本轮未运行
+
+- Node process E2E、Playwright 浏览器、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署均未运行。
+- 原因：本轮只改变仓库治理、文档检查、Vitest 收集和 CI Quality 配置，不改变产品运行时行为；完整 runtime 证据仍锚定 `3af886a`，远端新 CI 在 push 前无法产生。
+- Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
 
 ## 当前运维边界
 
@@ -51,16 +65,9 @@ git diff --check
 - WorkflowRun 的 `sourceInstanceId`、`errorMessage` 是 durable projection 字段；来源查询同时考虑 legacy Run 和 WorkflowRun，不从 Kernel stateJson 猜错误文本。
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
 
-## 当前真相分层
-
-当前工作树已提交并 push 到 `master=origin/master=3af886a0099bc778c32475513740b6562bb6e31f`；未部署。
-- 已验证层级分别为数据库/类型、属性/单元、构建、Node 进程 E2E、Playwright 浏览器 E2E 和 Windows smoke；每层证据只覆盖自身合同。
-- Docker/真实来源保持显式可选。Docker CLI 缺失导致 Compose 流程未运行；真实 RSS、AI HOT、Bilibili/OpenCLI 因外部前置缺失未运行。
-- 完整 Ingest parity、长时间双 Worker 压力、生产部署、多主机、Gateway、Redis 和远程 Worker 不由当前门禁证明。
-
 ## 当前下一步
 
-可选后续是提供 Docker daemon、真实来源 endpoint/凭据和 OpenCLI/Browser Bridge 后分别运行对应显式命令；不应把缺少这些外部前置写成离线 Worker 回归。
+获得相应授权后才能 commit、push 或创建 PR；push 后必须观察新的远端 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 实际结果。在远端 run 完成前，本轮结论保持“本地 Quality 通过、远端未重跑”。
 
 ## 已完成
 

@@ -6,15 +6,15 @@
 
 | 层级          | 命令                                                                         | 当前覆盖                                                                                                       |
 | ------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 单元          | `bun run test`                                                               | 包内和应用单元行为测试                                                                                         |
-| 属性          | `bun run test:property`                                                      | 幂等、租约 fencing、Worker recovery priority；独立配置只收集 `*.property.test.ts`                              |
+| 单元          | `bun run test`                                                               | 包内和应用单元行为测试；默认配置排除 `*.property.test.ts`                                                       |
+| 属性          | `bun run test:property`                                                      | 独立收集 `packages/**` 与 `apps/**` 下的 `*.property.test.ts`，覆盖幂等、租约 fencing 和 Worker recovery priority |
 | 类型/数据库   | `bun run typecheck`、`bun run db:validate`、`bun run db:generate`            | 全仓 TypeScript、Prisma schema 与 Client                                                                       |
 | 构建          | `bun run build`                                                              | packages、API、Worker、Next Web 生产产物                                                                       |
 | Node 进程 E2E | `bun run test:e2e`                                                           | 构建后的真实 API/Worker、隔离 SQLite、HTTP、SSE、结构化日志；包含 ingest、Admin、跨进程 recovery、调度失败隔离 |
 | 浏览器 E2E    | `bun run test:browser`                                                       | 真实 Next/API/Worker Stack 中的来源创建、录入、Feed 和 Story 用户流程                                          |
 | Windows smoke | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1` | Windows Node API/Worker、迁移、health、fixture、Feed/Search/Story、SSE、requestId 和脱敏日志                   |
 
-`bun run test:e2e` 使用独立的 `vitest.e2e.config.ts`，先构建 API/Worker，再串行运行 `e2e/**/*.e2e.test.ts`。`bun run test:property` 使用独立的 `vitest.property.config.ts`，不会继承全仓单元测试 include。
+`bun run test:e2e` 使用独立的 `vitest.e2e.config.ts`，先构建 API/Worker，再串行运行 `e2e/**/*.e2e.test.ts`。默认 `vitest.config.ts` 明确排除 `*.property.test.ts`；`bun run test:property` 使用独立的 `vitest.property.config.ts`，只收集当前三份 property 文件：`apps/worker/src/runtime.property.test.ts`、`packages/application/src/workflow-control.property.test.ts` 和 `packages/storage-prisma/src/workflow-host-store.property.test.ts`，不会扫描普通单元测试。
 
 ## 文档治理
 
@@ -56,7 +56,7 @@ COSMOS_ALLOW_REAL_NETWORK=true COSMOS_OPENCLI_PATH=<path> OPENCLI_PROFILE=<profi
 
 ## CI 分层
 
-`.github/workflows/ci.yml` 将质量、Node E2E、浏览器 E2E 和 Windows smoke 分为独立 job。质量 job 先执行 `bun run docs:check`，再执行数据库检查、类型检查、单元测试、Web lint 和构建；Node/browser/smoke job 分别报告自己的结果。Docker 和真实来源没有加入默认 CI。
+`.github/workflows/ci.yml` 将质量、Node E2E、浏览器 E2E 和 Windows smoke 分为独立 job。质量 job 依次执行 `bun run docs:check`、数据库检查、类型检查、单元测试、属性测试、Web lint 和构建；Node/browser/smoke job 分别报告自己的结果。Docker 和真实来源没有加入默认 CI。
 
 ## 证据边界
 

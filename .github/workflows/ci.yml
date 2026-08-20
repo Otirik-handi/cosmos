@@ -32,6 +32,7 @@ jobs:
             - run: bun run db:generate
             - run: bun run typecheck
             - run: bun run test
+            - run: bun run test:property
             - run: bun run lint:web
             - run: bun run build
 
