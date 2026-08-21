@@ -1,45 +1,53 @@
 # Cosmos Project Status
 
-> 更新于 2026-08-20。最近一次由完整 runtime 门禁覆盖的实现基线是 `3af886a0099bc778c32475513740b6562bb6e31f`，已提交、已 push、未部署；后续治理提交未改变产品运行时。
+> 更新于 2026-08-21。最近一次由完整 runtime 门禁覆盖的实现基线是 `3af886a0099bc778c32475513740b6562bb6e31f`，已提交、已 push、未部署；后续治理提交未改变产品运行时。
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为基线。本轮在基于 `origin/master=a3b962f1aa42c51ecbf6c7abcdb67d4042554818` 的隔离分支收敛 Agent Skills 开发生命周期，并修复该远端提交的已知 Quality 红灯：默认 Vitest 现在从源码解析 `@cosmos/worker-admin`，unit 与 property 收集真实分离，Quality 显式执行两层测试。
+产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。改动尚未 commit、push 或创建 PR，因此远端 CI 未重跑，不能写成远端恢复绿色。
 
-本轮本地 Quality 全序列已通过；改动尚未 commit、push 或创建 PR，因此远端 CI 未重跑，不能写成远端恢复绿色。实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-## 本轮本地已验证（2026-08-20）
+React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成实现、P1 修复、本地最终门禁与修复后五轴审查。远端 CI 未重跑。
+
+## Task 09 本地实现证据
+
+- 登记门禁覆盖 `components/ui/*.tsx` 与 `components/cosmos/*.tsx`：8 + 5 个模块；registry 聚焦测试通过；
+- `/dev/components` 开发路由、URL/history、props、Light/Dark、token 草稿/JSON 和五个产品 fixture 已实际浏览器验证；
+- token 覆盖只在预览根节点，实验室无 Product API/SSE 请求；生产 Web 对 `/dev/components` 返回 HTTP 404；
+- 既有 `bun run test:browser` ingest 流程通过：来源创建、录入、Feed、Story；
+- 当前 worktree 未 commit、push、PR、merge、发布、部署或清理。
+
+## 本轮本地已验证（2026-08-21）
 
 ```text
-bun install --frozen-lockfile
-  passed；lockfile 无变化
 bun run docs:check
-  passed；checkedFiles=256，failures=[]
-bun run db:validate
-  passed
-bun run db:generate
-  passed；Prisma Client 6.19.3
+  passed；checkedFiles=283，failures=[]
 bun run typecheck
-  passed
-bunx vitest run apps/worker/src/runtime.test.ts
-  passed；1 file / 6 tests
-bun run test -- scripts/check-documentation.test.ts
-  RED：新增根 README SHA 防漂移案例按预期失败
-  GREEN：1 file / 9 tests passed
+  passed；packages 与 API/Worker/Web 全仓 TypeScript
 bun run test
-  passed；26 unit files / 190 tests，未收集 *.property.test.ts
+  passed；30 个测试文件 / 217 个测试
 bun run test:property
-  passed；3 property files / 4 tests
-  apps/worker/src/runtime.property.test.ts
-  packages/application/src/workflow-control.property.test.ts
-  packages/storage-prisma/src/workflow-host-store.property.test.ts
+  passed；3 个 property 文件 / 4 个测试
 bun run lint:web
   passed
 bun run build
   passed；packages、API、Worker 与 Next Web 生产构建完成
+bun run test:browser
+  passed；1 个 Playwright ingest 流程（来源创建、录入、Feed、Story）
+bun run test:browser:component-lab
+  passed；4 个开发态 Playwright 回归（SourceForm 双 props 同步、SourceForm 提交阻断、FeedBrowser 搜索提交阻断、token 无操作失焦保留）
+bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts
+  passed；3 个文件 / 24 个合同测试，覆盖 13 个公共模块登记、控件 schema、token 边界
+git diff --check
+  passed；无输出
 ```
 
-`vitest.config.ts` 通过 `configDefaults.exclude` 保留 Vitest 默认排除项并追加 `**/*.property.test.ts`；`vitest.property.config.ts` 独立收集 `packages/**` 与 `apps/**` 下的 property 文件。原 CI 失败路径不再依赖预先存在的 `packages/worker-admin/dist/index.js`。
+组件实验室额外真实浏览器证据：开发路由 URL/history、props、Light/Dark、token 作用域/恢复/非法
+导入、五个产品 fixture、P1 修复回归、320/768/1024/1440 视口和无 Product API/SSE 请求均通过；生产
+`/dev/components` 通过 `curl` 返回 HTTP 404。测试数据使用隔离 `.agent/tmp`，本轮导入样本已清理。
+工具链保留的 `vitest.config.ts` / `vitest.property.config.ts` 分层收集合同未改变。
+修复后五轴审查结论：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均由专用浏览器回归覆盖；`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
 ## 远端 CI 与治理边界
 
@@ -50,12 +58,12 @@ bun run build
 
 ## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
 
-2026-08-18 已验证：数据库/类型、属性/单元、构建、4 个 Node process E2E、1 个 Playwright browser test 和 Windows smoke。该证据继续证明当时的产品运行时合同；本轮治理与测试配置改动没有重跑这些 runtime 层，也不扩大其证明范围。
+2026-08-18 已验证：数据库/类型、属性/单元、构建、4 个 Node process E2E、1 个 Playwright browser test 和 Windows smoke。该证据是历史产品运行时基线；本轮 Task 09 新增的本地浏览器证据见上方，未重新运行 Node process E2E 或 Windows smoke。
 
 ## 本轮未运行
 
-- Node process E2E、Playwright 浏览器、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署均未运行。
-- 原因：本轮只改变仓库治理、文档检查、Vitest 收集和 CI Quality 配置，不改变产品运行时行为；完整 runtime 证据仍锚定 `3af886a`，远端新 CI 在 push 前无法产生。
+- Task 09 的 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
+- 历史治理轮次未运行的 Node process E2E、Browser E2E 和 Windows Node smoke 不应与本轮 Task 09 浏览器证据混淆；远端 CI 仍未重跑。
 - Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
 
 ## 当前运维边界
