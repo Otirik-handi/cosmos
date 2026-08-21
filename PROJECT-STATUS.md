@@ -4,11 +4,11 @@
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR 尚未创建，远端 CI 未重跑，merge、发布和部署未执行。
+产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建且保持 OPEN，PR URL 为 `https://github.com/notnotype/cosmos/pull/10`。远端 CI run `32458447273` 已 completed/failure：Quality 成功，Node process E2E、Browser E2E 和 Windows Node smoke 失败；具体错误详情未验证，merge、发布和部署未执行。
 
 实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成实现、P1 修复、本地最终门禁与修复后五轴审查。远端 CI 未重跑。
+React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。PR #10 的远端 run `32458447273` 已失败；CI Browser job 只执行 `bun run test:browser`，未执行 `bun run test:browser:component-lab`。
 
 ## Task 09 本地实现证据
 
@@ -16,7 +16,7 @@ React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.wo
 - `/dev/components` 开发路由、URL/history、props、Light/Dark、token 草稿/JSON 和五个产品 fixture 已实际浏览器验证；
 - token 覆盖只在预览根节点，实验室无 Product API/SSE 请求；生产 Web 对 `/dev/components` 返回 HTTP 404；
 - 既有 `bun run test:browser` ingest 流程通过：来源创建、录入、Feed、Story；
-实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR 尚未创建；merge、发布、部署和 worktree 清理未执行。
+实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；merge、发布、部署和 worktree 清理未执行。
 
 ## 本轮本地已验证（2026-08-21）
 
@@ -51,10 +51,11 @@ git diff --check
 
 ## 远端 CI 与治理边界
 
-- 远端 `a3b962f` 的 CI run `32241661044` 仍为 failure：Linux clean install 后 `apps/worker/src/runtime.test.ts` 无法解析 `@cosmos/worker-admin`，后续 Node process E2E、Browser E2E 和 Windows Node smoke 因依赖 Quality 被跳过。
+- PR #10（`https://github.com/notnotype/cosmos/pull/10`）对应远端 CI run `32458447273` 已于 2026-08-21 completed/failure：Quality 成功；Node process E2E 在 `bun run test:e2e` 失败；Browser E2E 在 `bun run test:browser` 失败；Windows Node smoke 在 `bun run build` 失败，后续 smoke 跳过。三个失败作业的具体错误详情未验证；当前禁止 merge。
+- `.github/workflows/ci.yml` 的 Browser E2E job 只执行 `bun run test:browser`，未执行 `bun run test:browser:component-lab`；本地专用 component-lab 门禁 4/4 通过，不能替代远端 CI。
 - 2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空。用户选择本轮只修改仓库内流程；未创建或修改 branch protection/ruleset。
-- 因此 `.github/workflows/ci.yml` 定义了检查内容，但当前远端没有强制这些检查阻止直接 push 或合并。是否改变远端治理需要单独决策。
-- 本轮没有 commit、push、PR、merge、Issue 关闭、worktree 清理、发布或部署授权，这些操作均未执行。
+- 因此 `.github/workflows/ci.yml` 定义了检查内容，但当前远端没有强制这些检查阻止直接 push 或合并。PR #10 当前仍 OPEN，是否改变远端治理需要单独决策。
+- 实现已 commit、push 并创建 PR；merge、Issue 关闭、worktree 清理、发布和部署未执行。
 
 ## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
 
@@ -62,8 +63,8 @@ git diff --check
 
 ## 本轮未运行
 
-- Task 09 的 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
-- 历史治理轮次未运行的 Node process E2E、Browser E2E 和 Windows Node smoke 不应与本轮 Task 09 浏览器证据混淆；远端 CI 仍未重跑。
+- Task 09 的本地 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；本地未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
+- PR #10 已实际运行远端 Node process E2E、Browser E2E 和 Windows Node smoke，但三个 job 均失败；具体错误详情未验证。远端 Browser E2E 未覆盖 `bun run test:browser:component-lab`。
 - Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
 
 ## 当前运维边界

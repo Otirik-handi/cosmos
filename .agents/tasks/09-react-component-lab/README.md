@@ -33,15 +33,14 @@
 - 改变 Product API、Transport DTO、Prisma schema、Worker 或现有首页业务语义；
 - commit、push、PR、merge、发布、部署和 worktree 清理，除非分别获得授权。
 ## Current State
-生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，当前 PR 尚未创建，等待交付流程继续。
+生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建并保持 OPEN；其远端 CI run `32458447273` 已 failure，当前禁止 merge。
 
 本 worktree 已实现静态 registry 与双目录登记门禁（8 个 `components/ui`、5 个 `components/cosmos`）、
 URL 会话/浏览器历史、token 快照与 localStorage 草稿、开发态 `/dev/components`、生产 404、
 五个无副作用 Cosmos 展示组件及首页复用。`page.tsx` 继续持有 HttpCosmosClient、SSE、
 React Hook Form 提交、搜索/分页/Story 状态；实验室 fixture 不访问 Product API。
 
-实现位于独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab`；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR 尚未创建；merge、发布、部署或 worktree 清理未执行。
-## Decisions and Deviations
+实现位于独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab`；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；merge、发布、部署或 worktree 清理未执行。
 
 - 继续以仓库内 shadcn primitive 源码为实现基座，不增加无意义的 Button 等转发包装层。
 - 产品展示组件进入 `components/cosmos`，只接受 DTO/展示状态/回调，不导入 Product API client 或建立 SSE。
@@ -207,11 +206,11 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
   P1 修复回归、320/768/1024/1440 视口和无 API/SSE 请求通过；生产 `curl` 对 `/dev/components` 返回 HTTP 404；
 - `bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts`：3 个文件、24 个测试通过，覆盖 13 个公共模块登记合同；
 
-最终收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`
-（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`
-（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归；fixturePath 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。Docker、真实 RSS/AI HOT/Bilibili、Windows smoke、真实 Agent、发布和部署未运行。
+最终本地收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归。
+PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）的远端 CI run `32458447273` 已 completed/failure：Quality 成功；Node process E2E 在 `bun run test:e2e` 失败；Browser E2E 在 `bun run test:browser` 失败（该 job 未执行 `bun run test:browser:component-lab`）；Windows Node smoke 在 `bun run build` 失败，后续 smoke 跳过。三个失败作业的具体错误详情未验证，因此当前禁止 merge。
+`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。Docker、真实 RSS/AI HOT/Bilibili、Windows smoke 的本地运行、真实 Agent、发布和部署未运行；远端 Windows Node smoke 已尝试但在 build 失败。
 
 ## Follow-ups
 
-- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR 尚未创建；merge、发布、部署和 worktree 清理未执行。
+- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；远端 run `32458447273` 失败，merge、发布、部署和 worktree 清理未执行。
 - NeuroBook/macOS 主题、跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。
