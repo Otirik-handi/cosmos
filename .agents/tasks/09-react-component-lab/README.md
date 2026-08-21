@@ -212,5 +212,5 @@ PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）的最新远端 
 
 ## Follow-ups
 
-- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；最新远端 run `32459370422` 失败，CI 修复已推送待新 run，merge、发布、部署和 worktree 清理未执行。
+- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；最新远端 run `32459370422` 失败，CI 修复已加入当前分支，修复后的远端 run 尚未验证；merge、发布、部署和 worktree 清理未执行。
 - NeuroBook/macOS 主题、跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。

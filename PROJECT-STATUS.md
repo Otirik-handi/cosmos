@@ -8,7 +8,7 @@
 
 实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。PR #10 的最新远端 run `32459370422` 已失败；CI Browser job 只执行 `bun run test:browser`，未执行 `bun run test:browser:component-lab`。
+React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入 `bun run test:browser:component-lab`，但最新远端 run `32459370422` 早于该配置修复，未执行该专用门禁；修复后的新 run 尚未验证。
 
 ## Task 09 本地实现证据
 
@@ -65,7 +65,7 @@ git diff --check
 ## 本轮未运行
 
 - Task 09 的本地 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；本地未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
-- PR #10 已实际运行远端 Node process E2E、Browser E2E 和 Windows Node smoke，但最新 run `32459370422` 的三个 job 均在 `packages/storage-prisma` 构建链失败；当前分支已补下游 Prisma Client 生成和 component-lab browser gate，具体修复因果待新 run 验证。旧 run 的 Browser E2E 未覆盖 `bun run test:browser:component-lab`，不代表新 CI 配置。
+- PR #10 最新已完成 run `32459370422` 的 Node process E2E、Browser E2E 和 Windows Node smoke 均在 `packages/storage-prisma` 构建链失败；当前分支已加入下游 Prisma Client 生成和 component-lab browser gate，但修复后的远端 run 尚未完成验证。本地专用门禁 4/4 通过不能替代远端检查。
 - Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
 
 ## 当前运维边界
