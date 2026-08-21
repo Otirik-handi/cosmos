@@ -4,11 +4,11 @@
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建且保持 OPEN，PR URL 为 `https://github.com/notnotype/cosmos/pull/10`。最新远端 CI run `32459370422` 已 completed/failure：Quality 成功，Node process E2E、Browser E2E 和 Windows Node smoke 均在 `packages/storage-prisma` 构建链失败；日志具体错误已记录于 Task，merge、发布和部署未执行。
+产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建且保持 OPEN，PR URL 为 `https://github.com/notnotype/cosmos/pull/10`。最新已完成远端 CI run `32461104472` 成功：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；merge、发布和部署未执行。
 
 实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入 `bun run test:browser:component-lab`，但最新远端 run `32459370422` 早于该配置修复，未执行该专用门禁；修复后的新 run 尚未验证。
+React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入隔离下游 job 的 `bun run db:generate` 和 `bun run test:browser:component-lab`；远端 run `32461104472` 已验证四个 CI job 全部通过。
 
 ## Task 09 本地实现证据
 
@@ -51,12 +51,10 @@ git diff --check
 
 ## 远端 CI 与治理边界
 
-- PR #10（`https://github.com/notnotype/cosmos/pull/10`）对应最新远端 CI run `32459370422`（head `7d8257b67f3c701f055cfd0b4c44f60ea7984fec`）已 completed/failure：Quality 成功；Node process E2E 的 `bun run test:e2e`、Browser E2E 的 `bun run test:browser`、Windows Node smoke 的 `bun run build` 均失败，后续 Windows smoke 跳过，当前禁止 merge。
-- 三个失败 job 的首个失败步骤均进入 `bun run --cwd packages/storage-prisma build`。原始日志报告 `src/index.ts`、`workflow-backend.ts`、`workflow-event-sink.ts`、`workflow-host-store.ts` 及测试文件无法从 `@prisma/client` 导入 `PrismaClient`/`Prisma`，并出现大量 `TS7006` 隐式 `any` 级联错误；具体修复因果仍未验证。
-- 当前分支已为每个隔离下游 job 在构建前加入 `bun run db:generate`，并为 Browser E2E job 增加 `bun run test:browser:component-lab`；上述 run `32459370422` 早于该 CI 修复，未覆盖这些步骤，推送后等待新 run 验证。
-- 2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空。用户选择本轮只修改仓库内流程；未创建或修改 branch protection/ruleset。
-- 因此 `.github/workflows/ci.yml` 定义了检查内容，但当前远端没有强制这些检查阻止直接 push 或合并。PR #10 当前仍 OPEN，是否改变远端治理需要单独决策。
-- 实现已 commit、push 并创建 PR；merge、Issue 关闭、worktree 清理、发布和部署未执行。
+- PR #10 的前一轮远端 run `32459370422`（head `7d8257b67f3c701f055cfd0b4c44f60ea7984fec`）曾失败：三个下游 job 在 `packages/storage-prisma` 构建链缺少生成后的 Prisma Client；该 run 仅作为历史失败证据保留。
+- 当前分支已为每个隔离下游 job 在构建前加入 `bun run db:generate`，并为 Browser E2E job 增加 `bun run test:browser:component-lab`。最新远端 run `32461104472`（head `1eada5745f4b846d6f2041de5d8cdc77278cc6f2`）已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过，且 Browser E2E 已执行专用 component-lab 门禁。
+- 远端 CI 检查已通过，但用户未授权 merge；PR #10 保持 OPEN。2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空；本轮未创建或修改远端治理。
+- 实现、CI 修复和状态记录已 commit 并 push；Issue 关闭、worktree 清理、发布和部署未执行。
 
 ## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
 
@@ -65,8 +63,7 @@ git diff --check
 ## 本轮未运行
 
 - Task 09 的本地 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；本地未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
-- PR #10 最新已完成 run `32459370422` 的 Node process E2E、Browser E2E 和 Windows Node smoke 均在 `packages/storage-prisma` 构建链失败；当前分支已加入下游 Prisma Client 生成和 component-lab browser gate，但修复后的远端 run 尚未完成验证。本地专用门禁 4/4 通过不能替代远端检查。
-- Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
+- PR #10 最新远端 run `32461104472` 已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；远端 Browser E2E 已覆盖 `bun run test:browser:component-lab`，隔离下游 job 已执行 `bun run db:generate`。
 
 ## 当前运维边界
 
