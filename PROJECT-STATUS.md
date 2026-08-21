@@ -4,11 +4,11 @@
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建且保持 OPEN，PR URL 为 `https://github.com/notnotype/cosmos/pull/10`。已验证远端 CI run `32463514494`（head `731d435bd0c6ab7b9b772368e901c8f22923fa5c`）成功：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；merge、发布和部署未执行。
+产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建且保持 OPEN，PR URL 为 `https://github.com/notnotype/cosmos/pull/10`。已验证远端 CI run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）成功：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；merge、发布和部署未执行。
 
 实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入隔离下游 job 的 `bun run db:generate` 和 `bun run test:browser:component-lab`；远端 CI run `32463514494` 已验证四个 CI job 全部通过。
+React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入隔离下游 job 的 `bun run db:generate` 和 `bun run test:browser:component-lab`；远端 CI run `32464307892` attempt 2 已验证四个 CI job 全部通过。
 
 ## Task 09 本地实现证据
 
@@ -52,7 +52,7 @@ git diff --check
 ## 远端 CI 与治理边界
 
 - PR #10 的前一轮远端 run `32459370422`（head `7d8257b67f3c701f055cfd0b4c44f60ea7984fec`）曾失败：三个下游 job 在 `packages/storage-prisma` 构建链缺少生成后的 Prisma Client；该 run 仅作为历史失败证据保留。
-- 当前分支已为每个隔离下游 job 在构建前加入 `bun run db:generate`，并为 Browser E2E job 增加 `bun run test:browser:component-lab`。已验证远端 CI run `32463514494`（head `731d435bd0c6ab7b9b772368e901c8f22923fa5c`）已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过，且 Browser E2E 已执行专用 component-lab 门禁。
+- 当前分支已为每个隔离下游 job 在构建前加入 `bun run db:generate`，并为 Browser E2E job 增加 `bun run test:browser:component-lab`。已验证远端 CI run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过，且 Browser E2E 已执行专用 component-lab 门禁；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过。
 - 远端 CI 检查已通过，但用户未授权 merge；PR #10 保持 OPEN。2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空；本轮未创建或修改远端治理。
 - 实现、CI 修复和状态记录已 commit 并 push；Issue 关闭、worktree 清理、发布和部署未执行。
 
@@ -63,7 +63,7 @@ git diff --check
 ## 本轮未运行
 
 - Task 09 的本地 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；本地未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
-- 已验证远端 CI run `32463514494` 已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；远端 Browser E2E 已覆盖 `bun run test:browser:component-lab`，隔离下游 job 已执行 `bun run db:generate`。
+- 已验证远端 CI run `32464307892` attempt 2 已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；远端 Browser E2E 已覆盖 `bun run test:browser:component-lab`，隔离下游 job 已执行 `bun run db:generate`。
 
 ## 当前运维边界
 
@@ -74,7 +74,7 @@ git diff --check
 
 ## 当前下一步
 
-Task 09 已获授权完成 commit、push 和 PR 创建；已验证远端 CI run `32463514494` 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过。PR #10 保持 OPEN，merge、发布、部署和 worktree 清理未执行。
+Task 09 已获授权完成 commit、push 和 PR 创建；已验证远端 CI run `32464307892` attempt 2 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过。PR #10 保持 OPEN，merge、发布、部署和 worktree 清理未执行。
 
 ## 已完成
 
