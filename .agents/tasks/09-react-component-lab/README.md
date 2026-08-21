@@ -33,7 +33,7 @@
 - 改变 Product API、Transport DTO、Prisma schema、Worker 或现有首页业务语义；
 - commit、push、PR、merge、发布、部署和 worktree 清理，除非分别获得授权。
 ## Current State
-生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建并保持 OPEN；其远端 CI run `32458447273` 已 failure，当前禁止 merge。
+生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建并保持 OPEN；最新远端 CI run `32459370422` 已 failure，当前禁止 merge。
 
 本 worktree 已实现静态 registry 与双目录登记门禁（8 个 `components/ui`、5 个 `components/cosmos`）、
 URL 会话/浏览器历史、token 快照与 localStorage 草稿、开发态 `/dev/components`、生产 404、
@@ -207,10 +207,10 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
 - `bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts`：3 个文件、24 个测试通过，覆盖 13 个公共模块登记合同；
 
 最终本地收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归。
-PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）的远端 CI run `32458447273` 已 completed/failure：Quality 成功；Node process E2E 在 `bun run test:e2e` 失败；Browser E2E 在 `bun run test:browser` 失败（该 job 未执行 `bun run test:browser:component-lab`）；Windows Node smoke 在 `bun run build` 失败，后续 smoke 跳过。三个失败作业的具体错误详情未验证，因此当前禁止 merge。
-`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。Docker、真实 RSS/AI HOT/Bilibili、Windows smoke 的本地运行、真实 Agent、发布和部署未运行；远端 Windows Node smoke 已尝试但在 build 失败。
+PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）的最新远端 CI run `32459370422`（head `7d8257b67f3c701f055cfd0b4c44f60ea7984fec`）已 completed/failure：Quality 成功；Node process E2E 在 `bun run test:e2e`、Browser E2E 在 `bun run test:browser`、Windows Node smoke 在 `bun run build` 均失败，后续 Windows smoke 跳过。三个失败 job 的首个失败步骤均进入 `bun run --cwd packages/storage-prisma build`；原始日志报告 `@prisma/client` 缺少 `PrismaClient`/`Prisma` 导出，并有大量 `TS7006` 隐式 `any` 级联错误。具体修复因果仍未验证，因此当前禁止 merge。
+当前分支已为每个隔离下游 job 在构建前加入 `bun run db:generate`，并为 Browser E2E job 增加 `bun run test:browser:component-lab`；上述 run `32459370422` 早于该 CI 修复，等待新 run 验证。`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
 ## Follow-ups
 
-- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；远端 run `32458447273` 失败，merge、发布、部署和 worktree 清理未执行。
+- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；最新远端 run `32459370422` 失败，CI 修复已推送待新 run，merge、发布、部署和 worktree 清理未执行。
 - NeuroBook/macOS 主题、跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。
