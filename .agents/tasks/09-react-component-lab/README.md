@@ -33,15 +33,14 @@
 - 改变 Product API、Transport DTO、Prisma schema、Worker 或现有首页业务语义；
 - commit、push、PR、merge、发布、部署和 worktree 清理，除非分别获得授权。
 ## Current State
-生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成，等待交付授权。
+生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，当前 PR 尚未创建，等待交付流程继续。
 
 本 worktree 已实现静态 registry 与双目录登记门禁（8 个 `components/ui`、5 个 `components/cosmos`）、
 URL 会话/浏览器历史、token 快照与 localStorage 草稿、开发态 `/dev/components`、生产 404、
 五个无副作用 Cosmos 展示组件及首页复用。`page.tsx` 继续持有 HttpCosmosClient、SSE、
 React Hook Form 提交、搜索/分页/Story 状态；实验室 fixture 不访问 Product API。
 
-实现位于独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab`；未 commit、push、
-PR、merge、发布、部署或清理 worktree。
+实现位于独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab`；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR 尚未创建；merge、发布、部署或 worktree 清理未执行。
 ## Decisions and Deviations
 
 - 继续以仓库内 shadcn primitive 源码为实现基座，不增加无意义的 Button 等转发包装层。
@@ -214,5 +213,5 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
 
 ## Follow-ups
 
-- 保持当前独立 worktree；未授权不 commit、push、PR、merge、发布、部署或清理。
+- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR 尚未创建；merge、发布、部署和 worktree 清理未执行。
 - NeuroBook/macOS 主题、跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。

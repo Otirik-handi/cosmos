@@ -4,7 +4,7 @@
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。改动尚未 commit、push 或创建 PR，因此远端 CI 未重跑，不能写成远端恢复绿色。
+产品运行时能力仍以 `3af886a` 的分层验证为历史基线；本 worktree 另完成 Task 09 React 组件实验室及首页无副作用组件提取。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`；PR 尚未创建，远端 CI 未重跑，merge、发布和部署未执行。
 
 实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
@@ -16,7 +16,7 @@ React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.wo
 - `/dev/components` 开发路由、URL/history、props、Light/Dark、token 草稿/JSON 和五个产品 fixture 已实际浏览器验证；
 - token 覆盖只在预览根节点，实验室无 Product API/SSE 请求；生产 Web 对 `/dev/components` 返回 HTTP 404；
 - 既有 `bun run test:browser` ingest 流程通过：来源创建、录入、Feed、Story；
-- 当前 worktree 未 commit、push、PR、merge、发布、部署或清理。
+实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR 尚未创建；merge、发布、部署和 worktree 清理未执行。
 
 ## 本轮本地已验证（2026-08-21）
 
