@@ -33,7 +33,7 @@
 - 改变 Product API、Transport DTO、Prisma schema、Worker 或现有首页业务语义；
 - commit、push、PR、merge、发布、部署和 worktree 清理，除非分别获得授权。
 ## Current State
-生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证、远端 CI 验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建且保持 OPEN；已验证远端 run `32461889411` success，当前不执行 merge。
+生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证、远端 CI 验证和修复后五轴审查已完成；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建且保持 OPEN；已验证远端 run `32462892821` success，当前不执行 merge。
 
 本 worktree 已实现静态 registry 与双目录登记门禁（8 个 `components/ui`、5 个 `components/cosmos`）、
 URL 会话/浏览器历史、token 快照与 localStorage 草稿、开发态 `/dev/components`、生产 404、
@@ -207,10 +207,10 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
 - `bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts`：3 个文件、24 个测试通过，覆盖 13 个公共模块登记合同；
 
 最终本地收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归。
-PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32461889411`（head `b3a8be6027a623fe149063e9192a1989f609dd7d`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；PR 保持 OPEN，当前不执行 merge。
+PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32462892821`（head `dae05d11bec150a2b344e865921eacf4a4051856`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；PR 保持 OPEN，当前不执行 merge。
 `fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
 ## Follow-ups
 
-- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8`、CI 修复提交 `36db989`、状态表述同步提交 `1eada5745f4b846d6f2041de5d8cdc77278cc6f2` 和最终远端状态记录提交 `b3a8be6` 已 commit 并 push；PR #10 已创建并保持 OPEN；远端 run `32461889411` 全部通过，merge、发布、部署和 worktree 清理未执行。
+- 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8`、CI 修复提交 `36db989`、状态表述同步提交 `1eada5745f4b846d6f2041de5d8cdc77278cc6f2`、最终远端状态记录提交 `b3a8be6` 和最终交付状态修正提交 `dae05d1` 已 commit 并 push；PR #10 已创建并保持 OPEN；远端 run `32462892821` 全部通过，merge、发布、部署和 worktree 清理未执行。
 - NeuroBook/macOS 主题、跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。
