@@ -94,20 +94,18 @@ taskkill /pid <pid> /t /f
 **`scripts/dev-env.ts`**
 
 - 解析工作区根目录。
-- `createWorkspaceDevEnvironment` 返回的环境对象只包含以下三项：
-  - `COSMOS_WORKFLOW_HOST_ENABLED`
-  - `COSMOS_WORKSPACE_ROOT`
-  - `COSMOS_DATA_ROOT`
-- `COSMOS_WORKFLOW_HOST_ENABLED` 默认值为 `true`。
-- `COSMOS_WORKSPACE_ROOT` 设置为解析出的 `root`。
-- `COSMOS_DATA_ROOT` 设置为 `resolve(root, configuredDataRoot || ".cosmos")`。
+- `createWorkspaceDevEnvironment` 返回的环境对象包含：
+  - `COSMOS_WORKFLOW_HOST_ENABLED`（默认 `true`）；
+  - `COSMOS_WORKSPACE_ROOT`；
+  - `COSMOS_DATA_ROOT`；
+  - 以及调用方显式设置且非空白的服务配置键（原样透传，不注入默认值）：
+    `COSMOS_API_HOST`、`COSMOS_API_PORT`、`COSMOS_WEB_PORT`、
+    `COSMOS_WORKER_ADMIN_HOST`、`COSMOS_WORKER_ADMIN_PORT`。
 - 不复制全部 `process.env` 到返回对象。
 
 **`scripts/dev-port.ts`**
 
-- `findAvailablePort(preferredPort, host = "127.0.0.1", maxAttempts = 50)` 从传入的首选端口开始查找可用端口；重建默认配置时调用方显式使用 `findAvailablePort(4310)`。
-- 每个候选端口均通过 `listen` 尝试绑定，并在成功确认后 `close`。
-- 最多尝试 `50` 个候选端口。
+- `findAvailablePort(preferredPort, host = "127.0.0.1", maxAttempts = 50, label = "API", excludedPorts = new Set())` 从首选端口开始查找；候选命中 `excludedPorts` 时跳过；错误消息携带 `label`（如 `Invalid COSMOS_WEB_PORT port: ...`）。
 - `withApiPortEnvironment` 写入：
   - `COSMOS_API_PORT=<port>`
   - `COSMOS_API_URL=http://localhost:<port>`
@@ -127,16 +125,14 @@ taskkill /pid <pid> /t /f
 
 - 创建工作区开发环境。
 - 调用端口相关逻辑。
-- 按以下固定顺序启动开发进程：
-  1. `web`
+- 解析三个服务端口（互斥集合防重；Admin `0` 保留动态），按以下固定顺序启动：
+  1. `web` —— 追加 `-- --port <webPort>`
   2. `api`
   3. `worker`
-- 每个进程均使用以下形式启动：
 
 ```text
-process.execPath run --cwd <dir> dev
+process.execPath run --cwd <dir> dev[ -- --port <webPort>]
 ```
-
 - 子进程继承：
   - `stdio: "inherit"`
   - 环境变量 `env`
@@ -199,10 +195,10 @@ file:<databasePath with slash>
 
 **端口输入**
 
-- `preferred`：首选端口；当前开发编排的默认配置值为 `4310`，由调用方显式传入 `findAvailablePort(4310)`，函数参数本身无默认值。
+- 每个服务独立的 `preferred`：API 默认 `4310`、Web 默认 `3000`、Worker Admin 默认
+  `9091`（允许 `0` 动态）；由调用方经环境变量显式传入，函数参数仅提供默认主机与尝试数。
 - `host`：监听主机，默认 `127.0.0.1`。
-- 候选端口范围必须为整数 `1..65535`。
-- 最大尝试次数为 `50`。
+- `excludedPorts`：已选服务端口集合，保证多服务探测不重叠。
 
 **服务输入**
 
