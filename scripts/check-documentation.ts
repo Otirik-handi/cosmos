@@ -17,6 +17,7 @@ const requiredIndexes = [
     "docs/standards/README.md",
     "docs/standards/repository-workflow.md",
     "docs/testing/README.md",
+    ".github/SECURITY.md",
 ] as const;
 
 const retiredPaths = ["docs/tasks/", "docs/testing.md"] as const;
@@ -75,6 +76,43 @@ export function checkDocumentation(
             );
         }
     }
+    const workflowPath = "docs/standards/repository-workflow.md";
+    if (fileSet.has(workflowPath)) {
+        const workflowMarkdown = readFileSync(
+            resolve(normalizedRoot, workflowPath),
+            "utf8",
+        );
+        const workflowNavigation = collectRelativeLinkTargets(workflowMarkdown);
+        if (!hasRelativeLinkTarget(workflowNavigation, "../../.github/SECURITY.md")) {
+            failures.push(
+                "仓库流程缺少私密安全报告链接：docs/standards/repository-workflow.md -> .github/SECURITY.md",
+            );
+        }
+        const hasPrivateSecurityRoute = hasAdmissionIssueCell(
+            workflowMarkdown,
+            "违反当前安全合同的漏洞",
+            (issueCell) => issueCell.startsWith("禁止")
+                && hasRelativeLinkTarget(
+                    collectRelativeLinkTargets(issueCell),
+                    "../../.github/SECURITY.md",
+                ),
+        );
+        if (!hasPrivateSecurityRoute) {
+            failures.push(
+                "仓库流程缺少私密安全报告路由：docs/standards/repository-workflow.md",
+            );
+        }
+        const hasPublicBugRoute = hasAdmissionIssueCell(
+            workflowMarkdown,
+            "当前合同可判定的局部非安全 Bug",
+            (issueCell) => issueCell === "需要",
+        );
+        if (!hasPublicBugRoute) {
+            failures.push(
+                "仓库流程缺少非安全 Bug 公开 Issue 路由：docs/standards/repository-workflow.md",
+            );
+        }
+    }
 
     for (const source of files.filter(isActiveMarkdown)) {
         const markdown = readFileSync(resolve(normalizedRoot, source), "utf8");
@@ -84,6 +122,40 @@ export function checkDocumentation(
     }
 
     return { failures, checkedFiles: files.length };
+}
+
+function hasRelativeLinkTarget(
+    urls: readonly string[],
+    expectedPath: string,
+): boolean {
+    return urls.some((url) => {
+        const encodedPath = url.split("#", 1)[0].split("?", 1)[0];
+        try {
+            return posix.normalize(decodeURIComponent(encodedPath)) === expectedPath;
+        } catch {
+            return false;
+        }
+    });
+}
+
+function hasAdmissionIssueCell(
+    markdown: string,
+    rowLabel: string,
+    predicate: (issueCell: string) => boolean,
+): boolean {
+    return markdown.split(/\r?\n/u).some((line) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine.startsWith("|")) {
+            return false;
+        }
+        const cells = trimmedLine
+            .split("|")
+            .slice(1, -1)
+            .map((cell) => cell.trim());
+        return cells.length >= 3
+            && cells[0] === rowLabel
+            && predicate(cells[2]);
+    });
 }
 
 function listRepositoryFiles(repoRoot: string): string[] {

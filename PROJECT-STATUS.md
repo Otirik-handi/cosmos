@@ -4,9 +4,11 @@
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为基线。本轮在基于 `origin/master=a3b962f1aa42c51ecbf6c7abcdb67d4042554818` 的隔离分支收敛 Agent Skills 开发生命周期，并修复该远端提交的已知 Quality 红灯：默认 Vitest 现在从源码解析 `@cosmos/worker-admin`，unit 与 property 收集真实分离，Quality 显式执行两层测试。
+产品运行时能力仍以 `3af886a` 的分层验证为基线。本地 `master` 已包含治理提交 `185967e`：Agent Skills 生命周期已收敛，默认 Vitest 从源码解析 `@cosmos/worker-admin`，unit 与 property 收集真实分离，Quality 显式执行两层测试。随后用八个 fresh-context 只读场景演练 Bug、安全、迁移、文档、公共 API、UI、性能和发布路径，并在当前工作树补齐高置信流程缺口。
 
-本轮本地 Quality 全序列已通过；改动尚未 commit、push 或创建 PR，因此远端 CI 未重跑，不能写成远端恢复绿色。实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+治理提交的本地 Quality 全序列已通过；本轮演练优化尚未 commit、push 或创建 PR，远端 CI 仍未重跑，不能写成远端恢复绿色。实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+
+React 组件实验室 Proposal 已于 2026-08-20 接受，稳定 Web 组件边界与测试边界已更新，Task 09 实施计划正在等待用户批准；前端实现代码、组件注册表、开发路由和 CI 组件门禁均尚未开始。本次规格工作不改变产品 runtime，也没有重新运行浏览器、Node E2E、Windows smoke、Docker 或真实来源验收。
 
 ## 本轮本地已验证（2026-08-20）
 
@@ -14,7 +16,7 @@
 bun install --frozen-lockfile
   passed；lockfile 无变化
 bun run docs:check
-  passed；checkedFiles=256，failures=[]
+  passed；checkedFiles=258，failures=[]
 bun run db:validate
   passed
 bun run db:generate
@@ -24,10 +26,11 @@ bun run typecheck
 bunx vitest run apps/worker/src/runtime.test.ts
   passed；1 file / 6 tests
 bun run test -- scripts/check-documentation.test.ts
-  RED：新增根 README SHA 防漂移案例按预期失败
-  GREEN：1 file / 9 tests passed
+  已证实 RED：根 README SHA 新增案例曾按预期失败
+  最终 GREEN：1 file / 12 tests passed；覆盖安全政策链接、安全私密路由、非安全 Bug 公开路由和反转准入表语义
 bun run test
-  passed；26 unit files / 190 tests，未收集 *.property.test.ts
+  最终串行 passed；26 unit files / 193 tests，未收集 *.property.test.ts
+  中间一次与 typecheck 并行运行时，旧库升级用例 5.079s 超过默认 5s；同例随后串行 4 次均通过（3.168–3.232s），最终全量 64.37s 通过；未改阈值或运行时代码
 bun run test:property
   passed；3 property files / 4 tests
   apps/worker/src/runtime.property.test.ts
@@ -39,14 +42,14 @@ bun run build
   passed；packages、API、Worker 与 Next Web 生产构建完成
 ```
 
-`vitest.config.ts` 通过 `configDefaults.exclude` 保留 Vitest 默认排除项并追加 `**/*.property.test.ts`；`vitest.property.config.ts` 独立收集 `packages/**` 与 `apps/**` 下的 property 文件。原 CI 失败路径不再依赖预先存在的 `packages/worker-admin/dist/index.js`。
+门禁现在额外要求 canonical workflow 的准入表同时保留安全漏洞的私密路由和非安全局部 Bug 的公开 Issue 路由，并独立验证安全政策链接；反转表格语义会由文档行为测试拦截。`vitest.config.ts` 通过 `configDefaults.exclude` 保留 Vitest 默认排除项并追加 `**/*.property.test.ts`；`vitest.property.config.ts` 独立收集 `packages/**` 与 `apps/**` 下的 property 文件。原 CI 失败路径不再依赖预先存在的 `packages/worker-admin/dist/index.js`。
 
 ## 远端 CI 与治理边界
 
 - 远端 `a3b962f` 的 CI run `32241661044` 仍为 failure：Linux clean install 后 `apps/worker/src/runtime.test.ts` 无法解析 `@cosmos/worker-admin`，后续 Node process E2E、Browser E2E 和 Windows Node smoke 因依赖 Quality 被跳过。
 - 2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空。用户选择本轮只修改仓库内流程；未创建或修改 branch protection/ruleset。
 - 因此 `.github/workflows/ci.yml` 定义了检查内容，但当前远端没有强制这些检查阻止直接 push 或合并。是否改变远端治理需要单独决策。
-- 本轮没有 commit、push、PR、merge、Issue 关闭、worktree 清理、发布或部署授权，这些操作均未执行。
+- 治理提交已 commit、快进合并到本地 `master` 并清理对应任务 worktree；本轮流程演练优化没有 commit、push、PR、Issue 关闭、远端保护修改、发布或部署授权，这些操作均未执行。
 
 ## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
 
@@ -54,8 +57,8 @@ bun run build
 
 ## 本轮未运行
 
-- Node process E2E、Playwright 浏览器、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署均未运行。
-- 原因：本轮只改变仓库治理、文档检查、Vitest 收集和 CI Quality 配置，不改变产品运行时行为；完整 runtime 证据仍锚定 `3af886a`，远端新 CI 在 push 前无法产生。
+- Node process E2E、Playwright 浏览器、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署均未在本轮流程演练优化后运行。
+- 原因：本轮只改变仓库治理、文档检查和贡献/PR/Issue/Task 入口，不改变产品运行时行为；完整 runtime 证据仍锚定 `3af886a`，远端新 CI 在 push 前无法产生。
 - Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
 
 ## 当前运维边界
@@ -67,7 +70,7 @@ bun run build
 
 ## 当前下一步
 
-获得相应授权后才能 commit、push 或创建 PR；push 后必须观察新的远端 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 实际结果。在远端 run 完成前，本轮结论保持“本地 Quality 通过、远端未重跑”。
+先完成当前治理改动的提交/推送与远端 CI 观察；Task 09 实施计划获批后，再从核对过的最新目标分支创建独立前端 worktree。组件实验室当前只有已接受方案和待批计划，不应描述为已实现能力。
 
 ## 已完成
 

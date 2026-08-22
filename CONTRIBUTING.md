@@ -8,7 +8,8 @@ Cosmos 已有 Phase 1 的 Web、NestJS API、固定 Ingest Worker、Prisma/SQLit
 
 改动是否需要 Proposal、公开 Issue、Task walkthrough 或 `PROJECT-STATUS.md`，只按[仓库流程的准入决策表](docs/standards/repository-workflow.md#准入决策表)判断。不要因修改跨多个文件就把纯机械迁移升级为产品变更，也不要把行为、数据或对外承诺变化降级为机械迁移。
 
-需要公开 Issue 时使用对应表单；计划实现的贡献者等待维护者添加 `status: claimed` 后再开始，避免重复工作。Source、Trigger、Flow、Action、Agent、Board Block、SDK 或其它扩展资产使用扩展与 Agent 资产表单或功能建议。安装和使用问题使用支持表单；安全漏洞不要创建公开 Issue 或 PR，按[安全政策](.github/SECURITY.md)私密报告。
+安全漏洞必须优先按[安全政策](.github/SECURITY.md)私密报告；公开 Issue、Task、PR 和日志不得包含漏洞载荷或私密报告编号。
+需要公开 Issue 时使用对应表单；计划实现的贡献者等待维护者添加 `status: claimed` 后再开始，避免重复工作。Source、Trigger、Flow、Action、Agent、Board Block、SDK 或其它扩展资产使用扩展与 Agent 资产表单或功能建议。安装和使用问题使用支持表单。
 
 Issue 被接受表示方向和范围可以继续讨论，不承诺特定实现或完成时间。冷门、高成本或跨边界需求会先讨论更小的可验证切片。
 
@@ -19,7 +20,7 @@ Issue 被接受表示方向和范围可以继续讨论，不承诺特定实现�
 1. **分流与假设**：按[准入决策表](docs/standards/repository-workflow.md#准入决策表)确认改动类型、权威合同、记录范围和外部授权；显式列出目标、不在范围内及仍影响结果的假设。
 2. **定义与 Proposal**：需求不明确时先澄清；需要 Proposal 时先完成评审，接受后再更新需求、架构或 ADR。当前合同可判定的局部 Bug 直接进入复现。
 3. **Task 垂直切片**：重大实现创建或复用 Task，把工作拆成一个连贯目标、最多三条可观察验收和无环依赖；不创建第二套计划或待办文件。
-4. **上下文与 worktree**：只读取当前切片相关的状态、合同、实现、测试和既有模式；检查 dirty worktree，有远端时先 fetch，再从最新目标分支创建 `.worktree/<slug>` 和任务分支。
+4. **上下文与 worktree**：只读取当前切片相关的状态、合同、实现、测试和既有模式；代码类改动检查 dirty worktree，有远端时先 fetch，再从最新目标分支创建 `.worktree/<slug>` 和任务分支。准入表明确不需要 Task/Issue 的轻量文档可直接在文档分支 `docs/no-ref-<slug>` 上完成，不为命名虚构记录。
 5. **增量实现**：行为切片按 `RED → GREEN → REFACTOR → runtime VERIFY` 推进；代码、合同、持久化和恢复路径必须一致。
 6. **五轴审查**：按正确性、简单性、架构、安全和性能审查测试与实现；阻断 finding 解决后才能交付。
 7. **分层验证与事实同步**：按风险运行聚焦、全量、运行表面和外部验收；同步当前 spec、Task 与项目状态，并记录完整命令、结果或“未运行”说明。
@@ -123,7 +124,7 @@ Proposal、Issue、Task 和项目状态的记录要求以[准入决策表](docs/
 ## Git 与提交
 
 - 代码改动优先在独立 `.worktree/<slug>` 中完成；开始前检查主工作区和目标 worktree 的状态。
-- 分支从最新目标分支创建，命名遵守 `AGENTS.md` 的 `{type}/{refs}-{slug}` 规则。
+- 分支从最新目标分支创建；命名遵守 `AGENTS.md` 的 `{type}/{refs}-{slug}` 规则。无 Task/Issue 的轻量文档使用 `docs/no-ref-<slug>`。
 - 远端存在时先执行 `git fetch origin`；主工作区需要同步远端 `master` 时使用 `git merge --ff-only origin/master`，快进失败就停止并报告。
 - Windows worktree 清理遇到长路径时，先启用 `core.longpaths`；目录残留时使用 PowerShell 或 robocopy，并且只在已确认的目标目录内清理。
 - 一个 PR 只解决一个连贯问题；不夹带无关修复、全仓格式化、依赖升级、上游合并、版本提交或生成产物。

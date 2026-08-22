@@ -32,7 +32,7 @@
 ## Git 与 GitHub
 
 - GitHub Issue 承载公开问题和需求；重大实现使用一个持续更新的 Task walkthrough；代码实现优先在独立 `.worktree/<slug>` 中完成。
-- 分支格式为 `{type}/{refs}-{slug}`：`type` 使用 `feat`、`fix`、`docs`、`refactor`、`test` 或 `chore`；`refs` 使用 `t<task号>` 或 `i<issue号>`；slug 使用不超过 5 个单词的英文 kebab-case。
+- 分支格式为 `{type}/{refs}-{slug}`：`type` 使用 `feat`、`fix`、`docs`、`refactor`、`test` 或 `chore`；`refs` 使用 `t<task号>` 或 `i<issue号>`。准入表明确不需要 Task/Issue 的轻量文档可使用 `docs/no-ref-<slug>`，不为满足命名虚构记录。
 - 有远端时先执行 `git fetch origin`，再从最新目标分支创建 worktree 和任务分支；首次使用前按仓库实际配置安装依赖。
 - 只暂存任务范围内的文件，不用 `git add -A` 带入无关改动。除非用户明确要求，不自行 commit、push、创建远端、创建 PR、合并、关闭 Issue、发布或部署。
 - 远端主分支更新后，主工作区使用 `git fetch origin` 和 `git merge --ff-only origin/master` 同步；失败就停在断点报告。不 force push 共享主分支。
@@ -55,6 +55,7 @@ Leader 的阶段判断不等于外部操作授权。commit、push、创建 PR、
 - 需求变更按固定顺序维护：原话追加到 `docs/requirements/0001-original-requirements.md`；存在产品歧义或长期取舍时先按 [`docs/proposals/README.md`](docs/proposals/README.md) 评审；接受后更新 PRD、架构或 ADR 并创建或复用 Task；代码与测试落地后更新 `docs/spec/`。
 - 创建、推进或审查 Task 时读取 [`.agents/tasks/README.md`](.agents/tasks/README.md) 与 [`.agents/tasks/AGENTS.md`](.agents/tasks/AGENTS.md)；测试、fixture、验收或临时数据改动时读取 [`docs/testing/README.md`](docs/testing/README.md)。
 - 新功能、期望不明确的 Bug 或长期行为变化读取 [`docs/proposals/README.md`](docs/proposals/README.md)；Git、Issue、Task、PR、合并或发布读取 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+- 复用 Task 时优先选择仍 active 且明确覆盖受影响合同和文件的 Task；多个候选时在选定 Task 记录理由；只有确需新建 Task 才请求维护者分配编号。
 - 原始需求保留措辞、数字、示例和不确定性；解释、取舍和重命名进入 PRD、Proposal、架构或 Task，不反向改写原文。
 - `CONTEXT.md` 是工作台，不是稳定合同；候选名称和工作假设不能伪装成已确认决定。
 - 重大任务持续更新同一个 walkthrough，至少记录目标、范围、不在范围内、当前状态、决定、实施过程、验证、偏差和后续事项。

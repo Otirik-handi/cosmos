@@ -5,6 +5,7 @@
 ## 记录分工
 
 - GitHub Issue：公开问题、需求、分流状态和实现授权。
+- [安全政策](../../.github/SECURITY.md)：安全漏洞的私密报告、脱敏和协调披露。
 - [`docs/proposals/`](../proposals/)：尚未生效且存在长期取舍的方案。
 - [`docs/requirements/`](../requirements/)：用户原话、产品范围和验收意图。
 - [`docs/architecture/`](../architecture/) 与 [`docs/adr/`](../adr/)：当前设计和稳定决定。
@@ -20,12 +21,17 @@
 | --- | --- | --- | --- | --- |
 | 拼写、断链或不改变含义的小型文档修正 | 不需要 | 可选 | 不需要 | 不需要 |
 | 不改变用户行为、产品数据、公开接口、安装、发布或兼容承诺的纯机械仓库迁移 | 不需要 | 可选 | 需要 | 治理路径或仓库状态改变时更新 |
-| 当前合同可判定的局部 Bug | 不需要 | 需要 | 通常复用相关 Task | 模块状态改变时更新 |
+| 当前合同可判定的局部非安全 Bug | 不需要 | 需要 | 通常复用相关 Task | 已知缺陷关闭或模块状态改变时更新 |
+| 违反当前安全合同的漏洞 | 恢复既有合同不需要；改变安全边界时接受后实施 | 禁止；按[安全政策](../../.github/SECURITY.md)私密报告 | 披露前由私密报告承载；披露后按影响复用或创建 | 修复或协调披露后更新 |
 | 新增或改变用户可观察行为的小功能 | 接受后实施 | 需要且已接受 | 由维护者复用或创建 | 状态改变时更新 |
 | 跨模块、进程或数据所有权，或改变持久化、公开接口、权限、安全、安装、发布、兼容承诺 | 接受后实施 | 需要且已接受 | 需要 | 需要 |
-| 产品数据迁移、数据生命周期或正式发布 | 接受后实施 | 需要且已接受 | 复用相关 Task | 需要 |
+| 产品数据迁移、数据生命周期或正式发布 | 接受后实施 | 需要且已接受 | 复用或创建独立 Task | 需要 |
 
-按可观察影响和合同变化分类，不按修改文件数量分类。纯机械仓库迁移是窄例外；只要改变行为、产品数据或对外承诺，就进入对应的 Proposal 行。非公开的维护者或用户明确请求可以作为内部授权来源，但 Task 必须记录该请求；公开贡献仍按“公开 Issue”列执行。
+按可观察影响和合同变化分类，不按修改文件数量分类。纯机械仓库迁移是窄例外；只要改变行为、产品数据或对外承诺，就进入对应的 Proposal 行。恢复已有合同是 Bug；只有新增或改变合同边界才触发 Proposal。
+
+[安全政策](../../.github/SECURITY.md)覆盖本表的公开 Issue 和公开记录要求。私密报告在协调披露前充当 Issue、决策和实施记录；公开 Task、分支、PR、测试名和验证摘要不得包含漏洞载荷、私密编号或可利用细节。改变安全边界所需的 Proposal 决策也先留在私密报告，协调披露后再公开稳定结论。
+
+非公开的维护者或用户明确请求可以替代公开 Issue 的记录与实现授权；需要 Task 时必须记录该请求。该例外不授权 commit、push、创建 PR、合并或其它外部操作。公开贡献仍按“公开 Issue”列执行。
 
 ## 开发生命周期
 
@@ -42,15 +48,17 @@
 
 能从代码、文档、配置或远端接口发现的信息先调查。权威合同与实现冲突时停止猜测，把冲突及后果记录到对应 Proposal 或 Task。
 
+声称性能回归但当前合同没有性能预算时，报告中的规模和耗时先作为待验证观测，不自动成为 SLA。先在同一数据形状、环境和命令下复现并比较可用的回归前行为；能证明退化时按 Bug 推进，需要建立长期性能承诺时才进入 Proposal。机器测量数字只写 Task 或 `PROJECT-STATUS.md` 的带环境证据，不写入当前行为 spec。
+
 **完成条件**：改动分类、合同来源、记录目标和每项外部操作的决策权均已明确。
 
 ### 2. 定义
 
 需求不明确时使用 `interview-me` 提取真实意图；粗略方向需要比较和收敛时使用 `idea-refine`。新增行为或长期取舍按[准入决策表](#准入决策表)完成 Proposal 与 specification；当前合同足以判定的局部 Bug 直接进入可失败的复现，不为它补写 Proposal。
 
-需要 Proposal 时，用户原话仍先追加到原始需求；Proposal 接受后，才把目标写入 PRD、架构或 ADR 并创建或复用 Task。
+需要 Proposal 时，用户原话仍先追加到原始需求；Proposal 接受后，才把目标写入 PRD、架构或 ADR 并创建或复用 Task。新增或改变公共 API/DTO 时，在 RED 前使用 `api-and-interface-design` 冻结版本、输入输出、错误、分页和消费者边界，先更新 [`docs/api/`](../api/) Draft 及 conformance 场景；实现暴露 Draft 缺陷时再以证据修订。`docs/spec/` 只在行为落地后更新为当前事实。
 
-**完成条件**：验收可测试，范围边界和未覆盖场景明确，需要人决定的取舍已由有权者决定。
+**完成条件**：验收可测试，范围边界和未覆盖场景明确，需要人决定的取舍已由有权者决定；公共接口的候选合同和首个消费者已冻结。
 
 ### 3. 计划
 
@@ -61,7 +69,7 @@
 - 前置依赖和受影响合同；
 - 预计核心文件和验证层级。
 
-一个切片只交付一个连贯行为。预计超过约五个核心实现文件或同时混合两个独立子系统时先拆分；机械迁移和 forward-only migration 可按同一原子合同成组。同一 Task 可以顺序追加多个小切片，不为每个切片创建新 Task。
+一个切片只交付一个连贯行为。预计超过约五个核心实现文件或同时混合两个独立子系统是拆分信号，不是硬性文件上限。公共接口可以把端点、公共 DTO 和首个已登记消费者作为一个原子行为；若按层拆分，Task 必须先冻结完整合同并明确每个可独立合入的边界，不能把部分实现标为 Current。机械迁移可按同一原子合同成组；数据 schema 迁移不得借此把 destructive contract 与 expand/backfill/read switch 合并到一个部署切片。同一 Task 可以顺序追加多个小切片，不为每个切片创建新 Task。
 
 **完成条件**：每个切片可独立验收，依赖无环，失败不会要求未定义的跨切片合同。
 
@@ -84,57 +92,79 @@ Bug 必须先以测试或实际运行场景复现失败；新行为必须先有�
 专业 Skill 按风险插入当前切片：
 
 - UI 使用 `frontend-ui-engineering`，并在实际浏览器表面验证；
-- 公共 API、DTO 或模块边界使用 `api-and-interface-design`；
-- 权限、Secret、路径和不可信输入使用 `security-and-hardening`；
+- 新增或改变公共 API、DTO 形状或模块边界合同，在定义与计划阶段使用 `api-and-interface-design`；只恢复既有接口合同的 Bug 不机械加载；
+- 权限、Secret、路径和不可信输入使用 `security-and-hardening`；安全漏洞和高风险权限决定再使用 `doubt-driven-development` 做 fresh-context 对抗复核；
 - 有明确性能目标或回归时使用 `performance-optimization`；
 - 生产路径的 logging、metrics 或 tracing 与实现同步使用 `observability-and-instrumentation`；
-- 陌生或高风险的持久化、并发、权限和不可逆决定使用 `doubt-driven-development`。
+- 陌生或高风险的持久化、并发和不可逆决定使用 `doubt-driven-development`。
 
 **完成条件**：切片的可观察验收全部通过，行为测试由红转绿，实际运行表面已验证或有明确且与风险相称的未运行理由。
 
 ### 6. 审查
 
-行为完成后使用 `code-review-and-quality`，先读测试再读实现，按以下五轴检查：正确性、简单性、架构、安全和性能。只有确有可删除复杂度时才使用 `code-simplification`；审查不授权扩大实现范围。
+行为完成后使用 `code-review-and-quality`，先读测试再读实现，按以下五轴检查：正确性、简单性、架构、安全和性能。只有确有可删除复杂度时才使用 `code-simplification`；审查不授权扩大实现范围。纯文档或无行为改动不强制加载代码审查 Skill，PR 五轴字段可以写“不适用”并说明理由。
 
 finding 使用 `Critical`、`Required`、`Optional` 或 `Nit` 标级。`Critical` 和 `Required` 未解决时不得进入交付阶段；范围外问题记录到有权威归属的位置，不以兼容层或 TODO 掩盖。
 
-**完成条件**：五轴均有结论，所有阻断 finding 已解决，并对测试是否真正覆盖声称的合同作出核验。
+**完成条件**：行为切片的五轴均有结论，所有阻断 finding 已解决，并对测试是否真正覆盖声称的合同作出核验；纯文档变更完成文档一致性审查。
 
 ### 7. 交付
 
-按风险执行 [`docs/testing/`](../testing/) 定义的聚焦、全量、运行表面和外部验收；每一层只证明自身合同。行为落地后同步 `docs/spec/`；稳定且反转成本高的决定进入 ADR。Task 和 `PROJECT-STATUS.md` 按[准入决策表](#准入决策表)记录实际命令、结果、偏差、未运行项和下一步。
+按风险执行 [`docs/testing/`](../testing/) 定义的聚焦、全量、运行表面和外部验收；每一层只证明自身合同。行为落地后同步 `docs/spec/`；稳定且反转成本高的决定进入 ADR。Task、私密安全报告和 `PROJECT-STATUS.md` 按[准入决策表](#准入决策表)记录实际命令、结果、偏差、未运行项和下一步。
 
-原子提交、PR、CI 与合并使用 `git-workflow-and-versioning`；迁移或弃用使用 `deprecation-and-migration`；已合并且已验证的发布或部署作为独立工作使用 `shipping-and-launch`。commit、push、创建 PR、合并、关闭 Issue、清理 worktree、发布和部署仍分别需要授权，阶段晋级不构成这些授权。
+原子提交、PR、CI 与合并使用 `git-workflow-and-versioning`；迁移或弃用使用 `deprecation-and-migration`。发布或部署是独立工作，必须重新从分流阶段进入并满足准入表的 Proposal/Issue/Task 要求；`shipping-and-launch` 只负责已冻结发布切片的准备、执行和观察。commit、push、创建 PR、合并、关闭 Issue、清理 worktree、发布和部署仍分别需要授权，阶段晋级不构成这些授权。
 
-**完成条件**：满足下方唯一完成定义；记录与代码事实一致，所有未执行的外部操作保持未执行状态。
+**完成条件**：满足下方唯一完成定义；记录与代码事实一致，所有未执行的外部操作保持未执行状态。发布/部署切片按“授权前预检 → 明确授权 → 执行 → 运行后验证与记录”闭环完成。
 
 ## 最短 Skill 链
 
+记录要求始终先按[准入决策表](#准入决策表)判断；下表只决定实施阶段使用哪些 Skill。
+
 | 改动类型 | 必需链路 | 按风险插入 |
 | --- | --- | --- |
-| 小型且无行为变化的文档 | `context-engineering → documentation-and-adrs → git-workflow-and-versioning` | 文档门禁与链接检查 |
+| 小型且无行为变化的文档 | `context-engineering → documentation-and-adrs → git-workflow-and-versioning` | 文档门禁与链接检查；无决策时只做一致性审查，不写 ADR |
 | 当前合同可判定的局部 Bug | `debugging-and-error-recovery → test-driven-development → code-review-and-quality → git-workflow-and-versioning` | 对应运行表面和风险 Skill；不要求 Proposal |
 | 新增或改变可观察行为 | `spec-driven-development → planning-and-task-breakdown → context-engineering → incremental-implementation + test-driven-development → code-review-and-quality/code-simplification → documentation-and-adrs + git-workflow-and-versioning` | API、安全、性能、可观测性或高风险复核 |
-| 公共 API 或 DTO | 新行为链 | `api-and-interface-design` |
-| 权限、Secret、路径或不可信输入 | 对应文档、Bug 或新行为链 | `security-and-hardening` |
-| 数据迁移或弃用 | 对应新行为链 | `deprecation-and-migration` |
+| 新增或改变公共 API/DTO | 新行为链 | 定义阶段先使用 `api-and-interface-design` 冻结合同和消费者 |
+| 安全漏洞、权限、Secret、路径或不可信输入 | 对应 Bug 或新行为链 | `security-and-hardening`；漏洞与高风险权限决定加 `doubt-driven-development` |
+| 有明确性能目标或回归 | 对应 Bug 或新行为链 | `performance-optimization` 与同条件前后测量 |
+| 数据迁移或弃用 | 对应新行为链 | `deprecation-and-migration` 与下方迁移合同 |
 | UI | 对应 Bug 或新行为链 | `frontend-ui-engineering` 与实际浏览器验证 |
-| 发布或部署 | 已合并、已验证变更后的独立链路 | `shipping-and-launch` |
+| 发布或部署 | 重新从分流进入的独立工作 | `shipping-and-launch`；远端 CI、产物、目标、回滚和观察均冻结后执行 |
 
-表中 Skill 在运行环境提供时先读取其规则；环境没有对应 Skill 时仍执行同名阶段的仓库合同，不以工具缺失降低验收要求。
+表中 Skill 在运行环境提供时先读取其规则；环境没有对应 Skill 时仍执行同名阶段和下方仓库最小合同，不以工具缺失降低验收要求。
+
+## 风险专用最小合同
+
+### 安全漏洞
+
+私密报告是协调披露前的唯一记录。完整漏洞载荷、复现命令和原始证据留在隔离的 `.agent/tmp/`；公开 Task、PR 和状态只写脱敏结论。公开回归测试使用能证明边界的泛化输入，不保留不必要的 exploit 细节；何时公开由安全报告线程协调。
+
+### 数据迁移与弃用
+
+`forward-only` 表示不重写已应用历史且不承诺自动降级，不表示允许一次部署内原地 rename/drop。Schema 演进默认分为 expand、旧数据回填、read switch 和 contract；destructive contract 必须单独部署，并在执行前证明无代码或活跃消费者依赖旧形态、旧数据升级测试通过、备份/恢复办法和失败停止条件已记录，且获得明确迁移授权。
+
+### 性能
+
+性能修复必须用同一 seed、环境、命令和测量口径保留修复前后可比较证据，并重复采样确认变化超过波动。墙钟阈值不进入默认 unit 测试；用查询次数、索引/计划、复杂度或其它确定性行为保护可回归合同。原始基准输出留在 `.agent/tmp/`，Task/PR 只记录完整命令、数据规模、环境、样本统计和结论；没有可比较基线时不得声称性能修复完成。
+
+### 发布与部署
+
+发布切片开始前必须冻结版本与 tag 来源、可安装产物和渠道、目标环境、迁移/备份、回滚步骤、观测指标和停止条件，并通过 GitHub API 核验目标提交的远端必需 CI，而不是用本地结果替代。授权前先满足除实际执行外的 DoD；获得发布或部署的单独授权后执行，再把产物身份、运行状态、健康/错误/延迟、回滚就绪状态和未验证边界记录回 Task 与 `PROJECT-STATUS.md`，切片才完成。
 
 ## Definition of Done
 
 本节是仓库唯一完成定义。Task、PR 模板和其它入口只链接本节，不复制检查表。以下条件必须同时满足：
 
 - 本切片的全部可观察验收通过；
-- 行为变化有回归测试，Bug 有先红后绿证据；
+- 行为变化有回归测试，Bug 有先红后绿证据；安全修复的公开证据遵守协调披露边界；
 - 风险对应的实际运行表面已验证，或记录未运行原因及剩余风险；
+- 适用的安全、迁移、性能或发布最小合同已满足；
 - 所有 `Critical` 和 `Required` review finding 已解决；
 - 代码、公共合同和 `docs/spec/` 对同一当前行为描述一致；
-- Task 与 PR 记录完整命令、实际结果、偏差和未验证边界；
+- Task、PR 或私密安全报告记录完整命令、实际结果、偏差和未验证边界；
 - 范围内文件与暂存区可审查，不包含 Secret、用户数据或意外生成物；
-- commit、push、创建 PR、合并、关闭 Issue、清理 worktree、发布和部署均只在分别授权后执行。
+- commit、push、创建 PR、合并、关闭 Issue、清理 worktree、迁移、发布和部署均只在分别授权后执行。
 
 ## 远端门禁事实
 

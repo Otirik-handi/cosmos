@@ -17,6 +17,7 @@ const requiredFiles = [
     "docs/standards/README.md",
     "docs/standards/repository-workflow.md",
     "docs/testing/README.md",
+    ".github/SECURITY.md",
 ] as const;
 
 afterEach(async () => {
@@ -149,6 +150,59 @@ describe("documentation governance check", () => {
         );
     });
 
+    it("requires the canonical workflow to link to the private security policy", async () => {
+        const fixture = await createFixture({
+            "docs/standards/repository-workflow.md": "# Workflow without a security route\n",
+        });
+
+        const result = checkDocumentation(fixture.root, fixture.paths);
+
+        expect(result.failures).toContain(
+            "仓库流程缺少私密安全报告链接：docs/standards/repository-workflow.md -> .github/SECURITY.md",
+        );
+    });
+
+    it("requires both private security and public non-security bug routes", async () => {
+        const fixture = await createFixture({
+            "docs/standards/repository-workflow.md": [
+                "# Workflow",
+                "",
+                "[private security policy](../../.github/SECURITY.md)",
+                "| 改动类型 | Proposal | 公开 Issue | Task walkthrough | PROJECT-STATUS.md |",
+                "| --- | --- | --- | --- | --- |",
+                "| 违反当前安全合同的漏洞 | 不需要 | 禁止；按安全政策私密报告 | 披露前由私密报告承载 | 修复或协调披露后更新 |",
+            ].join("\n"),
+        });
+
+        const result = checkDocumentation(fixture.root, fixture.paths);
+
+        expect(result.failures).toContain(
+            "仓库流程缺少非安全 Bug 公开 Issue 路由：docs/standards/repository-workflow.md",
+        );
+    });
+
+    it("rejects route keywords when admission table semantics are reversed", async () => {
+        const fixture = await createFixture({
+            "docs/standards/repository-workflow.md": [
+                "# Workflow",
+                "",
+                "[private security policy](../../.github/SECURITY.md)",
+                "| 改动类型 | Proposal | 公开 Issue | Task walkthrough | PROJECT-STATUS.md |",
+                "| --- | --- | --- | --- | --- |",
+                "| 违反当前安全合同的漏洞 | 不需要 | 禁止；按安全政策私密报告 | 披露前由私密报告承载 | 修复或协调披露后更新 |",
+                "| 当前合同可判定的局部非安全 Bug | 不需要 | 禁止 | 通常复用相关 Task | 已知缺陷关闭或模块状态改变时更新 |",
+                "公开 Issue",
+            ].join("\n"),
+        });
+
+        const result = checkDocumentation(fixture.root, fixture.paths);
+
+        expect(result.failures).toEqual(expect.arrayContaining([
+            "仓库流程缺少私密安全报告路由：docs/standards/repository-workflow.md",
+            "仓库流程缺少非安全 Bug 公开 Issue 路由：docs/standards/repository-workflow.md",
+        ]));
+    });
+
     it.each([
         ["docs/tasks/README.md", "docs/tasks/"],
         ["docs/testing.md", "docs/testing.md"],
@@ -175,6 +229,18 @@ async function createFixture(
     const files: Record<string, string> = Object.fromEntries(
         requiredFiles.map((path) => [path, `# ${path}\n`]),
     );
+
+    files["docs/standards/repository-workflow.md"] = [
+        "# Workflow",
+        "",
+        "[private security policy](../../.github/SECURITY.md)",
+        "| 改动类型 | Proposal | 公开 Issue | Task walkthrough | PROJECT-STATUS.md |",
+        "| --- | --- | --- | --- | --- |",
+        "| 当前合同可判定的局部非安全 Bug | 不需要 | 需要 | 通常复用相关 Task | 已知缺陷关闭或模块状态改变时更新 |",
+        "| 违反当前安全合同的漏洞 | 不需要 | 禁止；按[安全政策](../../.github/SECURITY.md)私密报告 | 披露前由私密报告承载 | 修复或协调披露后更新 |",
+        "安全政策",
+        "",
+    ].join("\n");
     Object.assign(files, additionalFiles);
 
     await Promise.all(Object.entries(files).map(async ([path, content]) => {

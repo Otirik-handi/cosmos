@@ -8,7 +8,7 @@ Cosmos already has a Phase 1 baseline containing the Web app, NestJS API, fixed 
 
 Use the [repository workflow admission table](docs/standards/repository-workflow.md#准入决策表) as the sole source for whether a change requires a Proposal, public Issue, Task walkthrough, or `PROJECT-STATUS.md` update. Do not promote a purely mechanical migration solely because it touches multiple files, and do not downgrade a behavior, data, or external-commitment change to a mechanical migration.
 
-When a public Issue is required, use the appropriate form. Contributors who plan to implement it must wait for maintainer authorization via `status: claimed` to avoid duplicate work. Use the extension and Agent asset form or a feature request for Source, Trigger, Flow, Action, Agent, Board Block, SDK, or other extension assets. Use the support form for installation and usage questions. Report security vulnerabilities privately through the [security policy](.github/SECURITY.md), not a public Issue or PR.
+When a public Issue is required, use the appropriate form. Contributors who plan to implement it must wait for maintainer authorization via `status: claimed` to avoid duplicate work. Use the extension and Agent asset form or a feature request for Source, Trigger, Flow, Action, Agent, Board Block, SDK, or other extension assets. Use the support form for installation and usage questions. Report security vulnerabilities privately through the [security policy](.github/SECURITY.md), not a public Issue or PR; never include exploit payloads or private report identifiers in public records.
 
 Acceptance of an issue confirms a direction and scope for discussion; it does not promise a particular implementation or delivery date. Complex or expensive requests may first be reduced to a smaller, independently verifiable slice.
 
@@ -19,7 +19,7 @@ Implementation work follows the [single repository development lifecycle](docs/s
 1. **Triage and assumptions**: use the [admission table](docs/standards/repository-workflow.md#准入决策表) to identify the change type, authoritative contract, record scope, and external authorization. State the goal, non-goals, and assumptions that still affect the result.
 2. **Definition and Proposal**: clarify ambiguous requirements first. When a Proposal is required, complete its review before updating requirements, architecture, or an ADR. A local bug decidable from the current contract proceeds directly to reproduction.
 3. **Task vertical slice**: create or reuse a Task for major work, then define one coherent goal, no more than three observable acceptance criteria, and acyclic dependencies. Do not create a second plan or todo tracker.
-4. **Context and worktree**: read only the status, contract, implementation, tests, and existing pattern relevant to the slice. Check the dirty worktree; when a remote exists, fetch first, then create `.worktree/<slug>` and a topic branch from the latest target branch.
+4. **Context and worktree**: read only the status, contract, implementation, tests, and existing pattern relevant to the slice. For code changes, check the dirty worktree; when a remote exists, fetch first, then create `.worktree/<slug>` and a topic branch from the latest target branch. Lightweight documentation explicitly exempted from Task/Issue may use `docs/no-ref-<slug>` without inventing a tracking record.
 5. **Incremental implementation**: run each behavior slice through `RED → GREEN → REFACTOR → runtime VERIFY`. Code, contracts, persistence, and recovery paths must agree.
 6. **Five-axis review**: review tests and implementation for correctness, simplicity, architecture, security, and performance. Resolve blocking findings before delivery.
 7. **Layered verification and fact sync**: run focused, full, runtime-surface, and external acceptance checks according to risk. Update the current spec, Task, and project status, recording every exact command, result, or “not run” reason.
@@ -123,7 +123,7 @@ Contributors should not allocate task numbers by default. When a new task is nee
 ## Git and Commits
 
 - Prefer an independent `.worktree/<slug>` for code changes, and check the main worktree and target worktree status before editing.
-- Create topic branches from the latest target branch and follow the `{type}/{refs}-{slug}` rule in [`AGENTS.md`](AGENTS.md).
+- Create topic branches from the latest target branch and follow the `{type}/{refs}-{slug}` rule in [`AGENTS.md`](AGENTS.md). Lightweight documentation with no Task/Issue uses `docs/no-ref-<slug>`.
 - When a remote exists, run `git fetch origin` first. To synchronize the main worktree with remote `master`, use `git merge --ff-only origin/master`; stop and report if fast-forward is not possible.
 - For long Windows worktree paths, enable `core.longpaths` before cleanup. Use PowerShell or robocopy only inside the confirmed target directory.
 - Keep one coherent problem per PR. Do not include opportunistic fixes, repository-wide formatting, dependency upgrades, upstream merges, version commits, or generated artifacts.

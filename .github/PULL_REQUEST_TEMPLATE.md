@@ -5,8 +5,8 @@ Thank you for contributing. Keep every section; write “none” or “not run�
 
 ## 关联 Issue / Related issue
 
-<!-- 需要 Issue 时写 Closes #123；允许直接提交的轻量文档修正写“无 / None”。 -->
-<!-- Write Closes #123 when an issue is required; write “无 / None” for an allowed small documentation fix. -->
+<!-- 需要 Issue 时写 Closes #123；允许直接提交的轻量文档修正写“无 / None”。内部请求 Bug 写“无 / None”并在 Task 字段说明请求来源。安全修复写私密报告引用或“无 / None”，不得公开报告编号或漏洞细节。 -->
+<!-- Write Closes #123 when an issue is required; use “无 / None” for allowed lightweight docs or an internally authorized bug and explain the source in the Task field. For security fixes, cite the private report only in an approved private channel or write “无 / None”; never expose report identifiers or exploit details publicly. -->
 
 ## 合同与生命周期 / Contract and lifecycle
 
@@ -42,7 +42,7 @@ Thank you for contributing. Keep every section; write “none” or “not run�
 
 ```
 
-RED 证据（纯文档或无行为配置写“不适用”及理由）/ RED evidence (write “not applicable” with a reason for documentation-only or behavior-neutral configuration changes):
+RED 证据（纯文档或无行为配置写“不适用”及理由；安全修复写脱敏边界摘要或私密报告引用，不写利用载荷）/ RED evidence (write “not applicable” with a reason for documentation-only or behavior-neutral configuration changes; for security fixes, write a redacted boundary summary or private-report reference, never the exploit payload):
 
 ```text
 
@@ -61,6 +61,20 @@ GREEN 证据 / GREEN evidence:
 未运行的检查及原因 / Checks not run and why:
 
 - 待填写 / To be completed
+
+### 迁移证据（无迁移写“不适用”）/ Migration evidence (write “not applicable” when no migration)
+
+- Expand/backfill/read switch/contract 阶段与当前阶段 / Phases and current phase: 待填写 / To be completed
+- 迁移前备份与恢复验证 / Pre-migration backup and restore verification: 待填写 / To be completed
+- 旧字段或旧消费者最后引用 / Last legacy field or consumer reference: 待填写 / To be completed
+- legacy-seed 回填验证命令与结果 / Legacy-seed backfill command and result: 待填写 / To be completed
+- destructive drop 是否独立部署 / Is the destructive drop a separate deployment: 待填写 / To be completed
+
+### 性能证据（无性能目标写“不适用”）/ Performance evidence (write “not applicable” when no performance target)
+
+- 同一 seed、环境、命令、测量口径 / Same seed, environment, command, and measurement method: 待填写 / To be completed
+- 修复前后样本统计与波动 / Before/after sample statistics and variance: 待填写 / To be completed
+- 原始输出隔离位置与摘要 / Isolated raw output location and summary: 待填写 / To be completed
 
 ## 界面证据 / UI evidence
 
@@ -87,8 +101,15 @@ GREEN 证据 / GREEN evidence:
 
 - 数据结构或迁移 / Data shape or migration: 待填写 / To be completed
 - 配置、安装或发布 / Configuration, installation, or release: 待填写 / To be completed
-- 安全与隐私 / Security and privacy: 待填写 / To be completed
+- 安全与隐私 / Security and privacy: 待填写；安全修复可引用私密报告或脱敏摘要，不公开载荷 / To be completed; security fixes may cite a private report or redacted summary, never the payload
 - 已知限制与后续事项 / Known limitations and follow-ups: 待填写 / To be completed
+
+### 发布与部署证据（无发布写“不适用”）/ Release and deployment evidence (write “not applicable” when no release)
+
+- 版本/tag 来源、可安装产物、渠道和目标环境 / Version/tag source, installable artifact, channel, and target: 待填写 / To be completed
+- 远端必需 CI 核验结果 / Remote required-CI verification: 待填写 / To be completed
+- 回滚步骤、迁移/备份状态、观察指标和停止条件 / Rollback, migration/backup state, monitoring, and stop conditions: 待填写 / To be completed
+- 独立发布/部署授权与运行后证据 / Separate release/deploy authorization and post-run evidence: 待填写 / To be completed
 
 ## 提交者确认 / Contributor confirmation
 

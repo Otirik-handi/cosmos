@@ -83,6 +83,31 @@
 - 远端 `a3b962f` CI run `32241661044` 仍为 failure 且未重跑；本地绿色不替代远端结果。commit、push、PR、merge、Issue 关闭、worktree 清理和远端保护修改均未执行。
 - 五轴审查：正确性上准入、生命周期、CI 和测试收集一致；简单性上只有一个 canonical lifecycle，无第二 tracker 或共享 Vitest 抽象；架构上动态状态、过程和当前产品行为分别由 `PROJECT-STATUS.md`、Task 和 spec 持有；安全上无 Secret、用户数据或远端写操作；性能上 property 文件从 unit 层移除后只在独立 Quality step 执行一次。未解决 `Critical`/`Required` finding：0。
 
+## 2026-08-20 Agent Skills 流程演练与优化决策
+
+基于八个 fresh-context 只读场景报告完成分类；报告只用于发现流程摩擦，不代表真实产品验收或外部授权：
+
+- **BugFlow：正常局部 Bug 可走通，结论为合同误读/已覆盖。** 当前合同足以判定的非安全 Bug 直接走公开 Issue、复现测试和既有 Task；内部请求的来源记录与多候选 Task 选择规则已补入入口规则。
+- **SecurityFlow：有效需改。** 公开准入表曾与私密安全政策冲突，已增加安全漏洞私密 override、PR/Task/日志脱敏边界、公开回归测试泛化输入和 `SECURITY.md` 门禁；安全边界改变时 Proposal 决策先留在私密报告。
+- **MigrationFlow：有效需改。** `forward-only` 不再被解释成一次部署内原地 rename/drop；已增加 expand、backfill、read switch、contract 的最小合同，以及 destructive contract 的独立部署、旧引用证明、备份恢复、失败停止条件和迁移授权要求。
+- **DocsFlow：有效需改。** 轻量文档现在有 `docs/no-ref-<slug>` 分支兜底；入口保留唯一 canonical lifecycle，不再复制准入表、阶段完成条件或 DoD。无行为文档仍只需静态门禁、差异检查和一致性审查。
+- **PublicApiFlow：有效需改。** 新增或改变公共 API/DTO 在 RED 前使用 `api-and-interface-design` 冻结版本、输入输出、错误、分页和消费者边界，并先更新 `docs/api/` Draft 与 conformance 场景；`docs/spec/` 只记录已落地事实。
+- **UiFlow：有效取舍。** 现有接口 spec 明确不使用 URL query，未把 searchParams 或具体响应式断点擅自升级成合同；若改变 URL 或新增用户流程，仍需 Proposal/Task、浏览器验证、viewport、键盘、焦点、console 和网络失败证据。
+- **PerformanceFlow：有效需改。** 无现行预算时性能数字先作为待验证观测，不自动变成 SLA；已要求同 seed、环境、命令和口径的前后采样、波动比较、确定性回归断言与隔离原始输出。
+- **ReleaseFlow：有效需改。** 发布/部署改为独立工作，重新从分流进入；版本/tag、产物、渠道、目标、回滚、迁移/备份、观察指标和停止条件冻结后，执行“预检→明确授权→执行→运行后验证与记录”。
+
+以下建议保留为后续决策，不在本轮伪造合同或工具：具体 SDK 交付面、URL query 产品合同、响应式断点数值、通用 legacy-seed/100k 性能工具、npm/Docker/GitHub Release 渠道与部署目标。它们需要真实消费者、目标迁移、性能预算或发布决策；当前报告不能替代这些前置条件。未采纳“为每类场景新增独立 tracker、统一强制所有运行时验收、把机器性能数字写入 spec”等建议，原因是与唯一 tracker、按风险分层验证和当前行为 spec 边界冲突。
+
+本轮进一步将 `docs:check` 的安全路由门禁从关键词存在收紧为准入表语义检查：安全漏洞行的公开 Issue 单元必须以“禁止”并指向安全政策，非安全局部 Bug 行的公开 Issue 单元必须为“需要”；链接检查仍独立保留。新增反转准入表的回归测试，避免入口文本看似完整但实际路由错误。
+
+## 当前优化验证
+
+- `bun run test -- scripts/check-documentation.test.ts`：通过，1 个文件 / 12 个测试；覆盖安全链接、安全私密路由、非安全 Bug 公开路由和反转准入表语义。
+- `bun install --frozen-lockfile` 无 lockfile 变化；`bun run docs:check` 为 `checkedFiles=258`、`failures=[]`；`bun run db:validate`、`bun run db:generate`、`bun run typecheck` 均通过。
+- `bun run test` 最终按 CI 顺序串行执行：26 个 unit 文件 / 193 个测试通过；`bun run test:property`：3 个文件 / 4 个测试通过；`bun run lint:web` 与 `bun run build` 通过。一次将 `bun run test` 与 `bun run typecheck` 并行的非 CI 顺序运行中，`workflow-host-store.test.ts` 的旧库升级用例耗时 5.079 秒并触发默认 5 秒超时；随后该用例串行单次及连续三次均通过（3.168–3.232 秒），最终全量串行运行 64.37 秒通过。未修改测试阈值或运行时代码；剩余风险是高资源竞争下该集成测试接近默认超时。
+- 本轮文档、流程、Task 和门禁增强未改变 Cosmos 产品运行时、数据库 schema、依赖、发布或部署状态；Node process E2E、浏览器、Windows smoke、Docker、真实来源、真实 Agent、发布和部署仍未运行。
+- 本地 master 已包含治理提交 `185967e1807b8987fb2b5a0b561f10a055b53862`；本轮优化仍在工作树中，未 push、未创建 PR，远端 CI 未重跑。
+
 ## Follow-ups
 
 获得相应授权后才能 commit、push 或创建 PR；push 后观察新的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke。远端保护状态未改变，不把仓库内 CI 描述为已强制。

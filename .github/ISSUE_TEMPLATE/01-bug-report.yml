@@ -11,6 +11,10 @@ body:
         感谢你帮助改进 Cosmos。请尽量提供最小复现，并在上传日志或截图前删除 API Key、Token、真实私有信息和未经授权的外部内容。
 
         Thank you for helping improve Cosmos. Please provide the smallest reproduction you can and remove API keys, tokens, real private data, and unlicensed external content before uploading logs or screenshots.
+
+        安全漏洞（包括路径越界、未授权访问、Secret/私人内容泄露、RCE 或恶意依赖）不要使用此公开表单；请按仓库 [Security Policy](../../.github/SECURITY.md) 私密报告。
+
+        Do not use this public form for security vulnerabilities, including path traversal, unauthorized access, secret/private-content disclosure, RCE, or malicious dependencies. Use the repository [Security Policy](../../.github/SECURITY.md) instead.
   - type: input
     id: version
     attributes:
