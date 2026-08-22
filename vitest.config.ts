@@ -6,6 +6,7 @@ const rootDirectory = resolve(import.meta.dirname);
 export default defineConfig({
     resolve: {
         alias: {
+            "@": resolve(rootDirectory, "apps/web/src"),
             "@cosmos/contracts": resolve(rootDirectory, "packages/contracts/src/index.ts"),
             "@cosmos/logging": resolve(rootDirectory, "packages/logging/src/index.ts"),
             "@cosmos/domain": resolve(rootDirectory, "packages/domain/src/index.ts"),

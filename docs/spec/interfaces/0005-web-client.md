@@ -2,13 +2,13 @@
 
 ## 状态
 
-当前实现规格；后续代码变化应同步更新本文。本文记录当前 Phase 1
-Next.js Web 页面和其 Product API 调用行为；不把尚未实现的浏览器/e2e 验收、认证、
-Gateway 或 Draft API 写成当前能力。
+当前实现规格；后续代码变化应同步更新本文。本文记录当前 Phase 1 Next.js Web 页面、
+开发态 React 组件实验室及其与 Product API 的边界。实验室浏览器/生产验收结果只在本轮 Task
+与 `PROJECT-STATUS.md` 记录，不把 Docker、真实来源或 Windows smoke 写成已验证能力。
 
 ## 最后更新
 
-2026-08-16。
+2026-08-22。
 
 ## 组件定位
 
@@ -127,15 +127,38 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 ## 状态与持久化
 
-页面所有状态均为 React 内存 state，不写 localStorage、IndexedDB、URL query 或其它
-持久介质：
+页面业务状态均为 React 内存 state，不写 URL query 或 IndexedDB：
 
 - `feed`、`nextCursor`、`activeSearch`、`sources`、`story`、`health`；
 - `notice`、`error`、`loading`、`showSourceForm`；
 - `eventStreamState`（connecting/connected/unavailable）。
 
-刷新页面会重新加载 API snapshots；SSE 连接不持久化 last event id。API/数据库/Blob 是
-唯一业务持久真相，UI 状态只做当前视图投影。
+唯一的产品 localStorage 持久化是外观主题偏好 `cosmos.theme.preference.v1`
+（见下方“外观主题”）；刷新页面会重新加载 API snapshots 并恢复主题偏好，SSE
+连接不持久化 last event id。API/数据库/Blob 是唯一业务持久真相，其余 UI
+状态只做当前视图投影。
+
+## 外观主题
+
+Web 默认使用 NeuroBook 视觉主题（`data-cosmos-theme="neurobook"`）配 macOS Light /
+macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚举
+`system | macos-light | macos-night`：
+
+- `<head>` 内的静态引导脚本在首帧前读取 `cosmos.theme.preference.v1` 与
+  `prefers-color-scheme`，把最终 theme/colorway 属性、`dark` class 和
+  `style.colorScheme` 写到 `<html>`；脚本只含仓库常量，解析或存储异常回退浅色；
+- `ThemeProvider` 用模块级 store 作为唯一浏览器真相：订阅 matchMedia（仅 system
+  生效）与 storage 跨标签同步，并把同一属性幂等写回 `<html>`；服务端快照固定
+  system → 浅色；
+- 首页头部与实验室 header 的 `ThemeSwitcher` 提供键盘可达的三态切换；
+  “跟随系统”删除存储 key，显式选择写入；写入失败仅影响当前标签页且 UI 不声称已持久化；
+- 实验室 URL 的 `theme=neurobook&colorway=macos-*` 只控制预览画布根节点
+  （含局部 `dark` class），与全局 chrome 偏好互不覆盖；token override 仍是预览内最高优先级。
+
+`globals.css` 以 `[data-cosmos-theme]` 承载字体/密度/圆角/动效/表面角色，
+以 `[data-cosmos-colorway]` 把两套 macOS 取值映射到现有 shadcn 语义 token；
+`prefers-reduced-motion` 将主题动效时长归零。生产构建下 `/dev/components`
+仍返回 404，主题能力不改变 Product API、SSE 或表单语义。
 
 ## 状态转换
 
@@ -223,12 +246,24 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
    404/网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
 7. 点击检查服务，观察 health card 更新为 `service · workerStatus`，notice 包含
    `storageStatus`；让 health 请求非 2xx，观察 error 文本包含 HTTP status。
-8. 刷新浏览器或卸载页面，观察所有 React/SSE 状态重新初始化，且没有 localStorage/
-   IndexedDB/URL 持久 cursor；Next rewrite 将 `/api/*` 转到配置 API host。
+8. 刷新浏览器或卸载页面，观察所有 React/SSE 状态重新初始化，且除主题偏好外没有
+   localStorage/IndexedDB/URL 持久 cursor；Next rewrite 将 `/api/*` 转到配置 API host。
+9. 清空 `cosmos.theme.preference.v1` 后分别以系统浅色/深色加载首页，观察 `<html>`
+   首帧即为对应 neurobook 配色；点击“macOS Night”后 storage 写入并在刷新与系统
+   变化下保持；切回“跟随系统”后 key 删除并即时跟随系统。
 
 ## 实现与测试锚点
+
 - 页面状态、调用、SSE、表单、搜索、Story 和渲染：[`apps/web/src/app/page.tsx`](../../../apps/web/src/app/page.tsx)。
-- 文档 metadata、lang、字体和 body wrapper：[`apps/web/src/app/layout.tsx`](../../../apps/web/src/app/layout.tsx)。
+- 文档 metadata、lang、字体、主题引导与 Provider：[`apps/web/src/app/layout.tsx`](../../../apps/web/src/app/layout.tsx)。
+- 外观主题合同/Provider/引导脚本：[`apps/web/src/theme/theme.ts`](../../../apps/web/src/theme/theme.ts)、
+  [`theme-provider.tsx`](../../../apps/web/src/theme/theme-provider.tsx)、
+  [`theme-bootstrap.ts`](../../../apps/web/src/theme/theme-bootstrap.ts) 与
+  [`theme.test.ts`](../../../apps/web/src/theme/theme.test.ts)。
+- 三态外观切换器及其实验室登记：[`components/cosmos/theme-switcher.tsx`](../../../apps/web/src/components/cosmos/theme-switcher.tsx)、
+  [`component-lab/registry.tsx`](../../../apps/web/src/component-lab/registry.tsx)。
+- 主题浏览器回归：[`e2e/browser/theme.spec.ts`](../../../e2e/browser/theme.spec.ts)、
+  [`e2e/component-lab/theme.spec.ts`](../../../e2e/component-lab/theme.spec.ts)。
 - Web server instrumentation、logger cache、register/onRequestError：[`apps/web/src/instrumentation.ts`](../../../apps/web/src/instrumentation.ts)。
 - instrumentation lifecycle/redaction test：[`apps/web/src/instrumentation.test.ts`](../../../apps/web/src/instrumentation.test.ts)。
 - 全局 Tailwind/theme 样式：[`apps/web/src/app/globals.css`](../../../apps/web/src/app/globals.css)。
@@ -237,6 +272,47 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 - Web scripts/dependencies：[`apps/web/package.json`](../../../apps/web/package.json)。
 - HTTP URL/schema/error/SSE behavior：[`packages/transport-http/src/index.ts`](../../../packages/transport-http/src/index.ts)、[`packages/transport-http/src/index.test.ts`](../../../packages/transport-http/src/index.test.ts)。
 - Shared form/response contracts：[`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)、[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)。
+
+## React 组件实验室
+
+组件实验室是 `/dev/components` 下的开发工具，不属于 Product API 或产品导航。Server Component
+先检查 `process.env.NODE_ENV`，非 development 调用 `notFound()`；开发态通过 Suspense 承载
+使用 `useSearchParams()` 的 client workbench。实验室不创建 `HttpCosmosClient`、EventSource，
+不读取 Prisma、SQLite、Data Root、Blob Root 或用户数据。
+
+受管公共模块位于 `apps/web/src/components/ui/*.tsx` 与
+`apps/web/src/components/cosmos/*.tsx`，每个模块在静态 registry 中有唯一 id、默认场景、
+控件 schema、合成 fixture、token 子集和 render 目标。`registry-integrity.ts` 比较两个目录与
+注册表，拒绝缺失、重复、无默认场景、缺控件值或未登记 token；当前登记 8 个 UI primitive 和
+6 个 Cosmos 展示组件。
+
+实验室全局 chrome 使用持久化外观偏好（`ThemeSwitcher`）；URL `theme=neurobook&colorway=macos-*`
+只控制预览根节点，缺省确定性 `macos-light`。
+
+首页 `page.tsx` 是数据请求容器：它独占 `HttpCosmosClient`、SSE、React Hook Form 的
+`handleSubmit`、搜索/分页/Story 状态和错误处理。无副作用展示组件只接收共享 DTO、展示状态和
+回调：首页与实验室复用同一实现，实验室使用固定 synthetic fixture，不复制演示组件。
+
+当前产品展示组件边界：
+
+- `SourceForm`：接收来源表单 `UseFormReturn` 和页面提交事件，展示 Zod 字段错误与 submitting 状态；
+- `StatusSummary`：接收 health、source summary 和 connecting/connected/unavailable 状态；
+- `SourceActions`：接收 `SourceSnapshot[]` 与 run 回调，展示空、disabled 和 configured 状态；
+- `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
+- `StoryPanel`：接收 `StoryDetail` 与关闭回调，展示 revision/observation 元数据。
+
+实验室 URL 只保存 `component`、`scene`、`viewport`、`theme`、`colorway`；非法值归一化并以
+`replace` 修正，用户操作以 `push` 保留浏览器前进/后退。已登记 token 的临时输入在失焦时校验，
+版本化快照写入 `localStorage`，JSON 导入整份原子校验；覆盖只写预览根节点的 inline custom
+properties，不写 `:root`，因此实验室 chrome 与产品页面不受污染。
+
+实现入口：[`apps/web/src/component-lab/registry.tsx`](../../../apps/web/src/component-lab/registry.tsx)、
+[`apps/web/src/component-lab/workbench.tsx`](../../../apps/web/src/component-lab/workbench.tsx)、
+[`apps/web/src/app/dev/components/page.tsx`](../../../apps/web/src/app/dev/components/page.tsx)。
+组件登记、URL/快照/草稿测试和实验室浏览器/生产验收边界见
+[`docs/testing/README.md`](../../testing/README.md) 与
+[`Task 09`](../../../.agents/tasks/09-react-component-lab/README.md)。
+
 ## 非目标/边界
 
 - 当前页面只有 fixture-rss 创建表单；不宣称浏览器端可配置 RSS/Bilibili/OpenCLI、Secret、

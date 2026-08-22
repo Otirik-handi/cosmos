@@ -4,19 +4,23 @@ export async function findAvailablePort(
     preferredPort: number,
     host = "127.0.0.1",
     maxAttempts = 50,
+    label = "API",
+    excludedPorts: ReadonlySet<number> = new Set(),
 ): Promise<number> {
     if (
         !Number.isInteger(preferredPort)
         || preferredPort < 1
         || preferredPort > 65_535
     ) {
-        throw new Error(`Invalid COSMOS_API_PORT: ${preferredPort}`);
+        throw new Error(`Invalid ${label} port: ${preferredPort}`);
     }
-
     for (let offset = 0; offset < maxAttempts; offset += 1) {
         const candidate = preferredPort + offset;
         if (candidate > 65_535) {
             break;
+        }
+        if (excludedPorts.has(candidate)) {
+            continue;
         }
         if (await isPortAvailable(candidate, host)) {
             return candidate;
@@ -24,7 +28,7 @@ export async function findAvailablePort(
     }
 
     throw new Error(
-        `No available API port found from ${preferredPort} to `
+        `No available ${label} port found from ${preferredPort} to `
         + `${Math.min(preferredPort + maxAttempts - 1, 65_535)}.`,
     );
 }

@@ -19,11 +19,9 @@
 - `/dev/components` 开发态工作台；
 - props、状态、主题/配色和已登记 token 调节；
 - URL 分享、localStorage 草稿、JSON 原子导入/导出；
-- 当前 8 个 shadcn primitive 场景；
-- 从首页提取 `SourceForm`、`StatusSummary`、`SourceActions`、`FeedBrowser`、`StoryPanel` 等无副作用产品组件并登记；
+- 当前 8 个 shadcn primitive 与 5 个 Cosmos 展示组件场景；从首页提取的组件与实验室复用同一实现；
 - 真实开发浏览器和生产 404 验收；
 - 对应架构、测试、当前 Web spec、Task 和项目状态同步。
-
 不在范围：
 
 - 独立 React UI 包、npm 发布或跨仓库共享合同；
@@ -34,16 +32,21 @@
 - Route、Layout、Provider、数据请求容器、测试 helper 和一次性内部实现登记；
 - 改变 Product API、Transport DTO、Prisma schema、Worker 或现有首页业务语义；
 - commit、push、PR、merge、发布、部署和 worktree 清理，除非分别获得授权。
-
 ## Current State
+生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；远端 CI run `32464307892` attempt 2 已验证通过。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建且保持 OPEN；当前不执行 merge。
 
-生命周期阶段：Proposal 已接受，稳定架构与测试边界已更新；本 Task 正在计划，尚未开始实现代码。
+本 worktree 已实现静态 registry 与双目录登记门禁（`components/ui` 8 个、
+`components/cosmos` 6 个，新增 ThemeSwitcher）、URL 会话/浏览器历史、token 快照与
+localStorage 草稿、全局 NeuroBook 主题偏好与三态切换器、实验室 neurobook/macos-* preview
+合同、开发态 `/dev/components`、生产 404、五个无副作用 Cosmos 展示组件及首页复用。
+`page.tsx` 继续独占 HttpCosmosClient、SSE、React Hook Form 提交、搜索/分页/Story 状态；
+实验室 fixture 不访问 Product API。
 
-当前 Web 是 React 19.2.8、Next 16.3.0、Tailwind CSS v4、shadcn 4.16.2 `base-nova`、Base UI 和 lucide。`components/ui` 已有 badge、button、card、field、input、label、separator、textarea。首页仍在一个 client component 中同时持有 Transport/SSE/表单状态和全部展示。
+实现位于独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab`；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；merge、发布、部署或 worktree 清理未执行。
 
-当前提交、远端关系、验证结果和未完成边界只在 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md) 维护。本 Task 不在主工作区实施；开始实现前必须核对最新目标分支和所有现存 worktree/dirty 改动，再建立独立 `.worktree/react-component-lab` 和 `feat/t09-react-component-lab`。任何并发改动都由其负责人提交、转移或明确排除，不能被本 Task 覆盖或夹带。
+### 2026-08-22 范围偏差：NeuroBook 主题系统
 
-## Decisions and Deviations
+原“不在范围”中的 NeuroBook/macOS 主题边界被已接受的 [neurobook-theme-system Proposal](../../../docs/proposals/neurobook-theme-system.md) 有界反转：实验室 theme/colorway 合同切换为 `neurobook` / `macos-light|macos-night`，并新增全局默认主题与三态偏好持久化。上方历史决定保留不变；实施切片见下方 Slice 7。
 
 - 继续以仓库内 shadcn primitive 源码为实现基座，不增加无意义的 Button 等转发包装层。
 - 产品展示组件进入 `components/cosmos`，只接受 DTO/展示状态/回调，不导入 Product API client 或建立 SSE。
@@ -54,6 +57,26 @@
 - token 覆盖写在预览画布根节点，不写 `:root`，不污染实验室 chrome 或产品页面。
 - 不新增 React DOM 测试依赖。纯合同使用 Vitest；真实组件交互、视觉、响应式和生产隔离使用浏览器/生产 smoke。只有实际复杂交互无法由浏览器验收稳定守护时再单独决定测试依赖。
 - shadcn CLI `info --json` 在计划阶段确认当前栈，没有产生 lockfile diff；其输出的 “Saved lockfile” 是 CLI 依赖解析提示，不是仓库变更。
+
+## Implementation Record（2026-08-20）
+
+按 contract → workbench → adoption 顺序完成：
+
+- Slice 1–2：8 个 UI primitive 与 5 个 Cosmos presentation module 的静态登记、URL 归一化、
+  版本化 token snapshot、localStorage 损坏回退和原子 JSON 校验；
+- Slice 3–4：开发 `/dev/components`、目录/画布/检查器、URL push/replace 历史、预览根 token
+  覆盖、草稿恢复、导入/导出和生产 404；
+- Slice 5：提取 `SourceForm`、`StatusSummary`、`SourceActions`、`FeedBrowser`、`StoryPanel`，
+  页面继续独占 Transport/SSE/表单提交/搜索分页/Story 请求，实验室使用合成 fixture。
+
+实现过程中修正两项行为证据：用户会话操作使用 `router.push` 以保留前进/后退；token 输入改为
+本地临时值、失焦校验提交，避免合法中间值触发检查器重挂载并截断逐字符输入。
+P1 修复（2026-08-21）：token 未编辑失焦保留持久 override；registry 现在校验控件默认值、场景值、select options、boolean 类型及 token 默认值；SourceForm fixture 使用 RHF `values` 使 Inspector props 实时同步。
+
+已完成的运行时证据：实验室 URL 选择、前进/后退、props、Light/Dark、token 作用域与刷新恢复、
+非法/合法 JSON 导入、320/768/1024/1440 视口、无 Product API/SSE 请求、五个产品组件 fixture、
+生产 HTTP 404，以及既有 Playwright ingest → Feed → Story 流程。具体命令结果同步到本文末尾和
+`PROJECT-STATUS.md`；Docker、真实来源、Windows smoke、发布和部署仍未运行。
 
 ## Source-verified Framework Constraints
 
@@ -162,6 +185,19 @@
 - **预计核心文件**：测试/CI（仅若默认测试无法收集门禁）、Web spec、本 Task、项目状态。
 - **验证层级**：`bun run docs:check`、聚焦测试、`bun run test`、`bun run test:property`、`bun run typecheck`、`bun run lint:web`、`bun run build:web`、开发/生产浏览器验收、`git diff --check`。
 
+### Slice 7：NeuroBook 主题系统（2026-08-22 追加）
+
+- **生命周期阶段**：已接受 neurobook-theme-system Proposal，进入 RED/GREEN。
+- **目标**：落地全局 `neurobook` 主题 × `macos-light|macos-night` 配色、三态偏好持久化、首帧引导脚本，并让首页与实验室 chrome/preview 各自消费正确状态。
+- **可观察验收**：
+  1. 无偏好时首页按系统浅/深显示对应配色；手动 Night 刷新保持，“跟随系统”清除偏好并即时响应系统变化；
+  2. 首次可见帧起 `<html>` 已带最终主题属性，无错误配色闪烁与 hydration 告警；外部 body 属性回归继续通过；
+  3. 实验室 URL preview 可独立固定另一配色且 token override 不泄漏到 chrome；390px 无横向溢出。
+- **依赖**：Slice 1–6 全部完成；保留当前未提交 hydration 回归。
+- **受影响合同**：neurobook-theme-system Proposal、架构 §3.8 两轴 token、BRD-010、Web spec 与测试边界。
+- **预计核心文件**：`apps/web/src/theme/*`、`app/layout.tsx`、`globals.css`、`components/ui/{button,card,input,textarea,badge}.tsx`、`components/cosmos/theme-switcher.tsx`、`app/page.tsx`、`component-lab/{types,session,registry,product-fixtures,workbench,lab-stage,tokens}` 与两份浏览器 spec。
+- **验证层级**：聚焦 Vitest RED/GREEN、两套 Playwright 表面、typecheck、lint:web、build、docs:check、生产 404 smoke、真实浏览器视觉验收。
+
 ## Checkpoints
 
 ### Contract checkpoint
@@ -178,16 +214,57 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
 
 ## Verification
 
-计划阶段已执行：
+本轮已执行：
 
-- `bunx --bun shadcn@latest info --json`：确认 Next 16.3.0、RSC、Tailwind v4、Base UI、`base-nova`、lucide 和 8 个已安装组件；无 `bun.lock` diff；
-- 官方 Next 16.3.1 `notFound`、`useSearchParams`、environment variables 文档与 React state/effect 文档只读核对；
-- 当前首页展示/Transport 边界与现有 `e2e/browser/ingest.spec.ts` 路径已定位。
+- `bun run test`：30 个测试文件、217 个测试通过；
+- `bun run --cwd apps/web tsc --noEmit`：通过；`bun run lint:web`：通过；
+- `bun run build`：通过，packages、API、Worker 和 Next Web 生产产物完成；
+- `bun run test:browser`：1 个既有 Playwright ingest 流程通过（创建来源、录入、Feed、Story）；
+- `bun run test:browser:component-lab`：4 个开发态 Playwright 回归通过，覆盖 SourceForm 的 `name`/`fixturePath` props 同步、SourceForm fixture 提交阻断、FeedBrowser 搜索提交阻断和 token 恢复后无操作失焦；
+- 真实开发浏览器：实验室 URL/props/配色、前进后退、token 作用域/恢复/非法导入、五个产品 fixture、
+  P1 修复回归、320/768/1024/1440 视口和无 API/SSE 请求通过；生产 `curl` 对 `/dev/components` 返回 HTTP 404；
+- `bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts`：3 个文件、24 个测试通过，覆盖 13 个公共模块登记合同；
 
-本阶段只改需求、Proposal、架构、测试规范、Task 索引、本 Task 和项目状态；未运行前端测试、typecheck、build 或浏览器，因为实现代码尚未开始。`bun run docs:check` 已通过，报告为 `failures=[]`、`checkedFiles=258`；上述目标文档的 `git diff --check` 退出码 0、无输出；Task 09 已由任务索引可达，当前 Web spec 不含组件实验室已实现声明。
+最终本地收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归。
+PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过；PR 保持 OPEN，当前不执行 merge。
+
+### Slice 7 验证记录（2026-08-22）
+
+异常路径修复（同日）：按批准计划合同，`localStorage` 读取抛错或 `matchMedia`
+不可用/抛错时，引导脚本与 Provider 首屏一律强制回退 `macos-light`（含已存储的
+显式偏好）；运行期用户显式点击不受降级媒体查询影响。新增两个生产回归：
+"falls back to macOS light when localStorage is unavailable" 与
+"falls back to macOS light when matchMedia is unavailable"（后者含存储 Night +
+抛错 matchMedia → 浅色首帧 → 点击 Night 即时生效）。复跑 `bun run test:browser`：8/8；
+`test:browser:component-lab` 仍 12/12。
+
+
+RED：`bun run test -- apps/web/src/theme/theme.test.ts apps/web/src/component-lab/session.test.ts`
+因 theme 模块缺失与旧 theme ids 失败；`bunx playwright test --config playwright.component-lab.config.ts --grep "theme|colorway"`
+4 个实验室主题用例全部失败（切换器/预览属性不存在）。
+
+GREEN 后实际结果：
+
+- 聚焦单元：theme + session + draft + snapshot + registry 共 5 文件 / 34 测试通过；
+- `bun run test`：31 文件 / 224 测试通过；`bun run test:property`：3 文件 / 4 测试通过；
+- `bun run typecheck`、`bun run lint:web`、`bun run build` 通过；
+- `bun run test:browser`：8/8（既有 ingest 流 + 无存储系统明/暗两分支、storage 抛错浅色
+  回退、matchMedia 抛错浅色回退、Night 持久化、390/1440 溢出）；
+- `bun run test:browser:component-lab`：12/12（5 个既有回归 + 全局偏好持久化/preview 独立/
+  局部 dark + 390/768/1024/1440 溢出），含外部 body 属性 hydration 回归继续通过；
+  表面/焦点 token 补齐（`--surface-panel/--surface-toolbar/--focus-ring` 消费）后复跑仍 12/12；
+- 真实浏览器视觉验收（隔离 Chromium，1440×900 与 390×844 × light/dark × 首页/实验室）：
+  computed 背景/前景精确为 macOS Light `rgb(246,248,250)/rgb(17,24,39)` 与 Night
+  `rgb(28,28,30)/rgb(250,250,250)`；截图存于被忽略的 `test-results/theme-visual/`；
+  hydration 过滤后 console/page error 为 0；
+- 生产 `next start` 后 `/dev/components` 经 `curl` 返回 HTTP 404；
+- 规格同步：Web spec 新增“外观主题”章节并修正持久化边界；testing README 记录两类表面
+  的主题回归边界；`PROJECT-STATUS.md` 增加本切片条目。
+
+未运行：Node process E2E、Windows smoke、Docker、真实来源、commit/push/PR 更新与远端 CI。
+`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
 ## Follow-ups
 
-- 等待用户批准本实施计划；批准不自动授权 commit、push、PR、merge、发布或部署。
-- 实现前先按 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)、远端和 worktree 实际状态冻结目标基线；不在主工作区直接开发。
-- NeuroBook/macOS 主题、跨仓库 token、React UI 包和许可证边界另行 Proposal，不作为本 Task 的隐含后续。
+- 实现、CI 修复、PR Scope 和状态记录均已形成独立提交并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建并保持 OPEN；远端 run `32464307892` attempt 2 全部通过，merge、发布、部署和 worktree 清理未执行。
+- NeuroBook/macOS 默认主题已于 2026-08-22 由 neurobook-theme-system Proposal 接受并在本 Task 以 Slice 7 实施；跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { ThemeProvider } from "@/theme/theme-provider";
+import { COSMOS_THEME_BOOTSTRAP_SCRIPT } from "@/theme/theme-bootstrap";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,9 +26,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     return (
         <html
             lang="zh-CN"
+            suppressHydrationWarning
             className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
         >
-            <body className="min-h-full flex flex-col">{children}</body>
+            <head>
+                <script dangerouslySetInnerHTML={{__html: COSMOS_THEME_BOOTSTRAP_SCRIPT}} />
+            </head>
+            <body suppressHydrationWarning className="min-h-full flex flex-col">
+                <ThemeProvider>{children}</ThemeProvider>
+            </body>
         </html>
     );
 }

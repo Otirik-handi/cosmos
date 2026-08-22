@@ -298,6 +298,7 @@ Web 展示层按四层单向依赖组织：
 - Cosmos 产品组件表达 Feed、Source、Search、Story 和状态摘要等可复用产品语义，使用显式 props 与合成 fixture 即可独立渲染；
 - `components/ui` 继续维护 shadcn `base-nova` / Base UI primitive 源码，不为未来换肤增加只转发 props 的包装层；
 - 产品组件只消费 Cosmos/shadcn 语义 token，不依赖某套主题私有变量或字面主题颜色；颜色、圆角、密度、阴影和字体优先在 token 与 primitive 层调整。
+- 全局语义 token 由两轴组成：NeuroBook theme（`data-cosmos-theme="neurobook"`，承载字体栈、密度、圆角、表面角色和动效）× macOS colorway（`data-cosmos-colorway="macos-light" | "macos-night"`，承载颜色）；页面与组件继续只消费语义变量，不读取主题/配色 id 或写字面颜色（见 [`neurobook-theme-system` Proposal](../proposals/neurobook-theme-system.md)）。
 
 组件实验室是开发工具，不是 Product Service 能力。开发模式的 `/dev/components` 使用固定、脱敏的合成 fixture 展示真实 primitive 和产品组件；它不访问 Product API、SSE、Prisma、SQLite、Blob Root、Artifact Root 或用户数据。生产构建访问该路由必须返回 404，实验室不进入产品导航。
 

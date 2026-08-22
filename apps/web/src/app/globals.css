@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * 兼容回退：仅在缺少 data-cosmos-* 属性的环境（如 SSR 片段、测试快照）下提供
+ * 中性亮暗。真实浏览器始终由首帧引导脚本写入属性，下方两套 colorway 块会覆盖这里。
+ */
 :root {
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
@@ -21,6 +25,116 @@
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
     --radius: 0.625rem;
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+}
+
+/*
+ * NeuroBook theme 层：字体、密度、圆角、动效与表面角色。
+ * 与配色无关；颜色一律来自下方 colorway 块映射出的 shadcn 语义 token，
+ * 派生角色通过 var() 在计算值时解析，因此块顺序不影响结果。
+ */
+[data-cosmos-theme="neurobook"] {
+    --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    --tracking-ui: 0em;
+    --control-h-sm: 26px;
+    --control-h-md: 32px;
+    --control-h-lg: 40px;
+    --control-px: 12px;
+    --radius-control: 10px;
+    --radius-panel: 18px;
+    --radius-pill: 999px;
+    --motion-fast: 90ms;
+    --motion-base: 140ms;
+    --motion-enter: 180ms;
+    --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* 表面角色：控件从所在面上抬起，面板保持实心卡片层级 */
+    --surface-control: color-mix(in srgb, var(--foreground) 7%, transparent);
+    --outline-control: color-mix(in srgb, var(--foreground) 16%, transparent);
+
+    /* 面板实心卡片，工具条为次级混合面；焦点统一走三段 focus-ring */
+    --surface-panel: var(--card);
+    --surface-toolbar: color-mix(in srgb, var(--secondary) 60%, transparent);
+    --focus-ring:
+        0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent),
+        0 1px 6px color-mix(in srgb, var(--ring) 22%, transparent);
+    --elevation-raised:
+        inset 0 1px 0 rgb(255 255 255 / 0.28),
+        0 1px 2px color-mix(in srgb, var(--cosmos-shadow) 20%, transparent);
+    --elevation-popover:
+        0 2px 6px color-mix(in srgb, var(--cosmos-shadow) 18%, transparent),
+        0 16px 40px color-mix(in srgb, var(--cosmos-shadow) 30%, transparent);
+    --elevation-dialog:
+        0 4px 12px color-mix(in srgb, var(--cosmos-shadow) 22%, transparent),
+        0 40px 88px color-mix(in srgb, var(--cosmos-shadow) 38%, transparent);
+}
+
+/* macOS Light 配色 → 现有 shadcn 语义 token */
+[data-cosmos-colorway="macos-light"] {
+    --background: #f6f8fa;
+    --foreground: #111827;
+    --card: #ffffff;
+    --card-foreground: #111827;
+    --popover: #ffffff;
+    --popover-foreground: #111827;
+    --primary: #007aff;
+    --primary-foreground: #ffffff;
+    --secondary: #f0f2f5;
+    --secondary-foreground: #111827;
+    --muted: #f0f2f5;
+    --muted-foreground: #4b5563;
+    --accent: #e6e8ec;
+    --accent-foreground: #111827;
+    --destructive: #dc2626;
+    --border: #e5e7eb;
+    --input: #d1d5db;
+    --ring: #007aff;
+    --radius: 10px;
+    --cosmos-shadow: #0f172a;
+}
+
+/* macOS Night 配色 → 同一组语义 token 的深色取值 */
+[data-cosmos-colorway="macos-night"] {
+    --background: #1c1c1e;
+    --foreground: #fafafa;
+    --card: #2c2c2e;
+    --card-foreground: #fafafa;
+    --popover: #2c2c2e;
+    --popover-foreground: #fafafa;
+    --primary: #0a84ff;
+    --primary-foreground: #ffffff;
+    --secondary: #232325;
+    --secondary-foreground: #fafafa;
+    --muted: #232325;
+    --muted-foreground: #a1a1aa;
+    --accent: #3a3a3c;
+    --accent-foreground: #fafafa;
+    --destructive: #ff453a;
+    --border: #3a3a3c;
+    --input: #48484a;
+    --ring: #0a84ff;
+    --radius: 10px;
+    --cosmos-shadow: #000000;
 }
 
 @theme inline {
@@ -50,29 +164,17 @@
     --font-mono: var(--font-geist-mono);
 }
 
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-}
-
 body {
     background: var(--background);
     color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-ui, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
+    letter-spacing: var(--tracking-ui, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-cosmos-theme="neurobook"] {
+        --motion-fast: 0ms !important;
+        --motion-base: 0ms !important;
+        --motion-enter: 0ms !important;
+    }
 }

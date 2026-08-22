@@ -120,6 +120,8 @@ CI 测试比较受管目录中的公共组件模块和注册表来源，拒绝�
 
 这只是一份本仓静态环境注册表，不是第三方主题包 API。新增 NeuroBook/macOS 主题、主题市场或组件实现覆盖必须另行 Proposal。
 
+> **2026-08-22 更新**：本节最小合同已被已接受的 [`neurobook-theme-system`](neurobook-theme-system.md) 有界反转。当前登记 theme 为 `neurobook`，colorway 为 `macos-light` / `macos-night`；以下原文保留为历史决策。
+
 ### 5. token 覆盖限定在预览画布
 
 可调 token 来自显式登记表，登记项包含变量名、分组、输入类型、允许范围和默认来源。实验室把覆盖值应用到预览画布根节点，不写到 `:root`，因此实验室导航和检查器保持稳定，也不会污染其它页面。
@@ -250,3 +252,4 @@ Proposal 接受后、实现开始前：
 | 2026-08-20 | Agent 候选 | 当时将实现拆成 `component-lab-contract` → `component-lab-workbench` → `cosmos-component-adoption`；后由本 Proposal 整体接受生效。 |
 | 2026-08-20 | 当时待决定 | 是否接受本 Proposal，并从接受时起授权更新稳定文档、创建 Task 和进入计划阶段；下一行记录最终决定。 |
 | 2026-08-20 | 用户 | 接受本 Proposal 整体方案，授权更新稳定文档、创建 Task 和进入计划阶段；未授权实施代码、commit、push 或 PR。 |
+| 2026-08-22 | 用户 | 接受 neurobook-theme-system Proposal，将本提案“不接入 NeuroBook/macOS 主题”的非目标有界反转为默认主题系统；实验室 theme/colorway 合同随之切换。 |
