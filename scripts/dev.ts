@@ -53,28 +53,71 @@ function stopAll(exitCode: number): void {
 
 async function start(): Promise<void> {
     const baseEnvironment = createWorkspaceDevEnvironment(rootDirectory);
-    const preferredPort = Number(baseEnvironment.COSMOS_API_PORT ?? "4310");
-    const apiHost = baseEnvironment.COSMOS_API_HOST ?? "127.0.0.1";
-    const apiPort = await findAvailablePort(preferredPort, apiHost);
-    const environment = withApiPortEnvironment(baseEnvironment, apiPort);
 
-    if (apiPort !== preferredPort) {
-        console.warn(
-            `[dev] API port ${preferredPort} is occupied; using ${apiPort}.`,
-        );
+    const apiHost = baseEnvironment.COSMOS_API_HOST ?? "127.0.0.1";
+    const adminHost = baseEnvironment.COSMOS_WORKER_ADMIN_HOST ?? "127.0.0.1";
+    const selectedPorts = new Set<number>();
+
+    // Worker Admin 合同允许端口 0（动态分配）；API/Web 需要确定值供 rewrite/参数使用。
+    async function resolveServicePort(
+        preferred: number,
+        host: string,
+        label: string,
+    ): Promise<number> {
+        if (preferred === 0 && label === "COSMOS_WORKER_ADMIN_PORT") {
+            return 0;
+        }
+        const port = await findAvailablePort(preferred, host, 50, label, selectedPorts);
+        selectedPorts.add(port);
+        return port;
     }
+
+    const apiPreferred = Number(baseEnvironment.COSMOS_API_PORT ?? "4310");
+    const adminPreferred = Number(baseEnvironment.COSMOS_WORKER_ADMIN_PORT ?? "9091");
+    const webPreferred = Number(baseEnvironment.COSMOS_WEB_PORT ?? "3000");
+
+    const apiPort = await resolveServicePort(apiPreferred, apiHost, "COSMOS_API_PORT");
+    const adminPort = await resolveServicePort(
+        adminPreferred,
+        adminHost,
+        "COSMOS_WORKER_ADMIN_PORT",
+    );
+    const webPort = await resolveServicePort(webPreferred, "127.0.0.1", "COSMOS_WEB_PORT");
+
+    for (const [name, preferred, selected] of [
+        ["API", apiPreferred, apiPort],
+        ["Worker Admin", adminPreferred, adminPort],
+        ["Web", webPreferred, webPort],
+    ] as const) {
+        if (preferred !== selected) {
+            console.warn(`[dev] ${name} port ${preferred} is occupied; using ${selected}.`);
+        }
+    }
+
+    const environment: NodeJS.ProcessEnv = {
+        ...withApiPortEnvironment(baseEnvironment, apiPort),
+        COSMOS_WEB_PORT: String(webPort),
+        COSMOS_WORKER_ADMIN_HOST: adminHost,
+        COSMOS_WORKER_ADMIN_PORT: String(adminPort),
+    };
 
     for (const [name, directory] of [
         ["web", "apps/web"],
         ["api", "apps/api"],
         ["worker", "apps/worker"],
     ] as const) {
-        const child = spawn(process.execPath, ["run", "--cwd", directory, "dev"], {
-            cwd: rootDirectory,
-            env: environment,
-            stdio: "inherit",
-        });
-
+        const extraArgs = name === "web"
+            ? ["--", "--port", String(webPort)]
+            : [];
+        const child = spawn(
+            process.execPath,
+            ["run", "--cwd", directory, "dev", ...extraArgs],
+            {
+                cwd: rootDirectory,
+                env: environment,
+                stdio: "inherit",
+            },
+        );
         children.push(child);
         child.on("exit", (code) => {
             if (!shuttingDown && code !== 0) {

@@ -24,6 +24,7 @@ import {
     renderSourceFormLab,
     renderStatusSummaryLab,
     renderStoryPanelLab,
+    renderThemeSwitcherLab,
 } from "./product-fixtures";
 
 import type {LabComponentDefinition, LabControlDefinition, LabProps} from "./types";
@@ -466,5 +467,22 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderStoryPanelLab,
+    },
+    {
+        id: "theme-switcher",
+        label: "ThemeSwitcher",
+        category: "Cosmos",
+        modulePath: "components/cosmos/theme-switcher.tsx",
+        defaultSceneId: "default",
+        controls: [
+            control("value", "Value", "select", "system", ["system", "macos-light", "macos-night"]),
+        ] as const satisfies readonly LabControlDefinition[],
+        scenes: [
+            {id: "default", label: "System", props: {value: "system"}},
+            {id: "light", label: "Light", props: {value: "macos-light"}},
+            {id: "night", label: "Night", props: {value: "macos-night"}},
+        ],
+        tokens: sharedTokens,
+        render: renderThemeSwitcherLab,
     },
 ] as const satisfies readonly LabComponentDefinition[];

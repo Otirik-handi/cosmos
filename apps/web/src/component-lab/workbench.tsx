@@ -6,6 +6,9 @@ import {usePathname, useRouter, useSearchParams} from "next/navigation";
 import {Badge} from "@/components/ui/badge";
 import {Card, CardContent} from "@/components/ui/card";
 
+import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
+import {useTheme} from "@/theme/theme-provider";
+
 import {labComponentDefinitions} from "./registry";
 import {saveLabTokenDraft} from "./draft";
 import {LabInspector} from "./lab-inspector";
@@ -15,7 +18,7 @@ import {LabNav} from "./lab-nav";
 import {LabStage} from "./lab-stage";
 import {notifyLabTokenDraftChange, useLabTokenDraft} from "./use-token-draft";
 import {labTokenDefinitions} from "./tokens";
-import type {LabColorwayId, LabProps, LabTokenName, LabViewportId} from "./types";
+import type {LabColorwayId, LabProps, LabThemeId, LabTokenName, LabViewportId} from "./types";
 
 const labContext: LabUrlContext = {
     componentIds: labComponentDefinitions.map((definition) => definition.id),
@@ -29,19 +32,20 @@ const labContext: LabUrlContext = {
         labComponentDefinitions.map((definition) => [definition.id, definition.defaultSceneId]),
     ),
     viewportIds: ["responsive", "wide"],
-    themeIds: ["cosmos"],
-    colorwayIds: ["light", "dark"],
+    themeIds: ["neurobook"],
+    colorwayIds: ["macos-light", "macos-night"],
     defaults: {
         component: labComponentDefinitions[0]?.id ?? "button",
         scene: labComponentDefinitions[0]?.defaultSceneId ?? "default",
         viewport: "responsive",
-        theme: "cosmos",
-        colorway: "light",
+        theme: "neurobook",
+        colorway: "macos-light",
     },
 };
 
 export function ComponentLabWorkbench() {
     const pathname = usePathname();
+    const {preference, setPreference} = useTheme();
     const router = useRouter();
     const searchParams = useSearchParams();
     const session = useMemo(
@@ -84,7 +88,10 @@ export function ComponentLabWorkbench() {
                             <p className="text-xs text-muted-foreground">真实组件 · 固定 fixture · 不连接服务</p>
                         </div>
                     </div>
-                    <p className="min-w-0 max-w-full break-all text-right text-xs text-muted-foreground">{normalizedQuery}</p>
+                    <div className="flex items-center gap-3">
+                        <ThemeSwitcher onValueChange={setPreference} value={preference} />
+                        <p className="min-w-0 max-w-full break-all text-right text-xs text-muted-foreground">{normalizedQuery}</p>
+                    </div>
                 </div>
             </header>
             <LabSurface
@@ -171,6 +178,7 @@ function LabSurface({definition, onSessionChange, scene, session}: LabSurfacePro
                     onViewportChange={(viewport) => onSessionChange({viewport})}
                     props={props}
                     scene={scene}
+                    theme={session.theme as LabThemeId}
                     tokenOverrides={draft.overrides}
                     viewport={session.viewport as LabViewportId}
                 />

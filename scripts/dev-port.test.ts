@@ -39,6 +39,36 @@ describe("development API port selection", () => {
         expect(selectedPort).toBeGreaterThan(address.port);
     });
 
+    it("skips ports listed in the exclusion set", async () => {
+        const server = createServer();
+        servers.push(server);
+        server.listen(0, "127.0.0.1");
+        await once(server, "listening");
+
+        const address = server.address();
+        if (!address || typeof address === "string") {
+            throw new Error("Test server did not expose a TCP address.");
+        }
+
+        // 占用 preferred，并把顺延的第一候选加入排除集，应继续向后找。
+        const excluded = new Set([address.port + 1]);
+        const selectedPort = await findAvailablePort(
+            address.port,
+            "127.0.0.1",
+            50,
+            "COSMOS_WEB_PORT",
+            excluded,
+        );
+
+        expect(selectedPort).toBeGreaterThan(address.port + 1);
+    });
+
+    it("rejects invalid ports with the requesting label", async () => {
+        await expect(
+            findAvailablePort(0, "127.0.0.1", 50, "COSMOS_WEB_PORT"),
+        ).rejects.toThrow(/Invalid COSMOS_WEB_PORT port/u);
+    });
+
     it("propagates the selected API URL to Web development settings", () => {
         const environment = withApiPortEnvironment(
             { COSMOS_API_PORT: "4310" },

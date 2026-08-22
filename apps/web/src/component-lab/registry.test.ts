@@ -23,6 +23,7 @@ const expectedPublicModules = [
     "components/cosmos/source-form.tsx",
     "components/cosmos/status-summary.tsx",
     "components/cosmos/story-panel.tsx",
+    "components/cosmos/theme-switcher.tsx",
 ] as const;
 
 describe("component lab registry", () => {

@@ -17,14 +17,14 @@ const context: LabUrlContext = {
         input: "default",
     },
     viewportIds: ["responsive", "wide"],
-    themeIds: ["cosmos"],
-    colorwayIds: ["light", "dark"],
+    themeIds: ["neurobook"],
+    colorwayIds: ["macos-light", "macos-night"],
     defaults: {
         component: "button",
         scene: "default",
         viewport: "responsive",
-        theme: "cosmos",
-        colorway: "light",
+        theme: "neurobook",
+        colorway: "macos-light",
     },
 };
 
@@ -38,7 +38,7 @@ describe("component lab URL session", () => {
             component: "input",
             scene: "disabled",
             viewport: "phone",
-            theme: "macos",
+            theme: "cosmos",
             colorway: "blue",
         });
 
@@ -46,8 +46,8 @@ describe("component lab URL session", () => {
             component: "input",
             scene: "default",
             viewport: "responsive",
-            theme: "cosmos",
-            colorway: "light",
+            theme: "neurobook",
+            colorway: "macos-light",
         });
     });
 
@@ -55,9 +55,9 @@ describe("component lab URL session", () => {
         const state = {
             component: "input",
             scene: "invalid",
-            viewport: "wide",
-            theme: "cosmos",
-            colorway: "dark",
+            viewport: "responsive",
+            theme: "neurobook",
+            colorway: "macos-night",
         } as const;
         const query = serializeLabUrlState(state);
 

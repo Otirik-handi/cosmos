@@ -10,6 +10,7 @@ import type {
     LabComponentDefinition,
     LabProps,
     LabScene,
+    LabThemeId,
     LabViewportId,
 } from "./types";
 
@@ -18,6 +19,7 @@ type LabStageProps = {
     definition: LabComponentDefinition;
     props: LabProps;
     scene: LabScene;
+    theme: LabThemeId;
     tokenOverrides: Readonly<Record<string, string>>;
     viewport: LabViewportId;
     onColorwayChange: (value: LabColorwayId) => void;
@@ -30,6 +32,7 @@ export function LabStage({
     definition,
     props,
     scene,
+    theme,
     tokenOverrides,
     viewport,
     onColorwayChange,
@@ -39,7 +42,7 @@ export function LabStage({
     const previewStyle = Object.fromEntries(Object.entries(tokenOverrides)) as CSSProperties;
     return (
         <Card className="min-w-0 overflow-hidden">
-            <CardHeader className="gap-4 border-b bg-card">
+            <CardHeader className="gap-4 border-b bg-[color:var(--surface-toolbar,var(--card))]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -52,20 +55,20 @@ export function LabStage({
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <Button
-                            aria-pressed={colorway === "light"}
-                            onClick={() => onColorwayChange("light")}
+                            aria-pressed={colorway === "macos-light"}
+                            onClick={() => onColorwayChange("macos-light")}
                             size="sm"
-                            variant={colorway === "light" ? "secondary" : "ghost"}
+                            variant={colorway === "macos-light" ? "secondary" : "ghost"}
                         >
-                            Light
+                            macOS Light
                         </Button>
                         <Button
-                            aria-pressed={colorway === "dark"}
-                            onClick={() => onColorwayChange("dark")}
+                            aria-pressed={colorway === "macos-night"}
+                            onClick={() => onColorwayChange("macos-night")}
                             size="sm"
-                            variant={colorway === "dark" ? "secondary" : "ghost"}
+                            variant={colorway === "macos-night" ? "secondary" : "ghost"}
                         >
-                            Dark
+                            macOS Night
                         </Button>
                     </div>
                 </div>
@@ -103,7 +106,10 @@ export function LabStage({
                 <div className="flex min-h-[28rem] items-center justify-center overflow-auto rounded-xl border border-dashed border-border bg-background/70 p-4 md:p-8">
                     <div className={viewport === "wide" ? "flex w-full max-w-5xl justify-center" : "flex w-full max-w-2xl justify-center"}>
                         <div
-                            className={colorway === "dark" ? "dark flex w-full justify-center rounded-lg bg-background p-6 text-foreground" : "flex w-full justify-center rounded-lg bg-background p-6 text-foreground"}
+                            className={colorway === "macos-night" ? "dark flex w-full justify-center rounded-[var(--radius-control,10px)] bg-background p-6 text-foreground" : "flex w-full justify-center rounded-[var(--radius-control,10px)] bg-background p-6 text-foreground"}
+                            data-component-lab-preview
+                            data-cosmos-colorway={colorway}
+                            data-cosmos-theme={theme}
                             style={previewStyle}
                         >
                             {definition.render(props)}
@@ -112,7 +118,7 @@ export function LabStage({
                 </div>
                 <Separator className="my-5" />
                 <p className="text-xs text-muted-foreground">
-                    真实组件渲染 · 无 API / SSE / 用户数据 · 当前主题 cosmos
+                    真实组件渲染 · 无 API / SSE / 用户数据 · 当前主题 neurobook
                 </p>
             </CardContent>
         </Card>

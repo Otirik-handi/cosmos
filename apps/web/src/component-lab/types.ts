@@ -47,6 +47,6 @@ export type LabComponentDefinition = {
     render: (props: LabProps) => ReactNode;
 };
 
-export type LabThemeId = "cosmos";
-export type LabColorwayId = "dark" | "light";
+export type LabThemeId = "neurobook";
+export type LabColorwayId = "macos-light" | "macos-night";
 export type LabViewportId = "responsive" | "wide";

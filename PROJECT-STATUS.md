@@ -49,6 +49,30 @@ git diff --check
 工具链保留的 `vitest.config.ts` / `vitest.property.config.ts` 分层收集合同未改变。
 修复后五轴审查结论：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均由专用浏览器回归覆盖；`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
+## NeuroBook 主题系统切片（2026-08-22，本地）
+
+已接受的 [`neurobook-theme-system`](docs/proposals/neurobook-theme-system.md) Proposal 在
+`feat/t09-react-component-lab` worktree 以 Task 09 Slice 7 实施：全局 `neurobook` 主题 ×
+`macos-light|macos-night` 配色、三态偏好（system/显式，持久化 key
+`cosmos.theme.preference.v1`）、`<head>` 首帧引导脚本与 React Provider、首页与实验室
+chrome 的三态切换器、实验室 URL preview 独立配色，以及 Button/Card/Input/Textarea/Badge
+对主题 token 的消费迁移。治理侧同步：原始需求追加、BRD-010、架构 §3.8 两轴 token、
+react-component-lab Proposal 反转决策行、Task 09 偏差与切片、Web spec“外观主题”章节、
+testing README 回归边界。
+
+本地门禁：`bun run test`（31 文件/224）、`test:property`（3/4）、`typecheck`、`lint:web`、
+`build`、`test:browser`（8/8，含无存储系统明/暗两分支、storage 抛错与 matchMedia 抛错均
+强制浅色回退、Night 持久化、390/1440 溢出）、`test:browser:component-lab`（12/12，含
+390/768/1024/1440 溢出）、聚焦单元 34 测试、`docs:check`、`git diff --check` 全部通过；
+生产 `/dev/components` 复验 HTTP 404。视觉验收
+（1440/390 × 明/暗 × 首页/实验室）computed 背景前景逐项等于 macOS Light
+`rgb(246,248,250)/rgb(17,24,39)` 与 Night `rgb(28,28,30)/rgb(250,250,250)`，hydration 过滤后
+console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`。既有未提交 hydration
+回归保留并通过。
+
+未运行/未授权：Node process E2E、Windows smoke、Docker、真实来源、commit、push、PR #10 更新、
+merge、发布、部署与 worktree 清理。`fixturePath` containment 既有安全债务仍未处理。
+
 ## 远端 CI 与治理边界
 
 - PR #10 的前一轮远端 run `32459370422`（head `7d8257b67f3c701f055cfd0b4c44f60ea7984fec`）曾失败：三个下游 job 在 `packages/storage-prisma` 构建链缺少生成后的 Prisma Client；该 run 仅作为历史失败证据保留。

@@ -21,6 +21,9 @@ import {
     type EventStreamState,
 } from "@/components/cosmos/status-summary";
 import {StoryPanel} from "@/components/cosmos/story-panel";
+import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
+
+import type {CosmosThemePreference} from "@/theme/theme";
 
 import type {LabProps} from "./types";
 
@@ -205,4 +208,19 @@ export function renderStoryPanelLab(props: LabProps) {
         },
     };
     return <StoryPanel onClose={() => undefined} story={story} />;
+}
+
+export function renderThemeSwitcherLab(props: LabProps) {
+    const value = optionProp(
+        props,
+        "value",
+        "system",
+        ["system", "macos-light", "macos-night"] as const,
+    );
+    return (
+        <ThemeSwitcher
+            onValueChange={() => undefined}
+            value={value as CosmosThemePreference}
+        />
+    );
 }

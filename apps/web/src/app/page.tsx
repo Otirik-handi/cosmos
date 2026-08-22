@@ -34,6 +34,8 @@ import {SourceForm, sourceFormSchema, type SourceFormValues} from "@/components/
 import {StatusSummary, type EventStreamState} from "@/components/cosmos/status-summary";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {StoryPanel} from "@/components/cosmos/story-panel";
+import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
+import {useTheme} from "@/theme/theme-provider";
 
 
 
@@ -43,6 +45,7 @@ const client = new HttpCosmosClient({
 
 
 export default function Home() {
+    const {preference, setPreference} = useTheme();
     const [feed, setFeed] = useState<readonly FeedItem[]>([]);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [activeSearch, setActiveSearch] = useState<SearchQuery | null>(null);
@@ -244,6 +247,7 @@ export default function Home() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    <ThemeSwitcher onValueChange={setPreference} value={preference} />
                     <Button onClick={() => setShowSourceForm((value) => !value)}>
                         {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
                         {showSourceForm ? "关闭表单" : "新建来源"}
