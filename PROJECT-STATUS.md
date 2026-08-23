@@ -16,7 +16,7 @@ React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.wo
 - `/dev/components` 开发路由、URL/history、props、Light/Dark、token 草稿/JSON 和五个产品 fixture 已实际浏览器验证；
 - token 覆盖只在预览根节点，实验室无 Product API/SSE 请求；生产 Web 对 `/dev/components` 返回 HTTP 404；
 - 既有 `bun run test:browser` ingest 流程通过：来源创建、录入、Feed、Story；
-实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；merge、发布、部署和 worktree 清理未执行。
+实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；分支已按用户授权合并进本地 `master`（merge commit `b08f72d`），发布、部署和 push master 未执行。
 
 ## 本轮本地已验证（2026-08-21）
 
@@ -78,15 +78,14 @@ testing README 回归边界。
 console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`。既有未提交 hydration
 回归保留并通过。
 
-未运行/未授权：Node process E2E、Windows smoke、Docker、真实来源、commit、push、PR #10 更新、
-merge、发布、部署与 worktree 清理。`fixturePath` containment 既有安全债务仍未处理。
+未运行/未授权：Node process E2E、Windows smoke、Docker、真实来源、push、PR #10 更新、发布与部署；worktree 清理已获授权，将在合并验证完成后执行。`fixturePath` containment 既有安全债务仍未处理。
 
 ## 远端 CI 与治理边界
 
 - PR #10 的前一轮远端 run `32459370422`（head `7d8257b67f3c701f055cfd0b4c44f60ea7984fec`）曾失败：三个下游 job 在 `packages/storage-prisma` 构建链缺少生成后的 Prisma Client；该 run 仅作为历史失败证据保留。
 - 当前分支已为每个隔离下游 job 在构建前加入 `bun run db:generate`，并为 Browser E2E job 增加 `bun run test:browser:component-lab`。已验证远端 CI run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过，且 Browser E2E 已执行专用 component-lab 门禁；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过。
-- 远端 CI 检查已通过，但用户未授权 merge；PR #10 保持 OPEN。2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空；本轮未创建或修改远端治理。
-- 实现、CI 修复和状态记录已 commit 并 push；Issue 关闭、worktree 清理、发布和部署未执行。
+- 远端 CI 检查通过后，用户已授权将分支合并进本地 `master`（已完成，merge commit `b08f72d`）并清理 worktree；push 与 PR #10 关闭仍未授权，PR 保持 OPEN。2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空；本轮未创建或修改远端治理。
+- 分支实现、CI 修复和状态记录已 commit 并 push；本地合并已完成。Issue 关闭、push master、发布和部署未执行。
 
 ## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
 
