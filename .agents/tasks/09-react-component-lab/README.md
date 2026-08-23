@@ -42,7 +42,7 @@ localStorage 草稿、全局 NeuroBook 主题偏好与三态切换器、实验�
 `page.tsx` 继续独占 HttpCosmosClient、SSE、React Hook Form 提交、搜索/分页/Story 状态；
 实验室 fixture 不访问 Product API。
 
-实现原位于 `.worktree/react-component-lab` / `feat/t09-react-component-lab`（实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 push）；该 worktree 与本地任务分支已按授权清理，历史保留在 `master` 合并链中，`master` 已按授权推送（远端 `1a258f0`）。发布、部署与远端任务分支删除未执行。
+实现原位于 `.worktree/react-component-lab` / `feat/t09-react-component-lab`（实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 push）；该 worktree 与本地任务分支已按授权清理，历史保留在 `master` 合并链中，`master` 已按授权推送（2026-08-23 首次推送至 `1a258f0`）。发布、部署与远端任务分支删除未执行。
 
 ### 2026-08-22 范围偏差：NeuroBook 主题系统
 
@@ -226,7 +226,7 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
 - `bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts`：3 个文件、24 个测试通过，覆盖 13 个公共模块登记合同；
 
 最终本地收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归。
-PR #10（`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过。后续（2026-08-22/23）：分支已按授权合并进 `master`（merge commit `b08f72d`），`master` 已按授权推送（远端 `1a258f0`），GitHub 据此将 PR #10 标记为 MERGED（GitHub 记录的 merge commit 为分支头 `52a2535`）。
+PR #10（`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过。后续（2026-08-22/23）：分支已按授权合并进 `master`（merge commit `b08f72d`），`master` 已按授权推送（2026-08-23 首次至 `1a258f0`），GitHub 据此将 PR #10 标记为 MERGED（GitHub 记录的 merge commit 为分支头 `52a2535`）。
 
 ### Slice 7 验证记录（2026-08-22）
 
@@ -266,5 +266,5 @@ GREEN 后实际结果：
 
 ## Follow-ups
 
-- 实现、CI 修复、PR Scope 和状态记录均已形成独立提交并 push 到 `origin/feat/t09-react-component-lab`；远端 run `32464307892` attempt 2 全部通过。分支已按授权合并进 `master`（merge commit `b08f72d`），对应 worktree 与本地任务分支已清理；`master` 已按授权推送（远端 `1a258f0`），PR #10 被 GitHub 标记为 MERGED。发布、部署与远端任务分支删除未执行。
+- 实现、CI 修复、PR Scope 和状态记录均已形成独立提交并 push 到 `origin/feat/t09-react-component-lab`；远端 run `32464307892` attempt 2 全部通过。分支已按授权合并进 `master`（merge commit `b08f72d`），对应 worktree 与本地任务分支已清理；`master` 已按授权推送（2026-08-23 首次至 `1a258f0`），PR #10 被 GitHub 标记为 MERGED。发布、部署与远端任务分支删除未执行。
 - NeuroBook/macOS 默认主题已于 2026-08-22 由 neurobook-theme-system Proposal 接受并在本 Task 以 Slice 7 实施；跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。

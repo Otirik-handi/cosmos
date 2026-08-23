@@ -6,7 +6,7 @@
 
 产品运行时能力仍以 `3af886a` 的分层验证为历史基线。治理与流程演练优化已以检查点提交 `a0388f1` 进入 `master`（此前为长期未提交的工作树改动）；Agent Skills 生命周期收敛、Vitest unit/property 分层收集、文档门禁扩展等合同随之生效。实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
-Task 09 React 组件实验室与 NeuroBook 主题系统已通过合并 `feat/t09-react-component-lab`（tip `e6bff3c`）进入 `master`，本次合并由用户明确授权；远端 run `32464307892` attempt 2 四个 job 全绿。2026-08-23 已按授权快进推送 `master`（远端现为 `1a258f0`），GitHub 据此将 PR #10 自动标记为 MERGED（`mergedAt=2026-08-23T12:14:30Z`）；发布和部署未执行。
+Task 09 React 组件实验室与 NeuroBook 主题系统已通过合并 `feat/t09-react-component-lab`（tip `e6bff3c`）进入 `master`，本次合并由用户明确授权；远端 run `32464307892` attempt 2 四个 job 全绿。2026-08-23 已按授权快进推送 `master`（首次推送至 `1a258f0`，当前远端 HEAD 为 `43be9e2`，随文档提交推进），GitHub 据此将 PR #10 自动标记为 MERGED（`mergedAt=2026-08-23T12:14:30Z`）；发布和部署未执行。
 
 React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入隔离下游 job 的 `bun run db:generate` 和 `bun run test:browser:component-lab`；远端 CI run `32464307892` attempt 2 已验证四个 CI job 全部通过。
 
@@ -16,7 +16,7 @@ React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.wo
 - `/dev/components` 开发路由、URL/history、props、Light/Dark、token 草稿/JSON 和五个产品 fixture 已实际浏览器验证；
 - token 覆盖只在预览根节点，实验室无 Product API/SSE 请求；生产 Web 对 `/dev/components` 返回 HTTP 404；
 - 既有 `bun run test:browser` ingest 流程通过：来源创建、录入、Feed、Story；
-实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；分支已按用户授权合并（merge commit `b08f72d`），`master` 已推送至远端（`1a258f0`），PR #10 已被 GitHub 标记为 MERGED；发布、部署未执行。
+实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；分支已按用户授权合并（merge commit `b08f72d`），`master` 已按授权推送至远端（2026-08-23 首次推送 `1a258f0`），PR #10 已被 GitHub 标记为 MERGED；发布、部署未执行。
 
 ## 本轮本地已验证（2026-08-21）
 
@@ -108,7 +108,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-Task 09 全链路已闭环：远端 run `32464307892` attempt 2 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 通过 → 分支按授权合并进 `master`（merge commit `b08f72d`）→ worktree 与本地任务分支清理 → `master` 按授权快进推送（远端 `1a258f0`）→ GitHub 将 PR #10 标记为 MERGED。剩余未执行项：发布、部署、删除远端分支 `origin/feat/t09-react-component-lab`。
+Task 09 全链路已闭环：远端 run `32464307892` attempt 2 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 通过 → 分支按授权合并进 `master`（merge commit `b08f72d`）→ worktree 与本地任务分支清理 → `master` 按授权快进推送（2026-08-23 首次至 `1a258f0`）→ GitHub 将 PR #10 标记为 MERGED。剩余未执行项：发布、部署、删除远端分支 `origin/feat/t09-react-component-lab`。
 
 ## 已完成
 
