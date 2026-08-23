@@ -226,7 +226,7 @@ Slice 3–4 完成后，实验室自身必须可用且生产 404。未通过前�
 - `bun run test -- apps/web/src/component-lab/draft.test.ts apps/web/src/component-lab/registry.test.ts apps/web/src/component-lab/snapshot.test.ts`：3 个文件、24 个测试通过，覆盖 13 个公共模块登记合同；
 
 最终本地收口命令已通过：`bun run docs:check`（`failures=[]`、`checkedFiles=283`）、`bun run test:property`（3 files / 4 tests）、`bun run typecheck`、`bun run lint:web`、`bun run build`、`bun run test:browser`（1/1）、`bun run test:browser:component-lab`（4/4）和 `git diff --check`（无输出）。修复后五轴审查：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均有专用浏览器回归。
-PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过；PR 保持 OPEN，当前不执行 merge。
+PR #10（OPEN，`https://github.com/notnotype/cosmos/pull/10`）已验证远端 run `32464307892` attempt 2（head `e3b75d132b086c57472035d0cd093a07594e05bc`）completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；Browser E2E 已执行 `bun run test:browser:component-lab`，各隔离下游 job 已执行 `bun run db:generate`。前一轮 run `32459370422` 的 Prisma Client 构建失败已由该 CI 修复后的远端通过结果闭环；attempt 1 曾因 5 个 Vitest 测试超出 5 秒超时而失败，重跑后通过。后续（2026-08-22）：分支已按授权合并进本地 `master`（merge commit `b08f72d`）；PR 保持 OPEN，push master 与 PR 关闭未执行。
 
 ### Slice 7 验证记录（2026-08-22）
 
@@ -261,10 +261,10 @@ GREEN 后实际结果：
 - 规格同步：Web spec 新增“外观主题”章节并修正持久化边界；testing README 记录两类表面
   的主题回归边界；`PROJECT-STATUS.md` 增加本切片条目。
 
-未运行：Node process E2E、Windows smoke、Docker、真实来源、commit/push/PR 更新与远端 CI。
+本切片内未运行：Node process E2E、Windows smoke、Docker、真实来源与远端 CI 重跑（commit/push/PR 创建已在切片完成时执行）。
 `fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
 ## Follow-ups
 
-- 实现、CI 修复、PR Scope 和状态记录均已形成独立提交并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建并保持 OPEN；远端 run `32464307892` attempt 2 全部通过，merge、发布、部署和 worktree 清理未执行。
+- 实现、CI 修复、PR Scope 和状态记录均已形成独立提交并 push 到 `origin/feat/t09-react-component-lab`；PR #10 已创建并保持 OPEN；远端 run `32464307892` attempt 2 全部通过。分支已按授权合并进本地 `master`（merge commit `b08f72d`），对应 worktree 与本地任务分支已清理；push master、PR 关闭、发布和部署未执行。
 - NeuroBook/macOS 默认主题已于 2026-08-22 由 neurobook-theme-system Proposal 接受并在本 Task 以 Slice 7 实施；跨仓库 token、React UI 包和许可证边界仍需另行 Proposal。
