@@ -33,7 +33,7 @@
 - 改变 Product API、Transport DTO、Prisma schema、Worker 或现有首页业务语义；
 - commit、push、PR、merge、发布、部署和 worktree 清理，除非分别获得授权。
 ## Current State
-生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；远端 CI run `32464307892` attempt 2 已验证通过。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建且保持 OPEN；当前不执行 merge。
+生命周期阶段：实现代码、产品接入、P1 修复、本地运行时验证和修复后五轴审查已完成；远端 CI run `32464307892` attempt 2 已验证通过。实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push 到 `origin/feat/t09-react-component-lab`，PR #10 已创建且保持 OPEN；分支已按授权合并进本地 `master`（merge commit `b08f72d`）。
 
 本 worktree 已实现静态 registry 与双目录登记门禁（`components/ui` 8 个、
 `components/cosmos` 6 个，新增 ThemeSwitcher）、URL 会话/浏览器历史、token 快照与
@@ -42,7 +42,7 @@ localStorage 草稿、全局 NeuroBook 主题偏好与三态切换器、实验�
 `page.tsx` 继续独占 HttpCosmosClient、SSE、React Hook Form 提交、搜索/分页/Story 状态；
 实验室 fixture 不访问 Product API。
 
-实现位于独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab`；实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；PR #10 已创建并保持 OPEN；merge、发布、部署或 worktree 清理未执行。
+实现原位于 `.worktree/react-component-lab` / `feat/t09-react-component-lab`（实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 push）；该 worktree 与本地任务分支已按授权清理，历史保留在 `master` 合并链中。PR #10 保持 OPEN；发布、部署与 PR 更新未执行。
 
 ### 2026-08-22 范围偏差：NeuroBook 主题系统
 

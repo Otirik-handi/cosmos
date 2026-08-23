@@ -78,7 +78,7 @@ testing README 回归边界。
 console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`。既有未提交 hydration
 回归保留并通过。
 
-未运行/未授权：Node process E2E、Windows smoke、Docker、真实来源、push、PR #10 更新、发布与部署；worktree 清理已获授权，将在合并验证完成后执行。`fixturePath` containment 既有安全债务仍未处理。
+未运行/未授权：Node process E2E、Windows smoke、Docker、真实来源、push、PR #10 更新、发布与部署；worktree 清理已按授权完成。`fixturePath` containment 既有安全债务仍未处理。
 
 ## 远端 CI 与治理边界
 
@@ -108,7 +108,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-Task 09 已完成 commit、push 与 PR 创建，远端 run `32464307892` attempt 2 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；用户已授权将分支合并进 `master` 并清理对应 worktree（合并进行中）。本轮仍不执行 push master、发布和部署。
+Task 09 已完成 commit、push 与 PR 创建，远端 run `32464307892` attempt 2 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；分支已按授权合并进本地 `master`（merge commit `b08f72d`），对应 worktree 与本地任务分支已清理。本轮仍不执行 push master、PR #10 更新/关闭、发布和部署。
 
 ## 已完成
 
