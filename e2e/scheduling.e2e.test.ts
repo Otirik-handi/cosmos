@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
     applyMigrations,
+    createRssSource,
     assertLogsRedacted,
     createIsolatedStackRoot,
     disposeIsolatedStack,
@@ -159,36 +160,14 @@ describe("schedule failure isolation E2E", () => {
 });
 
 async function createSource(name: string, enabled: boolean): Promise<unknown> {
-    const created = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            name,
-            sourceDefinitionRef: "source.rss@1",
-            operationId: "fetch",
-            config: { feedUrl: rss.url, scheduleIntervalMs: 60_000 },
-        }),
+    return await createRssSource({
+        apiBaseUrl,
+        feedUrl: rss.url,
+        name,
+        enabled,
+        scheduleIntervalMs: 60_000,
+        activationIdempotencyKey: (sourceId) => `scheduling-activate:${sourceId}`,
     });
-    expect(created.status).toBe(201);
-    if (!enabled) return created.body;
-
-    const sourceId = readString(created.body, "id");
-    const activated = await requestJson(
-        `${apiBaseUrl}/api/v1/sources/${sourceId}/activation-commands`,
-        {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-                "idempotency-key": `scheduling-activate:${sourceId}`,
-            },
-            body: JSON.stringify({
-                enabled: true,
-                baseRevisionId: readString(created.body, "revisionId"),
-            }),
-        },
-    );
-    expect(activated.status).toBe(201);
-    return activated.body;
 }
 
 async function requestJson(url: string, init?: RequestInit): Promise<JsonResponse> {

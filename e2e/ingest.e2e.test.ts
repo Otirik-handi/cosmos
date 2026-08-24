@@ -7,6 +7,7 @@ import {
     applyMigrations,
     assertLogsRedacted,
     createIsolatedStackRoot,
+    createRssSource,
     disposeIsolatedStack,
     environmentForStack,
     findAvailablePort,
@@ -118,7 +119,12 @@ describe("ingest Node process E2E", () => {
         expect(invalidSource.status).toBe(400);
         expect(invalidSource.body).toMatchObject({ code: "validation_failed" });
 
-        const sourceResponse = await createRssSource("Controlled RSS E2E", true, "ingest-e2e-source-1");
+        const sourceResponse = await createRssSource({
+            apiBaseUrl,
+            feedUrl: rss.url,
+            name: "Controlled RSS E2E",
+            activationIdempotencyKey: "ingest-e2e-source-1",
+        });
         expect(sourceResponse).toMatchObject({
             name: "Controlled RSS E2E",
             sourceDefinitionRef: "source.rss@1",
@@ -130,11 +136,12 @@ describe("ingest Node process E2E", () => {
         });
         const sourceId = readString(sourceResponse, "id");
 
-        const secondSourceResponse = await createRssSource(
-            "Second Controlled RSS E2E",
-            true,
-            "ingest-e2e-source-2",
-        );
+        const secondSourceResponse = await createRssSource({
+            apiBaseUrl,
+            feedUrl: rss.url,
+            name: "Second Controlled RSS E2E",
+            activationIdempotencyKey: "ingest-e2e-source-2",
+        });
         const secondSourceId = readString(secondSourceResponse, "id");
 
         const missingRun = await requestJson(`${apiBaseUrl}/api/v1/runs/missing-run`);
@@ -206,43 +213,6 @@ describe("ingest Node process E2E", () => {
         });
     }, 120_000);
 });
-
-async function createRssSource(
-    name: string,
-    enabled: boolean,
-    idempotencyKey: string,
-): Promise<unknown> {
-    const created = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            name,
-            sourceDefinitionRef: "source.rss@1",
-            operationId: "fetch",
-            config: { feedUrl: rss.url },
-        }),
-    });
-    expect(created.status).toBe(201);
-    if (!enabled) return created.body;
-
-    const sourceId = readString(created.body, "id");
-    const activated = await requestJson(
-        `${apiBaseUrl}/api/v1/sources/${sourceId}/activation-commands`,
-        {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-                "idempotency-key": idempotencyKey,
-            },
-            body: JSON.stringify({
-                enabled: true,
-                baseRevisionId: readString(created.body, "revisionId"),
-            }),
-        },
-    );
-    expect(activated.status).toBe(201);
-    return activated.body;
-}
 
 async function requestJson(url: string, init?: RequestInit): Promise<HttpResult> {
     const response = await fetch(url, init);

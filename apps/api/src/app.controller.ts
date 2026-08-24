@@ -80,6 +80,30 @@ function requireIdempotencyKey(rawHeader?: string): string {
     return parsed.data;
 }
 
+/**
+ * Single error funnel for the Source write endpoints: schema issues become
+ * validation failures, storage not-found/conflict codes map to their HTTP
+ * contracts, and anything else is a validation failure with the original
+ * message preserved.
+ */
+function sourceCommandError(error: unknown): never {
+    if (error instanceof ZodError) validationError(error);
+    if (error instanceof BadRequestException || error instanceof NotFoundException || error instanceof ConflictException) {
+        throw error;
+    }
+    if (error instanceof Error && "code" in error && error.code === "not_found") {
+        throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
+    }
+    if (error instanceof Error && "code" in error && error.code === "conflict") {
+        throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
+    }
+    throw new BadRequestException({
+        code: "validation_failed",
+        message: error instanceof Error ? error.message : "Source configuration is invalid.",
+        retryable: false,
+    });
+}
+
 @Controller()
 export class AppController {
     constructor(
@@ -204,16 +228,7 @@ export class AppController {
             this.sourceProbe.validate(command);
             return toPublicSource(await this.repository.createSource(command));
         } catch (error) {
-            if (error instanceof ZodError) {
-                validationError(error);
-            }
-            throw new BadRequestException({
-                code: "validation_failed",
-                message: error instanceof Error
-                    ? error.message
-                    : "Source configuration is invalid.",
-                retryable: false,
-            });
+            sourceCommandError(error);
         }
     }
 
@@ -240,19 +255,7 @@ export class AppController {
             const updated = await this.repository.updateSource(sourceId, input);
             return toPublicSource(updated);
         } catch (error) {
-            if (error instanceof ZodError) validationError(error);
-            if (error instanceof NotFoundException || error instanceof ConflictException) throw error;
-            if (error instanceof Error && "code" in error && error.code === "not_found") {
-                throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
-            }
-            if (error instanceof Error && "code" in error && error.code === "conflict") {
-                throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
-            }
-            throw new BadRequestException({
-                code: "validation_failed",
-                message: error instanceof Error ? error.message : "Source configuration is invalid.",
-                retryable: false,
-            });
+            sourceCommandError(error);
         }
     }
 
@@ -283,21 +286,7 @@ export class AppController {
                 idempotencyKey: key,
             }));
         } catch (error) {
-            if (error instanceof ZodError) validationError(error);
-            if (error instanceof BadRequestException || error instanceof NotFoundException || error instanceof ConflictException) {
-                throw error;
-            }
-            if (error instanceof Error && "code" in error && error.code === "not_found") {
-                throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
-            }
-            if (error instanceof Error && "code" in error && error.code === "conflict") {
-                throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
-            }
-            throw new BadRequestException({
-                code: "validation_failed",
-                message: error instanceof Error ? error.message : "Source configuration is invalid.",
-                retryable: false,
-            });
+            sourceCommandError(error);
         }
     }
 

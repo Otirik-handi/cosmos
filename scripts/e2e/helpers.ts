@@ -355,3 +355,61 @@ export function createHealthServer(): {
         }),
     };
 }
+
+async function postExpectedCreated(
+    url: string,
+    headers: Record<string, string>,
+    body: unknown,
+): Promise<Record<string, unknown>> {
+    const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+    if (response.status !== 201 || payload === null) {
+        throw new Error(`Expected HTTP 201 from ${url}, got ${response.status}.`);
+    }
+    return payload;
+}
+
+/**
+ * Single source of truth for the Product API acceptance flow: create a
+ * disabled RSS Source, then optionally enable it through an activation
+ * command. Contract changes to this flow should land here only instead of
+ * being re-applied across every E2E scenario.
+ */
+export async function createRssSource(options: {
+    apiBaseUrl: string;
+    feedUrl: string;
+    name: string;
+    activationIdempotencyKey: string | ((sourceId: string) => string);
+    enabled?: boolean;
+    scheduleIntervalMs?: number;
+}): Promise<Record<string, unknown>> {
+    const created = await postExpectedCreated(`${options.apiBaseUrl}/api/v1/sources`, {
+        "content-type": "application/json",
+    }, {
+        name: options.name,
+        sourceDefinitionRef: "source.rss@1",
+        operationId: "fetch",
+        config: {
+            feedUrl: options.feedUrl,
+            ...(options.scheduleIntervalMs === undefined ? {} : { scheduleIntervalMs: options.scheduleIntervalMs }),
+        },
+    });
+    const sourceId = created.id;
+    const baseRevisionId = created.revisionId;
+    if (typeof sourceId !== "string" || typeof baseRevisionId !== "string") {
+        throw new Error("Source creation response is missing id or revisionId.");
+    }
+    if (options.enabled === false) return created;
+    const activationKey = typeof options.activationIdempotencyKey === "function"
+        ? options.activationIdempotencyKey(sourceId)
+        : options.activationIdempotencyKey;
+    return await postExpectedCreated(
+        `${options.apiBaseUrl}/api/v1/sources/${encodeURIComponent(sourceId)}/activation-commands`,
+        { "content-type": "application/json", "idempotency-key": activationKey },
+        { enabled: true, baseRevisionId },
+    );
+}
