@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+
+import { createControlledRssServer, type ControlledRssServer } from "../scripts/e2e/controlled-rss.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -29,9 +32,13 @@ let worker: ManagedProcess;
 let apiBaseUrl: string;
 let badSourceId: string;
 let goodSourceId: string;
+let rss: ControlledRssServer;
 
 beforeAll(async () => {
     stack = await createIsolatedStackRoot("scheduling-e2e");
+    const fixtureXml = await readFile(new URL("../fixtures/rss/basic.xml", import.meta.url), "utf8");
+    rss = await createControlledRssServer(fixtureXml);
+    rss.release();
     applyMigrations(stack.dataRoot);
     const apiPort = await findAvailablePort(4310);
     apiBaseUrl = `http://127.0.0.1:${apiPort}`;
@@ -56,7 +63,7 @@ beforeAll(async () => {
     });
     try {
         await waitForHttp(`${apiBaseUrl}/readyz`, 200, 30_000);
-        const collisionSource = await createSource("Collision binding", false);
+        const collisionSource = await createSource("Collision binding", true);
         const badSource = await createSource("Broken schedule source", true);
         const goodSource = await createSource("Healthy schedule source", true);
         badSourceId = readString(badSource, "id");
@@ -91,6 +98,7 @@ beforeAll(async () => {
     } catch (error) {
         await stopManagedProcess(worker, "force").catch(() => undefined);
         await stopManagedProcess(api, "force").catch(() => undefined);
+        await rss.close().catch(() => undefined);
         throw new Error([
             error instanceof Error ? error.message : String(error),
             api ? formatProcessFailure(api) : "",
@@ -102,6 +110,7 @@ beforeAll(async () => {
 afterAll(async () => {
     await stopManagedProcess(worker, "graceful").catch(() => undefined);
     await stopManagedProcess(api, "graceful").catch(() => undefined);
+    await rss?.close().catch(() => undefined);
     if (stack) {
         const records = await readStructuredLogs(stack.logRoot).catch(() => []);
         assertLogsRedacted(records);
@@ -150,18 +159,36 @@ describe("schedule failure isolation E2E", () => {
 });
 
 async function createSource(name: string, enabled: boolean): Promise<unknown> {
-    const result = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
+    const created = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
             name,
-            kind: "fixture-rss",
-            config: { fixturePath: "fixtures/rss/basic.xml", scheduleIntervalMs: 60_000 },
-            enabled,
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            config: { feedUrl: rss.url, scheduleIntervalMs: 60_000 },
         }),
     });
-    expect(result.status).toBe(201);
-    return result.body;
+    expect(created.status).toBe(201);
+    if (!enabled) return created.body;
+
+    const sourceId = readString(created.body, "id");
+    const activated = await requestJson(
+        `${apiBaseUrl}/api/v1/sources/${sourceId}/activation-commands`,
+        {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "idempotency-key": `scheduling-activate:${sourceId}`,
+            },
+            body: JSON.stringify({
+                enabled: true,
+                baseRevisionId: readString(created.body, "revisionId"),
+            }),
+        },
+    );
+    expect(activated.status).toBe(201);
+    return activated.body;
 }
 
 async function requestJson(url: string, init?: RequestInit): Promise<JsonResponse> {

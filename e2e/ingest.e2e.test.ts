@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+
+import { createControlledRssServer, type ControlledRssServer } from "../scripts/e2e/controlled-rss.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -28,9 +31,13 @@ let stack: IsolatedStackRoot;
 let api: ManagedProcess;
 let worker: ManagedProcess;
 let apiBaseUrl: string;
+let rss: ControlledRssServer;
 
 beforeAll(async () => {
     stack = await createIsolatedStackRoot("ingest-e2e");
+    const fixtureXml = await readFile(new URL("../fixtures/rss/basic.xml", import.meta.url), "utf8");
+    rss = await createControlledRssServer(fixtureXml);
+    rss.release();
     applyMigrations(stack.dataRoot);
 
     const apiPort = await findAvailablePort(4310);
@@ -75,6 +82,7 @@ beforeAll(async () => {
     } catch (error) {
         if (worker) await stopManagedProcess(worker, "force").catch(() => undefined);
         await stopManagedProcess(api, "force").catch(() => undefined);
+        await rss.close().catch(() => undefined);
         throw new Error([
             error instanceof Error ? error.message : String(error),
             api ? formatProcessFailure(api) : "",
@@ -83,52 +91,51 @@ beforeAll(async () => {
     }
 }, 120_000);
 
+afterAll(async () => {
+    await stopManagedProcess(worker, "graceful").catch(() => undefined);
+    await stopManagedProcess(api, "graceful").catch(() => undefined);
+    await rss?.close().catch(() => undefined);
+    if (stack) {
+        const records = await readStructuredLogs(stack.logRoot).catch(() => []);
+        assertLogsRedacted(records);
+        await disposeIsolatedStack(stack.root);
+    }
+}, 120_000);
+
 
 describe("ingest Node process E2E", () => {
-    it("creates a source, queues a durable Run, ingests the fixture, and exposes events", async () => {
+    it("creates an RSS source, queues a durable Run, ingests the feed, and exposes events", async () => {
         const invalidSource = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-                name: "Invalid fixture",
-                kind: "fixture-rss",
-                config: { fixturePath: "" },
-                enabled: true,
+                name: "Invalid RSS",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "" },
             }),
         });
         expect(invalidSource.status).toBe(400);
         expect(invalidSource.body).toMatchObject({ code: "validation_failed" });
 
-        const sourceResponse = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                name: "Fixture RSS E2E",
-                kind: "fixture-rss",
-                config: { fixturePath: "fixtures/rss/basic.xml" },
-                enabled: true,
-            }),
+        const sourceResponse = await createRssSource("Controlled RSS E2E", true, "ingest-e2e-source-1");
+        expect(sourceResponse).toMatchObject({
+            name: "Controlled RSS E2E",
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            connectorId: "rss",
+            kind: "rss",
+            config: { feedUrl: rss.url },
+            enabled: true,
         });
-        expect(sourceResponse.status).toBe(201);
-        expect(sourceResponse.body).toMatchObject({
-            name: "Fixture RSS E2E",
-            kind: "fixture-rss",
-            config: {},
-        });
-        const sourceId = readString(sourceResponse.body, "id");
+        const sourceId = readString(sourceResponse, "id");
 
-        const secondSourceResponse = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                name: "Second Fixture RSS E2E",
-                kind: "fixture-rss",
-                config: { fixturePath: "fixtures/rss/basic.xml" },
-                enabled: true,
-            }),
-        });
-        expect(secondSourceResponse.status).toBe(201);
-        const secondSourceId = readString(secondSourceResponse.body, "id");
+        const secondSourceResponse = await createRssSource(
+            "Second Controlled RSS E2E",
+            true,
+            "ingest-e2e-source-2",
+        );
+        const secondSourceId = readString(secondSourceResponse, "id");
 
         const missingRun = await requestJson(`${apiBaseUrl}/api/v1/runs/missing-run`);
         expect(missingRun.status).toBe(404);
@@ -199,6 +206,43 @@ describe("ingest Node process E2E", () => {
         });
     }, 120_000);
 });
+
+async function createRssSource(
+    name: string,
+    enabled: boolean,
+    idempotencyKey: string,
+): Promise<unknown> {
+    const created = await requestJson(`${apiBaseUrl}/api/v1/sources`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            name,
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            config: { feedUrl: rss.url },
+        }),
+    });
+    expect(created.status).toBe(201);
+    if (!enabled) return created.body;
+
+    const sourceId = readString(created.body, "id");
+    const activated = await requestJson(
+        `${apiBaseUrl}/api/v1/sources/${sourceId}/activation-commands`,
+        {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "idempotency-key": idempotencyKey,
+            },
+            body: JSON.stringify({
+                enabled: true,
+                baseRevisionId: readString(created.body, "revisionId"),
+            }),
+        },
+    );
+    expect(activated.status).toBe(201);
+    return activated.body;
+}
 
 async function requestJson(url: string, init?: RequestInit): Promise<HttpResult> {
     const response = await fetch(url, init);

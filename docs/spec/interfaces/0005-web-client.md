@@ -8,13 +8,13 @@
 
 ## 最后更新
 
-2026-08-22。
+2026-08-24。
 
 ## 组件定位
 
 Web Client 是 `apps/web/src/app/page.tsx` 的一个 client-side Next App Router 页面，
-使用 `HttpCosmosClient` 读取 Feed/Source/Health、创建 fixture Source、手动触发 Source
-Run、搜索分页、展开 Story，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
+使用 `HttpCosmosClient` 读取 Feed/Source/Health、创建并启用 RSS Source、手动触发已启用
+Source 的 Run、搜索分页、展开 Story，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
 metadata 和全局样式；`components/ui/*` 是 UI primitive，`lib/utils.ts` 只提供
 Tailwind class 合并。`instrumentation.ts` 是 Next server instrumentation：Node runtime
 按需创建并缓存一个 `cosmos-web` logger，`register()` 写一次 `web.started`，
@@ -95,9 +95,11 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 ### Form input
 
-- Source form：`name` trim 后 1–200 字符；`fixturePath` trim 后至少 1 字符；默认
-  `Cosmos fixture`、`fixtures/rss/basic.xml`。提交时 kind 固定 `fixture-rss`、enabled=true、
-  config `{ fixturePath }`。
+- Source form：`name` trim 后 1–200 字符（默认 `Cosmos RSS`）；`feedUrl` 必须是
+  http(s) URL（默认占位 `https://example.com/feed.xml`）。提交固定发送
+  `{name, sourceDefinitionRef: "source.rss@1", operationId: "fetch", config: { feedUrl }}`
+  且不含 enabled；创建成功后立即以 `baseRevisionId=created.revisionId` 与
+  `Idempotency-Key: web-activation:<id>:<revisionId>` 调用 activation command 启用。
 - Search form：text trim/max 500，sourceId、publishedAfter、publishedBefore 可为空；
   search command 固定 `limit: 20`。非空 date 变成 `YYYY-MM-DDT00:00:00.000Z` 或
   `YYYY-MM-DDT23:59:59.999Z`。
@@ -114,7 +116,7 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
   互斥显示最新状态文本。
 - 四个状态卡：服务器部署模式/health（有 health 时显示 service·workerStatus）、Source
   数与启用数、Prisma+SQLite 文案、SSE 已连接/正在连接/SSE 不可用。
-- Source actions：无 Source 显示“创建第一个 fixture 来源”；每个 enabled Source 有
+- Source actions：无 Source 显示“创建第一个 RSS 来源。”；每个 enabled Source 有
   手动录入按钮，disabled Source 按钮禁用。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
   时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多。
@@ -232,11 +234,13 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 
 1. 使用空 `NEXT_PUBLIC_COSMOS_API_URL` 启动 Web，观察初始化请求为同源 `/api/v1/feed` 与
    `/api/v1/sources`，页面先显示 loading，成功后显示四个状态卡和 Feed/Source 内容。
-2. 在 Source 表单提交空 name 或空 fixture path，观察 Zod FieldError 且不发送 POST；提交
-   合法默认值，观察 request body 为 `{name,kind:"fixture-rss",config:{fixturePath},enabled:true}`，
-   成功后 notice、表单关闭并刷新列表。
+2. 在 Source 表单提交空 name 或非法 URL，观察 Zod FieldError 且不发送 POST；提交合法值后
+   先观察 POST `/api/v1/sources`（body 为上表形状），再观察 POST
+   `/api/v1/sources/:id/activation-commands`（header `Idempotency-Key: web-activation:<id>:<revisionId>`），
+   成功后 notice 提示已保存并启用、表单关闭并刷新列表。
 3. 对 enabled Source 点击录入，观察 POST `/api/v1/sources/:id/runs`，queued/running 时
-   notice 包含 Run id；disabled Source 的按钮不可点击。
+   notice 包含 Run id；disabled Source 按钮不可点击，且 API 对未启用 Source 的手动
+   Run 返回 409 conflict。
 4. 输入 text/source/date 搜索，观察日期边界为 UTC 当日开始/结束、结果替换 Feed、保存
    nextCursor；点击加载更多，观察新 items 追加而不是覆盖。
 5. SSE 收到 `feed.updated.v1`、Run/Job 终态事件时观察 Feed 自动 refresh；收到

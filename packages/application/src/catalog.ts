@@ -17,6 +17,7 @@ export interface SourceDefinitionManifest {
     version: number;
     ref: string;
     provider: string;
+    connectorId: string;
     displayName: string;
     description: string | null;
     manifestHash: ManifestHash;
@@ -53,10 +54,10 @@ export interface ActionDefinitionManifest {
     inputSchema: JsonSchemaRef;
     outputSchema: JsonSchemaRef;
 }
-
 export interface CatalogPort {
     listSourceDefinitions(): readonly SourceDefinitionManifest[];
     getSourceDefinition(id: string, version?: number): SourceDefinitionManifest | null;
+    getSourceDefinitionByRef(ref: string): SourceDefinitionManifest | null;
     listWorkflowDefinitions(): readonly WorkflowDefinitionManifest[];
     getWorkflowDefinition(id: string, version: number): WorkflowDefinitionManifest | null;
     listActionDefinitions(): readonly ActionDefinitionManifest[];
@@ -103,6 +104,10 @@ export class StaticCatalog implements CatalogPort {
         return this.sourceDefinitions.find((item) => item.id === id && (version === undefined || item.version === version)) ?? null;
     }
 
+    getSourceDefinitionByRef(ref: string): SourceDefinitionManifest | null {
+        return this.sourceDefinitions.find((item) => item.ref === ref) ?? null;
+    }
+
     listWorkflowDefinitions(): readonly WorkflowDefinitionManifest[] {
         return this.workflowDefinitions;
     }
@@ -143,6 +148,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             version: 1,
             ref: "source.rss@1",
             provider: "cosmos",
+            connectorId: "rss",
             displayName: "RSS",
             description: "Fetch one RSS or Atom feed page.",
             manifestHash: builtinHash("builtin:source.rss@1"),
@@ -151,7 +157,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor"],
             configurationSchema: builtinSchema("source.rss.config@1", {
                 type: "object",
-                properties: { feedUrl: { type: "string", format: "uri" }, scheduleIntervalMs: { type: "integer" } },
+                properties: { feedUrl: { type: "string", format: "uri" }, scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
                 required: ["feedUrl"],
                 additionalProperties: false,
             }),
@@ -161,6 +167,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             version: 1,
             ref: "source.fixture-rss@1",
             provider: "cosmos",
+            connectorId: "fixture-rss",
             displayName: "Fixture RSS",
             description: "Read a configured fixture feed in a trusted workspace.",
             manifestHash: builtinHash("builtin:source.fixture-rss@1"),
@@ -169,7 +176,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor"],
             configurationSchema: builtinSchema("source.fixture-rss.config@1", {
                 type: "object",
-                properties: { scheduleIntervalMs: { type: "integer" } },
+                properties: { scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
                 additionalProperties: false,
             }),
         },
@@ -178,6 +185,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             version: 1,
             ref: "source.bilibili@1",
             provider: "cosmos",
+            connectorId: "bilibili",
             displayName: "Bilibili",
             description: "Read Bilibili data through a trusted OpenCLI profile.",
             manifestHash: builtinHash("builtin:source.bilibili@1"),
@@ -186,7 +194,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor", "external:opencli"],
             configurationSchema: builtinSchema("source.bilibili.config@1", {
                 type: "object",
-                properties: { mode: { enum: ["hot", "feed"] }, profile: { type: "string" }, limit: { type: "integer" }, scheduleIntervalMs: { type: "integer" } },
+                properties: { mode: { enum: ["hot", "feed"] }, profile: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 }, scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
                 required: ["mode"],
                 additionalProperties: false,
             }),
@@ -196,6 +204,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             version: 1,
             ref: "source.aihot@1",
             provider: "cosmos",
+            connectorId: "aihot",
             displayName: "AI HOT",
             description: "Fetch the AI HOT JSON feed.",
             manifestHash: builtinHash("builtin:source.aihot@1"),
@@ -204,7 +213,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor"],
             configurationSchema: builtinSchema("source.aihot.config@1", {
                 type: "object",
-                properties: { scheduleIntervalMs: { type: "integer" } },
+                properties: { scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
                 additionalProperties: false,
             }),
         },
@@ -280,7 +289,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
     ];
 
     const connectors: readonly ConnectorDescriptor[] = sourceDefinitions.map((item) => ({
-        id: item.id,
+        id: item.connectorId,
         description: item.description ?? item.displayName,
         capabilities: [...item.capabilities],
         configVersion: `${item.ref}`,

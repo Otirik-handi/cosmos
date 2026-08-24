@@ -1,8 +1,8 @@
 # Cosmos 产品需求文档
 
-> 状态：Draft v0.17
+> 状态：Draft v0.18
 >
-> 最后更新：2026-08-11
+> 最后更新：2026-08-23
 >
 > 原始需求真相源：[`0001-original-requirements.md`](0001-original-requirements.md)
 >
@@ -101,6 +101,7 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 - 运行环境可以持续或定时启动 Worker；睡眠或关机后应在恢复时安全补跑。
 - LLM 和外部 Agent 能力可能不可用、昂贵或失败；普通录入、搜索和 Feed 不能依赖它们在线工作。
 - 本地磁盘不是无限的；媒体、历史版本、缓存和 Agent 成本需要可配置预算。
+- 未认证单用户阶段的作用域键、配置/来源/Blob/运行记录归属和未来认证替换点是待设计建议，不是当前已冻结的持久化合同。
 
 ## 4. 产品原则与边界
 
@@ -174,6 +175,8 @@ flowchart LR
 
 产品必须允许每个环节独立演进。例如新增 Telegram Connector 不要求修改看板；新增 Board Block 不要求直接读取 Telegram 数据；升级 Story 归并算法不改写原始采集记录。
 
+本阶段的“第一条可用产品 E2E”有独立门槛：预配置来源跑通只能证明 Connector/Worker 管线 smoke，不能证明 Cosmos 对用户可用。产品验收必须从空数据根目录开始，由用户在 Web 选择 `rss` Connector、按 schema 填写实际 RSS URL，完成服务端校验、测试、保存和启用，再由 Worker 抓取该 URL。`fixture-rss`、fixture XML、本地受控 HTTP 源和直接调用 Worker Admin 只计入集成/管线测试。
+
 ### 6.1 初步实现与部署约束
 
 以下是当前阶段的技术与运行形态决策，不构成不可替换的领域合同：
@@ -218,9 +221,9 @@ flowchart LR
 
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
-| AUT-001 | Phase 1 | 用户可以创建、停用、测试和删除 SourceInstance，并配置来源参数、凭据引用、抓取范围、频率和预算。 | 同一种 SourceDefinition 可创建多个互不混淆的实例；删除凭据、停用来源和删除历史数据是三个独立动作。 |
-| AUT-002 | Phase 1 | 同一 Workflow 至少支持用户手动触发和定时触发。 | 两种入口执行同一版本 Workflow，并生成可查询的独立 Run。 |
-| AUT-003 | Phase 1 | 系统支持轮询来源并用持久 checkpoint 判断是否有新内容或变化。 | 重启后沿用 checkpoint；没有变化时不执行完整抓取和下游分析。 |
+| AUT-001 | Phase 1 | 用户可以从 Web 选择可用 SourceDefinition/Connector，按配置 schema 创建、编辑、校验、测试、保存、停用/启用和删除 SourceInstance，并配置来源参数、凭据引用、抓取范围、频率和预算。首版产品入口只开放 `rss`，不开放 `fixture-rss`。 | 同一种 SourceDefinition 可创建多个互不混淆的实例；产品 E2E 从用户填写实际 RSS URL 开始；删除凭据、停用来源和删除历史数据是三个独立动作。 |
+| AUT-002 | Phase 1 | 同一 Workflow 至少支持用户手动触发和定时触发；首版可采用默认定时抓取 30 分钟的实现建议，用户可以修改或关闭定时，测试动作立即执行。 | 两种入口执行同一版本 Workflow，并生成可查询的独立 Run；已排队 Run 使用创建时配置快照；30 分钟默认值及其调度字段合同需实现设计验证。 |
+| AUT-003 | Phase 1 | 系统支持轮询来源并用持久 checkpoint 判断是否有新内容或变化。 | 重启后沿用 checkpoint；没有变化时不执行完整抓取和下游分析；配置修改不改变已经创建 Run 的输入快照。 |
 | AUT-004 | Phase 2 | Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发。 | 每次触发保存触发原因、输入、时间和对应定义版本。 |
 | AUT-005 | Phase 2 | 用户或插件可定义自定义 Trigger 和 Action。 | 扩展通过版本化 SDK 注册配置 schema、能力范围、输入、输出和失败语义，不直接访问核心数据库。 |
 | AUT-006 | Phase 1 | Workflow 可以按顺序、条件和批量 fan-out 编排 Action。 | 同一个采集流程能够表达“拉取 → 标准化 → 去重 → 入库”，失败步骤和已完成步骤可区分。 |
@@ -276,10 +279,10 @@ flowchart LR
 | ING-005 | Phase 1 | 同一来源的重复轮询需去重，来源更新需形成修订。 | 重复运行不产生新的稳定 Entry；真实编辑产生新 Revision。 |
 | ING-006 | Phase 2 | 跨来源重复、转载和同事件报道要建立关系，不粗暴合并来源身份。 | 官方公告与转载仍是两个 Entry，可以标记重复或归入同一 Story。 |
 | ING-007 | Phase 1 | 成功录入的核心文本和元数据可离线访问。 | 断网后能检索、打开正文、查看来源和已保存关系。 |
-| ING-008 | Phase 1 | 图片、附件、HTML 快照和其它媒体按策略“尽可能保存”。 | 每个 Asset 明确显示已保存、仅元数据、超预算、需认证、策略跳过或失败等状态。 |
-| ING-009 | Phase 2 | 用户可以按 SourceInstance 配置媒体类型、单文件/单次预算、保留期和失败重试。 | 修改策略只影响后续采集或明确的清理任务，不静默删除已有数据。 |
+| ING-008 | Phase 1 | 图片、音频、视频、附件、HTML 快照和其它媒体按策略“尽可能保存”；本次首条产品闭环的媒体发现范围优先采用 RSS 条目自身的 enclosure 与正文媒体标签，不抓取 `webUrl` 外部全文的建议。 | 每个 Asset 明确显示已保存、仅元数据、超预算、需认证、策略跳过或失败等状态；具体媒体范围、提取/下载和容量策略需实现设计验证，缺少全文或媒体时显示真实降级状态并保留原文链接。 |
+| ING-009 | Phase 2 | 用户可以按 SourceInstance 配置媒体类型、单文件/单次预算、保留期和失败重试。 | 修改策略只影响后续采集或明确的清理任务，不静默删除已有数据；具体媒体容量默认值和下载合同在实现设计中确定。 |
 | ING-010 | Phase 4 | Source 可覆盖平台首页推荐、关注用户、搜索结果、公告、AIHOT 类聚合站和邮件。 | 每种接入分别记录认证、速率、游标、平台限制和真实验收结果。 |
-| ING-011 | Phase 1 | 第一条端到端实现切片使用 RSS/RSSHub 和本地 fixture，验证采集、信息库、最小 Story projection、搜索/Feed 和离线访问闭环。 | fixture 能覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态；每个已录入 Entry 至少能投影为一个可打开的 Story；真实 Connector 的替换不改变领域合同。跨来源聚类、merge、split 和 Topic 维护后置。 |
+| ING-011 | Phase 1 | 第一条管线集成切片使用 RSS/RSSHub 和本地 fixture，验证采集、信息库、最小 Story projection、搜索/Feed 和离线访问闭环。 | fixture 能覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态；每个已录入 Entry 至少能投影为一个可打开的 Story；该 fixture 链路不等同于产品可用验收，产品 E2E 必须另行从 Web 填写实际 RSS URL 开始。跨来源聚类、merge、split 和 Topic 维护后置。 |
 | ING-012 | Phase 2 | Connector 可以通过 Cosmos 提供的命名空间化、版本化 StateStore 保存 cursor、ETag、分页 token 和速率状态等非秘密运行状态。 | Adapter 不直接写核心数据库；状态可备份、恢复、迁移并按 Connection/Source/Workflow 范围隔离；Secret 不混入普通状态。 |
 | ING-013 | Phase 2 | Entry → Story 的知识处理可以配置为 Workflow；用户和 Agent 可以选择“批量全量 Agent”或“脚本优先、困难/强相关/重要内容升级 Agent”等策略。 | 事实入库不依赖 LLM；处理 Workflow 有版本、输入批次、输出 Proposal、失败状态和可重跑边界；更换策略不覆盖 Observation。 |
 | ING-014 | Phase 3 | Research 不与 Ingest 强耦合；知识分析可以产生紧急、需要研究或来源冲突信号，再由 Trigger 启动独立 Research Workflow。 | Research Request/触发原因可追溯；研究结果重新经过 Observation → Entry，不直接写入 Story；研究失败不丢失原始 Entry。 |
@@ -394,7 +397,7 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
-| BRD-001 | Phase 1 | 系统提供最小看板和 Feed Block，以 Story 为展示单位。Phase 1 的 Story 先采用保守 projection，不提前实现完整聚类维护。 | 用户无需数据库工具即可从 Feed 打开 Story、查看其当前 Revision 和 Entry/来源；一个 Story 可以暂时只有一个 Entry。跨来源成员聚合与完整 Story 维护在 Phase 2 验证。 |
+| BRD-001 | Phase 1 | 系统提供两块固定的最小看板：最新内容 Feed 与来源健康摘要，以 Story 为展示单位。Phase 1 的 Story 先采用保守 projection，不提前实现完整聚类维护。 | 用户无需数据库工具即可从最新内容打开 Story、查看其当前 Revision 和 Entry/来源，并能看到每个已配置来源的最近运行与成功/失败状态；一个 Story 可以暂时只有一个 Entry。跨来源成员聚合与完整 Story 维护在 Phase 2 验证。 |
 | BRD-002 | Phase 2 | 看板由可配置 Board、Section 和 Block 构成。 | 用户可以调整顺序、隐藏、复制和配置区块；删除区块不删除内容。 |
 | BRD-003 | Phase 2 | 默认看板按热点、精华、普通信息流组织。 | 三个区域可以引用相同 Story、Topic、Workspace 或 Artifact，但使用不同展示策略。 |
 | BRD-004 | Phase 2 | Spotlight Block 可由系统或用户设置，展示事件、话题、状态或大会等高关注目标。 | 用户能固定一个 Topic；系统也能根据明确 policy 推荐 Spotlight。 |
@@ -620,7 +623,7 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 | 缩略图、转码、临时候选、查询缓存 | 可重建缓存；可按预算清理 |
 | DeliveryIntent、Attempt、receipt | 外部副作用审计账本；不能仅从日志推断 |
 
-当前建议默认策略是：文本和元数据长期保存；图片按预算保存；视频默认保存元数据、封面和用户明确收藏的本体。该策略仍需用户最终确认。
+**全局后置策略（不覆盖当前产品切片）**：当前历史建议为：文本和元数据长期保存；图片按预算保存；视频默认保存元数据、封面和用户明确收藏的本体；该策略仍需用户最终确认。它只描述尚未由具体产品切片冻结规则的通用媒体保留取舍，不构成本次配置优先产品 E2E 的媒体发现、下载或离线保存合同，也不改变已接受的职责方向（Connector 管线处理媒体、仓库提供 Blob 服务、无历史媒体回填）。本切片中，30 分钟默认、RSS 条目自身媒体范围、不抓取 `webUrl` 外部全文、domain → Workflow → Storage → Product API 分层、`local` 作用域以及端口、字段、容量和安全细节，均按 Proposal 标为建议/待冻结。
 
 ## 12. 实施范围与阶段验收
 
@@ -642,7 +645,8 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 > Phase 1 最小垂直切片完成 ≠ Phase 1 全部产品需求完成。当前已验证的是
 > fixture/RSS 为主的最小服务器闭环和固定 Ingest Workflow 生产接线；Source
 > 删除、完整 Step/Run 管理、Docker、真实 RSS/RSSHub、长时间恢复和全部
-> 媒体/搜索字段仍需分别验收或实现。
+> 媒体/搜索字段仍需分别验收或实现。上述是管线/服务器基线，不等于产品可用；
+> 本次接受的配置入口与真实 RSS 产品 E2E 是新增的用户验收门槛。
 
 范围：
 
@@ -653,23 +657,23 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 - Observation、EntryRevision、Asset，以及“一个 Entry → 一个最小 Story projection”的查询/展示投影。
 - 版本化 Service Endpoint/Command/Query/Event/Transport；最小 SSE 更新与健康检查。
 - 最小搜索页、Story-based Feed Block 和 Source/Run 状态。
+- 配置优先的产品入口：选择 `rss` Connector、schema 驱动填写实际 RSS URL、校验、测试、保存为停用 Source、单独启用和调度配置；`fixture-rss` 仅用于集成测试。
+- 两块固定最小看板：最新内容 Feed 与来源健康摘要；不交付可配置 Board/Section/Block 编辑器。
+- 首条产品 E2E 使用空数据根目录和用户填写的实际 RSS URL；本地受控 HTTP 源、fixture 与 fake Blob 不满足产品可用验收。
 
 验收：
 
 - 定时录入真实内容，重复运行和重启不产生重复 Entry。
 - 来源编辑形成 Revision。
-- 无 URL fixture 可完整录入。
-- 断网后可搜索正文并查看已保存图片。
+- 无 URL fixture 可完整录入；fixture 只作为管线集成证据。
+- 断网后可搜索正文并查看已保存图片、音频或视频；媒体保存与展示方向按已接受产品目标及后续实现设计执行，未保存媒体显示明确状态。
 - Feed 以 Story 为入口，能够打开 Story → Entry → Source/Revision；Phase 1 不要求跨来源聚类、Story merge/split 或 Topic 维护。
 - 失败能定位到 Source、Run 和 Action。
 - 同一 Web/Transport 合同可以在本地服务和远端服务之间复用；SSE 断线后能进入可解释的恢复或服务不可用状态。
 - Bun 开发命令与 Node 生产启动路径都通过最小兼容性检查；Docker 镜像/Compose 验证若环境未提供 Docker，明确记录为未运行。
+- 产品可用性验收必须从空数据根目录开始：用户在 Web 选择 `rss`、填写实际 RSS URL、完成校验/测试/保存/启用，Worker 抓取该 URL，最小看板显示内容与来源健康；fixture、受控 HTTP 源和直接 Worker Admin 调用不计入该验收。
 
-当前不应从上述最小闭环推断已完成：用户自定义 Workflow 产品面、
-Connection/Secret/State、多采集计划、Source 删除、Step API、完整 Run
-管理/运维、真实 RSS/RSSHub、Docker Compose、长时间 Worker 接管和真实平台
-验收。底层脚本 Runtime 已有等待、子 Workflow、取消、重试和接管行为测试，
-但这些能力尚未全部形成稳定的用户/API 产品面。
+当前不应从现有 fixture/RSS 管线基线推断产品可用或以下能力已完成：用户自定义 Workflow 产品面、配置入口、Connection/Secret/State、多采集计划、Source 删除、Step API、完整 Run 管理/运维、真实 RSS/RSSHub 产品 E2E、Docker Compose、长时间 Worker 接管和真实平台验收。底层脚本 Runtime 已有等待、子 Workflow、取消、重试和接管行为测试，但这些能力尚未全部形成稳定的用户/API 产品面。
 
 ### Phase 2：组织与可配置看板
 

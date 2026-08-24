@@ -381,21 +381,81 @@ type SourceDetail = SourceSummary & {
 
 type SourceSnapshot = SourceDetail;
 
+type SourceConfigValidationCommand = {
+    sourceDefinitionRef: string;
+    config: unknown;
+};
+
+type ConfigValidationIssue = {
+    path: string[];
+    code: string;
+    message: string;
+};
+
+type SourceConfigValidationSnapshot = {
+    sourceDefinitionRef: string;
+    schemaRef: JsonSchemaRef;
+    status: "valid" | "invalid";
+    issues: ConfigValidationIssue[];
+    checkedAt: string;
+};
+
+type SourceConfigProbeCommand = {
+    sourceDefinitionRef: string;
+    config: unknown;
+};
+
+/** Draft only: not the current `source-probe` JobSnapshot. */
+type SourceConfigProbeResult = {
+    sourceDefinitionRef: string;
+    connectorRef: string;
+    itemCount: number;
+    nextCursorAvailable: boolean;
+    checkedAt: string;
+};
+
+/** Draft only: this kind requires a new contracts/Repository/Worker slice. */
+type SourceConfigProbeJobSnapshot = {
+    id: string;
+    kind: "source-config-probe";
+    sourceId: null;
+    runId: null;
+    status:
+        | "queued"
+        | "leased"
+        | "retry_wait"
+        | "succeeded"
+        | "failed_terminal"
+        | "cancelled";
+    attempts: number;
+    maxAttempts: number;
+    errorCode: string | null;
+    error: FailureSnapshot | null;
+    createdAt: string;
+    updatedAt: string;
+    result: SourceConfigProbeResult | null;
+};
+
+type SourceActivationCommand = {
+    enabled: boolean;
+    /** Required optimistic-concurrency guard; stale revisions must fail closed. */
+    baseRevisionId: string;
+};
+
 type CreateSourceCommand = {
     name: string;
     sourceDefinitionRef: string;
     operationId: string;
     connectionId?: string | null;
     config: unknown;
-    enabled?: boolean;
 };
 
 type UpdateSourceCommand = {
+    /** Required optimistic-concurrency guard; stale revisions must fail closed. */
     baseRevisionId: string;
     name?: string;
     connectionId?: string | null;
     config?: unknown;
-    enabled?: boolean;
 };
 
 type OverlapPolicy = "forbid" | "queue" | "replace" | "allow" | "merge";

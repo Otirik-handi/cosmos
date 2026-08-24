@@ -5,17 +5,17 @@ test("updates SourceForm preview when inspector props change", async ({page}) =>
     await expect(page.getByRole("button", {name: "SourceForm", exact: true})).toBeVisible();
 
     const previewName = page.locator("#source-name");
-    await expect(previewName).toHaveValue("Cosmos fixture");
-    const previewPath = page.locator("#fixture-path");
-    await page.locator("#lab-control-source-form-fixturePath").fill("fixtures/rss/updated.xml");
-    await expect(previewPath).toHaveValue("fixtures/rss/updated.xml");
-    await page.locator("#lab-control-source-form-name").fill("Updated fixture");
-    await expect(previewName).toHaveValue("Updated fixture");
+    await expect(previewName).toHaveValue("Cosmos RSS");
+    const previewFeedUrl = page.locator("#source-feed-url");
+    await page.locator("#lab-control-source-form-feedUrl").fill("https://example.test/updated.xml");
+    await expect(previewFeedUrl).toHaveValue("https://example.test/updated.xml");
+    await page.locator("#lab-control-source-form-name").fill("Updated RSS");
+    await expect(previewName).toHaveValue("Updated RSS");
     await page.locator("#source-name").fill("User editing");
     await expect(page.locator("#source-name")).toHaveValue("User editing");
 });
 
-test("keeps SourceForm fixture submission inside the lab", async ({page}) => {
+test("keeps SourceForm RSS submission inside the lab", async ({page}) => {
     await page.goto("/dev/components?component=source-form&scene=default");
     await expect(page).toHaveURL(/viewport=responsive&theme=neurobook&colorway=macos-light/u);
     const initialUrl = page.url();

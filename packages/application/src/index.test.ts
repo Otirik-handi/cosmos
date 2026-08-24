@@ -87,9 +87,13 @@ function source(input: Partial<SourceSnapshot> = {}): SourceSnapshot {
     return {
         id: "source-1",
         name: "Bilibili",
+        sourceDefinitionRef: "source.bilibili@1",
+        operationId: "fetch",
+        connectorId: "bilibili",
         kind: "bilibili",
         config: { mode: "hot", limit: 5 },
         enabled: true,
+        revisionId: "source-1:1",
         createdAt: "2026-08-08T00:00:00.000Z",
         updatedAt: "2026-08-08T00:00:00.000Z",
         lastRunAt: null,
@@ -99,7 +103,7 @@ function source(input: Partial<SourceSnapshot> = {}): SourceSnapshot {
 }
 
 describe("ConnectorRegistry", () => {
-    it("resolves by business source kind and describes config version", () => {
+    it("resolves by the manifest-projected connector id", () => {
         const connector: IngestConnector = {
             id: "bilibili",
             description: "Bilibili",
@@ -112,7 +116,7 @@ describe("ConnectorRegistry", () => {
         };
         const registry = new ConnectorRegistry([connector]);
 
-        expect(registry.resolve(source())).toBe(connector);
+        expect(registry.resolve(source({ kind: "legacy-bilibili" }))).toBe(connector);
         expect(registry.descriptors()).toEqual([{
             id: "bilibili",
             description: "Bilibili",

@@ -6,9 +6,13 @@ import { createIngestActions } from "./workflow-ingest.js";
 const source = {
     id: "source-1",
     name: "Fixture",
+    sourceDefinitionRef: "source.fixture-rss@1",
+    operationId: "fetch",
+    connectorId: "fixture-rss",
     kind: "fixture-rss",
     config: {},
     enabled: true,
+    revisionId: "source-1:1",
     createdAt: "2026-08-16T00:00:00.000Z",
     updatedAt: "2026-08-16T00:00:00.000Z",
 };

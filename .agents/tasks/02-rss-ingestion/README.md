@@ -239,6 +239,46 @@ SourceInstance
 
 这些方向暂不扩大本 Task 的实现范围。继续增加平台 Adapter 前，应先单独建立 Connection/Secret/State、脚本优先的 Workflow API、持久子任务、Knowledge Workflow、Research Request/Trigger 和 `nb-memory` Adapter 的实现 Task。
 
+## Current implementation slice：配置优先的产品 E2E（2026-08-23）
+
+- **生命周期阶段**：已接受 Proposal 后的产品入口设计与实施准备；当前只建立任务切片，不把未实现能力写成完成。
+- **连贯目标**：让本地单用户从空数据根目录通过 Web 选择 `rss` Connector、填写实际 RSS URL、校验/测试/保存/启用配置，由 Worker 抓取并在两块固定最小看板（最新内容 Feed + 来源健康）中看到结果。
+- **可观察验收**：
+  1. 产品配置入口不再固定提交 `fixture-rss`/`fixturePath`；用户可读取 `rss` schema，填写实际 `feedUrl`，完成服务端校验、未保存配置测试、保存为停用 Source 和单独启用。
+  2. 默认定时 30 分钟、用户可修改或关闭、测试立即执行、已排队 Run 使用创建时配置快照是本次选择的实现建议；具体调度字段与调度合同待冻结；配置错误、测试失败和来源健康状态在 Web 可见。
+  3. 在隔离数据库/Data Root 中，真实产品 E2E 从用户填写的实际 RSS URL 开始，Worker 抓取后看板显示内容与来源健康；fixture、受控 HTTP 源、fake Blob 和直接 Worker Admin 调用只作为集成/管线测试。
+ - **依赖**：已接受 [`first-usable-e2e-loop Proposal`](../../../docs/proposals/first-usable-e2e-loop.md)、现有 SourceDefinition/catalog、Product API、Worker durable Ingest、SSE、Feed/Story 查询；媒体实现依赖后续 Blob 流式端口、RSS 媒体提取/下载和 bytes/BlobRef 映射设计。
+ - **受影响合同**：PRD AUT-001～AUT-003、ING-007～ING-011、BRD-001；架构 §4.7、§6.4 和 Phase 1 路线；第 4–7 项实现建议仍待冻结，不新增 `NormalizedIngestItem.localMediaRefs`，不直接冻结媒体公共 DTO、Prisma 字段或 Blob 端口。
+- **预计核心文件**：`packages/contracts/src/base.ts`、`apps/api/src/app.controller.ts`/Source application ports、`apps/web/src/app/page.tsx` 与 Source 配置组件、HTTP transport client、相关 storage schema/repository；实际文件以合同设计和代码证据为准。
+- **验证层级**：contracts/API focused tests；隔离数据库与 Blob/Data Root integration；Web 浏览器配置流程；Node API/Worker process smoke；真实 RSS URL 产品 E2E；断网阅读与媒体状态；fixture/受控 HTTP 只作为独立集成证据。
+
+#### 合同切换登记（2026-08-24）
+
+- 本切片采用版本化 `sourceDefinitionRef` 作为 SourceInstance 的唯一业务身份；Catalog manifest 必须显式提供运行时 `connectorId`，首批 operation 使用 `fetch`。新 Product API 不接受 `kind`，也不根据 kind 字符串隐式推导 ref。
+- SourceInstance 不持久化 `connectorId`；Repository 注入 `CatalogPort`，按 ref 解析 manifest，并由 manifest 生成 `connectorId` 与迁移期 `kind` 运行时投影。API/Worker/Repository 不手工传入投影，也不按字符串猜测映射。
+- 迁移期保留旧 `kind` 作为兼容投影，但它不是第二套身份真相；新建/更新 Source 时由 manifest 映射约束，旧数据先做显式 kind→ref/operation 预检。未知 kind、非唯一映射或 manifest 不可用必须阻断迁移并报告。
+- SourceInstance 增加独立单调 `revision`，公开 Snapshot 提供不透明 `revisionId`。创建默认停用并从 revision 1 开始；配置更新与启用状态变更使用 CAS，过期 revision 返回当前 `conflict`，绝不使用 `updatedAt` 充当 revision。
+- 本轮只冻结 Source 身份、并发、保存默认停用、完整配置替换和独立启用边界；不冻结 CollectionPlan、未保存 Probe、RSS 媒体范围、Blob 下载或未认证作用域。
+- 实施状态（2026-08-24）：contracts/Catalog/Prisma/存储迁移/API/Web 入口已完成并通过全仓单元测试（34 文件 243 用例，含 stale no-op 激活回归）、`typecheck:packages`、`typecheck:apps`、`docs:check`、`git diff --check`。新增 forward migration `20260824000000_source_identity_revision`（显式 kind→ref 回填、未知 kind 阻断、保留 enabled、revision 从 1 起）与 `SourceActivationCommand` 幂等表；Storage 测试改用真实 `migrate deploy`，历史升级由 `source-identity-migration.test.ts` 覆盖。激活命令按唯一幂等键 + requestHash 事务化：同键同请求重放不递增 revision，同键不同请求或过期 revision 返回 conflict（含 no-op 意图——命令创建前先在事务内校验 revision），无状态变化且 revision 匹配的 no-op 命令记录 resultRevision 但不递增。Web 产品入口只提交 `source.rss@1/fetch + feedUrl`，创建默认停用后经 activation command 启用；未保存配置独立 Probe（`source-config-probe`）仍未实现，保持门控。
+- Product API/运行时验收调用方同步完成（2026-08-24）：`e2e/ingest.e2e.test.ts`、`e2e/recovery.e2e.test.ts`、`e2e/scheduling.e2e.test.ts`、`e2e/browser/ingest.spec.ts`、`scripts/smoke-node.ps1`、`scripts/e2e/docker-flow.ts` 与 `scripts/e2e/real-source.ts` 均改为 `sourceDefinitionRef + operationId + config` 创建，再以 `baseRevisionId + Idempotency-Key` 独立激活；这些 Product API/运行时路径不再提交 `kind`、`enabled` 或 `fixturePath`。`e2e/component-lab/source-form.spec.ts` 不属于 Product API E2E：其 `renderSourceFormLab` 使用合成 props，并以 `event.preventDefault()` 阻断提交；本轮只将旧 `fixturePath/#fixture-path` 选择器迁移为 `feedUrl/#source-feed-url`。离线默认门禁使用受控本地 HTTP RSS：`bun run test:e2e` 4 文件/4 场景通过，`COSMOS_E2E_WEB_PORT=4183 bun run test:browser` 8/8 通过，`bun run test:browser:component-lab` 12/12 通过，Windows Node smoke 通过。Docker CLI 在本机不可用，因此 `test:docker` 未运行；真实 RSS/AI HOT/Bilibili 需要显式网络/OpenCLI 前置，本轮未运行。
+- 五轴审查收口（2026-08-24）：审查发现并修复 1 blocker 与多项 Required——迁移回归测试临时目录改用 `os.tmpdir()` 并显式分组 legacy/identity/snapshot 迁移；新增第 9 个 migration `20260824100000_source_activation_result_snapshot`（`SourceActivationCommand.resultSnapshotJson`），activation 同键重放改为返回首次记录的结果快照（覆盖“激活→PATCH 推进 revision→同键重放”的行为测试）；API 配置校验切换到 contracts `getSourceConfigurationSchema(ref)` canonical Zod schema，Bilibili feed 缺 profile 在创建/启用阶段即被拒，手写 JSON Schema validator 删除；RSS `feedUrl` 收紧为 http(s) 并补拒绝测试；activation/test/runs 的 `Idempotency-Key` 统一为 1–300 字符；手动 Run 对未启用 Source 返回 409 `conflict`（scheduling E2E 的碰撞源相应改为启用后预置幂等键）。修复后门禁：全仓 typecheck 通过、单元 34 文件/249 用例、Node E2E 4/4、生产浏览器 8/8、组件实验室 12/12、Windows Node smoke 通过；`docs/spec/contracts/0001` 与 `docs/spec/interfaces/0002/0004/0005` 已同步当前合同。仍未完成：未保存配置 Probe、真实来源/Docker 验收、媒体离线链路。
+
+ ### 实施顺序与检查点（复用本 Task，不新增 Task 编号）
+1. 先以 contracts/API focused tests 固定 `sourceDefinitionRef`、`operationId`、revisionId、保存默认停用、完整配置替换、独立启用和错误映射；第 4–7 项实现建议先保持待冻结，不修改媒体公共合同。
+2. 实现配置 API/持久化垂直切片：按显式 manifest 映射保存 Source，迁移旧 kind 前先预检，保存默认停用、独立启用/停用、完整配置替换、过期 revision 拒写和同步配置校验；产品路径只开放 `rss`，测试必须不写入事实数据。
+ 3. 接入未保存配置测试的独立垂直切片：定义 `source-config-probe` Job kind、`SourceConfigProbeJobSnapshot` POST/GET 状态查询、result、repository 创建与幂等、Worker acceptedKinds/dispatcher、Probe port、输入脱敏和 focused 无副作用验收；当前 `source-probe` 只处理已保存 Source，不得复用。
+ 4. 在上述后端能力完成后实现 schema 驱动 Web 配置流程，按“选择 `rss` → 填实际 `feedUrl` → 校验 → 测试未保存配置 → 保存为停用 Source → 单独启用”串联真实端点，不暴露 `fixture-rss`/`fixturePath`。
+ 5. 接入两块固定最小看板和来源健康；确认已启用 Source 才能调度，SSE/Run/Job 状态可解释。
+
+**Checkpoint：配置与看板**
+
+- 配置入口、API、Worker 调度和看板在隔离环境形成可观察链路；focused、integration、browser 门禁分别通过。
+- 真实 RSS URL 产品 E2E 尚未通过前，不把 fixture/受控 HTTP 结果写成应用可用。
+
+5. 单独完成媒体边界实现设计与必要的稳定文档/ADR：受控流式 Blob 端口、RSS 条目媒体提取/下载、安全/限额/失败状态、domain bytes 与 Workflow BlobRef 映射；设计通过前不改公共媒体字段。
+6. 按批准设计实现阅读与媒体路径，最后用用户填写的实际 RSS URL 完成断网产品 E2E；媒体未保存时展示真实降级，不伪造离线成功。
+
+本切片不扩大为通用 Workflow 编辑器、可配置 Board/Section/Block、登录 UI、其它平台 Connector 或历史媒体回填。
 ## Verification
 
 已完成：
@@ -248,9 +288,11 @@ SourceInstance
 - `bun run typecheck`、`bun run build`、`bun run lint:web`：通过。
 - `bun run test`：通过，覆盖 domain、Blob、RSS、Transport、API SSE、Prisma/FTS、Job lease、Worker、schedule 和分页过滤。
 - `bun run db:migrate`：在隔离 Data Root 上通过。
-- `pwsh -NoProfile -File scripts/smoke-node.ps1`：通过 Node API/Worker、migration、queued Run、fixture、Search、Story 和 SSE 回放。
-- Playwright 浏览器验收：通过来源创建、queued Run、SSE、Feed、搜索、URL-free Story/Revision/Observation 和健康检查。
-- 20 份仓库 Markdown、链接、代码围栏和 `git diff --check`：通过。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1`：通过 Node API/Worker、migration、受控 HTTP RSS、创建后激活、queued Run、Probe、Search、Story 和 SSE 回放。
+- `bun run test:e2e`：通过，4 文件/4 场景覆盖受控 RSS ingest、Worker recovery、调度失败隔离与 Admin 生命周期。
+- `powershell -NoProfile -Command '$env:NODE_ENV=$null; bun run test:browser'`（`COSMOS_E2E_WEB_PORT=4183`）：通过，8/8 覆盖 RSS Feed URL 配置、创建后激活、queued Run、Feed/Story、console/page error/request failure 和主题；默认 4173 被用户运行的其它仓库服务占用，未终止该进程。
+- `bun run test:browser:component-lab`：通过，12/12；组件实验室仅验证合成 SourceForm 的 `name/feedUrl` props、控件同步和提交阻断，无 Product API/SSE 请求；旧 `fixturePath` 选择器已迁移到 `feedUrl/#source-feed-url`。
+- `bun run docs:check`、`git diff --check`：通过，`checkedFiles=298`、`failures=[]`、无空白错误。
 
 实现阶段至少分开报告：
 
@@ -264,7 +306,7 @@ SourceInstance
 - Docker/Compose 和三种宿主模式验收。
 - Phase 1B Connector 配置、Probe 无副作用、Job 查询、AI HOT cursor、Bilibili/OpenCLI 场景和 Browser Bridge 前置条件验收。
 
-当前仍未运行：Docker/Compose、真实 RSS/RSSHub、跨平台 Node 和长时间故障恢复验收。
+当前仍未运行：Docker/Compose（本机无 Docker CLI）、真实公网 RSS/RSSHub、真实 AI HOT/Bilibili/OpenCLI、非 Windows 平台 smoke 和长时间故障恢复验收。
 
 ## Follow-ups
 

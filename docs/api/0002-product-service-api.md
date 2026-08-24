@@ -100,19 +100,70 @@ Browser Bridge/OpenCLI profile 可以投影为一种外部管理的 Connection�
 
 | 成熟度 | Method | Path | 结果 |
 | --- | --- | --- | --- |
-| Current | `GET` | `/sources` | `Page<SourceSummary>`；当前代码暂为数组 |
-| Current | `POST` | `/sources` | `SourceSnapshot` |
-| Current | `GET` | `/sources/{id}` | `SourceDetail` |
-| Current | `PATCH` | `/sources/{id}` | `SourceSnapshot`；当前只支持 enabled |
-| Planned · Phase 1 remainder | `DELETE` | `/sources/{id}` | 删除配置或创建删除计划；历史事实策略显式 |
-| Convergence | `POST` | `/sources/{id}/probes` | `202 ProbeSnapshot` |
-| Current | `POST` | `/sources/{id}/runs` | `202 WorkflowRunSnapshot` |
+| Current (legacy) | `GET` | `/sources` | `SourceSnapshot[]`；按 repository 顺序读取，不写入 |
+| Current (legacy) | `POST` | `/sources` | `SourceSnapshot`；当前实现允许省略 `enabled` 并默认启用，不能作为配置优先产品合同 |
+| Planned · Phase 1 product cutover | `POST` | `/sources` | `SourceSnapshot`；保存后强制 `enabled=false`，不接受客户端 `enabled` |
+| Current (legacy) | `GET` | `/sources/{id}` | `SourceSnapshot`；不存在返回 404 |
+| Current (legacy) | `PATCH` | `/sources/{id}` | `SourceSnapshot`；当前只支持 `enabled` |
+| Planned · Phase 1 product cutover | `PATCH` | `/sources/{id}` | `SourceSnapshot`；目标合同编辑名称/完整配置，不改变 `enabled` |
+| Planned · Phase 1 remainder | `POST` | `/source-configuration-validations` | 同步校验未保存的 `sourceDefinitionRef + config`；成功返回 validation snapshot；失败沿用当前 `validation_failed` 合同，具体 HTTP 状态待实现验证 |
+| Planned · Phase 1 remainder | `POST` | `/source-probes` | `202 SourceConfigProbeJobSnapshot`；创建独立的 `source-config-probe` Job，不能复用当前 `source-probe` |
+| Planned · Phase 1 remainder | `POST` | `/sources/{id}/activation-commands` | 独立启用/停用 Command；返回更新后的 `SourceSnapshot` |
+| Convergence | `POST` | `/sources/{id}/probes` | `202 ProbeSnapshot`；已保存 Source 的规范 Probe 路径 |
+| Current compatibility | `POST` | `/sources/{id}/test` | `202 JobSnapshot`；保留已保存 Source Probe 语义，不接受未保存 `kind + config` |
+| Current | `POST` | `/sources/{id}/runs` | `202 WorkflowRunSnapshot`；创建对应的 Workflow Run |
 | Planned | `GET` | `/sources/{id}/observations` | 来源 Observation page |
 | Planned | `GET` | `/sources/{id}/entries` | 来源 Entry page |
 | Planned · Phase 1 remainder | `GET` | `/sources/{id}/health` | 来源状态、最近成功/错误和计划摘要 |
+| Planned · Phase 1 remainder | `GET` | `/source-probes/{probeId}` | `SourceConfigProbeJobSnapshot`；只读独立未保存 Probe 的 status/error/result，不返回配置输入 |
 
-`POST /sources/{id}/runs` 是 Ingest 的产品快捷入口，规范行为仍是创建
-`WorkflowRun`；它不建立第二种 Run。
+### 4.2.1 配置优先产品流程合同（Phase 1 remainder）
+
+本切片以一个 `SourceInstance` 同时保存来源名称、版本化 `sourceDefinitionRef`、`operationId`、已校验配置、revision 和可选调度字段；`sourceDefinitionRef` 是唯一业务身份，不新增独立 `CollectionPlan` 持久对象或第二套 Draft 状态机。`CollectionPlan` 仍是后续扩展边界。
+
+产品流程固定为：
+
+```text
+读取 SourceDefinition/schema
+→ POST /source-configuration-validations
+→ POST /source-probes（未保存配置）
+→ POST /sources（服务端保存为 disabled）
+→ POST /sources/{id}/activation-commands（独立启用）
+```
+
+Command 约束：
+
+- `config` 在服务端按该 ref 对应的 canonical strict Zod schema 校验（manifest JSON Schema 只是发布投影）；产品 API 不接受任意 passthrough 字段，也不把未知字段静默持久化或回显。RSS 首版允许 `feedUrl` 和可选 `scheduleIntervalMs`，`feedUrl` 必须是 http(s) URL。
+- `POST /sources` 的创建 Command 不包含 `enabled`；请求若携带该字段必须按 `validation_failed` 拒绝，而不是忽略。校验失败不创建 Source。
+- `PATCH /sources/{id}` 必须携带 `baseRevisionId`（或等价的必填 `If-Match`；本 DTO 草案采用 `baseRevisionId`）作为乐观并发保护；配置是完整替换值，不做未经声明的浅合并。允许修改名称和完整 `config`，`sourceDefinitionRef` 不可变，`enabled` 只能通过独立 activation Command 改变。revision 过期必须返回现有冲突合同，不能静默覆盖；修改不改写已排队 Run 的输入快照。
+- `POST /sources/{id}/activation-commands` 使用必需且不超过 300 字符的 `Idempotency-Key`，body 为 `{ enabled: boolean, baseRevisionId: string }`；重复同一意图可重放并返回首次记录的结果快照，同 key 不同请求或冲突返回 409。启用前必须存在有效且已保存的配置；停用只阻止未来调度，不删除历史事实。状态实际变化时递增 revision；过期 `baseRevisionId` 沿用 `conflict` 合同。
+- `POST /source-probes` 使用必需的 `Idempotency-Key`，body 只含 `sourceDefinitionRef` 与 `config`；目标是返回独立的 `source-config-probe` Job（`sourceId=null`），但该 Job kind、repository 创建/幂等、Worker acceptedKinds/dispatcher、Probe port、输入脱敏和结果投影尚未实现，不能复用当前 `source-probe`。在该垂直切片完成前，不把此端点标为 Current，也不声称 Worker 可以执行它。
+- 未保存 Probe 的目标语义是允许创建独立 Job 和 `job.queued` 事件，但不得创建 Source、Run、Observation、Entry、Asset、Checkpoint 或推进任何事实游标；同一幂等键复用同一 Probe Job，不同配置沿用当前 `conflict` 合同。以上均为待实现合同，不是当前行为。
+- 现有 `POST /sources/{id}/test` 继续只接收已保存 `sourceId` 和可选幂等 Header，作为兼容路径；它不能通过改名、增加 body 或复用实现来替代未保存配置测试。
+- `scheduleIntervalMs` 仍是可选配置字段，范围沿用公共 schema；30 分钟默认、时区/间隔校验和修改生效时机仍是实现建议/待冻结，不在本次 DTO 中写死默认值。
+
+统一错误边界：输入/schema/manifest 校验沿用当前 `validation_failed` 错误合同；资源不存在为 `404 not_found`；幂等键与已有不同 payload 冲突沿用当前 `conflict` 合同。Draft 中的 `idempotency_conflict` 仍需单独与当前实现统一，不在本切片新增错误码。配置校验的具体 HTTP 状态、字段级 details 形状、独立 `source-config-probe` 的执行失败映射和是否扩展 `ServiceError` code，均需在实现设计与行为测试中确认。测试期间的外部连接/解析失败写入独立 Probe Job 状态，不由 API 进程直接执行或伪装成保存成功。
+
+`POST /sources/{id}/runs` 是 Ingest 的产品快捷入口，仅接受已启用的 Source（未启用返回 409 `conflict`）；规范行为仍是创建 `WorkflowRun`，它不建立第二种 Run。入队时捕获 Source execution snapshot，之后修改 Source 不改变已排队 Run 的输入。
+
+身份与迁移边界：`sourceDefinitionRef` 必须精确匹配不可变 Catalog manifest；manifest 显式声明运行时 `connectorId`，SourceInstance 不持久化 `connectorId`，旧 `kind` 只作由注入 Catalog 生成的迁移期兼容投影。新 Product API 不接受 `kind`，也不根据 kind 字符串隐式生成 ref。旧数据迁移必须先对已知 kind、ref 和首批 `fetch` operation 做显式预检；未知或不唯一映射阻断迁移。SourceInstance 的 `revision` 是独立单调并发令牌，公开 `revisionId` 是不透明投影，`updatedAt` 不参与并发判断。
+
+Repository/Application 必须通过注入的 `CatalogPort` 完成 ref→manifest→connectorId/kind 投影；调用方不得把投影字段作为创建输入传给 Repository。
+
+错误映射固定为：输入、manifest 或配置 schema 错误使用当前 `validation_failed`（HTTP 400）；资源不存在使用 `not_found`（HTTP 404）；过期 revision、幂等键复用不同 payload 或其它状态冲突使用当前 `conflict`（HTTP 409）。
+### 4.2.2 未保存配置 Probe 的完整待实现垂直切片
+
+`POST /source-probes` 在以下边界全部实现并通过 focused 验收前保持 `Planned`，不能作为当前可调用端点或现有 `source-probe` 的别名：
+
+1. **公共 Job 合同**：为 `source-config-probe` 定义独立 Job kind、`SourceConfigProbeJobSnapshot` 状态/结果投影和错误映射；`sourceId`、`runId` 固定为 `null`，输入配置不回显。该 kind 必须与当前 `@cosmos/contracts` 的 `source-probe` 明确区分。
+2. **Application Probe port**：定义接收已校验 `sourceDefinitionRef + config` 的独立 Probe port，按 manifest 解析 Connector 并执行 dry-run；不得调用只接收已保存 `sourceId` 的 `SourceProbeService.runSource`，不得拥有领域持久化。
+3. **Repository 创建与幂等**：提供独立 Job 创建方法，保存受控输入快照和规范化 payload fingerprint；相同幂等键/相同 payload 重放同一 Job，不同 payload 返回当前 `conflict` 合同；创建只能写 Job 与 queued Event。
+4. **Worker acceptedKinds/dispatcher**：acceptedKinds 新增该 kind；dispatcher 按 `sourceDefinitionRef + config` 解析输入并调用新 Probe port，不能按 payload 读取 `sourceId`。租约、重试、完成和失败结果必须复用既有 Job fencing 语义。
+5. **输入脱敏与结果投影**：配置中的凭据引用、URL 查询敏感值和完整外部 payload 不进入普通日志或 Job/HTTP 结果；成功结果只返回 connector/source definition 标识、计数、游标可用性和检查时间等受控字段。
+6. **查询路径**：`GET /source-probes/{probeId}` 返回同一 `SourceConfigProbeJobSnapshot`，只读 status/error/result，不返回配置输入；现有 `GET /jobs/{jobId}` 继续只服务 legacy `JobSnapshot`/`JobDetail`，不隐式承载新 kind。
+7. **行为验收**：补充 contracts/API/repository/worker focused tests，覆盖有效/无效 manifest 与 config、同/异 payload 幂等、旧 `source-probe` 回归、Worker dispatcher 正确分派、租约失败、POST→GET 状态读取，以及 Source/Run/Observation/Entry/Asset/Checkpoint 均未写入。
+
+完成上述切片后，才决定是否把该端点从 `Planned` 提升为 `Convergence`，并同步 `@cosmos/contracts`、Product API、HTTP client、Worker 和 Task 证据。
 
 ### 4.3 CollectionPlan
 

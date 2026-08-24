@@ -93,11 +93,38 @@ export const contentMetricsSchema = z.object({
 export type ContentMetrics = z.infer<typeof contentMetricsSchema>;
 
 /**
- * A source kind is a stable connector family identifier. Plugin-defined
- * values remain valid so the core does not need an enum migration per plugin.
+ * Legacy runtime connector-family key. New Product API commands use
+ * sourceDefinitionRef; kind remains in execution snapshots during migration.
  */
 export const sourceKindSchema = z.string().trim().min(1).max(100);
 export type SourceKind = z.infer<typeof sourceKindSchema>;
+
+export const sourceDefinitionRefSchema = z.string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^source\.[A-Za-z0-9._-]+@[1-9][0-9]*$/);
+export type SourceDefinitionRef = z.infer<typeof sourceDefinitionRefSchema>;
+
+export const sourceOperationIdSchema = z.string().trim().min(1).max(100);
+export type SourceOperationId = z.infer<typeof sourceOperationIdSchema>;
+
+export const sourceConnectorIdSchema = z.string().trim().min(1).max(100);
+export type SourceConnectorId = z.infer<typeof sourceConnectorIdSchema>;
+
+export const sourceRevisionIdSchema = z.string().trim().min(1).max(300);
+export type SourceRevisionId = z.infer<typeof sourceRevisionIdSchema>;
+/** Idempotency keys share one wire budget across commands and headers. */
+export const idempotencyKeySchema = z.string().trim().min(1).max(300);
+
+/**
+ * Connector transports speak HTTP(S) only; rejecting other schemes at the
+ * contract boundary keeps file:, data:, ftp: URLs out of server-side fetches.
+ */
+const httpFeedUrlSchema = z.string().url().refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+}, { message: "feedUrl must be an http or https URL." });
 
 const scheduleConfigShape = {
     scheduleIntervalMs: z.coerce.number().int().min(1_000).max(31 * 24 * 60 * 60 * 1_000).optional(),
@@ -111,7 +138,7 @@ export const sourceConfigSchema = z.object({
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
 
 export const rssSourceConfigSchema = z.object({
-    feedUrl: z.string().url(),
+    feedUrl: httpFeedUrlSchema,
     ...scheduleConfigShape,
 }).strict();
 export type RssSourceConfig = z.infer<typeof rssSourceConfigSchema>;
@@ -151,18 +178,45 @@ export const aiHotSourceConfigSchema = z.object({
 }).strict();
 export type AiHotSourceConfig = z.infer<typeof aiHotSourceConfigSchema>;
 
+/**
+ * Canonical configuration schemas keyed by the versioned source definition ref.
+ * The Product API boundary validates against these so connector-specific rules
+ * (e.g. a Bilibili feed profile) cannot drift from the manifest's published
+ * JSON Schema projection, which intentionally stays descriptive.
+ */
+export const sourceConfigurationSchemas = {
+    "source.rss@1": rssSourceConfigSchema,
+    "source.fixture-rss@1": fixtureRssSourceConfigSchema,
+    "source.bilibili@1": bilibiliSourceConfigSchema,
+    "source.aihot@1": aiHotSourceConfigSchema,
+} as const;
+
+export function getSourceConfigurationSchema(
+    sourceDefinitionRef: string,
+): z.ZodTypeAny | null {
+    return sourceConfigurationSchemas[sourceDefinitionRef as keyof typeof sourceConfigurationSchemas] ?? null;
+}
+
 export const createSourceCommandSchema = z.object({
     name: z.string().trim().min(1).max(200),
-    kind: sourceKindSchema,
-    config: sourceConfigSchema,
-    enabled: z.boolean().default(true),
-});
-export type CreateSourceCommand = z.input<typeof createSourceCommandSchema>;
+    sourceDefinitionRef: sourceDefinitionRefSchema,
+    operationId: sourceOperationIdSchema,
+    config: z.unknown(),
+}).strict();
+export type CreateSourceCommand = z.infer<typeof createSourceCommandSchema>;
 
 export const updateSourceCommandSchema = z.object({
-    enabled: z.boolean(),
-});
+    baseRevisionId: sourceRevisionIdSchema,
+    name: z.string().trim().min(1).max(200).optional(),
+    config: z.unknown().optional(),
+}).strict();
 export type UpdateSourceCommand = z.infer<typeof updateSourceCommandSchema>;
+
+export const sourceActivationCommandSchema = z.object({
+    enabled: z.boolean(),
+    baseRevisionId: sourceRevisionIdSchema,
+}).strict();
+export type SourceActivationCommand = z.infer<typeof sourceActivationCommandSchema>;
 
 export const sourceProbeResultSchema = z.object({
     sourceId: z.string(),
@@ -179,7 +233,7 @@ export type SourceTestResult = SourceProbeResult;
 export const ingestCommandSchema = z.object({
     sourceId: z.string().min(1),
     triggerKind: z.enum(["manual", "schedule"]).default("manual"),
-    idempotencyKey: z.string().trim().min(1).max(300).optional(),
+    idempotencyKey: idempotencyKeySchema.optional(),
 });
 export type IngestCommand = z.input<typeof ingestCommandSchema>;
 
@@ -187,9 +241,14 @@ export type IngestCommand = z.input<typeof ingestCommandSchema>;
 export const sourceExecutionSnapshotSchema = z.object({
     id: z.string(),
     name: z.string(),
+    sourceDefinitionRef: sourceDefinitionRefSchema,
+    operationId: sourceOperationIdSchema,
+    connectorId: sourceConnectorIdSchema,
+    /** Migration-era runtime projection; not accepted by Product API commands. */
     kind: sourceKindSchema,
     config: sourceConfigSchema,
     enabled: z.boolean(),
+    revisionId: sourceRevisionIdSchema,
     createdAt: z.string(),
     updatedAt: z.string(),
 });

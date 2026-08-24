@@ -846,7 +846,11 @@ describe("PrismaWorkflowHostStore", () => {
             data: {
                 name: "legacy",
                 kind: "rss",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
                 configJson: "{}",
+                enabled: true,
+                revision: 1,
             },
         });
         const legacyRun = await store.prisma.run.create({

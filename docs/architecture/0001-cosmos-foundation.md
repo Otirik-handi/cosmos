@@ -1,8 +1,8 @@
 # Cosmos 总体架构设计
 
-> 状态：Draft v0.24
+> 状态：Draft v0.25
 >
-> 最后更新：2026-08-20
+> 最后更新：2026-08-23
 >
 > 原始需求真相源：[`../requirements/0001-original-requirements.md`](../requirements/0001-original-requirements.md)
 >
@@ -465,7 +465,7 @@ Workflow 使用轻量 `kind + tags` 分类，不为每类 Workflow 复制一套 
 
 `SourceOperation` 是未来由 Adapter 对外部来源提供的一项可调用操作，例如 `bilibili.dynamic`、`bilibili.recommendation` 或 `rss.poll`。它声明输入配置、输出的标准化 `NormalizedIngestItem`、稳定 external key、`originLocator`、`discoveryContext`、媒体状态、checkpoint 读写范围和错误语义；它不是 Workflow，也不直接写 Cosmos 数据库。
 
-Phase 1B 当前实现使用较小的 `IngestConnector` 运行时边界：`ConnectorRegistry` 按业务 `Source.kind` 解析一个 Connector，Connector 只执行配置校验和外部读取，返回标准化 items 与 cursor。`SourceOperation` 是未来在一个 Provider 下区分多个采集操作的设计粒度，当前不作为用户配置字段或 Registry override。
+Phase 1B 当前实现使用较小的 `IngestConnector` 运行时边界：目标合同以版本化 `SourceDefinitionManifest.ref` 作为 SourceInstance 的持久身份；manifest 必须显式声明运行时 `connectorId`，Worker 再通过该 id 解析 Connector。迁移期保留旧 `Source.kind` 作为兼容投影，但新 Product API 不接受 kind，代码不得根据字符串隐式推导 ref。`SourceOperation` 是未来在一个 Provider 下区分多个采集操作的设计粒度，当前首批 manifest 使用稳定的 `fetch` operation。
 
 Workflow 通过 `ActionDefinition` 调用 Source Operation。Adapter manifest 只注册能力和 schema，用户的 Connection、SourceInstance 和采集计划再把某个 operation 绑定到具体凭证、范围、Trigger、Workflow 版本和 StateStore 命名空间。
 
@@ -541,6 +541,19 @@ Operation、Trigger、WorkflowBinding、checkpoint namespace、发现上下文�
 - `ConnectorStateStore` 保存 cursor、ETag、分页 token、速率状态等非秘密状态。Adapter 可以定义状态 schema，Cosmos 负责命名空间、版本、备份、并发和恢复。
 - OpenCLI/Browser Bridge 可以作为外部登录态管理例外，Cosmos 只保存 profile 引用；长期仍需映射到统一 Connection 合同。
 
+
+### 4.7 产品配置入口与可用性 E2E
+
+第一条可用产品 E2E 不等于预配置 Ingest 管线跑通。产品验收必须从空数据根目录开始：用户在 Web 选择 `rss` SourceDefinition/Connector，按其配置 schema 填写实际 RSS URL，完成服务端校验、测试未保存配置、保存为停用 Source、单独启用和调度配置；Worker 只读取已启用配置执行抓取，Web 再展示内容与来源健康。`fixture-rss`、fixture XML、本地受控 HTTP 源、fake Blob 和直接调用 Worker Admin 只属于集成/管线测试。
+
+本产品入口的用户可观察能力依次为：
+
+1. 选择可用 Connector/SourceDefinition，并读取版本化配置 schema；首版只开放 `rss`，不把 `fixture-rss` 暴露为产品来源。
+2. 按 schema 创建、编辑、服务端校验、测试、保存、停用/启用 Source；本切片以一个 SourceInstance 保存版本化 `sourceDefinitionRef`、`operationId`、已校验配置、revision 和可选调度字段，不新增独立 `CollectionPlan` 持久对象或第二套 Draft 状态机。`CollectionPlan` 仍是后续扩展边界。
+3. 默认定时抓取 30 分钟、测试立即执行、用户可修改或关闭定时、已排队 Run 使用创建时配置快照，是本次选择的实现建议；具体调度字段、时区/间隔校验和修改生效时机仍需设计验证。
+
+API 继续是 manifest/schema、Command、Query、Run 控制和 SSE 的控制面；Connector executable 与外部网络访问留在 Worker。SourceDefinitionRef 到 Connector 的映射必须来自不可变 manifest，不得由 API 或 Worker 隐式猜测。SourceInstance 的 revision 是独立的单调并发令牌；`updatedAt` 只表示时间，不能充当 revision。上述身份与并发边界已冻结，但不冻结 CollectionPlan、未保存 Probe、媒体下载或未认证作用域合同。
+未认证单用户作用域和未来认证替换点是待设计建议，不是当前已冻结的持久化合同。
 ## 5. 持久化事件与任务运行时
 
 Cosmos 的生产者/消费者特征集中在运行时，而不是把整个产品简化成一个 FIFO 队列。
@@ -920,6 +933,10 @@ Blob 使用内容寻址去重。原始媒体与缩略图、转码和 OCR 结果�
 - 是否保存视频本体或只保存封面与元数据；
 - 认证内容和隐私内容的保留期限；
 - 失败重试次数。
+
+**本次接受的媒体职责方向**只冻结三点：Connector 管线处理媒体，仓库提供 Blob 服务；没有历史媒体，因此不做回填。RSS 条目自身的 enclosure/正文媒体范围、不抓取 `webUrl` 外部全文、受控流式 Blob 能力、domain bytes/Asset → Workflow BlobRef → Storage metadata → Product API 受控下载分层，以及 `local` 作用域，都是实现建议/待冻结，不是当前公共合同。
+
+当前优先实现建议是由 Application 控制受限流式媒体能力并复用 `FileBlobStore`，保持 domain `NormalizedAssetInput.content: Uint8Array`，由 Application 在 Workflow 边界映射 BlobRef，Storage 保存 Asset metadata，Product API 提供受控下载；这些建议不构成当前公共合同。流式端口、幂等/重试/大小预算/取消/orphan bytes、媒体提取与下载安全、具体字段映射和 `local` 作用域键仍待设计。不得先新增 `NormalizedIngestItem.localMediaRefs` 或让 Connector 直接访问 Data Root。
 
 ## 7. 信息库领域模型
 
@@ -1861,18 +1878,19 @@ Saved View / recommendation policy
 
 完成标准：后续需求能明确落到已有对象，或通过记录变更理由调整对象。
 
-### Phase 1：信息录入与离线查询垂直切片
+### Phase 1：信息录入与产品可用性门槛
 
 - Source/Trigger/Workflow/Action 最小合同，以及脚本优先的 Workflow API。
-- manual + schedule Trigger。
+- manual + schedule Trigger；首版产品入口优先建议默认定时 30 分钟，用户可修改或关闭；具体调度字段、校验和修改生效合同待冻结。
 - RSS/RSSHub 真实 Connector 和一个 fixture Connector，先验证通用合同，再扩展到其它平台。
 - Next.js App Router Web、NestJS API 和独立 Worker 的最小宿主边界。
+- 用户可从 Web 选择 `rss`、按 schema 填写实际 RSS URL、校验/测试/保存/启用配置；`fixture-rss` 不进入产品配置入口。
 - Observation、EntryRevision、Asset 和一个 Entry → 一个最小 Story projection。
-- Prisma + SQLite、受控 SQLite SQL Adapter、Blob Store、FTS5/BM25。
 - 版本化 Service Endpoint、Command、Query、Event、SSE 和健康检查。
-- 最小搜索页和以 Story 为入口的 Feed Board Block。
+- 两块固定最小看板：最新内容 Feed 与来源健康摘要。
+- Prisma + SQLite、受控 SQLite SQL Adapter、Blob Store、FTS5/BM25。
 
-完成标准：定时录入真实信息，重启后不重复，断网后仍可搜索正文和已保存图片；用户可以从 Feed 打开 Story → Entry → Source/Revision；本阶段只实现固定 Ingest Workflow，不要求通用用户自定义 Workflow、跨来源聚类、Story merge/split、Topic 维护或完整推荐。
+完成标准分两层：现有 fixture/RSS 管线先证明采集、去重、修订、恢复和离线查询；产品可用门槛再从空数据根目录开始，由用户在 Web 填写实际 RSS URL，完成校验/测试/保存/启用，Worker 抓取该 URL，最小看板显示内容与来源健康，并在断网时展示已保存内容。fixture、本地受控 HTTP 源、fake Blob 和直接 Worker Admin 调用不能替代产品 E2E。
 
 ### Phase 1B：受管 Collector Runtime
 
@@ -2031,6 +2049,14 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 76. ActionDefinition 使用 `host`、`trusted_worker` 和 `remote_worker` execution placement；领域写入不经普通远程 Worker。
 77. Direct Worker 与 Gateway Worker 必须共享 TaskStore/Attempt/Receipt conformance；Worker Admin 不提供同步 Job execute，Gateway 不持有第二套终态。
 
+78. 第一条可用产品 E2E 必须从 Web 配置入口开始；首版只开放 `rss` schema 驱动入口，用户填写实际 RSS URL；`fixture-rss` 只用于集成/管线测试。
+79. 配置产品流程采用“校验 → 测试未保存配置 → 保存为停用 Source → 单独启用”；默认定时 30 分钟、测试立即执行、用户可修改或关闭定时、已排队 Run 使用创建时配置快照作为实现建议，具体调度合同待冻结。
+80. 已接受的媒体职责方向只有三项：Connector 管线处理媒体，仓库提供 Blob 服务，没有历史媒体因此不做回填。RSS 条目自身媒体范围、不抓取 `webUrl` 外部全文、Blob 端口、bytes/BlobRef 分层和 `local` 作用域键均为全局后置的实现建议/待冻结边界，不覆盖当前配置优先产品 E2E。
+81. 当前优先建议保持 domain bytes/Asset、Application Workflow BlobRef、Storage metadata 和 Product API 受控下载的分层；具体字段、错误/安全/预算合同仍需实现设计，Connector 不直接访问 Data Root。
+82. SourceInstance 以版本化 `sourceDefinitionRef` 作为唯一业务身份；manifest 显式提供 `connectorId`，旧 `kind` 只在迁移和运行时兼容期间保留，并由 manifest 映射约束，不允许新 API 写入或隐式 kind→ref 推导。
+83. SourceInstance 持久化单调整数 `revision`，公开投影提供不透明 `revisionId`；创建从 revision 1 开始且默认停用，配置更新和启用状态变更都必须使用基于 revision 的 CAS。过期 revision 返回 `conflict`，不得使用 `updatedAt` 代替。
+84. 旧数据迁移先按已登记的 kind→sourceDefinitionRef/operationId 显式映射预检；未知 kind、非唯一映射或 manifest 不可用时阻断迁移并报告，不静默生成 ref。
+
 ## 20. 核心边界结论与后置决定
 
 本次 grilling 已结束。首批来源、扩展信任范围和初步技术基线已经记录；其它问题保留为后置决定，不阻塞 Phase 0。
@@ -2043,7 +2069,9 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 
 已确认：第一版不建设权限平台或不可信插件沙箱，只运行用户明确安装的本地可信扩展。扩展仍使用 SDK/Command/Query/Event，不直接写核心数据库，以保留未来隔离升级空间。
 
-### 20.3 本地数据保留
+### 20.3 本地数据保留（全局后置策略）
+
+**范围**：以下媒体保留取舍是全局后置策略，不覆盖当前配置优先产品 E2E 的媒体职责方向或待冻结实现建议。
 
 【决策点】Cosmos 默认保存多少原始媒体和历史修订？
 
@@ -2051,11 +2079,11 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 
 【选项】
 
-- 推荐：文本与元数据长期保存；图片按预算保存；视频默认只保存元数据、封面和用户明确收藏的本体。
+- 推荐（仍待确认）：文本与元数据长期保存；图片按预算保存；视频默认只保存元数据、封面和用户明确收藏的本体。
 - 最大化保存所有可获取媒体，离线能力最强但成本和风险最高。
 - 只保存文本与外链，空间最小但不满足稳定离线浏览。
 
-【建议】采用第一项，并允许每个 SourceInstance 覆盖。
+【建议状态】第一项仅作全局后置建议，仍待用户最终确认；它不覆盖当前配置优先产品 E2E，也不得据此冻结本切片的媒体发现、下载、Blob、分层、容量或作用域合同。
 
 【选错代价】策略可调整，但未下载且来源后来消失的内容无法补回；过度保存则需要可靠清理和隐私工具。
 

@@ -6,6 +6,7 @@ import {
     jobSnapshotSchema,
     runSnapshotSchema,
     searchPageSchema,
+    sourceActivationCommandSchema,
     sourceSnapshotSchema,
     storyDetailSchema,
     entryDetailSchema,
@@ -20,6 +21,7 @@ import {
     type RunSnapshot,
     type SearchPage,
     type SearchQuery,
+    type SourceActivationCommand,
     type SourceSnapshot,
     type StoryDetail,
     type SseEvent,
@@ -120,6 +122,20 @@ export class HttpCosmosClient {
         return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}`, {
             method: "PATCH",
             body: input,
+            schema: sourceSnapshotSchema,
+        });
+    }
+
+    async activateSource(
+        sourceId: string,
+        input: SourceActivationCommand,
+        idempotencyKey: string,
+    ): Promise<SourceSnapshot> {
+        const payload = sourceActivationCommandSchema.parse(input);
+        return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}/activation-commands`, {
+            method: "POST",
+            headers: { "idempotency-key": idempotencyKey },
+            body: payload,
             schema: sourceSnapshotSchema,
         });
     }

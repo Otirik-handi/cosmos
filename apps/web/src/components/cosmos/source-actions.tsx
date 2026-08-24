@@ -16,7 +16,7 @@ export function SourceActions({onRun, sources}: SourceActionsProps) {
                 <div className="flex flex-col gap-1">
                     <h2 className="text-xl font-semibold">来源与录入</h2>
                     <p className="text-sm text-muted-foreground">
-                        {sources.length === 0 ? "创建第一个 fixture 来源。" : "选择来源执行一次手动录入。"}
+                        {sources.length === 0 ? "创建第一个 RSS 来源。" : "选择来源执行一次手动录入。"}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

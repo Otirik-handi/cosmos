@@ -1,12 +1,14 @@
 # Cosmos Project Status
 
-> 更新于 2026-08-21。最近一次由完整 runtime 门禁覆盖的实现基线是 `3af886a0099bc778c32475513740b6562bb6e31f`，已提交、已 push、未部署；后续治理提交未改变产品运行时。
+> 更新于 2026-08-24。当前工作树正在实施 Task 02 配置优先产品 E2E；未提交、未 push、未部署。
 
 ## 一句话结论
 
-产品运行时能力仍以 `3af886a` 的分层验证为历史基线。治理与流程演练优化已以检查点提交 `a0388f1` 进入 `master`（此前为长期未提交的工作树改动）；Agent Skills 生命周期收敛、Vitest unit/property 分层收集、文档门禁扩展等合同随之生效。实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+Source 身份/revision 持久化合同与默认验收调用方已完成本地 clean cutover：Product API/Web/Node E2E/Windows smoke 使用 `sourceDefinitionRef + operationId + config` 创建默认停用 Source，再以 revision CAS activation command 启用；产品路径不再提交 `kind`、`enabled` 或 `fixturePath`。本轮经五轴审查收口：激活同键重放持久化并返回首结果快照（新 migration `20260824100000_source_activation_result_snapshot`）、API 边界配置校验切换 canonical Zod schema（Bilibili feed 缺 profile 即拒）、未启用 Source 手动 Run 返回 409、RSS `feedUrl` 收紧 http(s)、Idempotency-Key 统一 1–300 字符、迁移回归测试临时目录修复。本地通过全仓类型检查、34 文件/249 单元测试、4 文件/4 Node 进程 E2E、8 个生产浏览器场景、12 个组件实验室浏览器场景和 Windows Node smoke。Docker CLI 不可用，Docker 验收未运行；真实 RSS/AI HOT/Bilibili、未保存配置 Probe、媒体离线链路和发布部署仍未完成。
 
-Task 09 React 组件实验室与 NeuroBook 主题系统已通过合并 `feat/t09-react-component-lab`（tip `e6bff3c`）进入 `master`，本次合并由用户明确授权；远端 run `32464307892` attempt 2 四个 job 全绿。2026-08-23 已按授权快进推送 `master`（首次推送至 `1a258f0`，当前远端 HEAD 为 `43be9e2`，随文档提交推进），GitHub 据此将 PR #10 自动标记为 MERGED（`mergedAt=2026-08-23T12:14:30Z`）；发布和部署未执行。
+实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
+
+Task 09 React 组件实验室与 NeuroBook 主题系统已通过合并 `feat/t09-react-component-lab`（tip `e6bff3c`）进入 `master`，本次合并由用户明确授权；远端 run `32464307892` attempt 2 四个 job 全绿。2026-08-23 按授权首次快进推送 `master` 至远端 `1a258f0`；后续状态文档提交继续推送，GitHub 据此将 PR #10 自动标记为 MERGED（`mergedAt=2026-08-23T12:14:30Z`）；发布和部署未执行。
 
 React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.worktree/react-component-lab` / `feat/t09-react-component-lab` 完成本地实现、P1 修复、本地最终门禁与修复后五轴审查。CI 配置现已加入隔离下游 job 的 `bun run db:generate` 和 `bun run test:browser:component-lab`；远端 CI run `32464307892` attempt 2 已验证四个 CI job 全部通过。
 
@@ -18,7 +20,7 @@ React 组件实验室 Proposal 已于 2026-08-20 接受；Task 09 在独立 `.wo
 - 既有 `bun run test:browser` ingest 流程通过：来源创建、录入、Feed、Story；
 实现提交 `c130be8fba412dfdb1f5e2272ba3a579d30e63a8` 已 commit 并 push；分支已按用户授权合并（merge commit `b08f72d`），`master` 已按授权推送至远端（2026-08-23 首次推送 `1a258f0`），PR #10 已被 GitHub 标记为 MERGED；发布、部署未执行。
 
-## 本轮本地已验证（2026-08-21）
+## 历史本地验证记录（2026-08-21）
 
 ```text
 bun run docs:check
@@ -57,7 +59,7 @@ git diff --check
 工具链保留的 `vitest.config.ts` / `vitest.property.config.ts` 分层收集合同未改变。
 修复后五轴审查结论：Correctness、Readability、Architecture、Security、Performance 均通过；SourceForm 与 FeedBrowser fixture 提交阻断均由专用浏览器回归覆盖；`fixturePath` 任意路径属于 HEAD 既有基线风险，未纳入本轮 patch findings。
 
-## NeuroBook 主题系统切片（2026-08-22，本地）
+## 历史 NeuroBook 主题系统切片（2026-08-22，本地）
 
 已接受的 [`neurobook-theme-system`](docs/proposals/neurobook-theme-system.md) Proposal 在
 `feat/t09-react-component-lab` worktree 以 Task 09 Slice 7 实施：全局 `neurobook` 主题 ×
@@ -78,7 +80,7 @@ testing README 回归边界。
 console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`。既有未提交 hydration
 回归保留并通过。
 
-未运行：Node process E2E、Windows smoke、Docker、真实来源；发布与部署未执行。push 与 worktree 清理已按授权完成。`fixturePath` containment 既有安全债务仍未处理。
+历史记录：当时未运行 Node process E2E、Windows smoke、Docker、真实来源；发布与部署未执行。后续 Task 02 配置优先切片已补充本地 Node/Browser/Windows smoke 证据；`fixturePath` containment 仍是 Connector 内部遗留安全债务，未作为 Product API 输入。
 
 ## 远端 CI 与治理边界
 
@@ -87,17 +89,15 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - 远端 CI 检查通过后，用户已授权将分支合并进本地 `master`（已完成，merge commit `b08f72d`）并清理 worktree（已完成）。2026-08-23 用户进一步授权推送：`master` 快进推送至远端（`a3b962f..1a258f0`），GitHub 将 PR #10 自动标记为 MERGED（GitHub 记录的 merge commit 为分支头 `52a2535`）。2026-08-20 通过 GitHub API 核验：`master` 没有 branch protection，仓库 rulesets 为空；本轮未创建或修改远端治理。
 - 分支实现、CI 修复和状态记录已 commit 并 push；本地合并、master 推送均已完成。发布和部署未执行。
 
-## 最近一次完整 runtime 门禁（实现基线 `3af886a`）
+## 历史 runtime 基线（实现基线 `3af886a`）
 
-2026-08-18 已验证：数据库/类型、属性/单元、构建、4 个 Node process E2E、1 个 Playwright browser test 和 Windows smoke。该证据是历史产品运行时基线；本轮 Task 09 新增的本地浏览器证据见上方，未重新运行 Node process E2E 或 Windows smoke。
+2026-08-18 已验证：数据库/类型、属性/单元、构建、4 个 Node process E2E、1 个 Playwright browser test 和 Windows smoke。该证据保留为历史基线；本轮 Task 02 的更新证据见文档顶部与 `.agents/tasks/02-rss-ingestion/README.md`。
 
-## 本轮未运行
+## 历史 Task 09 流程演练未运行项
 
-- Node process E2E、Playwright 浏览器、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署均未在本轮流程演练优化后运行。
-- 原因：本轮只改变仓库治理、文档检查和贡献/PR/Issue/Task 入口，不改变产品运行时行为；完整 runtime 证据仍锚定 `3af886a`，远端新 CI 在 push 前无法产生。
+- Task 09 流程演练阶段未运行 Node process E2E、Playwright 浏览器、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署；这些历史边界不代表当前 Task 02 验证状态。
 - Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
-- Task 09 的本地 Playwright 浏览器与实验室开发/生产 smoke 已运行并通过；本地未运行 Node process E2E、Windows smoke、Docker、真实 RSS/AI HOT/Bilibili、长时双 Worker 压力、真实 Agent、发布和部署。
-- 已验证远端 CI run `32464307892` attempt 2 已 completed/success：Quality、Node process E2E、Browser E2E 和 Windows Node smoke 全部通过；远端 Browser E2E 已覆盖 `bun run test:browser:component-lab`，隔离下游 job 已执行 `bun run db:generate`。
+- 远端 CI run `32464307892` attempt 2 已 completed/success；该远端证据与当前工作树未提交状态分开记录。
 
 ## 当前运维边界
 
@@ -108,7 +108,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-Task 09 全链路已闭环：远端 run `32464307892` attempt 2 的 Quality、Node process E2E、Browser E2E 和 Windows Node smoke 通过 → 分支按授权合并进 `master`（merge commit `b08f72d`）→ worktree 与本地任务分支清理 → `master` 按授权快进推送（2026-08-23 首次至 `1a258f0`）→ GitHub 将 PR #10 标记为 MERGED。剩余未执行项：发布、部署、删除远端分支 `origin/feat/t09-react-component-lab`。
+Task 02 的 Source 身份/revision 合同、配置入口、API/Worker 迁移和默认离线 E2E 已通过本地门禁；当前仍未把未保存配置 Probe、RSS 媒体提取/下载、Blob/bytes 映射和断网阅读降级做成产品能力。下一步按 Task 顺序先实现独立 `source-config-probe`（不复用已保存 Source Probe），再完成媒体边界设计与实现，最后用用户填写的真实 RSS URL 做产品验收。Docker、真实来源、发布、部署和删除远端任务分支仍未执行。
 
 ## 已完成
 

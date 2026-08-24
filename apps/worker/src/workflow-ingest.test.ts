@@ -34,18 +34,8 @@ describe("Worker Ingest Workflow composition", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
-                name: "Workflow fixture",
-                kind: "fixture-rss",
-                config: {},
-                enabled: true,
-            });
-            const otherSource = await repository.createSource({
-                name: "Other workflow fixture",
-                kind: "fixture-rss",
-                config: {},
-                enabled: true,
-            });
+            const source = await createFixtureSource(repository, "Workflow fixture");
+            const otherSource = await createFixtureSource(repository, "Other workflow fixture");
             const imageV1 = new TextEncoder().encode("workflow-image-v1");
             const imageV2 = new TextEncoder().encode("workflow-image-v2");
             const firstPage: readonly NormalizedIngestItem[] = [{
@@ -179,16 +169,7 @@ describe("Worker Ingest Workflow composition", () => {
             });
             const getSourceExecutionSnapshot = async (sourceId: string) => {
                 const current = await repository.getSource(sourceId);
-                if (!current) return null;
-                return {
-                    id: current.id,
-                    name: current.name,
-                    kind: current.kind,
-                    config: current.config,
-                    enabled: current.enabled,
-                    createdAt: current.createdAt,
-                    updatedAt: current.updatedAt,
-                };
+                return current ?? null;
             };
             const composition = createComposition("workflow-parity-worker");
             const control = new IngestWorkflowControlService({
@@ -494,14 +475,31 @@ function prepareDatabase(root: string): void {
     writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
     execFileSync(process.execPath, [
         prismaCli,
-        "db",
-        "push",
+        "migrate",
+        "deploy",
         "--schema",
         schema,
-        "--skip-generate",
     ], {
         cwd: process.cwd(),
         env: { ...process.env, DATABASE_URL: databaseUrl },
         stdio: "ignore",
+    });
+}
+
+async function createFixtureSource(
+    repository: PrismaCosmosRepository,
+    name: string,
+) {
+    const created = await repository.createSource({
+        name,
+        sourceDefinitionRef: "source.fixture-rss@1",
+        operationId: "fetch",
+        config: {},
+    });
+    return repository.activateSource({
+        sourceId: created.id,
+        idempotencyKey: `test-activation:${created.id}`,
+        enabled: true,
+        baseRevisionId: created.revisionId,
     });
 }

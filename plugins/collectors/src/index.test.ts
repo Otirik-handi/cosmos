@@ -11,15 +11,21 @@ import {
 } from "./index.js";
 
 function source(input: {
-    kind: string;
+    kind: "bilibili" | "aihot";
     config: Record<string, unknown>;
 }): SourceSnapshot {
     return {
         id: `source-${input.kind}`,
         name: input.kind,
+        sourceDefinitionRef: input.kind === "bilibili"
+            ? "source.bilibili@1"
+            : "source.aihot@1",
+        operationId: "fetch",
+        connectorId: input.kind,
         kind: input.kind,
         config: input.config,
         enabled: true,
+        revisionId: `source-${input.kind}:1`,
         createdAt: "2026-08-08T00:00:00.000Z",
         updatedAt: "2026-08-08T00:00:00.000Z",
         lastRunAt: null,
@@ -319,9 +325,6 @@ describe("built-in collectors", () => {
             "bilibili",
             "aihot",
         ]);
-        expect(() => registry.resolve(source({
-            kind: "opencli",
-            config: {},
-        }))).toThrow();
+        expect(registry.descriptors().map((item) => item.id)).not.toContain("opencli");
     });
 });

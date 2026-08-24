@@ -23,7 +23,7 @@ import {Textarea} from "@/components/ui/textarea";
 
 export const sourceFormSchema = z.object({
     name: z.string().trim().min(1).max(200),
-    fixturePath: z.string().trim().min(1),
+    feedUrl: z.string().trim().url(),
 });
 
 export type SourceFormValues = z.input<typeof sourceFormSchema>;
@@ -39,7 +39,7 @@ export function SourceForm({form, onSubmit}: SourceFormProps) {
             <CardHeader>
                 <CardTitle>新建 RSS 来源</CardTitle>
                 <CardDescription>
-                    当前首条切片使用本地 fixture；真实 RSS 只需要把类型改为 RSS 并填写 Feed URL。
+                    先填写真实 RSS/Atom Feed URL；来源创建后默认停用，确认配置后才会启用。
                 </CardDescription>
             </CardHeader>
             <form onSubmit={onSubmit}>
@@ -54,17 +54,16 @@ export function SourceForm({form, onSubmit}: SourceFormProps) {
                             />
                             <FieldError errors={[form.formState.errors.name]} />
                         </Field>
-                        <Field data-invalid={Boolean(form.formState.errors.fixturePath)}>
-                            <FieldLabel htmlFor="fixture-path">Fixture 路径</FieldLabel>
-                            <Textarea
-                                id="fixture-path"
-                                aria-invalid={Boolean(form.formState.errors.fixturePath)}
-                                {...form.register("fixturePath")}
+                        <Field data-invalid={Boolean(form.formState.errors.feedUrl)}>
+                            <FieldLabel htmlFor="source-feed-url">Feed URL</FieldLabel>
+                            <Input
+                                id="source-feed-url"
+                                type="url"
+                                placeholder="https://example.com/feed.xml"
+                                aria-invalid={Boolean(form.formState.errors.feedUrl)}
+                                {...form.register("feedUrl")}
                             />
-                            <FieldDescription>
-                                相对于服务器工作目录的路径，例如 fixtures/rss/basic.xml。
-                            </FieldDescription>
-                            <FieldError errors={[form.formState.errors.fixturePath]} />
+                            <FieldError errors={[form.formState.errors.feedUrl]} />
                         </Field>
                     </FieldGroup>
                 </CardContent>

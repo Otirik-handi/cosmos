@@ -248,8 +248,8 @@ const textareaControls = [
     control("disabled", "Disabled", "boolean", false),
 ] as const satisfies readonly LabControlDefinition[];
 const sourceFormControls = [
-    control("name", "Name", "text", "Cosmos fixture"),
-    control("fixturePath", "Fixture path", "text", "fixtures/rss/basic.xml"),
+    control("name", "Name", "text", "Cosmos RSS"),
+    control("feedUrl", "Feed URL", "text", "https://example.com/feed.xml"),
 ] as const satisfies readonly LabControlDefinition[];
 
 const statusSummaryControls = [
@@ -432,8 +432,8 @@ export const labComponentDefinitions = [
         defaultSceneId: "default",
         controls: sourceFormControls,
         scenes: [
-            {id: "default", label: "Default", props: {name: "Cosmos fixture", fixturePath: "fixtures/rss/basic.xml"}},
-            {id: "long-text", label: "Long text", props: {name: "A source name long enough to test wrapping", fixturePath: "fixtures/rss/a-long-fixture-path.xml"}},
+            {id: "default", label: "Default", props: {name: "Cosmos RSS", feedUrl: "https://example.com/feed.xml"}},
+            {id: "long-text", label: "Long text", props: {name: "A source name long enough to test wrapping", feedUrl: "https://example.com/a-very-long-feed-url.xml"}},
         ],
         tokens: sharedTokens,
         render: renderSourceFormLab,

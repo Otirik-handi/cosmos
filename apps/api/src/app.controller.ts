@@ -37,6 +37,8 @@ import {
     createSourceCommandSchema,
     entryListQuerySchema,
     searchQuerySchema,
+    idempotencyKeySchema,
+    sourceActivationCommandSchema,
     updateSourceCommandSchema,
     type HealthResponse,
     type RunStatus,
@@ -64,6 +66,18 @@ function validationError(error: unknown): never {
         });
     }
     throw error;
+}
+
+function requireIdempotencyKey(rawHeader?: string): string {
+    const parsed = idempotencyKeySchema.safeParse(rawHeader ?? "");
+    if (!parsed.success) {
+        throw new BadRequestException({
+            code: "validation_failed",
+            message: "Idempotency-Key must be 1-300 characters.",
+            retryable: false,
+        });
+    }
+    return parsed.data;
 }
 
 @Controller()
@@ -207,6 +221,7 @@ export class AppController {
     @Bind(Param("sourceId"), Body())
     async updateSource(sourceId: string, body: unknown) {
         try {
+            const input = updateSourceCommandSchema.parse(body);
             const source = await this.repository.getSource(sourceId);
             if (!source) {
                 throw new NotFoundException({
@@ -215,13 +230,74 @@ export class AppController {
                     retryable: false,
                 });
             }
-            const updated = await this.repository.setSourceEnabled(
-                sourceId,
-                updateSourceCommandSchema.parse(body).enabled,
-            );
+            if (input.config !== undefined) {
+                this.sourceProbe.validate({
+                    sourceDefinitionRef: source.sourceDefinitionRef,
+                    operationId: source.operationId,
+                    config: input.config,
+                });
+            }
+            const updated = await this.repository.updateSource(sourceId, input);
             return toPublicSource(updated);
         } catch (error) {
-            validationError(error);
+            if (error instanceof ZodError) validationError(error);
+            if (error instanceof NotFoundException || error instanceof ConflictException) throw error;
+            if (error instanceof Error && "code" in error && error.code === "not_found") {
+                throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
+            }
+            if (error instanceof Error && "code" in error && error.code === "conflict") {
+                throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
+            }
+            throw new BadRequestException({
+                code: "validation_failed",
+                message: error instanceof Error ? error.message : "Source configuration is invalid.",
+                retryable: false,
+            });
+        }
+    }
+
+    @Post("sources/:sourceId/activation-commands")
+    @Bind(Param("sourceId"), Body(), Headers("idempotency-key"))
+    async activateSource(sourceId: string, body: unknown, idempotencyKey?: string) {
+        try {
+            const key = requireIdempotencyKey(idempotencyKey);
+            const command = sourceActivationCommandSchema.parse(body);
+            if (command.enabled) {
+                const source = await this.repository.getSource(sourceId);
+                if (!source) {
+                    throw new NotFoundException({
+                        code: "not_found",
+                        message: `Source not found: ${sourceId}`,
+                        retryable: false,
+                    });
+                }
+                this.sourceProbe.validate({
+                    sourceDefinitionRef: source.sourceDefinitionRef,
+                    operationId: source.operationId,
+                    config: source.config,
+                });
+            }
+            return toPublicSource(await this.repository.activateSource({
+                ...command,
+                sourceId,
+                idempotencyKey: key,
+            }));
+        } catch (error) {
+            if (error instanceof ZodError) validationError(error);
+            if (error instanceof BadRequestException || error instanceof NotFoundException || error instanceof ConflictException) {
+                throw error;
+            }
+            if (error instanceof Error && "code" in error && error.code === "not_found") {
+                throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
+            }
+            if (error instanceof Error && "code" in error && error.code === "conflict") {
+                throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
+            }
+            throw new BadRequestException({
+                code: "validation_failed",
+                message: error instanceof Error ? error.message : "Source configuration is invalid.",
+                retryable: false,
+            });
         }
     }
 
@@ -237,10 +313,10 @@ export class AppController {
                 retryable: false,
             });
         }
+        const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
         const job = await this.repository.createProbeJob({
             sourceId,
-            idempotencyKey: idempotencyKey?.trim()
-                || `probe:${sourceId}:${randomUUID()}`,
+            idempotencyKey: providedKey ?? `probe:${sourceId}:${randomUUID()}`,
         });
         this.logger?.info("job.queued", {
             jobId: job.id,
@@ -262,7 +338,15 @@ export class AppController {
                 retryable: false,
             });
         }
-        const key = idempotencyKey?.trim() || `manual:${sourceId}:${randomUUID()}`;
+        if (!source.enabled) {
+            throw new ConflictException({
+                code: "conflict",
+                message: `Source is not enabled: ${sourceId}`,
+                retryable: false,
+            });
+        }
+        const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
+        const key = providedKey ?? `manual:${sourceId}:${randomUUID()}`;
         if (this.workflowControl) {
             try {
                 const envelope = await this.workflowControl.enqueue({
@@ -601,9 +685,13 @@ function toPublicSource(source: SourceSnapshot) {
     return {
         id: source.id,
         name: source.name,
+        sourceDefinitionRef: source.sourceDefinitionRef,
+        operationId: source.operationId,
+        connectorId: source.connectorId,
         kind: source.kind,
         config,
         enabled: source.enabled,
+        revisionId: source.revisionId,
         createdAt: source.createdAt,
         updatedAt: source.updatedAt,
         lastRunAt: source.lastRunAt,

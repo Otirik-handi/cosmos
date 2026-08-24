@@ -1,9 +1,7 @@
 import { execFileSync } from "node:child_process";
-
 import {
     applyMigrations,
     createIsolatedStackRoot,
-    delay,
     disposeIsolatedStack,
     environmentForStack,
     findAvailablePort,
@@ -113,11 +111,8 @@ function readPort(raw: string): number {
 process.once("SIGINT", () => void stop().finally(() => process.exit(0)));
 process.once("SIGTERM", () => void stop().finally(() => process.exit(0)));
 
-void main()
-    .catch((error) => {
-        process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-        process.exitCode = 1;
-    })
-    .finally(async () => {
-        if (stopping) await delay(0);
-    });
+void main().catch(async (error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exitCode = 1;
+    await stop();
+});

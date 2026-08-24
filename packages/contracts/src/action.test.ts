@@ -150,9 +150,13 @@ describe("Action contracts", () => {
         const executionSnapshot = sourceExecutionSnapshotSchema.parse({
             id: "source-1",
             name: "Fixture source",
+            sourceDefinitionRef: "source.fixture-rss@1",
+            operationId: "fetch",
+            connectorId: "fixture-rss",
             kind: "fixture-rss",
             config: { fixturePath: "fixtures/feed.xml" },
             enabled: true,
+            revisionId: "source-1:1",
             createdAt: "2026-08-15T00:00:00.000Z",
             updatedAt: "2026-08-15T00:00:00.000Z",
         });

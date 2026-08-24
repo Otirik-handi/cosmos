@@ -1,4 +1,25 @@
 services:
+    rss-fixture:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+        command:
+            - node
+            - scripts/e2e/rss-fixture-server.ts
+        environment:
+            COSMOS_E2E_RSS_HOST: 0.0.0.0
+            COSMOS_E2E_RSS_PORT: "4380"
+        healthcheck:
+            test:
+                - CMD
+                - node
+                - -e
+                - fetch('http://127.0.0.1:4380/feed.xml').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+            interval: 2s
+            timeout: 2s
+            retries: 20
+            start_period: 2s
+
     web:
         build:
             context: ..
@@ -75,6 +96,8 @@ services:
             - cosmos-logs:/var/lib/cosmos/logs
         depends_on:
             api:
+                condition: service_healthy
+            rss-fixture:
                 condition: service_healthy
 
 volumes:

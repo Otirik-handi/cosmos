@@ -60,8 +60,8 @@ export default function Home() {
     const sourceForm = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
         defaultValues: {
-            name: "Cosmos fixture",
-            fixturePath: "fixtures/rss/basic.xml",
+            name: "Cosmos RSS",
+            feedUrl: "https://example.com/feed.xml",
         },
     });
     const searchForm = useForm<SearchFormValues>({
@@ -133,15 +133,17 @@ export default function Home() {
     const onCreateSource = sourceForm.handleSubmit(async (values) => {
         setError(null);
         try {
-            await client.createSource(createSourceCommandSchema.parse({
+            const created = await client.createSource(createSourceCommandSchema.parse({
                 name: values.name,
-                kind: "fixture-rss",
-                config: {
-                    fixturePath: values.fixturePath,
-                },
-                enabled: true,
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: values.feedUrl },
             }));
-            setNotice("来源已创建，可以立即触发一次录入。");
+            await client.activateSource(created.id, {
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            }, `web-activation:${created.id}:${created.revisionId}`);
+            setNotice("RSS 来源已保存并启用，可以立即触发一次录入。");
             setShowSourceForm(false);
             sourceForm.reset();
             await refresh();
@@ -243,7 +245,7 @@ export default function Home() {
                         Cosmos
                     </h1>
                     <p className="max-w-2xl text-muted-foreground">
-                        从 Story 入口浏览已保存的信息，并手动触发 RSS/fixture 录入。
+                        从 Story 入口浏览已保存的信息，并手动触发 RSS 录入。
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

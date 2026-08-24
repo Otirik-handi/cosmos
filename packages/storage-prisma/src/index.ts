@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
     join,
     relative,
@@ -22,11 +22,13 @@ import {
     type SearchQuery,
     type RevisionDetail,
     type IngestTriggerKind,
+    type SourceActivationCommand,
     type SourceCheckpointOutput,
     type Publisher,
     type SourceSnapshot,
     type StoryDetail,
     type TemporalValue,
+    type UpdateSourceCommand,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
@@ -35,14 +37,18 @@ import {
     temporalProjection,
     type NormalizedIngestItem,
 } from "@cosmos/domain";
-import type {
-    CosmosRepository,
-    HostActionExecutionFence,
-    JobLease,
-    LoggerPort,
-    PersistIngestItemResult,
-    RepositoryHealth,
-    WorkflowAttemptSnapshot,
+import {
+    createBuiltinManifestCatalog,
+    SourceNotFoundError,
+    SourceRevisionConflictError,
+    type CatalogPort,
+    type CosmosRepository,
+    type HostActionExecutionFence,
+    type JobLease,
+    type LoggerPort,
+    type PersistIngestItemResult,
+    type RepositoryHealth,
+    type WorkflowAttemptSnapshot,
 } from "@cosmos/application";
 import { FileBlobStore } from "@cosmos/blob-store";
 import { PrismaClient, type Prisma } from "@prisma/client";
@@ -108,17 +114,35 @@ export function resolveContainedPath(root: string, child: string): string {
     return resolvedChild;
 }
 
+function parseSourceRevisionId(sourceId: string, revisionId: string): number {
+    const prefix = `${sourceId}:`;
+    if (!revisionId.startsWith(prefix) || revisionId.length === prefix.length) {
+        throw new SourceRevisionConflictError(sourceId);
+    }
+    const rawRevision = revisionId.slice(prefix.length);
+    if (!/^[1-9][0-9]*$/.test(rawRevision)) {
+        throw new SourceRevisionConflictError(sourceId);
+    }
+    const revision = Number(rawRevision);
+    if (!Number.isSafeInteger(revision) || revision < 1) {
+        throw new SourceRevisionConflictError(sourceId);
+    }
+    return revision;
+}
+
 export class PrismaCosmosRepository implements CosmosRepository {
     readonly roots: StorageRoots;
     readonly prisma: PrismaClient;
     readonly blobs: FileBlobStore;
     private readonly logger?: LoggerPort;
+    private readonly catalog: CatalogPort;
 
     constructor(options: {
         dataRoot?: string;
         prisma?: PrismaClient;
         blobs?: FileBlobStore;
         logger?: LoggerPort;
+        catalog?: CatalogPort;
     } = {}) {
         this.roots = resolveStorageRoots(options.dataRoot);
         this.prisma = options.prisma ?? createPrismaClient(this.roots.dataRoot);
@@ -126,6 +150,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             root: this.roots.blobRoot,
         });
         this.logger = options.logger;
+        this.catalog = options.catalog ?? createBuiltinManifestCatalog();
     }
 
     async initialize(): Promise<void> {
@@ -164,12 +189,19 @@ export class PrismaCosmosRepository implements CosmosRepository {
     }
 
     async createSource(input: CreateSourceCommand): Promise<SourceSnapshot> {
+        const manifest = this.catalog.getSourceDefinitionByRef(input.sourceDefinitionRef);
+        if (!manifest || manifest.status !== "enabled" || !manifest.operationIds.includes(input.operationId)) {
+            throw new Error(`Source definition is not available: ${input.sourceDefinitionRef}`);
+        }
         const source = await this.prisma.sourceInstance.create({
             data: {
                 name: input.name,
-                kind: input.kind,
+                kind: manifest.id,
+                sourceDefinitionRef: manifest.ref,
+                operationId: input.operationId,
                 configJson: JSON.stringify(input.config),
-                enabled: input.enabled ?? true,
+                enabled: false,
+                revision: 1,
             },
         });
         return this.toSourceSnapshot(source);
@@ -189,14 +221,100 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return source ? this.toSourceSnapshot(source) : null;
     }
 
-    async setSourceEnabled(
-        sourceId: string,
-        enabled: boolean,
-    ): Promise<SourceSnapshot> {
-        const source = await this.prisma.sourceInstance.update({
-            where: { id: sourceId },
-            data: { enabled },
+    async updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot> {
+        const expectedRevision = parseSourceRevisionId(sourceId, input.baseRevisionId);
+        const current = await this.prisma.sourceInstance.findUnique({ where: { id: sourceId } });
+        if (!current) throw new SourceNotFoundError(sourceId);
+        const updated = await this.prisma.sourceInstance.updateMany({
+            where: { id: sourceId, revision: expectedRevision },
+            data: {
+                ...(input.name !== undefined ? { name: input.name } : {}),
+                ...(input.config !== undefined ? { configJson: JSON.stringify(input.config) } : {}),
+                revision: { increment: 1 },
+            },
         });
+        if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
+        return this.toSourceSnapshot(await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: sourceId } }));
+    }
+
+    async activateSource(input: SourceActivationCommand & {
+        sourceId: string;
+        idempotencyKey: string;
+    }): Promise<SourceSnapshot> {
+        const expectedRevision = parseSourceRevisionId(input.sourceId, input.baseRevisionId);
+        const requestHash = sourceActivationRequestHash(input);
+        let source: Prisma.SourceInstanceGetPayload<{}>;
+        try {
+            const outcome = await this.prisma.$transaction(async (tx): Promise<{
+                snapshot: SourceSnapshot | null;
+            }> => {
+                const existing = await tx.sourceActivationCommand.findUnique({
+                    where: { idempotencyKey: input.idempotencyKey },
+                });
+                if (existing) {
+                    if (existing.sourceInstanceId !== input.sourceId || existing.requestHash !== requestHash) {
+                        throw new SourceRevisionConflictError(input.sourceId);
+                    }
+                    // Replay returns the recorded first-result snapshot so the
+                    // response stays stable even when later PATCHes moved the
+                    // source forward. Rows created before that column existed
+                    // fall back to a fresh read.
+                    return {
+                        snapshot: existing.resultSnapshotJson
+                            ? JSON.parse(existing.resultSnapshotJson) as SourceSnapshot
+                            : null,
+                    };
+                }
+
+                const current = await tx.sourceInstance.findUnique({ where: { id: input.sourceId } });
+                if (!current) throw new SourceNotFoundError(input.sourceId);
+                // CAS guard for every fresh command, including no-op intents:
+                // a stale baseRevisionId must conflict instead of recording.
+                if (current.revision !== expectedRevision) {
+                    throw new SourceRevisionConflictError(input.sourceId);
+                }
+
+                const resultRevision = current.enabled === input.enabled
+                    ? expectedRevision
+                    : expectedRevision + 1;
+                if (resultRevision !== expectedRevision) {
+                    const updated = await tx.sourceInstance.updateMany({
+                        where: { id: input.sourceId, revision: expectedRevision },
+                        data: { enabled: input.enabled, revision: resultRevision },
+                    });
+                    if (updated.count !== 1) throw new SourceRevisionConflictError(input.sourceId);
+                }
+                const resultRow = await tx.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
+                const snapshot = await this.toSourceSnapshot(resultRow, tx);
+                await tx.sourceActivationCommand.create({
+                    data: {
+                        id: randomUUID(),
+                        sourceInstanceId: input.sourceId,
+                        idempotencyKey: input.idempotencyKey,
+                        requestHash,
+                        enabled: input.enabled,
+                        baseRevisionId: input.baseRevisionId,
+                        resultRevision,
+                        resultSnapshotJson: JSON.stringify(snapshot),
+                    },
+                });
+                return { snapshot };
+            });
+            if (outcome.snapshot) return outcome.snapshot;
+            source = await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
+        } catch (error) {
+            if (!isUniqueConstraintError(error)) throw error;
+            const existing = await this.prisma.sourceActivationCommand.findUnique({
+                where: { idempotencyKey: input.idempotencyKey },
+            });
+            if (!existing || existing.sourceInstanceId !== input.sourceId || existing.requestHash !== requestHash) {
+                throw new SourceRevisionConflictError(input.sourceId);
+            }
+            if (existing.resultSnapshotJson) {
+                return JSON.parse(existing.resultSnapshotJson) as SourceSnapshot;
+            }
+            source = await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
+        }
         return this.toSourceSnapshot(source);
     }
 
@@ -1825,13 +1943,16 @@ export class PrismaCosmosRepository implements CosmosRepository {
 
     private async toSourceSnapshot(
         source: Prisma.SourceInstanceGetPayload<{}>,
+        // Transaction-scoped reads let activation freeze the exact post-write
+        // projection it will replay later.
+        db: Prisma.TransactionClient = this.prisma,
     ): Promise<SourceSnapshot> {
         const [latestRun, latestWorkflowRun] = await Promise.all([
-            this.prisma.run.findFirst({
+            db.run.findFirst({
                 where: { sourceInstanceId: source.id },
                 orderBy: { createdAt: "desc" },
             }),
-            this.prisma.workflowRun.findFirst({
+            db.workflowRun.findFirst({
                 where: { sourceInstanceId: source.id },
                 orderBy: { createdAt: "desc" },
             }),
@@ -1851,12 +1972,20 @@ export class PrismaCosmosRepository implements CosmosRepository {
         const latest = legacyProjection && workflowProjection
             ? legacyProjection.at >= workflowProjection.at ? legacyProjection : workflowProjection
             : legacyProjection ?? workflowProjection;
+        const manifest = this.catalog.getSourceDefinitionByRef(source.sourceDefinitionRef);
+        if (!manifest || manifest.id !== source.kind || !manifest.operationIds.includes(source.operationId)) {
+            throw new Error(`Source definition mapping is invalid: ${source.sourceDefinitionRef}`);
+        }
         return {
             id: source.id,
             name: source.name,
-            kind: sourceKindSchema.parse(source.kind),
+            sourceDefinitionRef: manifest.ref,
+            operationId: source.operationId,
+            connectorId: manifest.connectorId,
+            kind: manifest.id,
             config: sourceConfigSchema.parse(JSON.parse(source.configJson)),
             enabled: source.enabled,
+            revisionId: `${source.id}:${source.revision}`,
             createdAt: source.createdAt.toISOString(),
             updatedAt: source.updatedAt.toISOString(),
             lastRunAt: latest?.at.toISOString() ?? null,
@@ -2235,6 +2364,19 @@ function parseJson<T>(value: string | null): T | null {
     } catch {
         return null;
     }
+}
+
+function sourceActivationRequestHash(input: SourceActivationCommand & {
+    sourceId: string;
+    idempotencyKey: string;
+}): string {
+    return `sha256:${createHash("sha256")
+        .update(JSON.stringify({
+            sourceId: input.sourceId,
+            enabled: input.enabled,
+            baseRevisionId: input.baseRevisionId,
+        }))
+        .digest("hex")}`;
 }
 
 function exactTemporalValue(date: Date | null): TemporalValue | null {

@@ -58,6 +58,50 @@ describe("HttpCosmosClient", () => {
         }]);
     });
 
+    it("posts source activation commands with the idempotency key", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                return new Response(JSON.stringify({
+                    id: "source-1",
+                    name: "RSS",
+                    sourceDefinitionRef: "source.rss@1",
+                    operationId: "fetch",
+                    connectorId: "rss",
+                    kind: "rss",
+                    config: { feedUrl: "https://example.test/feed.xml" },
+                    enabled: true,
+                    revisionId: "source-1:2",
+                    createdAt: "2026-08-24T00:00:00.000Z",
+                    updatedAt: "2026-08-24T00:00:01.000Z",
+                    lastRunAt: null,
+                    lastError: null,
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const activated = await client.activateSource("source-1", {
+            enabled: true,
+            baseRevisionId: "source-1:1",
+        }, "activation-1");
+
+        expect(activated.revisionId).toBe("source-1:2");
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/sources/source-1/activation-commands");
+        expect(requests[0]?.init).toMatchObject({
+            method: "POST",
+            headers: expect.objectContaining({ "idempotency-key": "activation-1" }),
+        });
+        expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+            enabled: true,
+            baseRevisionId: "source-1:1",
+        });
+    });
+
     it("opens the versioned SSE endpoint and validates event envelopes", () => {
         let instance: CosmosEventSource | undefined;
         let openedUrl = "";

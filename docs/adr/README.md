@@ -19,8 +19,5 @@ ADR 只记录已经稳定、需要长期保留的决定。仍在探索或会随�
   固定规范脚本 Kernel、可选 Backend、Cosmos Host、`TaskStore + WakeupBus`、
   多宿主和 Agent Extension 边界；实施先稳定 `nb-workflow`，再进入 Cosmos
   Worker/Host convergence。
-- [0003 Product Service、Worker Admin 与 Worker Gateway 边界](0003-service-worker-api-boundaries.md)：
-  分离产品、运维和远程执行协议；远程 Worker v1 使用 HTTPS long-poll，并由
-  Action execution placement 控制执行位置；Attempt owner handoff、late evidence
-  和 Gateway capacity 由 TaskStore fencing/CAS 裁决。Worker Admin 后于本地
-  Worker 收敛，远程 Gateway 再后置实施。
+- [0003 Product Service、Worker Admin 与 Worker Gateway 边界](0003-service-worker-api-boundaries.md)：分离产品、运维和远程执行协议；远程 Worker v1 使用 HTTPS long-poll，并由 Action execution placement 控制执行位置；Attempt owner handoff、late evidence 和 Gateway capacity 由 TaskStore fencing/CAS 裁决。Worker Admin 后于本地 Worker 收敛，远程 Gateway 再后置实施。
+- [0004 SourceInstance 身份与 revision 并发边界](0004-source-instance-identity-and-revision.md)：固定版本化 `sourceDefinitionRef`、manifest 到 Connector 的显式映射、迁移预检、默认停用和 revision CAS；不覆盖 CollectionPlan、未保存 Probe 或媒体实现。

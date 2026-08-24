@@ -14,10 +14,11 @@ export const cosmosLogger = createLogger({
     service: "cosmos-api",
     fileName: "api",
 });
+export const cosmosCatalog = createBuiltinManifestCatalog();
 export const cosmosRepository = new PrismaCosmosRepository({
     logger: cosmosLogger,
+    catalog: cosmosCatalog,
 });
-export const cosmosCatalog = createBuiltinManifestCatalog();
 export const cosmosWorkflowStore = new PrismaWorkflowHostStore(cosmosRepository.prisma, {
     logger: cosmosLogger,
 });
@@ -25,16 +26,7 @@ export const cosmosIngestControl = new IngestWorkflowControlService({
     store: cosmosWorkflowStore,
     getSourceExecutionSnapshot: async (sourceId) => {
         const source = await cosmosRepository.getSource(sourceId);
-        if (!source) return null;
-        return {
-            id: source.id,
-            name: source.name,
-            kind: source.kind,
-            config: source.config,
-            enabled: source.enabled,
-            createdAt: source.createdAt,
-            updatedAt: source.updatedAt,
-        };
+        return source ?? null;
     },
     getCheckpointSnapshot: (sourceId) => cosmosRepository.getCheckpointSnapshot(sourceId),
 });

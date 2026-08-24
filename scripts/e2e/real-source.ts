@@ -81,6 +81,23 @@ try {
             `Real ${kind} source creation returned HTTP ${created.status}.`,
         );
     const sourceId = readString(created.body, "id");
+    const activated = await requestJson(
+        `http://127.0.0.1:${apiPort}/api/v1/sources/${sourceId}/activation-commands`,
+        {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "idempotency-key": `real-${kind}-activation`,
+            },
+            body: JSON.stringify({
+                enabled: true,
+                baseRevisionId: readString(created.body, "revisionId"),
+            }),
+        },
+    );
+    if (activated.status !== 201) {
+        throw new Error(`Real ${kind} source activation returned HTTP ${activated.status}.`);
+    }
     const queued = await requestJson(
         `http://127.0.0.1:${apiPort}/api/v1/sources/${sourceId}/runs`,
         {
@@ -148,9 +165,9 @@ try {
 type SourceConfiguration = {
     command: {
         name: string;
-        kind: string;
+        sourceDefinitionRef: string;
+        operationId: "fetch";
         config: Record<string, unknown>;
-        enabled: true;
     };
     environment?: NodeJS.ProcessEnv;
 };
@@ -162,9 +179,9 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
             return {
                 command: {
                     name: "Explicit real RSS",
-                    kind: "rss",
+                    sourceDefinitionRef: "source.rss@1",
+                    operationId: "fetch",
                     config: { feedUrl },
-                    enabled: true,
                 },
             };
         }
@@ -173,9 +190,9 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
             return {
                 command: {
                     name: "Explicit AI HOT",
-                    kind: "aihot",
-                    config: { schemaVersion: 1 },
-                    enabled: true,
+                    sourceDefinitionRef: "source.aihot@1",
+                    operationId: "fetch",
+                    config: {},
                 },
                 environment: { COSMOS_ALLOW_REAL_NETWORK: "true" },
             };
@@ -186,14 +203,13 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
             return {
                 command: {
                     name: "Explicit Bilibili",
-                    kind: "bilibili",
+                    sourceDefinitionRef: "source.bilibili@1",
+                    operationId: "fetch",
                     config: {
                         mode: "feed",
                         profile,
                         limit: 20,
-                        schemaVersion: 1,
                     },
-                    enabled: true,
                 },
                 environment: {
                     COSMOS_OPENCLI_PATH: openCliPath,

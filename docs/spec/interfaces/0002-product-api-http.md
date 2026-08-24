@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-08-18。
+2026-08-24。
 
 ## 组件定位
 
@@ -134,10 +134,11 @@ the current code has not removed it or replaced it with a permanent redirect.
 | --- | --- | --- |
 | `GET /sources` | 无 | `SourceSnapshot[]`；按 repository 顺序读取，不写入。 |
 | `GET /sources/:sourceId` | path `sourceId` | 单个 `SourceSnapshot`；不存在 404。 |
-| `POST /sources` | JSON body `CreateSourceCommand` | HTTP 201，创建并返回 `SourceSnapshot`。先按 Zod 合同校验，再确认 `kind` 存在于 manifest catalog、校验通用 source config，最后写 Source。 |
-| `PATCH /sources/:sourceId` | JSON body `UpdateSourceCommand`（当前只允许 `enabled: boolean`） | HTTP 200，更新 enabled 并返回 `SourceSnapshot`；不存在 404；body 不合法 400。 |
-| `POST /sources/:sourceId/test` | 可选 `Idempotency-Key` header | HTTP 202，返回 `JobSnapshot`，创建 `source-probe` Job；API 进程不直接调用 Connector。未提供或空白 key 时生成随机 probe key。Source 不存在 404。 |
-| `POST /sources/:sourceId/runs` | 可选 `Idempotency-Key` header | HTTP 201，返回 Product Run。Source 不存在 404；无 header 时生成随机 `manual:<sourceId>:<uuid>` key。优先通过 Workflow Control 入队 `cosmos.ingest@1`，否则走 legacy queued Run。 |
+| `POST /sources` | JSON body `CreateSourceCommand`（strict，无 `enabled`） | HTTP 201，创建默认停用的 Source（`revisionId` 从 `<id>:1` 起）并返回投影。先按 Zod 合同解析，再确认 ref 对应 enabled manifest 与 operationId，最后按 canonical 配置 schema 校验 `config` 后写库。 |
+| `PATCH /sources/:sourceId` | JSON body `UpdateSourceCommand`：必填 `baseRevisionId`，可选 `name` 与完整替换的 `config` | HTTP 200，CAS 更新后返回投影；不存在 404；body 不合法或配置校验失败 400；revision 过期 409。`config` 存在时先经 canonical schema 校验。 |
+| `POST /sources/:sourceId/activation-commands` | 必需非空且 ≤300 字符的 `Idempotency-Key` header；body `SourceActivationCommand` | HTTP 201 返回更新后投影。启用前按 canonical schema 校验已保存配置；同 key 同请求重放返回首次记录的结果快照；同 key 不同请求或过期 `baseRevisionId` 409；no-op 不递增 revision。 |
+| `POST /sources/:sourceId/test` | 可选 `Idempotency-Key` header（≤300 字符） | 不变：HTTP 202 返回 `JobSnapshot`，创建 `source-probe` Job；未提供 key 时生成随机 probe key；Source 不存在 404。 |
+| `POST /sources/:sourceId/runs` | 可选 `Idempotency-Key` header（≤300 字符） | HTTP 201 返回 Product Run；仅接受已启用 Source，未启用 409 `conflict`；Source 不存在 404；无 header 时生成随机 key。优先 Workflow Control 入队 `cosmos.ingest@1`，否则走 legacy queued Run。 |
 
 Catalog page 当前固定 `nextCursor: null`，`snapshotAt` 是响应生成时的 ISO 时间。Builtin
 catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions，Workflow
@@ -145,13 +146,18 @@ catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions�
 Action manifests；这些是当前实现锚点，不是允许客户端执行的命令列表。
 
 
-`CreateSourceCommand` 的 `name` 是去空格后 1–200 字符，`kind` 是 1–100 字符，`config`
-通过共享 schema；`enabled` 默认 true。具体 connector-specific config 仍由 manifest
-和下游 Connector 边界决定。Source 公开 config 由 Controller 白名单投影：通用只保留
-`feedUrl`、`scheduleIntervalMs`；Bilibili 另外保留 `mode`、`limit`、`profile`、
-`schemaVersion`。不会把其它配置值原样回显。
+`CreateSourceCommand` 的 `name` 去空格后 1–200 字符；`sourceDefinitionRef` 必须命中当前
+Catalog 的 enabled manifest，`operationId` 必须出现在其 operationIds 内；`config` 由
+contracts 的 `getSourceConfigurationSchema(ref)` strict Zod schema 校验——这是 canonical
+校验真相，manifest JSON Schema 只是发布投影。命令不接受 `enabled`：创建固定停用，
+只能通过 activation command 启用。Source 公开 config 仍按 Controller 白名单投影
+（通用保留 `feedUrl`、`scheduleIntervalMs`；Bilibili 另含 `mode`、`limit`、`profile`、
+`schemaVersion`），其余配置不回显。
 
-`Idempotency-Key` 在 Controller 中按 trim 后使用；Source run 的 Workflow Control 会按 key 复用同一 envelope，并在同 key 指向其它 source、trigger 或不可兼容快照时抛出 `WorkflowHostConflictError`。HTTP 将该类型映射为 `409 Conflict`，响应 `ServiceError` 的 `code` 为 `conflict`、`retryable` 为 `false`，并不把冲突降级为 400 或解析错误消息文本。下游入队合同要求 key 非空。
+`POST /sources/:sourceId/runs` 只接受已启用的 Source：未启用返回 409 `conflict`；
+可选 `Idempotency-Key` 超过 300 字符按 400 `validation_failed` 拒绝，缺失时生成随机
+`manual:<sourceId>:<uuid>` key。Workflow Control 仍按 key 复用 envelope 并在身份冲突时抛出
+`WorkflowHostConflictError` 映射为 409。
 
 ### Run、Job、Attempt
 

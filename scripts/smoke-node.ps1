@@ -9,6 +9,9 @@ $workerLog = Join-Path $root "worker.out.log"
 $workerErrorLog = Join-Path $root "worker.err.log"
 $api = $null
 $worker = $null
+$rss = $null
+$rssLog = Join-Path $root "rss.out.log"
+$rssErrorLog = Join-Path $root "rss.err.log"
 
 function Invoke-SmokeWebRequest {
     param(
@@ -139,7 +142,16 @@ try {
     $env:COSMOS_LOG_OUTPUT = "both"
     $env:COSMOS_LOG_LEVEL = "debug"
 
+    $env:COSMOS_E2E_RSS_HOST = "127.0.0.1"
+    $env:COSMOS_E2E_RSS_PORT = "4381"
     bun run db:migrate
+    $rss = Start-Process -FilePath bun `
+        -ArgumentList "run", "scripts/e2e/rss-fixture-server.ts" `
+        -WorkingDirectory (Get-Location) `
+        -PassThru `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $rssLog `
+        -RedirectStandardError $rssErrorLog
     $api = Start-Process -FilePath node `
         -ArgumentList "apps/api/dist/main.js" `
         -WorkingDirectory (Get-Location) `
@@ -187,7 +199,7 @@ try {
         Method = "Post"
         Uri = "http://127.0.0.1:4321/api/v1/sources"
         ContentType = "application/json"
-        Body = '{"name":123,"kind":"fixture-rss","config":{}}'
+        Body = '{"name":123,"sourceDefinitionRef":"source.rss@1","operationId":"fetch","config":{"feedUrl":"http://127.0.0.1:4381/feed.xml"}}'
         TimeoutSec = 2
         UseBasicParsing = $true
     }
@@ -203,11 +215,20 @@ try {
         -ContentType "application/json" `
         -Body (@{
             name = "Production smoke"
-            kind = "fixture-rss"
+            sourceDefinitionRef = "source.rss@1"
+            operationId = "fetch"
             config = @{
-                fixturePath = "fixtures/rss/basic.xml"
+                feedUrl = "http://127.0.0.1:4381/feed.xml"
             }
+        } | ConvertTo-Json -Depth 5)
+    $source = Invoke-RestMethod `
+        -Method Post `
+        -Uri "http://127.0.0.1:4321/api/v1/sources/$($source.id)/activation-commands" `
+        -Headers @{ "Idempotency-Key" = "smoke-activation-1" } `
+        -ContentType "application/json" `
+        -Body (@{
             enabled = $true
+            baseRevisionId = $source.revisionId
         } | ConvertTo-Json -Depth 5)
     $queuedResponse = Invoke-SmokeWebRequest -Parameters @{
         Method = "Post"
@@ -322,7 +343,7 @@ try {
         $probeWorkerRecords = @($workerRecords | Where-Object {
             $_.jobId -eq $probe.id `
                 -and $_.sourceId -eq $source.id `
-                -and $_.connectorId -eq "fixture-rss"
+                -and $_.connectorId -eq "rss"
         })
         $runBridgeRecords = @($apiRecords | Where-Object {
             ($_.event -eq "workflow.run.queued" -or $_.event -eq "run.queued") `
@@ -423,6 +444,9 @@ try {
     if ($worker) {
         Stop-Process -Id $worker.Id -Force -ErrorAction SilentlyContinue
     }
+    if ($rss) {
+        Stop-Process -Id $rss.Id -Force -ErrorAction SilentlyContinue
+    }
     if ($api) {
         Stop-Process -Id $api.Id -Force -ErrorAction SilentlyContinue
     }
@@ -438,6 +462,8 @@ try {
     Remove-Item Env:COSMOS_LOG_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_LOG_OUTPUT -ErrorAction SilentlyContinue
     Remove-Item Env:COSMOS_LOG_LEVEL -ErrorAction SilentlyContinue
+    Remove-Item Env:COSMOS_E2E_RSS_HOST -ErrorAction SilentlyContinue
+    Remove-Item Env:COSMOS_E2E_RSS_PORT -ErrorAction SilentlyContinue
     if ($root.StartsWith($env:TEMP, [System.StringComparison]::OrdinalIgnoreCase)) {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }

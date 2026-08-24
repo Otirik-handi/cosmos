@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-08-16。
+2026-08-24。
 
 ## 组件定位
 
@@ -57,9 +57,10 @@ options 注入。EventSource 默认从 globalThis 读取；运行时没有 Event
 | `listSources()` | `GET /api/v1/sources` | 无 | `SourceSnapshot[]` |
 | `getSource(sourceId)` | `GET /api/v1/sources/:encodedId` | path 用 `encodeURIComponent` | `SourceSnapshot` |
 | `createSource(input)` | `POST /api/v1/sources` | 先 parse `CreateSourceCommand`；JSON body/header | `SourceSnapshot` |
-| `updateSource(sourceId,input)` | `PATCH /api/v1/sources/:encodedId` | JSON body；path encoded | `SourceSnapshot` |
-| `testSource(sourceId,idempotencyKey?)` | `POST /api/v1/sources/:encodedId/test` | 可选 `idempotency-key` | `JobSnapshot` |
-| `triggerSource(sourceId,{idempotencyKey?})` | `POST /api/v1/sources/:encodedId/runs` | 可选 `idempotency-key` | `RunSnapshot` |
+| `updateSource(sourceId,input)` | `PATCH /api/v1/sources/:encodedId` | `UpdateSourceCommand` JSON body；path encoded | `SourceSnapshot` |
+| `activateSource(sourceId,input,idempotencyKey)` | `POST /api/v1/sources/:encodedId/activation-commands` | 必需非空且 ≤300 字符的 `idempotency-key` header；JSON body 为 `SourceActivationCommand` | `SourceSnapshot` |
+| `testSource(sourceId,idempotencyKey?)` | `POST /api/v1/sources/:encodedId/test` | 可选 `idempotency-key`（≤300 字符） | `JobSnapshot` |
+| `triggerSource(sourceId,{idempotencyKey?})` | `POST /api/v1/sources/:encodedId/runs` | 可选 `idempotency-key`（≤300 字符）；未启用 Source 返回 409 | `RunSnapshot` |
 | `getJob(jobId)` | `GET /api/v1/jobs/:encodedId` | path encoded | `JobSnapshot` |
 | `feed({cursor?,limit?})` | `GET /api/v1/feed` | URLSearchParams；只在 truthy 时发送 cursor/limit | `FeedPage` |
 | `search(query)` | `GET /api/v1/search` | text/sourceId/date/cursor/limit 按 truthy 发送 | `SearchPage` |

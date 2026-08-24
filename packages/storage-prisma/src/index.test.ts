@@ -76,11 +76,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Test fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             const pages: readonly NormalizedIngestItem[] = [
             {
@@ -218,6 +216,200 @@ describe("PrismaCosmosRepository", () => {
         }
     });
 
+    it("makes source activation idempotent and rejects stale or mismatched retries", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-source-activation-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const created = await repository.createSource({
+                name: "Activation fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            expect(created).toMatchObject({
+                enabled: false,
+                revisionId: `${created.id}:1`,
+            });
+
+            const activated = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-1",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+            expect(activated).toMatchObject({
+                enabled: true,
+                revisionId: `${created.id}:2`,
+            });
+
+            await expect(repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-1",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            })).resolves.toMatchObject({
+                enabled: true,
+                revisionId: `${created.id}:2`,
+            });
+
+            await expect(repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-1",
+                enabled: false,
+                baseRevisionId: created.revisionId,
+            })).rejects.toMatchObject({ code: "conflict" });
+
+            await expect(repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-2",
+                enabled: false,
+                baseRevisionId: created.revisionId,
+            })).rejects.toMatchObject({ code: "conflict" });
+
+            await expect(repository.prisma.sourceActivationCommand.findMany({
+                orderBy: { createdAt: "asc" },
+            })).resolves.toHaveLength(1);
+        } finally {
+            await repository.close();
+        }
+    });
+
+
+    it("records no-op activation commands without incrementing the source revision", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-source-activation-noop-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const created = await repository.createSource({
+                name: "Activation no-op fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            const activated = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-noop-1",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+            const replayedIntent = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-noop-2",
+                enabled: true,
+                baseRevisionId: activated.revisionId,
+            });
+
+            expect(replayedIntent.revisionId).toBe(activated.revisionId);
+            await expect(repository.prisma.sourceActivationCommand.findMany({
+                orderBy: { createdAt: "asc" },
+                select: { resultRevision: true },
+            })).resolves.toEqual([
+                { resultRevision: 2 },
+                { resultRevision: 2 },
+            ]);
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("rejects a stale no-op activation instead of recording it", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-source-activation-stale-noop-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const created = await repository.createSource({
+                name: "Stale no-op fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-stale-1",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+
+            // Desired state matches, but baseRevisionId points at :1 while
+            // the source is now at :2; ADR-0004 requires conflict.
+            await expect(repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-stale-2",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            })).rejects.toMatchObject({ code: "conflict" });
+
+            await expect(repository.prisma.sourceActivationCommand.count())
+                .resolves.toBe(1);
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("replays the recorded activation result after the source moved forward", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-source-activation-replay-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const created = await repository.createSource({
+                name: "Replay fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            const activated = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-replay-1",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+
+            // A later PATCH moves the source to :3 with a new name and config.
+            await repository.updateSource(created.id, {
+                baseRevisionId: activated.revisionId,
+                name: "Renamed fixture",
+                config: { scheduleIntervalMs: 60_000 },
+            });
+
+            const replayed = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: "source-activation-replay-1",
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+
+            // Same key + same request still returns the full first recorded
+            // result — name, config and updatedAt stay frozen at the
+            // activation moment, not the renamed :3 projection.
+            expect(replayed.name).toBe("Replay fixture");
+            expect(replayed.enabled).toBe(true);
+            expect(replayed.revisionId).toBe(`${created.id}:2`);
+            expect(replayed.config).toEqual({});
+            expect(replayed.updatedAt).toBe(activated.updatedAt);
+            await expect(repository.prisma.sourceActivationCommand.findMany())
+                .resolves.toHaveLength(1);
+        } finally {
+            await repository.close();
+        }
+    });
+
     it("refreshes metrics without creating a revision and keeps publisher ids nullable", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-metrics-test-"));
         temporaryRoots.push(root);
@@ -227,11 +419,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Metrics fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             let likes = 1;
             let exactPublishedAt = false;
@@ -340,11 +530,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Queue fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             const first = await repository.createQueuedRun({
                 sourceId: source.id,
@@ -417,11 +605,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Accepted kinds fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             await repository.prisma.job.create({
                 data: {
@@ -574,11 +760,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Worker fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             const run = await repository.createQueuedRun({
                 sourceId: source.id,
@@ -640,11 +824,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Probe fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             const job = await repository.createProbeJob({
                 sourceId: source.id,
@@ -716,11 +898,9 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Auth fixture",
-                kind: "fixture-rss",
                 config: {},
-                enabled: true,
             });
             const run = await repository.createQueuedRun({
                 sourceId: source.id,
@@ -779,13 +959,11 @@ describe("PrismaCosmosRepository", () => {
         await repository.initialize();
 
         try {
-            const source = await repository.createSource({
+            const source = await createFixtureSource(repository, {
                 name: "Scheduled fixture",
-                kind: "fixture-rss",
                 config: {
                     scheduleIntervalMs: 60_000,
                 },
-                enabled: true,
             });
             const connector: IngestConnector = {
                 id: "schedule-test",
@@ -848,7 +1026,16 @@ describe("PrismaCosmosRepository", () => {
             },
         });
         await repository.prisma.sourceInstance.create({
-            data: { id: "source-checkpoint", name: "Checkpoint", kind: "fixture-rss", configJson: "{}" },
+            data: {
+                id: "source-checkpoint",
+                name: "Checkpoint",
+                kind: "fixture-rss",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                configJson: "{}",
+                enabled: true,
+                revision: 1,
+            },
         });
         await repository.prisma.job.create({
             data: {
@@ -924,11 +1111,10 @@ function prepareDatabase(root: string): void {
     writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
     execFileSync(process.execPath, [
         prismaCli,
-        "db",
-        "push",
+        "migrate",
+        "deploy",
         "--schema",
         schema,
-        "--skip-generate",
     ], {
         cwd: process.cwd(),
         env: {
@@ -936,5 +1122,23 @@ function prepareDatabase(root: string): void {
             DATABASE_URL: databaseUrl,
         },
         stdio: "ignore",
+    });
+}
+
+async function createFixtureSource(
+    repository: PrismaCosmosRepository,
+    input: { name: string; config: unknown },
+): Promise<SourceSnapshot> {
+    const created = await repository.createSource({
+        name: input.name,
+        sourceDefinitionRef: "source.fixture-rss@1",
+        operationId: "fetch",
+        config: input.config,
+    });
+    return repository.activateSource({
+        sourceId: created.id,
+        idempotencyKey: `test-activation:${created.id}`,
+        enabled: true,
+        baseRevisionId: created.revisionId,
     });
 }

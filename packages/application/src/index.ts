@@ -13,10 +13,12 @@ import {
     type RunSnapshot,
     type SearchPage,
     type SearchQuery,
+    type SourceActivationCommand,
     type SourceCheckpointOutput,
     type SourceSnapshot,
     type SourceProbeResult,
     type StoryDetail,
+    type UpdateSourceCommand,
 } from "@cosmos/contracts";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
@@ -97,12 +99,33 @@ const noopLogger: LoggerPort = {
 function resolveLogger(logger?: LoggerPort): LoggerPort {
     return logger ?? noopLogger;
 }
+export class SourceNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(sourceId: string) {
+        super(`Source not found: ${sourceId}`);
+        this.name = "SourceNotFoundError";
+    }
+}
+
+export class SourceRevisionConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(sourceId: string) {
+        super(`Source revision conflict: ${sourceId}`);
+        this.name = "SourceRevisionConflictError";
+    }
+}
 
 export interface CosmosRepository {
     createSource(input: CreateSourceCommand): Promise<SourceSnapshot>;
     listSources(): Promise<readonly SourceSnapshot[]>;
     getSource(sourceId: string): Promise<SourceSnapshot | null>;
-    setSourceEnabled(sourceId: string, enabled: boolean): Promise<SourceSnapshot>;
+    updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot>;
+    activateSource(input: SourceActivationCommand & {
+        sourceId: string;
+        idempotencyKey: string;
+    }): Promise<SourceSnapshot>;
     createRun(input: {
         sourceId: string;
         triggerKind: "manual" | "schedule";
@@ -310,9 +333,9 @@ export class ConnectorRegistry {
     }
 
     resolve(source: SourceSnapshot): IngestConnector {
-        const connector = this.connectors.get(source.kind);
+        const connector = this.connectors.get(source.connectorId);
         if (!connector) {
-            throw new Error(`Unsupported source connector: ${source.kind}`);
+            throw new Error(`Unsupported source connector: ${source.connectorId}`);
         }
         return connector;
     }

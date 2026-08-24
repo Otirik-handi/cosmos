@@ -27,27 +27,42 @@ try {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-            name: "Docker fixture",
-            kind: "fixture-rss",
-            config: { fixturePath: "fixtures/rss/basic.xml" },
-            enabled: true,
+            name: "Docker RSS",
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            config: { feedUrl: "http://rss-fixture:4380/feed.xml" },
         }),
     });
-    assertStatus(source, 201, "Docker source creation");
+    assertStatus(source, 201, "Docker RSS source creation");
     const sourceId = readString(source.body, "id");
+    const activated = await requestJson(
+        `http://127.0.0.1:4310/api/v1/sources/${sourceId}/activation-commands`,
+        {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "idempotency-key": "docker-flow-rss-activation",
+            },
+            body: JSON.stringify({
+                enabled: true,
+                baseRevisionId: readString(source.body, "revisionId"),
+            }),
+        },
+    );
+    assertStatus(activated, 201, "Docker RSS source activation");
 
     const queued = await requestJson(
         `http://127.0.0.1:4310/api/v1/sources/${sourceId}/runs`,
         {
             method: "POST",
-            headers: { "idempotency-key": "docker-flow-fixture-run" },
+            headers: { "idempotency-key": "docker-flow-rss-run" },
         },
     );
-    assertStatus(queued, 201, "Docker fixture Run enqueue");
+    assertStatus(queued, 201, "Docker RSS Run enqueue");
     const runId = readString(queued.body, "id");
 
     await waitForCondition(
-        "Docker fixture Run succeeded",
+        "Docker RSS Run succeeded",
         async () => {
             const result = await requestJson(
                 `http://127.0.0.1:4310/api/v1/runs/${runId}`,
@@ -64,18 +79,18 @@ try {
     const feed = await requestJson(
         "http://127.0.0.1:4310/api/v1/feed?limit=10",
     );
-    assertStatus(feed, 200, "Docker fixture Feed");
+    assertStatus(feed, 200, "Docker RSS Feed");
     if (
         !isRecord(feed.body) ||
         !Array.isArray(feed.body.items) ||
         feed.body.items.length < 3
     ) {
         throw new Error(
-            "Docker fixture Feed did not contain at least three items.",
+            "Docker RSS Feed did not contain at least three items.",
         );
     }
     process.stdout.write(
-        "Docker acceptance passed: API, Web, Worker, fixture Run and Feed.\n",
+        "Docker acceptance passed: API, Web, Worker, RSS Run and Feed.\n",
     );
 } finally {
     if (composeStarted) {

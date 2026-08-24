@@ -78,13 +78,28 @@ beforeAll(async () => {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
                 name: "Controlled Recovery RSS",
-                kind: "rss",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
                 config: { feedUrl: rss.url },
-                enabled: true,
             }),
         });
         expect(source.status).toBe(201);
         const sourceId = readString(source.body, "id");
+        const activated = await requestJson(
+            `${apiBaseUrl}/api/v1/sources/${sourceId}/activation-commands`,
+            {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json",
+                    "idempotency-key": "recovery-e2e-activation",
+                },
+                body: JSON.stringify({
+                    enabled: true,
+                    baseRevisionId: readString(source.body, "revisionId"),
+                }),
+            },
+        );
+        expect(activated.status).toBe(201);
         const queued = await requestJson(`${apiBaseUrl}/api/v1/sources/${sourceId}/runs`, {
             method: "POST",
             headers: { "idempotency-key": "recovery-e2e-run" },

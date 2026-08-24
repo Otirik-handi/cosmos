@@ -49,9 +49,9 @@ export function renderSourceFormLab(props: LabProps) {
 }
 
 function SourceFormLabFixture({props}: {props: LabProps}) {
-    const name = textProp(props, "name", "Cosmos fixture");
-    const fixturePath = textProp(props, "fixturePath", "fixtures/rss/basic.xml");
-    const values = useMemo<SourceFormValues>(() => ({name, fixturePath}), [fixturePath, name]);
+    const name = textProp(props, "name", "Cosmos RSS");
+    const feedUrl = textProp(props, "feedUrl", "https://example.com/feed.xml");
+    const values = useMemo<SourceFormValues>(() => ({name, feedUrl}), [feedUrl, name]);
     const form = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
         defaultValues: values,
@@ -96,9 +96,13 @@ export function renderSourceActionsLab(props: LabProps) {
         : [{
             id: "source-fixture",
             name: textProp(props, "sourceName", "Cosmos fixture"),
+            sourceDefinitionRef: "source.fixture-rss@1",
+            operationId: "fetch",
+            connectorId: "fixture-rss",
             kind: "fixture-rss",
             config: {fixturePath: "fixtures/rss/basic.xml"},
             enabled: state !== "disabled" && booleanProp(props, "enabled", true),
+            revisionId: "source-fixture:1",
             createdAt: fixtureTimestamp,
             updatedAt: fixtureTimestamp,
             lastRunAt: null,
@@ -141,17 +145,21 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
         <FeedBrowser
             feed={feed}
             loading={state === "loading"}
-            nextCursor={state === "populated" ? "fixture-next" : null}
             onLoadMore={async () => undefined}
             onOpenStory={async () => undefined}
             onSubmit={(event) => event.preventDefault()}
             searchForm={form}
+            nextCursor={state === "populated" ? "fixture-next" : null}
             sources={[{
                 id: "source-fixture",
                 name: "Cosmos fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                connectorId: "fixture-rss",
                 kind: "fixture-rss",
                 config: {fixturePath: "fixtures/rss/basic.xml"},
                 enabled: true,
+                revisionId: "source-fixture:1",
                 createdAt: fixtureTimestamp,
                 updatedAt: fixtureTimestamp,
                 lastRunAt: null,

@@ -50,6 +50,23 @@ SourceDefinition -> Source -> Probe -> WorkflowRun -> Event -> Feed
 - 修订产生 EntryRevision，旧 Observation 保留；
 - SSE 重复事件可幂等应用。
 
+### S02a：未保存 RSS 配置测试（Planned · Phase 1 remainder）
+
+```text
+SourceDefinition/schema + 未保存 config
+-> source-config-probe Job
+-> 新 Worker dispatcher/Probe port
+-> 受控 Probe result
+```
+
+验收：
+
+- 请求携带 `sourceDefinitionRef + config` 和必需 `Idempotency-Key`；POST 返回 `202 SourceConfigProbeJobSnapshot`，配置不回显到 Job/HTTP 结果，敏感输入不进入普通日志。
+- GET `/source-probes/{probeId}` 返回同一 `SourceConfigProbeJobSnapshot` 的 status/error/result；现有 `GET /jobs/{id}` 不承载该 kind。
+- 使用独立 `source-config-probe` kind；不能复用当前 `source-probe` 的 `readSourceId(payload) -> runSource(sourceId)` 路径。
+- Repository 以规范化 payload fingerprint 实现同 key 重放、异 payload 冲突；Worker acceptedKinds/dispatcher 和 Probe port 均有 focused 覆盖。
+- 测试只创建 Probe Job/queued Event；不创建 Source、Run、Observation、Entry、Asset，不推进 Checkpoint。
+
 ### S03：同一 Bilibili Connection 下两个采集计划
 
 ```text

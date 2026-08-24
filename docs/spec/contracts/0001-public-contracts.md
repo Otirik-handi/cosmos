@@ -6,7 +6,7 @@
 
 ## 最后更新
 
-2026-08-16。
+2026-08-24。
 
 ## 组件定位
 
@@ -44,11 +44,12 @@
 
 ### Source 与采集命令
 
-- **SourceKind** 是 trim 后 1 至 100 个字符的开放字符串，插件可以增加 kind 而无需修改核心枚举。
-- **SourceConfig** 的核心字段是可选 `feedUrl`（URL）、`fixturePath`（非空字符串）和 `scheduleIntervalMs`。后者先 coerce 为整数，范围为 1,000 至 31 天的毫秒数。该 schema 使用 `passthrough`，因此未列出的配置字段会保留。
-- 内置配置 schema 是 strict：RSS 要求 `feedUrl`；fixture RSS 的 `fixturePath` 可选；Bilibili 具有 `schemaVersion`（coerce 为正整数，默认 `1`）、`mode`（`hot`/`feed`）、`limit`（coerce 为 1 至 100 的整数，默认 `20`）和安全 profile（trim 后匹配 `[A-Za-z0-9._-]`，长度 1 至 100），其中 `feed` 必须提供 profile；AI HOT 具有正整数 `schemaVersion`（coerce，默认 `1`）和调度字段。
-- **SourceExecutionSnapshot** 是入队时冻结的 `id`、`name`、`kind`、`config`、`enabled`、`createdAt`、`updatedAt`。**SourceSnapshot** 在同一字段上增加可变诊断 `lastRunAt` 和 `lastError`，二者可空。
-- **CreateSourceCommand**：`name` trim 后 1 至 200 个字符，`kind`、`config` 和 `enabled`；`enabled` 默认 `true`。**UpdateSourceCommand** 只有 `enabled` 布尔值。
+- **sourceDefinitionRef**（trim 后的版本化 ref，如 `source.rss@1`）是 SourceInstance 的唯一业务身份；**operationId** 必须出现在该定义 manifest 的 operationIds 中。旧 **SourceKind** 只作为迁移期运行时投影保留，新 Product API 命令不接受 `kind`。
+- **SourceConfig** 的通用字段是可选 `feedUrl`、`fixturePath` 与 `scheduleIntervalMs`（coerce 整数，范围 1,000 至 31 天毫秒）；该 passthrough schema 仅作历史投影。
+- 各 Source definition 的 canonical 配置校验由 `getSourceConfigurationSchema(ref)` 返回的 strict Zod schema 负责：RSS 要求 http(s) 的 `feedUrl`；fixture RSS 仅接受调度字段；Bilibili 要求 `mode` 且 `mode=feed` 时必须提供 profile；AI HOT 接受调度字段。manifest 的 JSON Schema 只是发布投影。
+- **revisionId** 形如 `<sourceId>:<revision>`；创建默认停用并从 revision 1 开始。**SourceActivationCommand** 为 `{ enabled, baseRevisionId }`，配合唯一 `Idempotency-Key` 使用：同 key 同请求重放返回首次记录的结果快照，同 key 不同请求或过期 baseRevision 返回冲突，无状态变化的 no-op 记录命令但不递增 revision。
+- **CreateSourceCommand**：strict 的 `name`（trim 后 1–200 字符）、`sourceDefinitionRef`、`operationId` 和 `config`，不接受 `enabled`。**UpdateSourceCommand**：必填 `baseRevisionId` 加可选 `name` 与完整替换的 `config`。
+- **SourceExecutionSnapshot** 冻结 `id`、`name`、`sourceDefinitionRef`、`operationId`、`connectorId`、迁移投影 `kind`、`config`、`enabled`、`revisionId`、`createdAt`、`updatedAt`。**SourceSnapshot** 在同一字段上增加可变诊断 `lastRunAt` 和 `lastError`，二者可空。
 - **SourceProbeResult**：`sourceId`、`connectorId`、非负整数 `itemCount`、`nextCursorAvailable` 和 `checkedAt`。
 - **IngestCommand**：非空 `sourceId`、`triggerKind`（`manual`/`schedule`，默认 `manual`）和可选幂等键；幂等键 trim 后 1 至 300 个字符。
 

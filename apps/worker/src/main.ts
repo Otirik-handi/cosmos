@@ -29,7 +29,8 @@ async function bootstrap(): Promise<void> {
         fileName: "worker",
         instanceId,
     });
-    const repository = new PrismaCosmosRepository({ logger });
+    const catalog = createBuiltinManifestCatalog();
+    const repository = new PrismaCosmosRepository({ logger, catalog });
     const connectors = createBuiltInConnectorRegistry({
         workspaceRoot: process.env.COSMOS_WORKSPACE_ROOT ?? process.cwd(),
         logger,
@@ -123,16 +124,7 @@ async function bootstrap(): Promise<void> {
                 store: workflowHost.store,
                 getSourceExecutionSnapshot: async (sourceId) => {
                     const source = await repository.getSource(sourceId);
-                    if (!source) return null;
-                    return {
-                        id: source.id,
-                        name: source.name,
-                        kind: source.kind,
-                        config: source.config,
-                        enabled: source.enabled,
-                        createdAt: source.createdAt,
-                        updatedAt: source.updatedAt,
-                    };
+                    return source ?? null;
                 },
                 getCheckpointSnapshot: (sourceId) => repository.getCheckpointSnapshot(sourceId),
             })
@@ -144,7 +136,6 @@ async function bootstrap(): Promise<void> {
             schedule: workflowHost === null,
             logger,
         });
-        const catalog = createBuiltinManifestCatalog();
         const executableActionRefs = new Set(
             workflowHost?.actions.descriptors().map((descriptor) => descriptor.ref) ?? [],
         );

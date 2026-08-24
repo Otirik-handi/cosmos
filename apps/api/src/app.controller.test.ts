@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 
 import { WorkflowHostConflictError } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
@@ -9,9 +9,17 @@ describe("AppController workflow conflicts", () => {
             getSource: vi.fn().mockResolvedValue({
                 id: "source-1",
                 name: "Fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                connectorId: "fixture-rss",
                 kind: "fixture-rss",
                 config: {},
                 enabled: true,
+                revisionId: "source-1:1",
+                createdAt: "2026-08-08T00:00:00.000Z",
+                updatedAt: "2026-08-08T00:00:00.000Z",
+                lastRunAt: null,
+                lastError: null,
             }),
         };
         const workflowControl = {
@@ -34,6 +42,60 @@ describe("AppController workflow conflicts", () => {
             code: "conflict",
             retryable: false,
         });
+    });
+});
+
+describe("AppController source run gating", () => {
+    function sourceFixture(enabled: boolean) {
+        return {
+            id: "source-1",
+            name: "Fixture",
+            sourceDefinitionRef: "source.fixture-rss@1",
+            operationId: "fetch",
+            connectorId: "fixture-rss",
+            kind: "fixture-rss",
+            config: {},
+            enabled,
+            revisionId: "source-1:1",
+            createdAt: "2026-08-08T00:00:00.000Z",
+            updatedAt: "2026-08-08T00:00:00.000Z",
+            lastRunAt: null,
+            lastError: null,
+        };
+    }
+
+    it("rejects a manual run for a disabled source", async () => {
+        const repository = { getSource: vi.fn().mockResolvedValue(sourceFixture(false)) };
+        const workflowControl = { enqueue: vi.fn() };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            workflowControl as never,
+        );
+
+        const error = await controller.runSource("source-1").catch((value) => value);
+
+        expect(error).toBeInstanceOf(ConflictException);
+        expect(error.getResponse()).toMatchObject({ code: "conflict", retryable: false });
+        expect(workflowControl.enqueue).not.toHaveBeenCalled();
+    });
+
+    it("rejects an oversized idempotency key before queueing a run", async () => {
+        const repository = { getSource: vi.fn().mockResolvedValue(sourceFixture(true)) };
+        const workflowControl = { enqueue: vi.fn() };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            workflowControl as never,
+        );
+
+        const error = await controller.runSource("source-1", "k".repeat(301)).catch((value) => value);
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
+        expect(workflowControl.enqueue).not.toHaveBeenCalled();
     });
 });
 
@@ -94,9 +156,13 @@ describe("AppController source probe", () => {
             getSource: vi.fn().mockResolvedValue({
                 id: "source-1",
                 name: "AI HOT",
+                sourceDefinitionRef: "source.aihot@1",
+                operationId: "fetch",
+                connectorId: "aihot",
                 kind: "aihot",
                 config: {},
                 enabled: true,
+                revisionId: "source-1:1",
                 createdAt: "2026-08-08T00:00:00.000Z",
                 updatedAt: "2026-08-08T00:00:00.000Z",
                 lastRunAt: null,
@@ -143,9 +209,13 @@ describe("AppController source probe", () => {
             getSource: vi.fn().mockResolvedValue({
                 id: "source-1",
                 name: "Fixture",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                connectorId: "fixture-rss",
                 kind: "fixture-rss",
                 config: {},
                 enabled: true,
+                revisionId: "source-1:1",
                 createdAt: "2026-08-08T00:00:00.000Z",
                 updatedAt: "2026-08-08T00:00:00.000Z",
                 lastRunAt: null,

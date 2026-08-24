@@ -17,12 +17,22 @@ export default defineConfig({
         video: "retain-on-failure",
         ...devices["Desktop Chrome"],
     },
-    webServer: {
-        command: `bun run scripts/e2e/web-stack.ts ${process.env.COSMOS_E2E_WEB_PORT ?? "4173"}`,
-        url: `http://127.0.0.1:${process.env.COSMOS_E2E_WEB_PORT ?? "4173"}`,
-        reuseExistingServer: false,
-        timeout: 120_000,
-        stdout: "pipe",
-        stderr: "pipe",
-    },
+    webServer: [
+        {
+            command: "bun run scripts/e2e/rss-fixture-server.ts",
+            url: "http://127.0.0.1:4380/feed.xml",
+            reuseExistingServer: false,
+            timeout: 30_000,
+            stdout: "pipe",
+            stderr: "pipe",
+        },
+        {
+            command: `bun run scripts/e2e/web-stack.ts ${process.env.COSMOS_E2E_WEB_PORT ?? "4173"}`,
+            url: `http://127.0.0.1:${process.env.COSMOS_E2E_WEB_PORT ?? "4173"}`,
+            reuseExistingServer: false,
+            timeout: 120_000,
+            stdout: "pipe",
+            stderr: "pipe",
+        },
+    ],
 });
