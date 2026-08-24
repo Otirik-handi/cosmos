@@ -54,6 +54,8 @@
  */
 [data-cosmos-theme="neurobook"] {
     --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    /* 编辑部标题字体：拉丁沿用 Geist，中文回退到系统衬线以拉开与正文的层级 */
+    --cosmos-font-display: var(--font-geist-sans, system-ui), ui-serif, Georgia, "Songti SC", "STSong", "SimSun", serif;
     --tracking-ui: 0em;
     --control-h-sm: 26px;
     --control-h-md: 32px;
@@ -161,6 +163,7 @@
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) + 4px);
     --font-sans: var(--font-geist-sans);
+    --font-display: var(--cosmos-font-display);
     --font-mono: var(--font-geist-mono);
 }
 

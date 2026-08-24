@@ -25,7 +25,7 @@ test.describe("production home theme", () => {
         await page.goto("/");
         await page.evaluate((key) => window.localStorage.removeItem(key), STORAGE_KEY);
         await page.reload();
-        await expect(page.getByRole("heading", {name: "Cosmos"})).toBeVisible();
+        await expect(page.getByRole("heading", {name: "Cosmos", exact: true})).toBeVisible();
     }
 
     async function documentTheme(page: Page) {
@@ -76,7 +76,7 @@ test.describe("production home theme", () => {
         });
         await page.emulateMedia({colorScheme: "dark"});
         await page.goto("/");
-        await expect(page.getByRole("heading", {name: "Cosmos"})).toBeVisible();
+        await expect(page.getByRole("heading", {name: "Cosmos", exact: true})).toBeVisible();
 
         expect(await documentTheme(page)).toEqual({
             theme: "neurobook",
@@ -98,7 +98,7 @@ test.describe("production home theme", () => {
             });
         }, {key: STORAGE_KEY});
         await page.goto("/");
-        await expect(page.getByRole("heading", {name: "Cosmos"})).toBeVisible();
+        await expect(page.getByRole("heading", {name: "Cosmos", exact: true})).toBeVisible();
 
         expect(await documentTheme(page)).toEqual({
             theme: "neurobook",
@@ -138,7 +138,7 @@ test.describe("production home theme", () => {
         expect(backgroundAfter).not.toBe(backgroundBefore);
 
         await page.reload();
-        await expect(page.getByRole("heading", {name: "Cosmos"})).toBeVisible();
+        await expect(page.getByRole("heading", {name: "Cosmos", exact: true})).toBeVisible();
         expect(await documentTheme(page)).toMatchObject({colorway: "macos-night"});
 
         // Explicit choice must win over later OS changes.
@@ -164,7 +164,7 @@ test.describe("production home theme", () => {
         test(`keeps the home page free of horizontal overflow at ${width}px`, async ({page}) => {
             await page.setViewportSize({width, height: width === 390 ? 844 : 900});
             await page.goto("/");
-            await expect(page.getByRole("heading", {name: "Cosmos"})).toBeVisible();
+            await expect(page.getByRole("heading", {name: "Cosmos", exact: true})).toBeVisible();
             await expect(page.getByRole("button", {name: "跟随系统"})).toBeVisible();
 
             const scroll = await page.evaluate(() => ({
