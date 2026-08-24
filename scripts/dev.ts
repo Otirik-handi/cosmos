@@ -9,6 +9,7 @@ import { createWorkspaceDevEnvironment } from "./dev-env.js";
 import {
     findAvailablePort,
     withApiPortEnvironment,
+    withWebOriginEnvironment,
 } from "./dev-port.js";
 
 const rootDirectory = fileURLToPath(new URL("..", import.meta.url));
@@ -95,7 +96,10 @@ async function start(): Promise<void> {
     }
 
     const environment: NodeJS.ProcessEnv = {
-        ...withApiPortEnvironment(baseEnvironment, apiPort),
+        ...withWebOriginEnvironment(
+            withApiPortEnvironment(baseEnvironment, apiPort),
+            webPort,
+        ),
         COSMOS_WEB_PORT: String(webPort),
         COSMOS_WORKER_ADMIN_HOST: adminHost,
         COSMOS_WORKER_ADMIN_PORT: String(adminPort),

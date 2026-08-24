@@ -46,6 +46,18 @@ export function withApiPortEnvironment(
     };
 }
 
+export function withWebOriginEnvironment(
+    environment: NodeJS.ProcessEnv,
+    webPort: number,
+): NodeJS.ProcessEnv {
+    // dev 编排拥有端口选择权：覆盖 .env / 全局环境里钉在默认端口的静态来源，
+    // 避免端口漂移后浏览器被 CORS 拦截。
+    return {
+        ...environment,
+        COSMOS_ALLOWED_ORIGIN: `http://localhost:${webPort}`,
+    };
+}
+
 async function isPortAvailable(port: number, host: string): Promise<boolean> {
     return new Promise((resolve) => {
         const server = createServer();

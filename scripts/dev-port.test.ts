@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     findAvailablePort,
     withApiPortEnvironment,
+    withWebOriginEnvironment,
 } from "./dev-port.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
@@ -79,6 +80,22 @@ describe("development API port selection", () => {
             COSMOS_API_PORT: "4311",
             COSMOS_API_URL: "http://localhost:4311",
             NEXT_PUBLIC_COSMOS_API_URL: "http://localhost:4311",
+        });
+    });
+    it("derives the allowed origin from the selected web port after fallback", () => {
+        // 模拟 .env / 全局环境把来源钉在默认 Web 端口，随后两个服务都发生端口回退。
+        const environment = withWebOriginEnvironment(
+            withApiPortEnvironment(
+                { COSMOS_ALLOWED_ORIGIN: "http://localhost:3000" },
+                4311,
+            ),
+            3001,
+        );
+
+        expect(environment).toMatchObject({
+            COSMOS_API_URL: "http://localhost:4311",
+            NEXT_PUBLIC_COSMOS_API_URL: "http://localhost:4311",
+            COSMOS_ALLOWED_ORIGIN: "http://localhost:3001",
         });
     });
 });
