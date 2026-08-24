@@ -17,6 +17,7 @@ import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
 import { createWorkerAdminServer, type ComponentHealth, type WorkerAdminServer } from "@cosmos/worker-admin";
 import { parseWorkerRuntimeConfig } from "./config.js";
 import { WorkerRuntime } from "./runtime.js";
+import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
 import { createWorkflowHost } from "./workflow-host.js";
 
 async function bootstrap(): Promise<void> {
@@ -31,9 +32,16 @@ async function bootstrap(): Promise<void> {
     });
     const catalog = createBuiltinManifestCatalog();
     const repository = new PrismaCosmosRepository({ logger, catalog });
+    const proxyConfig = describeProxyConfig(process.env);
+    if (proxyConfig.enabled) {
+        logger.info("network.proxy.enabled", {
+            proxyHost: proxyConfig.proxyHost,
+        });
+    }
     const connectors = createBuiltInConnectorRegistry({
         workspaceRoot: process.env.COSMOS_WORKSPACE_ROOT ?? process.cwd(),
         logger,
+        fetch: createProxyFetch(),
     });
     let workerAdminServer: WorkerAdminServer | null = null;
     let runtime: WorkerRuntime | null = null;
