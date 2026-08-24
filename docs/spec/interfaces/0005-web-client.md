@@ -33,7 +33,8 @@ AttemptSnapshot/AttemptPage 与 Asset download 虽由 API 提供，但当前 `Ht
 它提供 Feed/Source/Health、搜索、Story 展开、手动 Source Run 和 SSE 刷新等可见交互，同时把数据库、Blob 和 API 细节留在服务端/transport。
 
 ### 使用方式
-浏览器加载 `page.tsx` 后由 client component 调用 `HttpCosmosClient`；需要刷新时监听 SSE，创建 fixture 或触发 Run 也通过已有 client 方法和 API 路由完成，不直接访问 Prisma。
+浏览器加载 `page.tsx` 后由 client component 调用 `HttpCosmosClient`；需要刷新时监听 SSE，
+创建 RSS 来源、启用或触发 Run 也通过已有 client 方法和 API 路由完成，不直接访问 Prisma。
 
 ### 典型情景
 本地浏览内容、检查 Source/Health，验证搜索分页或观察一次手动 ingest 的页面刷新时，使用该页面；尚未封装的 Catalog、Attempt 或 Asset download 不由它承担。
@@ -42,8 +43,8 @@ AttemptSnapshot/AttemptPage 与 Asset download 虽由 API 提供，但当前 `Ht
 
 - **Feed**：API `FeedPage.items` 的 Story-level cards；页面展示 title、summary、kind、
   source，并以 `storyId` 作为卡片 key。
-- **Source**：共享合同中的可采集来源快照；当前 Web 新建表单固定提交 `fixture-rss`，
-  让用户随后手动触发录入。
+- **Source**：共享合同中的可采集来源快照；当前 Web 新建表单固定提交 `source.rss@1`
+  并在创建后立即通过 activation command 启用，用户随后手动触发录入。
 - **页面刷新**：按当前 `activeSearch` 重新并行读取 Feed/Search 与 Source，并替换而不是
   合并现有列表；匹配的 feed/run/job SSE 事件使用同一刷新路径，`snapshot_required` 只写 notice。
 - **SSE state**：`connecting`、`connected`、`unavailable` 三态 UI 指示；底层
@@ -61,9 +62,10 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 
 页面提供以下用户流程：
 
-1. **新建来源**：打开“新建来源”卡片，填写 name 和 fixture path，表单通过 React Hook
-   Form + Zod 校验，提交 `POST /api/v1/sources` 的 `fixture-rss` command；成功显示 notice、
-   关闭并 reset 表单，然后 refresh。
+1. **新建来源**：打开“新建来源”卡片，填写 name 和 http(s) `feedUrl`，表单通过 React Hook
+   Form + Zod 校验；先提交 `POST /api/v1/sources` 的 `source.rss@1` command（默认停用），
+   再以独立 `Idempotency-Key` 调用 activation command 启用；成功显示 notice、关闭并
+   reset 表单，然后 refresh。
 2. **手动运行**：对 enabled Source 点击按钮，调用 `triggerSource(source.id)`；queued/
    running 显示 Run 已排队，随后 refresh；其它 status 显示当前状态。
 3. **搜索**：输入 text/source/date，日期转换为 UTC 当日开始/结束 ISO，调用 search，
@@ -319,12 +321,12 @@ properties，不写 `:root`，因此实验室 chrome 与产品页面不受污染
 
 ## 非目标/边界
 
-- 当前页面只有 fixture-rss 创建表单；不宣称浏览器端可配置 RSS/Bilibili/OpenCLI、Secret、
+- 当前页面只开放 RSS 创建表单；不宣称浏览器端可配置 Bilibili/OpenCLI、Secret、
   Connection、Plugin、Workflow definition 或 arbitrary Action。
 - 不实现用户认证、授权、跨用户隔离、Saved View、interaction/read-state、文件上传、
   offline cache、service worker 或通知中心。
-- 不把“真实 RSS 只需要改类型”的表单说明当作已实现浏览器行为；当前 UI 固定 kind 为
-  fixture-rss。
+- 不把 schema 驱动表单或未保存配置 Probe 写成已实现浏览器行为；当前 UI 固定提交
+  `source.rss@1` 与 `feedUrl`，启用依赖独立的 activation command。
 - 不把 EventSource unavailable 后“服务恢复会重新连接”文案写成已实现自动 reconnect；
   当前代码只显示 unavailable，后续连接依赖页面重新挂载或上层操作。
 - Browser visual/e2e、Docker、真实网络来源和跨进程 recovery 未在当前代码和测试中验证；本规格的验收步骤需在相应运行环境中单独执行。
