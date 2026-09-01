@@ -1,10 +1,24 @@
 # Cosmos Project Status
 
-> 更新于 2026-08-24。Task 02 配置优先产品 E2E 已完成本地门禁并合入 master（`793fe10`），已推送 `origin/master`；未部署。
+> 更新于 2026-09-01。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 master（`793fe10`），已推送 `origin/master`；这不等于真实外网 RSS 产品闭环，仍未部署。
 
 ## 一句话结论
 
 Source 身份/revision 持久化合同与默认验收调用方已完成本地 clean cutover：Product API/Web/Node E2E/Windows smoke 使用 `sourceDefinitionRef + operationId + config` 创建默认停用 Source，再以 revision CAS activation command 启用；产品路径不再提交 `kind`、`enabled` 或 `fixturePath`。本轮经五轴审查收口：激活同键重放持久化并返回首结果快照（新 migration `20260824100000_source_activation_result_snapshot`）、API 边界配置校验切换 canonical Zod schema（Bilibili feed 缺 profile 即拒）、未启用 Source 手动 Run 返回 409、RSS `feedUrl` 收紧 http(s)、Idempotency-Key 统一 1–300 字符、迁移回归测试临时目录修复。本地通过全仓类型检查、34 文件/249 单元测试、4 文件/4 Node 进程 E2E、8 个生产浏览器场景、12 个组件实验室浏览器场景和 Windows Node smoke。Docker CLI 不可用，Docker 验收未运行；真实 RSS/AI HOT/Bilibili、未保存配置 Probe、媒体离线链路和发布部署仍未完成。
+
+## 2026-09-01：Worker Registry 状态纠偏
+
+本次核对发现：当前 `master`（核对基线 `9c6f513`）没有持久
+`WorkflowWorkerRegistration`、对应 Prisma migration、`GET /api/v1/workflow-workers`
+或 capability evaluator。当前实现中的 `Worker Admin` 是 Worker 进程内的管理与观测服务；
+`status` 的 `registrationGeneration` 固定为 `null`，Prisma 当前只保存
+`WorkerHeartbeat`。
+
+完整的注册表、TTL/heartbeat、能力投影和查询实现存在于归档标签
+`archive/t04-workflow-runtime-spike-wip-20260818` 的 `b8a1701`，但该提交不在当前
+`master` 祖先链中。因此归档 Task walkthrough 中的 Round 78–97 证据只能作为历史 WIP
+记录，不能作为当前主线能力或验收证据。当前 Worker Admin 的实现合同以
+[`docs/spec/runtime/0003-worker-admin.md`](docs/spec/runtime/0003-worker-admin.md) 为准。
 
 实现规格入口为 [`docs/spec/README.md`](docs/spec/README.md)，测试入口为 [`docs/testing/README.md`](docs/testing/README.md)，仓库生命周期与唯一完成定义位于 [`docs/standards/repository-workflow.md`](docs/standards/repository-workflow.md)。
 
@@ -181,33 +195,11 @@ Task 02 的 Source 身份/revision 合同、配置入口、API/Worker 迁移和�
   新 cursor。
 - Action 的 `retry_wait` 通过 `nextAttemptAt` 参与 Run claim；重试到期前不会让
   父 Run 被 Worker 高频反复领取。
-- Workflow Run lane 已接入持久 `WorkflowWorkerRegistration`：每个 slot 使用独立
-  registration token、TTL heartbeat、失效重注册和 graceful stop；Registry 只做
-  capability discovery，不替代 Run lease ownership。
-- Application Query、Nest API 和 HTTP Service Client 已接入只读
-  `GET /api/v1/workflow-workers`；返回不暴露 registration token 的 discovery
-  envelope。`enabled`、`disabled` 和 `unavailable` 分别表示查询成功、功能关闭
-  和注册表查询失败；查询成功但没有 active Worker 时仍返回 `enabled` + 空
-  `items`，不把它误判成 Definition 不存在，也不参与 Run 调度。API/Worker
-  只有显式 `COSMOS_WORKFLOW_WORKER_REGISTRY=prisma` 才启用 Registry，未设置时
-  默认 disabled。
+- 当前 Worker Admin 提供独立 loopback `healthz`、`readyz`、status、capabilities、metrics 和 drain；它只维护进程内状态与本地 executable evidence，不是持久 Worker Registry。
+- 当前 `master` 不提供持久 `WorkflowWorkerRegistration`、TTL 注册生命周期、版本化注册表 evidence 或 `GET /api/v1/workflow-workers`；`Worker Admin.status()` 的 `registrationGeneration` 固定为 `null`。
 - 修复 Worker process heartbeat 的 fire-and-forget race，Supervisor drain 现在等待
   `ready` observation 后再写入 `stopped`。
-- admission refresh 已收紧为正向证据：单个 Worker 的本地 catalog/Action/
-  snapshot 失败不会覆盖全局 Run 为 `definition_unavailable`；未来由独立
-  projector 表达全局不可用或 `no_capable_worker`。
-- Worker Registry 当前保存的 Workflow/Action refs 和 generic capabilities
-  只是 discovery hint；它还不能证明某个 slot 与 Run 的
-  `definitionSnapshot`、Workflow manifest hash 和 Action dependency hashes
-  精确匹配。未来 availability projection 必须使用单独的 capability evidence，
-  不能把 ref 命中直接当成可执行证明。
-- 新增不落库的 `assessWorkflowWorkerCapability()` 纯评估：对单个 Worker
-  evidence 与 Run snapshot 返回 `capable`、`ineligible` 或 `unknown`；它不参与
-  claim，不改变 Run/lease 状态，也不代表 Registration evidence 已经持久化。
-- 新增不落库的 `aggregateWorkflowWorkerAvailability()`：只有 fresh enabled、
-  `assessmentComplete=true` 且没有 capable Worker 时才产生诊断性的
-  `no_capable_worker`；disabled、unavailable、stale 或 partial evidence 都保持
-  unknown/registry_unavailable。
+- Worker capability discovery、持久 evidence、capability evaluator、availability projection、`no_capable_worker` 和 cleanup consumer 当前均未在 `master` 实现；归档标签中的对应内容不能作为当前能力证据。
 - 增加 Phase 1B 受管 Collector Runtime：`bilibili`、`aihot`、`rss`、`fixture-rss` 使用业务 Source kind，OpenCLI 不暴露为通用来源类型。
 - Probe 已改为异步持久 Job；API 只创建/查询 Job，Worker 执行 dry-run，Probe 不写 Observation、Entry、Asset 或 checkpoint。
 - 完成 OpenCLI 固定版本 `1.8.6`、外部 executable 覆盖、版本校验、Browser Bridge doctor 前置检查和 profile 引用边界；Cosmos 不保存 Cookie/Token。
@@ -438,7 +430,7 @@ Task 06 当时处于暂停状态；该历史状态已由 `nb-workflow@0.2.0` 稳
 
 ## 文档审查结论
 
-### 已验证的 Task 04 Spike 基线
+### 已验证的 Task 04 Spike 基线（归档 WIP，不属于当前 master）
 
 - Source execution snapshot focused：3 个测试文件、32 个测试通过；覆盖
   Source 查询态与执行态合同分离、相同幂等键不重读配置，以及真实 Prisma Run
@@ -452,11 +444,8 @@ Task 06 当时处于暂停状态；该历史状态已由 `nb-workflow@0.2.0` 稳
 - Phase 1 固定 Ingest Workflow 链路可运行：
   fixture/RSS → Workflow Run/Action Job → Observation/Entry/Revision/Asset →
   最小 Story projection → Search/Feed/Story 查询。
-- Registry-enabled Node production smoke 已验证 API/Worker、Workflow Worker
-  registration、固定 Ingest、Feed/Search/Story、SSE、结构化日志关联和
-  registration token 不暴露。
-- Next standalone 已在 Windows 上重建目录型内部 symlink；Node 24 可启动
-  standalone server。浏览器验收覆盖 Source 创建、Workflow 触发、SSE 自动刷新、
+- 归档 WIP 的 Registry-enabled Node production smoke 曾验证 API/Worker、Workflow Worker registration、固定 Ingest、Feed/Search/Story、SSE、结构化日志关联和 registration token 不暴露。
+- Next standalone 已在 Windows 上重建目录型内部 symlink；Node 24 可启动 standalone server。浏览器验收覆盖 Source 创建、Workflow 触发、SSE 自动刷新、
   Feed/Search/Story/Entry/Source/Revision/Observation、URL-free 内容、第二次运行
   幂等和健康状态，控制台无 error/warning。
 - 代码和文档都保留了当前单用户最大产品权限、旧 Observation 不覆盖和 Web 不直接访问数据库/文件系统的边界。
@@ -490,11 +479,7 @@ Task 06 当时处于暂停状态；该历史状态已由 `nb-workflow@0.2.0` 稳
   Source 保存，不能表达一个 Connection 下多个独立计划。
 - Source 删除与历史 Observation 保留、内容寻址 Blob orphan GC、Outbox 外部
   投递和通用 Consumer 恢复仍需单独设计和验收。
-- Worker capability evidence 已有最小版本化持久化、catalog-admitted projection
-  和带 revision CAS 的 tombstone/retirement；registration replacement 竞态在
-  同一 Prisma/SQLite Data Root 内已有 `registrationGeneration` 条件保护，但
-  仍缺远程信任根、权威 availability projection、scheduler/consumer 消费以及
-  delete/purge policy，因此不能安全地产生权威 `no_capable_worker`。
+- 当前 `master` 尚未实现 Worker capability discovery/Registry、版本化持久 evidence、权威 availability projection、scheduler/consumer 消费或 `no_capable_worker`；归档标签 `b8a1701` 的 WIP 代码不属于当前主线，未来若恢复该方向必须在当前基线上重新实现并验收。
 - URL-free fallback 尚无 `identityStrength`、`identityVersion` 和
   `identityBasis`；没有条目级稳定 locator 时，内容修订可能形成新 Entry。
 - 固定 Ingest 会在 Job result、Invocation result、Step output 和后续 Action
@@ -508,9 +493,7 @@ Task 06 当时处于暂停状态；该历史状态已由 `nb-workflow@0.2.0` 稳
   root，拒绝绝对路径、遍历和 symlink escape。
 - 当前 Source/Job/Asset public projection 尚未证明完全移除 Secret、内部 config、
   arbitrary result、`storageKey` 和绝对路径；Controller 需要白名单 DTO。
-- 当前尚无 `/healthz`/`readyz` 分离、Worker Admin、Gateway owner handoff、
-  late-evidence、Receipt CAS、claim capacity/replay/backpressure 或真实 bootstrap
-  identity。
+- 当前已有本地 Worker Admin，但其 status、capabilities、drain 和 heartbeat 观测主要是进程内状态；Gateway owner handoff、late-evidence、Receipt CAS、claim capacity/replay/backpressure 和真实 bootstrap identity 仍未实现或验收。
 
 ### 项目级质量审查（历史记录）
 
@@ -573,17 +556,17 @@ evidence 与当前验证混淆。
   fallback；无条目级稳定 locator 时的修订身份仍待显式建模。
 - 当前隔离数据库已应用 4 条 migration，状态 up to date；真实 master 三条
   migration 携带既有数据升级到第 4 条也已通过。
-- 启用 Prisma Definition/Worker Registry 的 Node production smoke 通过；固定
+- 归档 WIP 的启用 Prisma Definition/Worker Registry Node production smoke 曾通过；固定
   Ingest Run 产出 Feed 3 条、Search 1 条，并验证 Story、SSE、日志 correlation、
-  API 400/404、Run/Probe 幂等重放与冲突、超长 key 拒绝和 Worker discovery。
+  API 400/404、Run/Probe 幂等重放与冲突、超长 key 拒绝和 Worker discovery；该证据不属于当前 `master`。
 - Node production Connector smoke：通过；AI HOT 真实 GET 返回 200，Worker 真实保存 3 条 Entry；OpenCLI 内置入口返回版本 `1.8.6`。
 - Bilibili doctor smoke：已运行；daemon 在端口 `19825`，但 Browser Bridge 为 `Extension: not connected`，真实 hot 采集未执行成功。
 - Docker/Compose 仍因当前环境缺少 Docker CLI 未验证。
 - Playwright 浏览器验收：通过来源创建、固定 Ingest Workflow、SSE 自动刷新、
   Feed 3 条、搜索 `Cosmos` 1 条、Story → Entry → Source/Revision/Observation、
   URL-free 内容、第二次 Run 幂等和健康检查；控制台 0 error、0 warning。
-  Source execution snapshot 收口后没有改动 Web/Transport；最终后端由随后一次
-  Registry-enabled Node production smoke 覆盖，本轮未重复浏览器点击。
+  Source execution snapshot 收口后没有改动 Web/Transport；归档 WIP 的 Registry-enabled Node
+  production smoke 覆盖了当时的后端，不能作为当前主线 Registry 实现证据。
 - `docker` 命令不存在，因此 Docker/Compose 验收保留为未运行。
 - API/DTO 文档收口检查：全仓 48 个 Markdown 相对链接错误 0、未闭合围栏 0、
   EOF 缺失 0、尾随空白 0、conflict marker 0；PRD 164 个定义型需求 ID 无重复；

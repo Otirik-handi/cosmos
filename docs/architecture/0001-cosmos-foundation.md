@@ -1692,7 +1692,7 @@ type WorkflowValue =
 ValueStore。Job result、Journal 和下一 Activity input 共享引用。阈值、retention、
 终态压缩与删除后恢复语义由 Backend 能力和 Task 06 行为测试固定。
 
-### 15.6 Worker capability discovery 与 Run admission 分离
+### 15.6 Worker capability discovery 与 Run admission 分离（目标设计；当前 master 未实现）
 
 Workflow slot 可以通过持久 `WorkflowWorkerRegistration` 声明自己的
 `workerId`、lane、Workflow/Action refs、capabilities、TTL、heartbeat 和
@@ -1700,13 +1700,16 @@ Workflow slot 可以通过持久 `WorkflowWorkerRegistration` 声明自己的
 跨进程 discovery/routing projection，不是 Run owner；Run lease 仍是唯一的
 执行 ownership。
 
-当前 registration 已持久化版本化 Workflow/Action evidence，但 refs、generic
-capabilities 和 evidence 都首先是 Worker 自报的 discovery input。旧
-registration 默认 `evidenceVersion=0`/`legacy`/空 evidence；当前 Runtime
-descriptor 使用 `evidenceVersion=1`/`local-executable`。因此它们可以回答“哪个
-slot 声称加载了某个 ref、并报告了什么 manifest”，仍不能单独回答“这个 slot
-是否能执行给定 Run 的精确 `definitionSnapshot`”。Worker `version` 也只是进程
-版本，不等于 Definition catalog 或 binding revision。
+本节保留 Worker capability discovery 的目标合同，不代表当前主线已经交付。2026-09-01
+核对的 `master` 没有上述持久模型、Registry migration、能力投影或查询路由；完整实现只
+存在于归档标签 `archive/t04-workflow-runtime-spike-wip-20260818` 的 `b8a1701`，不在
+当前主线祖先链中。当前实现合同以 [`docs/spec/runtime/0003-worker-admin.md`](../spec/runtime/0003-worker-admin.md) 为准。
+
+目标 registration 应持久化版本化 Workflow/Action evidence；旧 registration 可以默认
+`evidenceVersion=0`/`legacy`/空 evidence，目标 Runtime descriptor 使用
+`evidenceVersion=1`/`local-executable`。这些字段仍来自 Worker 自报的 discovery input，
+不能单独作为某个 Run 的完整执行证明。当前 `master` 没有 registration 或该
+descriptor；Worker `version` 也只是进程版本，不等于 Definition catalog 或 binding revision。
 
 `WorkflowRun.admissionStatus` 不能被任意 Worker 的负面本地观察直接写成全局
 `definition_unavailable`。Worker refresh 只在本地 Definition、Action、catalog
@@ -1737,13 +1740,11 @@ capability evidence。它不能把“当前没有 active registration”误判�
 `unavailable` 表示读取 Registry 失败。这个 envelope 只表达可观测性，不改变
 Run claim、lease ownership 或 `admissionStatus`。
 
-Projection consumer 不能把 `listActive()` 的空数组解释为删除命令。当前另有
-只读 `listObserved()` inventory，读取不含 registration token 的 durable
-registration，并把 persisted slot 的时间状态表达为 `live`、`stopped` 或
-`expired`。Projection Runner 使用单次
-`observe({ now, staleAfterMs })` 返回的 `checkedAt` snapshot 同时取得 active
-和 observed registration；`listActive/listObserved` 仍是兼容读取。这样同一
-tick 不会因为两次 Registry 查询的时序差异混合不同状态。
+目标 projection consumer 不能把 `listActive()` 的空数组解释为删除命令；它应使用独立
+只读 `listObserved()` inventory，读取不含 registration token 的 durable registration，
+并把 persisted slot 的时间状态表达为 `live`、`stopped` 或 `expired`。目标 Runner 应使用
+单次 `observe({ now, staleAfterMs })` snapshot，同时取得 active 和 observed registration，
+避免同一 tick 中两次 Registry 查询产生时序差异。当前 `master` 没有这些 Registry API。
 `WorkflowWorkerCapabilityProjectionStore.listStale()` 只做有界的过期候选查询；
 Runner 在 Registry 可用、观察到明确 terminal registration 且 grace period
 已过时报告 cleanup candidate，但 Runner 本身不执行删除或 tombstone，也不
@@ -1756,15 +1757,11 @@ Candidate 后续可以通过版本化的
 Maintenance Workflow enqueue command。Command id 由 `workerId`、
 `projectionRevision`、`registrationGeneration` 和 terminal state/time 稳定派生；
 输入只保存 `expectedProjectionRevision`、generation、观察时间和 cleanup policy，
-不复制 registration/projection lease token。Application 已提供对应的版本化
-Cleanup Workflow/Action catalog 注册 seam 和最小执行实现：Action Job 由现有
-Workflow Runtime 领取和恢复，执行前重新观察 registration terminal state/time，
-执行时通过同一条 Prisma 条件更新再次校验 generation 和 terminal observation，
-并通过 projection revision CAS 设置 `retiredAt`、retirement reason/terminal time，
-保留 last-known snapshot 并清空 projection lease。重复 invocation 返回
-`already_retired`，registration 复活、generation 已变化或 revision 已变化则安全
-跳过；当前仍未把该 Definition/Action 接入 `apps/worker` 默认 wiring、scheduler
-或 candidate consumer，因此不代表生产自动 cleanup 已完成。
+目标上，Application 可提供版本化 Cleanup Workflow/Action 的注册 seam：Action Job
+由现有 Workflow Runtime 领取和恢复，执行前重新观察 registration terminal state/time，
+并通过 projection revision CAS 校验 generation、设置 `retiredAt` 和保留快照。当前
+`master` 尚未实现该 Definition/Action、scheduler 或 candidate consumer；归档 WIP 中的
+对应 seam 不能作为当前生产能力。
 
 同一个 `workerId` 的首次 registration generation 为 `1`，replacement 时递增，
 heartbeat 不递增。Prisma retirement 的单条条件更新同时要求 projection revision
@@ -1774,8 +1771,7 @@ replacement 会得到 `registration_conflict`，而不会把旧 registration 的
 tombstone 写进新 projection 生命周期。这个保证只存在于 Prisma/SQLite 的同库
 边界；InMemory reducer/store 只验证运行语义，不能模拟跨表数据库原子性。
 
-当前已经有独立、可版本化的 capability evidence 内容合同和
-Application CatalogAdmission source/service：
+目标上应有独立、可版本化的 capability evidence 内容合同和 CatalogAdmission service：
 
 ```text
 workerId
@@ -1787,12 +1783,12 @@ observedAt
 expiresAt
 ```
 
-CatalogAdmission 只在显式调用时把本地 snapshot 与 Definition/Action catalog
-精确匹配，并产生 `admitted`/`partial`/`rejected` 结果；source unavailable
-则保持不可用诊断。它目前不检查 binding、不自动写 registration，也不构成远程
-签名信任。未来 availability projector 仍必须要求 Registry 明确 enabled、观察
-仍在 stale window 内，并评估所有候选 evidence 后，才能把某个 Run 的诊断投影
-设为 `no_capable_worker`。这个投影不能改变 Run claim 或 lease ownership。
+CatalogAdmission 只应在显式读取 Definition/Action catalog 后把本地 snapshot 与 catalog
+精确匹配，并产生 `admitted`/`partial`/`rejected` 结果；它不是 authority/availability
+projection，也没有远程签名或信任根。当前 `master` 没有该 evidence contract 的运行时
+实现、CatalogAdmission 或 projection runner；未来 availability projector 仍必须要求
+Registry 明确 enabled、观察仍在 stale window 内，并评估所有候选 evidence 后，才能把
+某个 Run 的诊断投影设为 `no_capable_worker`，且不能改变 Run claim 或 lease ownership。
 
 ## 16. 安全、隐私和平台边界
 

@@ -9024,3 +9024,32 @@ PRD 已有 Trigger/Research/Story/推荐/Artifact/运行恢复需求，不为每
 Docker、真实来源、长时间恢复、Gateway 多主机、真实认证、Secret Broker 或
 Harness/Agent。既有 Spike 证据仍是历史基线，不能替代 API v0.2 后续实现的
 schema/Transport/conformance 验收。
+
+## Round 108：Worker Registry 主线/归档边界纠偏
+
+日期：2026-09-01
+
+目标：核对 `PROJECT-STATUS.md`、ADR-0001、总体架构和 Task 04 当前摘要中的 Worker Registry 描述，避免把归档 WIP 当作当前 `master` 能力。
+
+事实核对：
+
+- 当前 `master` 核对基线为 `9c6f513`；主线没有 `WorkflowWorkerRegistration`、对应 Prisma migration、`GET /api/v1/workflow-workers`、capability evaluator 或独立 capability projection 源文件。
+- 当前 `packages/worker-admin` 只提供 Worker 进程内的管理/观测服务；`WorkerStatusSnapshot.registrationGeneration` 固定为 `null`，当前 Prisma schema 只有 `WorkerHeartbeat`，没有持久 Worker Registry。
+- 完整注册表、TTL/heartbeat、能力投影和查询实现存在于归档标签 `archive/t04-workflow-runtime-spike-wip-20260818` 的 `b8a1701`；`b8a1701` 不在当前 `master` 祖先链中。
+- 当前实现规格 [`docs/spec/runtime/0003-worker-admin.md`](../../../docs/spec/runtime/0003-worker-admin.md) 已准确描述进程内 Worker Admin；归档 Round 78–97 保留为历史 WIP，不作为当前实现证据。
+
+实际修改：
+
+- 修正 `PROJECT-STATUS.md`、`CONTEXT.md`、总体架构、ADR-0001、Task 04 README 和 Product API 草案中的当前/目标边界；保留归档 walkthrough 的历史原文，并明确其来源与状态。
+- 本轮不恢复归档代码，不修改运行时、数据库、migration、依赖或 Product API 实现。
+
+验证命令与结果：
+
+- `git show master:packages/storage-prisma/src/workflow-worker-registry.ts`：当前主线不存在该文件。
+- `git show b8a1701:packages/storage-prisma/src/workflow-worker-registry.ts`：归档提交包含该文件；同一归档提交也包含 registration migration 和 Runtime registration 测试。
+- `git merge-base --is-ancestor b8a1701 master`：不成立；归档实现未进入当前主线。
+- 当前工作区代码与文档搜索确认：注册相关命中只剩进程内 Worker Admin 类型/字段及文档中的目标或历史说明。
+
+偏差：发现活跃状态文档曾把归档 WIP 的验证结果写成当前主线证据，已在本轮纠正。
+
+leader 判定：当前主线状态已与代码一致；若未来恢复 Worker Registry，必须在当前基线上重新实现持久模型、生命周期、API 和行为验收，不能直接把归档提交合并当作完成证明。

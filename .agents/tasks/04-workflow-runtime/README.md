@@ -302,10 +302,10 @@ type WorkflowContext = {
 
 ## 7. 当前状态与风险
 
-架构状态：固定 Ingest 生产链已收敛并可作为 parity 基线；通用脚本内核方向已
-转交 Task 06。当前 Cosmos Spike 尚未依赖 `nb-workflow`，TaskStore/WakeupBus、
-manifest-only API、独立 Migrator 和 Agent Extension 也尚未实现。以下“已存在”
-描述当前 Spike 证据，不表示 ADR-0002 的目标组装已经完成。
+架构状态：固定 Ingest 生产链已依赖 `nb-workflow` 并可作为 parity 基线；更广泛的
+Host/Backend convergence、通用脚本内核边界和完整验收仍未完成。TaskStore/WakeupBus、
+manifest-only API、独立 Migrator 和 Agent Extension 也尚未全部实现。以下“已存在”
+描述当前主线可核对的实现，不表示 ADR-0002 的全部目标组装已经完成。
 
 ### 已存在
 
@@ -366,54 +366,10 @@ manifest-only API、独立 Migrator 和 Agent Extension 也尚未实现。以下
   同一 commandId 的并发请求只保留一个结果。固定 Ingest 的 API、schedule 和
   Worker 生产组装已经注入该 repository；其它未来 Command 仍需逐条固定事务
   边界。
-- Workflow Run admission projection：`unknown`、`ready` 和
-  `definition_unavailable`，不可用 Run 不参与 claim，Definition 恢复后可由同一
-  Runtime 重新领取；当前 Worker refresh 只写正向 `ready`，不会把单个 Worker
-  的负面本地观察升级成全局 `definition_unavailable`。后者及未来
-  `no_capable_worker` 需要独立的权威 projector；aggregate-only Outbox event 已
-  通过 Prisma/SQLite 验证。
-- `WorkflowRuntime.describeWorkerCapabilities()` 已把本地 Worker 的
-  `workerId`、`lane`、`workflowRefs` 和 `actionRefs` 变成显式 descriptor；
-  admission diagnostics 会带上这份 snapshot。Run lease 仍是实际 ownership，
-  descriptor 目前只用于本地路由过滤和诊断；refs/capabilities 是 discovery hint，
-  不是精确 Run snapshot 的 manifest evidence。
-- 新增不落库的 `assessWorkflowWorkerCapability()` 纯评估，验证
-  `WorkerEvidence × RunDefinitionSnapshot → capable/ineligible/unknown`；它只
-  固定未来 evaluator 的状态语义，不接入 claim、scheduler、Registry persistence
-  或 API。
-- 新增不落库的 `aggregateWorkflowWorkerAvailability()`，要求 fresh enabled
-  discovery 和 `assessmentComplete=true` 才能生成 `no_capable_worker`；partial、
-  stale、disabled、unavailable 或 unknown evidence 都不能升级成该状态。
-- `WorkflowWorkerRegistration` 已通过 InMemory/Prisma Registry 和真实 Worker
-  lane 生命周期接入：每个 Workflow slot 启动时注册，独立 TTL timer 与每次
-  poll 前 heartbeat，token/TTL 失效后重新注册，slot drain 后停止注册。
-  Registry 是 capability discovery projection，不替代 Run lease；注册失败
-  fail-open，不阻断 Workflow Runtime 执行。
-- Worker registration 已增加版本化 Workflow/Action evidence 的兼容持久化；
-  Round 87–97 已验证 catalog admission Application port/Prisma bridge、独立
-  capability projection reducer、最小 InMemory/Prisma durable projection store
-  和独立 runner tick，以及两个 Prisma client/runner 之间的跨进程 lease
-  fencing。新增的 `listObserved()` 只读 inventory 能区分 live、stopped 和
-  expired registration；`observe({ now, staleAfterMs })` 在一个
-  `checkedAt` snapshot 中同时提供 active 和 observed registration；
-  `listStale()` 只返回过期 projection，runner 结合 terminal observation 和
-  grace period 生成 cleanup candidate，但不直接清理，也不清除 last-known
-  admitted snapshot。cleanup candidate 现在可以转换成带
-  `expectedProjectionRevision`、`registrationGeneration` 和稳定 command id 的
-  `maintenance` Workflow enqueue command；Application 已提供可显式注册的
-  Cleanup Workflow/Action catalog 和最小 Runtime 执行 seam。Action Job 会重新
-  核对 terminal observation/generation，并用同一条 Prisma 条件更新做 revision
-  CAS，设置 `retiredAt`/tombstone、保留快照和清空 projection lease；重复
-  invocation、registration 复活、generation replacement 和旧 revision 均有
-  明确结果。availability scheduler、独立生产 consumer、自动 candidate 消费、
-  query API、delete/purge policy 和自动 registration 消费仍未实现。
-- Application Query、Nest API 和 HTTP Service Client 已提供只读 active Worker
-  capability 查询；返回带 `status`、`checkedAt`、`staleAfterMs` 和 `items` 的
-  discovery envelope，不暴露 registration token。`enabled + items=[]` 表示查询
-  成功但当前为空；`disabled` 不查询 Registry；`unavailable` 表示 Registry
-  查询失败。API/Worker 只有显式 `COSMOS_WORKFLOW_WORKER_REGISTRY=prisma` 才启用
-  Registry，未设置时默认 disabled。该查询仍不参与 owner assignment、scheduler
-  或 Run admission。
+- 当前 `master` 的 Worker host 保留固定 Ingest 的 Run/Activity lane；`packages/worker-admin` 只提供进程内的 health、status、capabilities、metrics 和 drain 管理面。
+- 当前 `master` 没有持久 `WorkflowWorkerRegistration`、Registry/能力投影 Prisma 模型、TTL 注册生命周期、版本化注册表 evidence 或 `GET /api/v1/workflow-workers`；`Worker Admin.status()` 的 `registrationGeneration` 固定为 `null`。
+- Worker Admin 的 capability 输出是本地 executable evidence，不是跨进程发现、Run owner、准入状态或调度依据。`assessWorkflowWorkerCapability()`、`aggregateWorkflowWorkerAvailability()`、`no_capable_worker` 和 cleanup consumer 当前均未实现。
+- 上述注册表、能力评估、投影和查询能力曾出现在归档标签 `archive/t04-workflow-runtime-spike-wip-20260818` 的 `b8a1701`，但该提交不在当前 `master` 祖先链；对应 Round 78–97 只保留为历史 WIP 记录，未来恢复时必须在当前基线上重新实现和验收。
 
 ### 仍缺
 
@@ -436,17 +392,7 @@ manifest-only API、独立 Migrator 和 Agent Extension 也尚未实现。以下
   的 API/Transport 接入、Harness/`nb-memory` Adapter。
 - 固定 Ingest 的 API/Worker command wiring 已使用 Prisma atomic repository；
   其它未来 Command 和测试用 InMemory adapter 仍需逐条确认原子边界。
-- admission refresh 只处理当前 Worker 已注册的 Workflow refs；未知插件的 Run
-  仍保持 queued，后续拥有该 ref 的 Worker 可以接管。持久 Worker Registry
-  已存在并能记录 slot capability 与版本化 Workflow/Action evidence；纯
-  capability evaluator、catalog admission port、Prisma Definition Registry
-  bridge、projection reducer、registration observation、stale candidate query
-  和最小 Cleanup Workflow/Action Job 已有 focused/runtime smoke coverage；
-  `registrationGeneration` 已保护同一 Prisma/SQLite Data Root 内
-  replacement-before-retire 的条件更新，但跨 Worker owner assignment、无 owner
-  的 API projection、durable availability、自动 candidate consumer、delete/purge、
-  远程 Worker 和插件 manifest handshake 仍未实现。catalog-admitted snapshot
-  当前不会自动写回 registration，也不改变 Run claim。
+- 当前主线没有 Worker capability discovery/Registry、版本化持久 evidence、权威 availability projection、scheduler/consumer 消费或 `no_capable_worker`；归档标签 `b8a1701` 的 WIP 代码不属于当前实现，未来若恢复该方向必须在当前基线上重新实现并验收。
 - Outbox 的 per-Consumer delivery 已完成最小 spike，但旧 message-level 状态字段仍保留，尚未完成生产迁移和清理。
 - Outbox 已有最小 bounded retry/backoff policy，但 Consumer policy 持久化、dead-letter、`snapshot_required` 和外部副作用幂等尚未完成。
 - 固定 Ingest 只表达 manual/schedule provenance；关注账号、推荐流、搜索、

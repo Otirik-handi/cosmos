@@ -100,11 +100,16 @@ revision，提交时使用 CAS；已经被其它 Run 推进的旧结果只能记
 不能回滚较新的 cursor。该规则与 Run/Job lease fencing 同时成立，二者不能互相
 替代。
 
-### 6.1 Worker capability discovery 不替代 Run admission/ownership
+### 6.1 Worker capability discovery 不替代 Run admission/ownership（目标设计；当前 master 未实现）
 
 Workflow Worker Registry 只保存 slot capability discovery projection。它可以帮助
 诊断和未来 scheduler 找到声明支持某个 Workflow/Action 的 active Worker，但不
 拥有 Run，也不替代 Run lease。
+
+本节保留已接受的目标合同，不代表当前主线已经交付。2026-09-01 核对的当前
+`master` 没有持久 `WorkflowWorkerRegistration`、Registry migration、能力投影或
+`GET /api/v1/workflow-workers`；相关完整实现只存在于归档标签
+`archive/t04-workflow-runtime-spike-wip-20260818` 的 `b8a1701`，不在当前主线祖先链中。
 
 Worker 的 admission refresh 只提交正向的、与本地 Definition/Action、持久
 catalog 和 Run definition snapshot 精确匹配的 `ready` 证据。单个 Worker 缺少
@@ -145,14 +150,14 @@ Candidate 必须转换为普通 `maintenance` Workflow enqueue command；command
 由 Worker、projection revision、registration generation 和 terminal observation
 稳定派生，Workflow input 只包含 expected projection revision、generation 和
 业务时间，不包含任何 lease token。
-当前 Application 已提供版本化 Cleanup Workflow/Action 的注册 seam：Action Job
+目标上，Application 可提供版本化 Cleanup Workflow/Action 的注册 seam：Action Job
 由现有 Workflow Runtime 领取、续租、重试和恢复；Action 执行前重新观察相同的
 registration terminal state/time 和 generation，再以 projection revision CAS 写入
 `retiredAt`、retirement reason/terminal time，保留 last-known snapshot 并清空
 projection lease。重复 invocation 返回 `already_retired`，registration 复活、
-generation 已变化或 revision 已变化则安全跳过。该 Definition/Action 尚未接入
-`apps/worker` 默认 wiring、scheduler 或 candidate consumer，故仍不是生产自动
-cleanup。
+generation 已变化或 revision 已变化则安全跳过。当前 `master` 尚未实现该
+Definition/Action、scheduler 或 candidate consumer；归档 WIP 中的对应 seam 不能作为
+当前生产能力。
 
 同一个 `workerId` 首次 registration 的 generation 为 `1`，replacement 时递增，
 heartbeat 不递增。Prisma retirement 使用同一条条件更新同时校验 generation、
@@ -160,16 +165,15 @@ terminal state/time、projection revision 和 `retiredAt IS NULL`，从而拒绝
 re-check 后被替换的旧 registration。该 guard 只在同一 Prisma/SQLite Data Root
 内成立；InMemory Store 只验证 reducer/运行语义，不能替代数据库原子性证明。
 
-当前 registration 已以版本化字段持久化 Workflow/Action evidence；旧 registration
-默认是 `evidenceVersion=0`、`legacy` 和空 evidence，当前 Runtime descriptor
-使用 `evidenceVersion=1`、`local-executable`。但这些字段仍来自 Worker 自报，
-不能单独作为某个 Run 的完整执行证明。Application 的
-`WorkflowWorkerCatalogAdmissionService` 可以在显式读取 Definition/Action catalog
-后生成 `catalog-admitted` 候选 snapshot，并由当前最小 projection runner 保存
-独立的 capability projection；它仍不是 authority/availability projection，
-也没有远程签名或信任根。因此缺少 evidence、catalog mismatch 或 source
-unavailable 的 Worker 仍只能参与诊断，不能让 availability projector 直接写
-`no_capable_worker`。
+目标 registration 应以版本化字段持久化 Workflow/Action evidence；旧 registration
+可以默认 `evidenceVersion=0`、`legacy` 和空 evidence，当前 Runtime descriptor
+目标使用 `evidenceVersion=1`、`local-executable`。这些字段仍来自 Worker 自报，
+不能单独作为某个 Run 的完整执行证明。目标 Application 可在显式读取
+Definition/Action catalog 后生成 `catalog-admitted` 候选 snapshot，并由 projection
+runner 保存独立的 capability projection；它不是 authority/availability projection，
+也没有远程签名或信任根。当前 `master` 没有该 registration、CatalogAdmission 或
+projection runner，缺少 evidence、catalog mismatch 或 source unavailable 的 Worker
+不能因此被报告为 `no_capable_worker`。
 
 未来 capability evidence 至少要包含 Worker、Workflow manifest 和每个 Action
 dependency 的 hash，以及 `observedAt`/`expiresAt`。只有精确匹配且 observation

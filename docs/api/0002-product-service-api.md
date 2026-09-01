@@ -250,10 +250,10 @@ Cosmos Backend 或 Worker Gateway。
 
 | 成熟度 | Method | Path | 结果 |
 | --- | --- | --- | --- |
-| Current | `GET` | `/workflow-workers` | Worker discovery envelope |
+| Planned | `GET` | `/workflow-workers` | Worker discovery envelope |
 | Planned | `GET` | `/workflow-workers/{id}` | registration/capability 投影，不含 token |
 
-Worker discovery 是诊断，不是 assignment 或 Run owner。
+Worker discovery 是目标诊断查询，不是 assignment 或 Run owner；当前 `master` 尚未实现此路由。
 
 ## 6. 信息库
 
