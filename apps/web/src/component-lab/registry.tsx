@@ -250,6 +250,8 @@ const textareaControls = [
 const sourceFormControls = [
     control("name", "Name", "text", "Cosmos RSS"),
     control("feedUrl", "Feed URL", "text", "https://example.com/feed.xml"),
+    control("definitionState", "Definition state", "select", "ready", ["ready", "loading", "error"]),
+    control("probeState", "Probe state", "select", "idle", ["idle", "running", "succeeded", "failed", "timeout"]),
 ] as const satisfies readonly LabControlDefinition[];
 
 const statusSummaryControls = [
@@ -432,8 +434,10 @@ export const labComponentDefinitions = [
         defaultSceneId: "default",
         controls: sourceFormControls,
         scenes: [
-            {id: "default", label: "Default", props: {name: "Cosmos RSS", feedUrl: "https://example.com/feed.xml"}},
-            {id: "long-text", label: "Long text", props: {name: "A source name long enough to test wrapping", feedUrl: "https://example.com/a-very-long-feed-url.xml"}},
+            {id: "default", label: "Default", props: {name: "Cosmos RSS", feedUrl: "https://example.com/feed.xml", definitionState: "ready", probeState: "idle"}},
+            {id: "long-text", label: "Long text", props: {name: "A source name long enough to test wrapping", feedUrl: "https://example.com/a-very-long-feed-url.xml", definitionState: "ready", probeState: "idle"}},
+            {id: "probe-success", label: "Probe success", props: {name: "Cosmos RSS", feedUrl: "https://example.com/feed.xml", definitionState: "ready", probeState: "succeeded"}},
+            {id: "definition-error", label: "Definition error", props: {name: "Cosmos RSS", feedUrl: "https://example.com/feed.xml", definitionState: "error", probeState: "idle"}},
         ],
         tokens: sharedTokens,
         render: renderSourceFormLab,

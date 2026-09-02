@@ -277,6 +277,37 @@ SourceInstance
 - **预计核心文件**：`packages/contracts/src/index.ts`、`packages/application/src/index.ts`、`packages/storage-prisma/src/index.ts`、`apps/api/src/app.controller.ts`、`apps/worker/src/main.ts` 及各层测试文件。
 - **验证层级**：contracts/application/api focused tests；storage 隔离数据库测试（幂等重放 + 无持久化断言）；全仓 `typecheck`、`test`、`docs:check` 与默认门禁。真实外网 RSS 探测、Docker、发布部署不在本切片（未运行）。
 
+### 切片：schema 驱动 Web 配置流程（2026-09-02，实施顺序第 4 步）
+
+- **生命周期阶段**：实施方案已与维护者对齐并拍板三项决策——实施在 `.worktree/web-config-flow` 分支 `feat/t02-web-config-flow` 进行；表单暴露定时字段且默认 30 分钟；启用入口放在来源列表行内。本切片把第 3 切片完成的未保存配置 Probe 后端能力接入 Web 用户流程。
+- **连贯目标**：让用户在 Web 上按"选择 `rss` → 填实际 `feedUrl`（可改定时/关闭）→ 校验 → 测试未保存配置 → 保存为停用 Source → 来源列表内单独启用"完成配置；产品入口只暴露 `rss`，不暴露 `fixture-rss`/`fixturePath`。
+- **可观察验收**（最多三条）：
+  1. 打开"新建来源"时页面读取 `GET /api/v1/source-definitions`，按 `source.rss@1` manifest 的 configurationSchema 渲染字段（`feedUrl` 必填、`scheduleIntervalMs` 可选默认 30 分钟，清空即关闭定时）；Catalog 不可用时表单显示错误并提供重试，不回退到硬编码字段。
+  2. "测试配置"提交 `POST /api/v1/source-config-probes` 并轮询 `GET /api/v1/source-config-probes/:jobId`（间隔约 1.5s、上限约 30s），展示抓取条数、样例标题、耗时或失败原因；全程不产生 Source、不写事实数据。"保存来源"只创建停用 Source，不再自动启用。
+  3. 来源列表对停用来源提供"启用"、对启用来源提供"停用"（同一 activation command，`baseRevisionId` + `Idempotency-Key`）；conflict 时提示冲突并刷新列表。
+- **依赖**：第 3 切片后端（probe POST/GET、同步预校验、Worker 执行）、`GET /api/v1/source-definitions` Catalog 路由、`createSourceCommand`/`sourceActivationCommand` 合同、React Hook Form + Zod、shadcn 基础组件与组件实验室登记机制。
+- **受影响合同**：contracts 新增 `sourceDefinitionManifestSchema` 与 Catalog 页响应 DTO（此前 Catalog 页响应只在 API 内部拼装，Web 读取需要版本化公开合同；manifest 结构与 `packages/application/src/catalog.ts` 现有投影一致，不新增字段）；transport-http 新增 `listSourceDefinitions`、`createSourceConfigProbe`、`getSourceConfigProbe`。不改 probe/activation/Prisma 合同。
+- **预计核心文件**：`packages/contracts/src/index.ts`、`packages/transport-http/src/index.ts`、`apps/web/src/app/page.tsx`、`apps/web/src/components/cosmos/source-form.tsx`、`apps/web/src/components/cosmos/source-actions.tsx`、`apps/web/src/component-lab/registry.tsx`、`e2e/browser/ingest.spec.ts`、`e2e/component-lab/source-form.spec.ts`、`docs/spec/interfaces/0005-web-client.md` 及各层测试。
+- **仍有后果的假设**：定时字段沿用 `config.scheduleIntervalMs` 现有消费路径，不冻结独立调度 Trigger 合同；probe 轮询上限后仍可手动重新"测试配置"；`停用` 操作随同一 activation command 一并暴露，不新增合同。
+- **验证层级**：contracts/transport-http focused tests；组件实验室 spec；浏览器 e2e（新配置流程串联受控 RSS）；全仓 `typecheck`、`test`、`docs:check`、`git diff --check`。真实公网 RSS 探测、Docker 不在本切片（未运行）。
+- **实施状态（2026-09-02）**：本切片已在 `.worktree/web-config-flow` 完成实现并通过全部本地门禁。页面接线完成后：打开表单读取 `GET /api/v1/source-definitions` 并定位 `source.rss@1`，表单按 manifest 的 string/integer 字段渲染（未知类型不渲染、无硬编码回退）；“测试配置”先触发 Zod 校验，再 POST probe 并按 1.5s 轮询 GET（上限 30s），`succeeded` 展示条数/耗时/样例标题/更多内容提示，`failed_terminal`/`cancelled` 显示错误文本，超时显示可重试提示；“保存来源（停用）”只创建默认停用 Source；来源列表行内提供启用/停用（幂等键 `web-activation:<id>:<revisionId>:enable|disable`），409 conflict 提示版本冲突并刷新列表。实现补充记录：probe 与保存提交同一份 config（含可选 `scheduleIntervalMs`，分钟输入 × 60000 换算，1–44640 分钟对应 canonical 1000–2678400000ms 边界）；任一表单字段变化或重新打开表单都会立即作废旧探测结果，避免旧结果误导保存决定；Feed URL 输入 id 由 `#source-feed-url` 变为 `#source-config-feedUrl`（字段由 manifest 驱动生成），定时字段 id 为 `#source-schedule-interval`。组件实验室为 SourceForm 登记 `definitionState`/`probeState` 两个控件与 probe-success/definition-error 两个合成场景（实验室仍无任何 Product API/SSE 请求），SourceActions fixture 补充启停回调。文档同步 `docs/spec/interfaces/0005-web-client.md`（流程、输入/输出、状态、转换、验收与非目标）。
+- **验证记录（2026-09-02，全部实际运行）**：
+  - `bun run typecheck`（全仓，含 Web/Apps/Packages）：通过。
+  - focused：`bunx vitest run packages/contracts packages/transport-http`：3 文件 / 32 用例通过（含新增 catalog manifest/page DTO 与 probe POST/GET transport 用例）。
+  - `bun run test` 全量：36 文件 / 285 用例通过；其中一轮出现 2 个组件实验室 registry 用例失败（场景 props 缺新控件值），修复后复跑通过；另有一次 `bun run test` 出现既有 SQLite 超时/EBUSY 抖动（与 `PROJECT-STATUS.md` 记录的 master 环境固有问题一致），重跑全绿。
+  - `bun run db:generate`、`bun run build`：通过（新 worktree 首次构建，Next standalone 产物完成）。
+  - `COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser:component-lab`：13/13 通过（新增 catalog/probe 反馈场景回归）。
+  - `COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser`：8/8 通过；ingest 流程更新为“读取 catalog → 测试未保存配置（Worker 真实抓取受控 RSS 返回 3 条与样例标题）→ 保存停用 → 行内启用 → 手动录入 → Feed/Story → 搜索 → 移动端溢出”，console/page error/request failure 仍为 0。
+  - `BUN_BINARY=<真实 bun.exe> bun run test:e2e`：4 文件 / 4 场景通过（Node 进程 E2E 无回归；Windows 下 `BUN_BINARY` 必须指向真实 bun.exe，npm shim 会 ENOENT）。
+  - `bun run docs:check`：通过，checkedFiles=302；`git diff --check`：通过。
+  - 未运行：真实公网 RSS 探测/录入、Docker/Compose、Windows Node smoke（`scripts/smoke-node.ps1`）、发布部署。Docker CLI 本机不可用。
+- **维护者实测诊断与修复（2026-09-02，同日）**：维护者在本 worktree 以 `bun run dev` 实测发现两个错误——页面出现"服务请求失败（HTTP 500）"，向未保存配置 Probe 提交合法 RSS 配置（`https://www.ruanyifeng.com/blog/atom.xml`）时前端显示 400。API 结构化日志（`.cosmos/logs/api.jsonl`）定位根因：
+  1. 500 与 400 同源：dev 数据根 `.cosmos/cosmos.sqlite` 未应用 migration，业务表（Source/Job/DomainEvent 等）不存在。页面初始 Feed/Sources/SSE 查询命中缺表 → Prisma 错误 → HTTP 500；probe 请求先通过同步预校验（证明用户配置合法），随后 `createConfigProbeJob` 落库命中缺表 → 存储异常被 `sourceCommandError` 兜底映射为 **400 `validation_failed`**，把服务端故障伪装成客户端配置错误，误导排查方向。
+  2. 代码修复（`apps/api/src/app.controller.ts`）：新增私有 `validateSourceDefinition`——四个写端点（createSource/updateSource/activateSource/createSourceConfigProbe）的目录可用性与 canonical schema 预校验失败就地转为 400 `validation_failed`（既有测试锚定的契约不变）；`sourceCommandError` 的最终兜底由 400 改为 **500 `internal_error`**，存储/未知系统错误不再伪装成 400。新增单元测试：probe 落库抛普通 Error → `InternalServerErrorException`（API focused 26/26 通过）。
+  3. 环境修复：dev 库当时只含 FTS5 影子表（启动时由受控 SQL Adapter 自动创建）、无 `_prisma_migrations`，`migrate deploy` 以"schema 非空且无基线"拒绝执行。确认库内无业务数据后，将原库重命名保留为 `.cosmos/cosmos.sqlite.bak-empty-fts-only`，重新 `bun run db:migrate` 全量建表并 `db:status` 确认 up to date。维护者实测配置在迁移后的库上以临时 API 实例验证：`POST /api/v1/source-config-probes` 返回 202 + queued Job 快照（该实例随后关闭；这条 Job 留在 dev 库中，Worker 启动后会真实抓取阮一峰 Feed，属预期）。
+  4. 环境说明：本机 4310/4312 端口被 QQ 进程占用，`bun run dev` 的端口发现会自动跳到可用端口，无需手动配置；诊断过程中曾误将 curl 探测打到 QQ 的本地服务上（得到无意义 HTTP 200），已用 API 日志证据纠正。
+  5. 修复后门禁复跑：全仓 `typecheck` 0 错误、全量 `bun run test` 36 文件/286 用例通过、`bun run docs:check` 302 文件通过、`git diff --check` 干净。Node E2E 与浏览器 E2E 未受影响（未改动运行时序）。
+
  ### 实施顺序与检查点（复用本 Task，不新增 Task 编号）
 1. 先以 contracts/API focused tests 固定 `sourceDefinitionRef`、`operationId`、revisionId、保存默认停用、完整配置替换、独立启用和错误映射；第 4–7 项实现建议先保持待冻结，不修改媒体公共合同。
 2. 实现配置 API/持久化垂直切片：按显式 manifest 映射保存 Source，迁移旧 kind 前先预检，保存默认停用、独立启用/停用、完整配置替换、过期 revision 拒写和同步配置校验；产品路径只开放 `rss`，测试必须不写入事实数据。

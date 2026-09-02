@@ -20,6 +20,57 @@ export const connectorDescriptorSchema = z.object({
 });
 export type ConnectorDescriptor = z.infer<typeof connectorDescriptorSchema>;
 
+/**
+ * Public projection of a Catalog SourceDefinitionManifest row. The JSON Schema
+ * in `configurationSchema.schema` is descriptive: it drives Web form rendering,
+ * while canonical config validation stays in the source configuration schema
+ * registry at the API boundary.
+ */
+export const manifestHashSchema = z.object({
+    algorithm: z.string().trim().min(1),
+    value: z.string().trim().min(1),
+});
+export type ManifestHash = z.infer<typeof manifestHashSchema>;
+
+export const jsonSchemaRefSchema = z.object({
+    id: z.string().trim().min(1),
+    version: z.number().int().positive(),
+    hash: manifestHashSchema,
+    schema: z.record(z.string(), z.unknown()).optional(),
+});
+export type JsonSchemaRef = z.infer<typeof jsonSchemaRefSchema>;
+
+export const sourceDefinitionStatusSchema = z.enum([
+    "enabled",
+    "disabled",
+    "unavailable",
+    "incompatible",
+]);
+export type SourceDefinitionStatus = z.infer<typeof sourceDefinitionStatusSchema>;
+
+export const sourceDefinitionManifestSchema = z.object({
+    id: z.string().trim().min(1),
+    version: z.number().int().positive(),
+    ref: sourceDefinitionRefSchema,
+    provider: z.string().trim().min(1),
+    connectorId: sourceConnectorIdSchema,
+    displayName: z.string().trim().min(1),
+    description: z.string().nullable(),
+    manifestHash: manifestHashSchema,
+    status: sourceDefinitionStatusSchema,
+    operationIds: sourceOperationIdSchema.array(),
+    capabilities: z.string().array(),
+    configurationSchema: jsonSchemaRefSchema,
+}).strict();
+export type SourceDefinitionManifest = z.infer<typeof sourceDefinitionManifestSchema>;
+
+export const sourceDefinitionPageSchema = z.object({
+    items: sourceDefinitionManifestSchema.array(),
+    nextCursor: z.string().nullable(),
+    snapshotAt: z.string(),
+});
+export type SourceDefinitionPage = z.infer<typeof sourceDefinitionPageSchema>;
+
 export const runStatusSchema = z.enum([
     "queued",
     "running",
