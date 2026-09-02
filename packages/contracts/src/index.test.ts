@@ -8,6 +8,10 @@ import {
     rssSourceConfigSchema,
     createSourceCommandSchema,
     jobSnapshotSchema,
+    sourceConfigProbeCommandSchema,
+    sourceConfigProbeJobPayloadSchema,
+    sourceConfigProbeJobSnapshotSchema,
+    sourceConfigProbeResultSchema,
     sourceExecutionSnapshotSchema,
     sourceProbeResultSchema,
     temporalValueSchema,
@@ -172,5 +176,82 @@ describe("source and job contracts", () => {
             exactPrecision: null,
             fallback: null,
         })).toThrow();
+    });
+});
+
+describe("source config probe contracts", () => {
+    const probeCommand = {
+        sourceDefinitionRef: "source.rss@1",
+        operationId: "fetch",
+        config: { feedUrl: "https://example.test/feed.xml" },
+    } as const;
+
+    it("parses a config probe command and rejects unknown fields", () => {
+        expect(sourceConfigProbeCommandSchema.parse(probeCommand)).toEqual(probeCommand);
+        expect(() => sourceConfigProbeCommandSchema.parse({
+            ...probeCommand,
+            sourceId: "source-1",
+        })).toThrow();
+        expect(() => sourceConfigProbeCommandSchema.parse({
+            ...probeCommand,
+            sourceDefinitionRef: "source.rss@latest",
+        })).toThrow();
+    });
+
+    it("parses the job payload wrapper strictly", () => {
+        expect(sourceConfigProbeJobPayloadSchema.parse({ configProbe: probeCommand })).toMatchObject({
+            configProbe: probeCommand,
+        });
+        expect(() => sourceConfigProbeJobPayloadSchema.parse({ sourceId: "source-1" })).toThrow();
+    });
+
+    it("caps probe results at three sample titles of 200 characters", () => {
+        const base = {
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            connectorId: "rss",
+            itemCount: 2,
+            nextCursorAvailable: false,
+            checkedAt: "2026-08-24T00:00:00.000Z",
+            durationMs: 120,
+        };
+        expect(sourceConfigProbeResultSchema.parse({
+            ...base,
+            sampleTitles: ["First", "Second"],
+        })).toMatchObject({ sampleTitles: ["First", "Second"] });
+
+        expect(() => sourceConfigProbeResultSchema.parse({
+            ...base,
+            sampleTitles: ["1", "2", "3", "4"],
+        })).toThrow();
+        expect(() => sourceConfigProbeResultSchema.parse({
+            ...base,
+            sampleTitles: ["x".repeat(201)],
+        })).toThrow();
+    });
+
+    it("pins the config probe job snapshot kind and result shape", () => {
+        const job = {
+            id: "job-1",
+            kind: "source-config-probe",
+            sourceId: null,
+            runId: null,
+            status: "queued",
+            attempts: 0,
+            maxAttempts: 3,
+            errorCode: null,
+            error: null,
+            createdAt: "2026-08-24T00:00:00.000Z",
+            updatedAt: "2026-08-24T00:00:00.000Z",
+            result: null,
+        };
+        expect(sourceConfigProbeJobSnapshotSchema.parse(job)).toMatchObject({ kind: "source-config-probe" });
+        expect(() => sourceConfigProbeJobSnapshotSchema.parse({ ...job, kind: "source-probe" })).toThrow();
+        expect(() => sourceConfigProbeJobSnapshotSchema.parse({
+            ...job,
+            status: "succeeded",
+            result: { itemCount: 1 },
+        })).toThrow();
+        expect(jobSnapshotSchema.parse(job)).toMatchObject({ kind: "source-config-probe" });
     });
 });

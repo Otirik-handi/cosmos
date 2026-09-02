@@ -263,6 +263,20 @@ SourceInstance
 - Product API/运行时验收调用方同步完成（2026-08-24）：`e2e/ingest.e2e.test.ts`、`e2e/recovery.e2e.test.ts`、`e2e/scheduling.e2e.test.ts`、`e2e/browser/ingest.spec.ts`、`scripts/smoke-node.ps1`、`scripts/e2e/docker-flow.ts` 与 `scripts/e2e/real-source.ts` 均改为 `sourceDefinitionRef + operationId + config` 创建，再以 `baseRevisionId + Idempotency-Key` 独立激活；这些 Product API/运行时路径不再提交 `kind`、`enabled` 或 `fixturePath`。`e2e/component-lab/source-form.spec.ts` 不属于 Product API E2E：其 `renderSourceFormLab` 使用合成 props，并以 `event.preventDefault()` 阻断提交；本轮只将旧 `fixturePath/#fixture-path` 选择器迁移为 `feedUrl/#source-feed-url`。离线默认门禁使用受控本地 HTTP RSS：`bun run test:e2e` 4 文件/4 场景通过，`COSMOS_E2E_WEB_PORT=4183 bun run test:browser` 8/8 通过，`bun run test:browser:component-lab` 12/12 通过，Windows Node smoke 通过。Docker CLI 在本机不可用，因此 `test:docker` 未运行；真实 RSS/AI HOT/Bilibili 需要显式网络/OpenCLI 前置，本轮未运行。
 - 代理支持（2026-08-24）：Worker 连接器（RSS/AIHOT 共用）接入 `apps/worker/src/proxy-fetch.ts`，遵循标准 `HTTP_PROXY/HTTPS_PROXY/NO_PROXY` 环境变量合同；有代理时统一走 undici `ProxyAgent`（Bun/Node 双运行时同一路径，避免 Bun fetch 忽略代理选项），环路地址与 `NO_PROXY` 命中一律直连（保护受控本地 RSS 验收源），代理 URL 仅接受 http(s) 且日志只输出脱敏 host:port。新增 `proxy-fetch.test.ts` 6 用例（进程内假代理走代理/环路直连/NO_PROXY/非法 scheme/凭据脱敏/无代理回退）。全量门禁 35 文件/255 用例、Node E2E 4/4 通过；未做真实外网抓取（需显式网络授权）。
 
+### 切片：source-config-probe 未保存配置测试（2026-09-02）
+
+- **生命周期阶段**：实施方案 v2 已经维护者批准（4 项决策拍板：结果含 `sampleTitles`、独立 GET 路由、沿用 Job 默认重试、POST 同步预校验）。本切片完成后端垂直实现；schema 驱动 Web 配置流程与探测结果展示归实施顺序第 4 步。
+- **连贯目标**：让用户在保存 Source 之前提交 `sourceDefinitionRef + operationId + config`，由 Worker 真实抓取一页并返回统计与样例标题；全程无副作用。
+- **可观察验收**：
+  1. `POST /api/v1/source-config-probes` 同步预校验（canonical Zod schema + SourceDefinition 可用性），非法配置 400 且不建 Job；合法配置返回 202 + `source-config-probe` Job 快照，幂等键缺省 `config-probe:{uuid}`、请求头 `Idempotency-Key` 1–300 字符。
+  2. Worker legacy 泳道认领 `source-config-probe`：`SourceConfigProbeService` 按 manifest 身份链（ref → manifest.connectorId → ConnectorRegistry）构造瞬态 `SourceSnapshot` 执行 dry-run，结果写回 Job（`sampleTitles` 最多 3 条、单条截断 200 字符）；执行失败走既有 Job 重试/终态机制。
+  3. `GET /api/v1/source-config-probes/:jobId` 返回该类 Job，其他 kind 或不存在返回 404；服务构造上不持有任何 repository，结构性保证不写 Observation/Entry/Asset/checkpoint，也不产生新 Source。
+- **依赖**：Task 02 配置优先切片（`sourceDefinitionRef` 合同、Catalog manifest、`SourceProbeService.validate`）、legacy Job 通道（claimNextJob/租约/completeJob）、canonical configuration schema 注册表。
+- **受影响合同**：`jobKindSchema` 新增 `source-config-probe`；新增 `sourceConfigProbeCommandSchema`、`sourceConfigProbeJobPayloadSchema`、`sourceConfigProbeResultSchema`、`sourceConfigProbeJobSnapshotSchema`；`CosmosRepository` 新增 `createConfigProbeJob`。不新增媒体字段，不改 Prisma schema 与 migration。
+- **实现偏差**：方案原计划将服务放在独立 `packages/application/src/config-probe.ts`；实施时与 `ConnectorProbeService` 同置 `packages/application/src/index.ts`，避免跨文件导出循环并保持两个 Probe 服务并列可读。
+- **预计核心文件**：`packages/contracts/src/index.ts`、`packages/application/src/index.ts`、`packages/storage-prisma/src/index.ts`、`apps/api/src/app.controller.ts`、`apps/worker/src/main.ts` 及各层测试文件。
+- **验证层级**：contracts/application/api focused tests；storage 隔离数据库测试（幂等重放 + 无持久化断言）；全仓 `typecheck`、`test`、`docs:check` 与默认门禁。真实外网 RSS 探测、Docker、发布部署不在本切片（未运行）。
+
  ### 实施顺序与检查点（复用本 Task，不新增 Task 编号）
 1. 先以 contracts/API focused tests 固定 `sourceDefinitionRef`、`operationId`、revisionId、保存默认停用、完整配置替换、独立启用和错误映射；第 4–7 项实现建议先保持待冻结，不修改媒体公共合同。
 2. 实现配置 API/持久化垂直切片：按显式 manifest 映射保存 Source，迁移旧 kind 前先预检，保存默认停用、独立启用/停用、完整配置替换、过期 revision 拒写和同步配置校验；产品路径只开放 `rss`，测试必须不写入事实数据。
