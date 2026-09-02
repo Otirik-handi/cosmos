@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 
 import { WorkflowHostConflictError } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
@@ -418,6 +418,21 @@ describe("AppController source config probes", () => {
 
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toMatchObject({ message: "Idempotency-Key must be 1-300 characters." });
+    });
+
+    it("maps repository failures after validation to a 500 instead of a validation 400", async () => {
+        const controller = probeController(
+            {
+                createConfigProbeJob: vi.fn()
+                    .mockRejectedValue(new Error("The table `main.Job` does not exist in the current database.")),
+            },
+            { validate: vi.fn() },
+        );
+
+        const error = await controller.createSourceConfigProbe(probeCommand).catch((value) => value);
+
+        expect(error).toBeInstanceOf(InternalServerErrorException);
+        expect(error.getResponse()).toMatchObject({ code: "internal_error" });
     });
 
     it("returns the probe job on the dedicated route and 404s other job kinds", async () => {

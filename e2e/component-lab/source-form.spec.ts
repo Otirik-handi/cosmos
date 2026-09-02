@@ -6,13 +6,15 @@ test("updates SourceForm preview when inspector props change", async ({page}) =>
 
     const previewName = page.locator("#source-name");
     await expect(previewName).toHaveValue("Cosmos RSS");
-    const previewFeedUrl = page.locator("#source-feed-url");
+    const previewFeedUrl = page.locator("#source-config-feedUrl");
     await page.locator("#lab-control-source-form-feedUrl").fill("https://example.test/updated.xml");
     await expect(previewFeedUrl).toHaveValue("https://example.test/updated.xml");
     await page.locator("#lab-control-source-form-name").fill("Updated RSS");
     await expect(previewName).toHaveValue("Updated RSS");
     await page.locator("#source-name").fill("User editing");
     await expect(page.locator("#source-name")).toHaveValue("User editing");
+    // 定时字段来自 manifest schema 的默认 30 分钟展示。
+    await expect(page.locator("#source-schedule-interval")).toHaveValue("30");
 });
 
 test("keeps SourceForm RSS submission inside the lab", async ({page}) => {
@@ -32,6 +34,17 @@ test("keeps SourceForm RSS submission inside the lab", async ({page}) => {
     expect(page.url()).toBe(initialUrl);
     expect(navigationRequests).toBe(0);
     await expect(page.locator("#source-name")).toBeVisible();
+});
+
+test("renders catalog and probe feedback states with synthetic fixtures", async ({page}) => {
+    await page.goto("/dev/components?component=source-form&scene=probe-success");
+    await expect(page.getByText("测试成功")).toBeVisible();
+    await expect(page.getByText(/抓取到 3 条内容，耗时/)).toBeVisible();
+    await expect(page.getByText("Cosmos scaffold is ready")).toBeVisible();
+
+    await page.goto("/dev/components?component=source-form&scene=definition-error");
+    await expect(page.getByText(/无法读取来源定义：/)).toBeVisible();
+    await expect(page.getByRole("button", {name: "重试读取"})).toBeVisible();
 });
 
 test("keeps FeedBrowser fixture search inside the lab", async ({page}) => {

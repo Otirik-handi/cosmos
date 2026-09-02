@@ -102,6 +102,113 @@ describe("HttpCosmosClient", () => {
         });
     });
 
+    it("reads the source definition catalog page", async () => {
+        const requests: string[] = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input) => {
+                requests.push(String(input));
+                return new Response(JSON.stringify({
+                    items: [{
+                        id: "rss",
+                        version: 1,
+                        ref: "source.rss@1",
+                        provider: "cosmos",
+                        connectorId: "rss",
+                        displayName: "RSS",
+                        description: "Fetch one RSS or Atom feed page.",
+                        manifestHash: { algorithm: "builtin", value: "builtin:source.rss@1" },
+                        status: "enabled",
+                        operationIds: ["fetch"],
+                        capabilities: ["source:read", "cursor"],
+                        configurationSchema: {
+                            id: "source.rss.config@1",
+                            version: 1,
+                            hash: { algorithm: "builtin", value: "source.rss.config@1" },
+                            schema: {
+                                type: "object",
+                                properties: { feedUrl: { type: "string", format: "uri" } },
+                                required: ["feedUrl"],
+                            },
+                        },
+                    }],
+                    nextCursor: null,
+                    snapshotAt: "2026-09-02T00:00:00.000Z",
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const definitions = await client.listSourceDefinitions();
+
+        expect(definitions).toHaveLength(1);
+        expect(definitions[0]).toMatchObject({ ref: "source.rss@1", status: "enabled" });
+        expect(requests).toEqual(["http://localhost:4310/api/v1/source-definitions"]);
+    });
+
+    it("posts unsaved config probes and reads them back by job id", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const jobAt = (status: string, result: unknown) => JSON.stringify({
+            id: "job-config-1",
+            kind: "source-config-probe",
+            sourceId: null,
+            runId: null,
+            status,
+            attempts: 0,
+            maxAttempts: 3,
+            errorCode: null,
+            error: null,
+            createdAt: "2026-09-02T00:00:00.000Z",
+            updatedAt: "2026-09-02T00:00:01.000Z",
+            result,
+        });
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                return new Response(requests.length === 1 ? jobAt("queued", null) : jobAt("succeeded", {
+                    sourceDefinitionRef: "source.rss@1",
+                    operationId: "fetch",
+                    connectorId: "rss",
+                    itemCount: 3,
+                    nextCursorAvailable: false,
+                    sampleTitles: ["First", "Second"],
+                    checkedAt: "2026-09-02T00:00:01.000Z",
+                    durationMs: 140,
+                }), {
+                    status: requests.length === 1 ? 202 : 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const queued = await client.createSourceConfigProbe({
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            config: { feedUrl: "https://example.test/feed.xml" },
+        }, "config-probe-1");
+
+        expect(queued).toMatchObject({ id: "job-config-1", kind: "source-config-probe", result: null });
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/source-config-probes");
+        expect(requests[0]?.init).toMatchObject({
+            method: "POST",
+            headers: expect.objectContaining({ "idempotency-key": "config-probe-1" }),
+        });
+        expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            config: { feedUrl: "https://example.test/feed.xml" },
+        });
+
+        const finished = await client.getSourceConfigProbe("job-config-1");
+
+        expect(finished.status).toBe("succeeded");
+        expect(finished.result).toMatchObject({ itemCount: 3, sampleTitles: ["First", "Second"] });
+        expect(requests[1]?.url).toBe("http://localhost:4310/api/v1/source-config-probes/job-config-1");
+    });
+
     it("opens the versioned SSE endpoint and validates event envelopes", () => {
         let instance: CosmosEventSource | undefined;
         let openedUrl = "";

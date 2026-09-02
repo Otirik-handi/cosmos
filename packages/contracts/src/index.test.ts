@@ -12,6 +12,8 @@ import {
     sourceConfigProbeJobPayloadSchema,
     sourceConfigProbeJobSnapshotSchema,
     sourceConfigProbeResultSchema,
+    sourceDefinitionManifestSchema,
+    sourceDefinitionPageSchema,
     sourceExecutionSnapshotSchema,
     sourceProbeResultSchema,
     temporalValueSchema,
@@ -253,5 +255,65 @@ describe("source config probe contracts", () => {
             result: { itemCount: 1 },
         })).toThrow();
         expect(jobSnapshotSchema.parse(job)).toMatchObject({ kind: "source-config-probe" });
+    });
+});
+
+describe("source definition catalog contracts", () => {
+    const rssManifest = {
+        id: "rss",
+        version: 1,
+        ref: "source.rss@1",
+        provider: "cosmos",
+        connectorId: "rss",
+        displayName: "RSS",
+        description: "Fetch one RSS or Atom feed page.",
+        manifestHash: { algorithm: "builtin", value: "builtin:source.rss@1" },
+        status: "enabled",
+        operationIds: ["fetch"],
+        capabilities: ["source:read", "cursor"],
+        configurationSchema: {
+            id: "source.rss.config@1",
+            version: 1,
+            hash: { algorithm: "builtin", value: "source.rss.config@1" },
+            schema: {
+                type: "object",
+                properties: { feedUrl: { type: "string", format: "uri" } },
+                required: ["feedUrl"],
+            },
+        },
+    } as const;
+
+    it("parses a source definition manifest with a descriptive configuration schema", () => {
+        const manifest = sourceDefinitionManifestSchema.parse(rssManifest);
+        expect(manifest).toMatchObject({
+            ref: "source.rss@1",
+            connectorId: "rss",
+            status: "enabled",
+        });
+        expect(manifest.configurationSchema.schema).toMatchObject({ type: "object" });
+    });
+
+    it("rejects manifests with an unversioned ref or unknown fields", () => {
+        expect(() => sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            ref: "source.rss@latest",
+        })).toThrow();
+        expect(() => sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            scheduleIntervalMs: 1_800_000,
+        })).toThrow();
+    });
+
+    it("parses the catalog page envelope with items and snapshot metadata", () => {
+        const page = sourceDefinitionPageSchema.parse({
+            items: [rssManifest],
+            nextCursor: null,
+            snapshotAt: "2026-09-02T00:00:00.000Z",
+        });
+        expect(page.items).toHaveLength(1);
+        expect(page.snapshotAt).toBe("2026-09-02T00:00:00.000Z");
+        expect(() => sourceDefinitionPageSchema.parse({
+            items: [rssManifest],
+        })).toThrow();
     });
 });

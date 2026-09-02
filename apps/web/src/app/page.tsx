@@ -31,7 +31,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {SourceActions} from "@/components/cosmos/source-actions";
-import {SourceForm, sourceFormSchema, type SourceFormValues} from "@/components/cosmos/source-form";
+import {
+    SourceForm,
+    sourceFormSchema,
+    type ProbeState,
+    type SourceDefinitionState,
+    type SourceFormValues,
+} from "@/components/cosmos/source-form";
 import {StatusSummary, type EventStreamState} from "@/components/cosmos/status-summary";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {StoryPanel} from "@/components/cosmos/story-panel";
@@ -43,6 +49,30 @@ import {useTheme} from "@/theme/theme-provider";
 const client = new HttpCosmosClient({
     baseUrl: process.env.NEXT_PUBLIC_COSMOS_API_URL ?? "",
 });
+
+/** 产品入口只暴露这一个来源定义；表单字段仍由该 manifest 的 schema 驱动。 */
+const RSS_SOURCE_DEFINITION_REF = "source.rss@1";
+const RSS_OPERATION_ID = "fetch";
+const PROBE_POLL_INTERVAL_MS = 1_500;
+const PROBE_POLL_TIMEOUT_MS = 30_000;
+
+/**
+ * 表单里的定时以“分钟”输入，保存为 canonical 合同的 scheduleIntervalMs；
+ * 清空表示关闭定时，与 schema 的 union("") 分支一致。
+ */
+function toSourceConfig(values: SourceFormValues): Record<string, unknown> {
+    const config: Record<string, unknown> = { feedUrl: values.feedUrl.trim() };
+    if (values.scheduleIntervalMinutes !== "") {
+        config.scheduleIntervalMs = Number(values.scheduleIntervalMinutes) * 60_000;
+    }
+    return config;
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 
 export default function Home() {
     const {preference, setPreference} = useTheme();
@@ -58,14 +88,19 @@ export default function Home() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [openingStoryId, setOpeningStoryId] = useState<string | null>(null);
     const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
+    const [activatingSourceId, setActivatingSourceId] = useState<string | null>(null);
     const [checkingService, setCheckingService] = useState(false);
     const [showSourceForm, setShowSourceForm] = useState(false);
     const [eventStreamState, setEventStreamState] = useState<EventStreamState>("connecting");
+    const [definitionState, setDefinitionState] = useState<SourceDefinitionState>({status: "loading"});
+    const [probeState, setProbeState] = useState<ProbeState>({status: "idle"});
+    const probeConfigKeyRef = useRef<string | null>(null);
     const sourceForm = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
         defaultValues: {
             name: "Cosmos RSS",
             feedUrl: "https://example.com/feed.xml",
+            scheduleIntervalMinutes: "30",
         },
     });
     const searchForm = useForm<SearchFormValues>({
@@ -144,20 +179,101 @@ export default function Home() {
         return `${sources.length} 个来源，${sources.filter((source) => source.enabled).length} 个启用`;
     }, [sources]);
 
+    /** 表单字段由 catalog manifest 驱动；目录不可用时只提供重试，不回退硬编码字段。 */
+    const loadDefinitions = useCallback(async (): Promise<void> => {
+        setDefinitionState({status: "loading"});
+        try {
+            const definitions = await client.listSourceDefinitions();
+            const manifest = definitions.find((item) => item.ref === RSS_SOURCE_DEFINITION_REF);
+            if (!manifest) {
+                setDefinitionState({status: "error", message: `目录中没有 ${RSS_SOURCE_DEFINITION_REF} 来源定义。`});
+                return;
+            }
+            if (manifest.status !== "enabled") {
+                setDefinitionState({status: "error", message: `来源定义 ${RSS_SOURCE_DEFINITION_REF} 当前不可用。`});
+                return;
+            }
+            setDefinitionState({status: "ready", manifest});
+        } catch (caught) {
+            setDefinitionState({status: "error", message: readError(caught)});
+        }
+    }, []);
+
+    useEffect(() => {
+        if (showSourceForm) {
+            probeConfigKeyRef.current = null;
+            setProbeState({status: "idle"});
+            void loadDefinitions();
+        }
+    }, [showSourceForm, loadDefinitions]);
+
+    // 测试结果只对提交时的配置有效；字段一变立即作废，避免旧结果误导保存决定。
+    const watchedFeedUrl = sourceForm.watch("feedUrl");
+    const watchedScheduleInterval = sourceForm.watch("scheduleIntervalMinutes");
+    useEffect(() => {
+        probeConfigKeyRef.current = null;
+        setProbeState({status: "idle"});
+    }, [watchedFeedUrl, watchedScheduleInterval]);
+
+    const onTestSourceConfig = async (): Promise<void> => {
+        const valid = await sourceForm.trigger();
+        if (!valid) {
+            return;
+        }
+        const values = sourceForm.getValues();
+        const config = toSourceConfig(values);
+        probeConfigKeyRef.current = JSON.stringify(config);
+        setProbeState({status: "running"});
+        try {
+            let snapshot = await client.createSourceConfigProbe({
+                sourceDefinitionRef: RSS_SOURCE_DEFINITION_REF,
+                operationId: RSS_OPERATION_ID,
+                config,
+            });
+            const deadline = Date.now() + PROBE_POLL_TIMEOUT_MS;
+            while (
+                snapshot.status !== "succeeded"
+                && snapshot.status !== "failed_terminal"
+                && snapshot.status !== "cancelled"
+            ) {
+                if (Date.now() >= deadline) {
+                    if (probeConfigKeyRef.current !== null) {
+                        setProbeState({status: "timeout"});
+                    }
+                    return;
+                }
+                await delay(PROBE_POLL_INTERVAL_MS);
+                snapshot = await client.getSourceConfigProbe(snapshot.id);
+            }
+            if (snapshot.status === "succeeded" && snapshot.result) {
+                if (probeConfigKeyRef.current !== null) {
+                    setProbeState({status: "succeeded", result: snapshot.result});
+                }
+                return;
+            }
+            if (probeConfigKeyRef.current !== null) {
+                setProbeState({
+                    status: "failed",
+                    message: snapshot.error ?? "探测任务没有返回结果。",
+                });
+            }
+        } catch (caught) {
+            if (probeConfigKeyRef.current !== null) {
+                setProbeState({status: "failed", message: readError(caught)});
+            }
+        }
+    };
+
     const onCreateSource = sourceForm.handleSubmit(async (values) => {
         setError(null);
         try {
-            const created = await client.createSource(createSourceCommandSchema.parse({
+            await client.createSource(createSourceCommandSchema.parse({
                 name: values.name,
-                sourceDefinitionRef: "source.rss@1",
-                operationId: "fetch",
-                config: { feedUrl: values.feedUrl },
+                sourceDefinitionRef: RSS_SOURCE_DEFINITION_REF,
+                operationId: RSS_OPERATION_ID,
+                config: toSourceConfig(values),
             }));
-            await client.activateSource(created.id, {
-                enabled: true,
-                baseRevisionId: created.revisionId,
-            }, `web-activation:${created.id}:${created.revisionId}`);
-            setNotice("RSS 来源已保存并启用，可以立即触发一次录入。");
+            setNotice("来源已保存，当前为停用状态；在“来源与录入”列表中启用后开始抓取。");
             setShowSourceForm(false);
             sourceForm.reset();
             await refresh();
@@ -165,6 +281,30 @@ export default function Home() {
             setError(readError(caught));
         }
     });
+
+    const toggleActivation = async (source: SourceSnapshot, enabled: boolean): Promise<void> => {
+        setActivatingSourceId(source.id);
+        setError(null);
+        try {
+            await client.activateSource(source.id, {
+                enabled,
+                baseRevisionId: source.revisionId,
+            }, `web-activation:${source.id}:${source.revisionId}:${enabled ? "enable" : "disable"}`);
+            setNotice(enabled
+                ? `来源 ${source.name} 已启用；可执行手动录入，配置了定时的来源会自动抓取。`
+                : `来源 ${source.name} 已停用，不再自动或手动抓取。`);
+            await refresh();
+        } catch (caught) {
+            if (caught instanceof CosmosTransportError && caught.status === 409) {
+                setError("来源状态已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                await refresh();
+            } else {
+                setError(readError(caught));
+            }
+        } finally {
+            setActivatingSourceId(null);
+        }
+    };
 
     const onSearch = searchForm.handleSubmit(async ({
         text,
@@ -337,11 +477,20 @@ export default function Home() {
                     />
                     <SourceActions
                         onRun={runSource}
+                        onToggleActivation={toggleActivation}
+                        activatingSourceId={activatingSourceId}
                         runningSourceId={runningSourceId}
                         sources={sources}
                     />
                     {showSourceForm && (
-                        <SourceForm form={sourceForm} onSubmit={onCreateSource} />
+                        <SourceForm
+                            form={sourceForm}
+                            definitionState={definitionState}
+                            onSubmit={onCreateSource}
+                            onTest={() => void onTestSourceConfig()}
+                            probeState={probeState}
+                            onRetryDefinition={() => void loadDefinitions()}
+                        />
                     )}
                 </aside>
                 <FeedBrowser

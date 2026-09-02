@@ -17,17 +17,36 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     // 同一栈会话内数据库跨重试持久化，Feed 在重试时可能已有内容；
     // 编辑部空态改由组件实验室 empty 场景覆盖，这里不断言空态。
     await page.getByRole("button", { name: "新建来源" }).click();
-    await page.getByLabel("名称").fill("浏览器 RSS 来源");
-    await page.getByLabel("Feed URL").fill("http://127.0.0.1:4380/feed.xml");
-    await page.getByRole("button", { name: "保存来源" }).click();
-    await expect(page.getByRole("status")).toContainText("RSS 来源已保存并启用");
 
+    // 表单字段由 catalog manifest 驱动：Feed URL 必填、定时可选默认 30 分钟。
+    const feedUrlInput = page.getByLabel("Feed URL");
+    await expect(feedUrlInput).toBeVisible();
+    const scheduleInput = page.getByLabel("定时抓取间隔");
+    await expect(scheduleInput).toHaveValue("30");
+
+    await page.getByLabel("名称").fill("浏览器 RSS 来源");
+    await feedUrlInput.fill("http://127.0.0.1:4380/feed.xml");
+
+    // 未保存配置测试：Worker 真实抓取受控 RSS 一页并回显统计与样例标题。
+    await page.getByRole("button", { name: "测试配置" }).click();
+    const probeFeedback = page.getByRole("status").filter({ hasText: "测试成功" });
+    await expect(probeFeedback).toBeVisible({ timeout: 20_000 });
+    await expect(probeFeedback).toContainText(/抓取到 3 条内容，耗时/);
+    await expect(probeFeedback).toContainText("Cosmos scaffold is ready");
+
+    // 保存只创建停用 Source，启用是列表行内的独立动作。
+    await page.getByRole("button", { name: "保存来源" }).click();
+    await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
     const ingestSection = page.getByRole("heading", { name: "来源与录入" }).locator("..").locator("..");
-    const sourceButton = ingestSection.getByRole("button", { name: "浏览器 RSS 来源" }).first();
-    await expect(sourceButton).toBeVisible();
-    await expect(sourceButton).toBeEnabled();
-    await sourceButton.click();
-    await expect(page.getByRole("status")).toContainText("录入任务已排队", { timeout: 15_000 });
+    const enableButton = ingestSection.getByRole("button", { name: "启用 浏览器 RSS 来源", exact: true });
+    await expect(enableButton).toBeVisible();
+    await enableButton.click();
+    await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
+
+    const runButton = ingestSection.getByRole("button", { name: "浏览器 RSS 来源", exact: true });
+    await expect(runButton).toBeEnabled();
+    await runButton.click();
+    await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
     await expect(page.getByText("Cosmos scaffold is ready")).toBeVisible({ timeout: 30_000 });
