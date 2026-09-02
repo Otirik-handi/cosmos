@@ -5,7 +5,10 @@ import {
     contentKindSchema,
     contentMetricsSchema,
     publisherSchema,
+    sourceConnectorIdSchema,
+    sourceDefinitionRefSchema,
     sourceKindSchema,
+    sourceOperationIdSchema,
     temporalValueSchema,
 } from "./base.js";
 
@@ -16,6 +19,57 @@ export const connectorDescriptorSchema = z.object({
     configVersion: z.string().trim().min(1),
 });
 export type ConnectorDescriptor = z.infer<typeof connectorDescriptorSchema>;
+
+/**
+ * Public projection of a Catalog SourceDefinitionManifest row. The JSON Schema
+ * in `configurationSchema.schema` is descriptive: it drives Web form rendering,
+ * while canonical config validation stays in the source configuration schema
+ * registry at the API boundary.
+ */
+export const manifestHashSchema = z.object({
+    algorithm: z.string().trim().min(1),
+    value: z.string().trim().min(1),
+});
+export type ManifestHash = z.infer<typeof manifestHashSchema>;
+
+export const jsonSchemaRefSchema = z.object({
+    id: z.string().trim().min(1),
+    version: z.number().int().positive(),
+    hash: manifestHashSchema,
+    schema: z.record(z.string(), z.unknown()).optional(),
+});
+export type JsonSchemaRef = z.infer<typeof jsonSchemaRefSchema>;
+
+export const sourceDefinitionStatusSchema = z.enum([
+    "enabled",
+    "disabled",
+    "unavailable",
+    "incompatible",
+]);
+export type SourceDefinitionStatus = z.infer<typeof sourceDefinitionStatusSchema>;
+
+export const sourceDefinitionManifestSchema = z.object({
+    id: z.string().trim().min(1),
+    version: z.number().int().positive(),
+    ref: sourceDefinitionRefSchema,
+    provider: z.string().trim().min(1),
+    connectorId: sourceConnectorIdSchema,
+    displayName: z.string().trim().min(1),
+    description: z.string().nullable(),
+    manifestHash: manifestHashSchema,
+    status: sourceDefinitionStatusSchema,
+    operationIds: sourceOperationIdSchema.array(),
+    capabilities: z.string().array(),
+    configurationSchema: jsonSchemaRefSchema,
+}).strict();
+export type SourceDefinitionManifest = z.infer<typeof sourceDefinitionManifestSchema>;
+
+export const sourceDefinitionPageSchema = z.object({
+    items: sourceDefinitionManifestSchema.array(),
+    nextCursor: z.string().nullable(),
+    snapshotAt: z.string(),
+});
+export type SourceDefinitionPage = z.infer<typeof sourceDefinitionPageSchema>;
 
 export const runStatusSchema = z.enum([
     "queued",
@@ -48,6 +102,7 @@ export type JobStatus = z.infer<typeof jobStatusSchema>;
 export const jobKindSchema = z.enum([
     "source-ingest",
     "source-probe",
+    "source-config-probe",
     "workflow-activity",
 ]);
 export type JobKind = z.infer<typeof jobKindSchema>;
@@ -67,6 +122,43 @@ export const jobSnapshotSchema = z.object({
     result: z.unknown().nullable(),
 });
 export type JobSnapshot = z.infer<typeof jobSnapshotSchema>;
+
+/**
+ * Probe an unsaved source configuration: the command carries the config
+ * itself instead of a sourceId, so a user can validate a feed before saving
+ * the Source. The canonical configuration schema for the ref still owns
+ * config validation; the connector only receives the parsed config.
+ */
+export const sourceConfigProbeCommandSchema = z.object({
+    sourceDefinitionRef: sourceDefinitionRefSchema,
+    operationId: sourceOperationIdSchema,
+    config: z.unknown(),
+}).strict();
+export type SourceConfigProbeCommand = z.infer<typeof sourceConfigProbeCommandSchema>;
+
+/** Persisted Job payload shape for `source-config-probe` Jobs. */
+export const sourceConfigProbeJobPayloadSchema = z.object({
+    configProbe: sourceConfigProbeCommandSchema,
+}).strict();
+
+export const sourceConfigProbeResultSchema = z.object({
+    sourceDefinitionRef: sourceDefinitionRefSchema,
+    operationId: sourceOperationIdSchema,
+    connectorId: sourceConnectorIdSchema,
+    itemCount: z.number().int().nonnegative(),
+    nextCursorAvailable: z.boolean(),
+    /** At most 3 truncated entry titles so a user can eyeball the fetched content. */
+    sampleTitles: z.array(z.string().max(200)).max(3),
+    checkedAt: z.string(),
+    durationMs: z.number().int().nonnegative(),
+});
+export type SourceConfigProbeResult = z.infer<typeof sourceConfigProbeResultSchema>;
+
+export const sourceConfigProbeJobSnapshotSchema = jobSnapshotSchema.extend({
+    kind: z.literal("source-config-probe"),
+    result: sourceConfigProbeResultSchema.nullable(),
+});
+export type SourceConfigProbeJobSnapshot = z.infer<typeof sourceConfigProbeJobSnapshotSchema>;
 
 export const assetStatusSchema = z.enum([
     "saved",

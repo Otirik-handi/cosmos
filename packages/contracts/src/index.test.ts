@@ -8,6 +8,12 @@ import {
     rssSourceConfigSchema,
     createSourceCommandSchema,
     jobSnapshotSchema,
+    sourceConfigProbeCommandSchema,
+    sourceConfigProbeJobPayloadSchema,
+    sourceConfigProbeJobSnapshotSchema,
+    sourceConfigProbeResultSchema,
+    sourceDefinitionManifestSchema,
+    sourceDefinitionPageSchema,
     sourceExecutionSnapshotSchema,
     sourceProbeResultSchema,
     temporalValueSchema,
@@ -171,6 +177,143 @@ describe("source and job contracts", () => {
             exact: null,
             exactPrecision: null,
             fallback: null,
+        })).toThrow();
+    });
+});
+
+describe("source config probe contracts", () => {
+    const probeCommand = {
+        sourceDefinitionRef: "source.rss@1",
+        operationId: "fetch",
+        config: { feedUrl: "https://example.test/feed.xml" },
+    } as const;
+
+    it("parses a config probe command and rejects unknown fields", () => {
+        expect(sourceConfigProbeCommandSchema.parse(probeCommand)).toEqual(probeCommand);
+        expect(() => sourceConfigProbeCommandSchema.parse({
+            ...probeCommand,
+            sourceId: "source-1",
+        })).toThrow();
+        expect(() => sourceConfigProbeCommandSchema.parse({
+            ...probeCommand,
+            sourceDefinitionRef: "source.rss@latest",
+        })).toThrow();
+    });
+
+    it("parses the job payload wrapper strictly", () => {
+        expect(sourceConfigProbeJobPayloadSchema.parse({ configProbe: probeCommand })).toMatchObject({
+            configProbe: probeCommand,
+        });
+        expect(() => sourceConfigProbeJobPayloadSchema.parse({ sourceId: "source-1" })).toThrow();
+    });
+
+    it("caps probe results at three sample titles of 200 characters", () => {
+        const base = {
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            connectorId: "rss",
+            itemCount: 2,
+            nextCursorAvailable: false,
+            checkedAt: "2026-08-24T00:00:00.000Z",
+            durationMs: 120,
+        };
+        expect(sourceConfigProbeResultSchema.parse({
+            ...base,
+            sampleTitles: ["First", "Second"],
+        })).toMatchObject({ sampleTitles: ["First", "Second"] });
+
+        expect(() => sourceConfigProbeResultSchema.parse({
+            ...base,
+            sampleTitles: ["1", "2", "3", "4"],
+        })).toThrow();
+        expect(() => sourceConfigProbeResultSchema.parse({
+            ...base,
+            sampleTitles: ["x".repeat(201)],
+        })).toThrow();
+    });
+
+    it("pins the config probe job snapshot kind and result shape", () => {
+        const job = {
+            id: "job-1",
+            kind: "source-config-probe",
+            sourceId: null,
+            runId: null,
+            status: "queued",
+            attempts: 0,
+            maxAttempts: 3,
+            errorCode: null,
+            error: null,
+            createdAt: "2026-08-24T00:00:00.000Z",
+            updatedAt: "2026-08-24T00:00:00.000Z",
+            result: null,
+        };
+        expect(sourceConfigProbeJobSnapshotSchema.parse(job)).toMatchObject({ kind: "source-config-probe" });
+        expect(() => sourceConfigProbeJobSnapshotSchema.parse({ ...job, kind: "source-probe" })).toThrow();
+        expect(() => sourceConfigProbeJobSnapshotSchema.parse({
+            ...job,
+            status: "succeeded",
+            result: { itemCount: 1 },
+        })).toThrow();
+        expect(jobSnapshotSchema.parse(job)).toMatchObject({ kind: "source-config-probe" });
+    });
+});
+
+describe("source definition catalog contracts", () => {
+    const rssManifest = {
+        id: "rss",
+        version: 1,
+        ref: "source.rss@1",
+        provider: "cosmos",
+        connectorId: "rss",
+        displayName: "RSS",
+        description: "Fetch one RSS or Atom feed page.",
+        manifestHash: { algorithm: "builtin", value: "builtin:source.rss@1" },
+        status: "enabled",
+        operationIds: ["fetch"],
+        capabilities: ["source:read", "cursor"],
+        configurationSchema: {
+            id: "source.rss.config@1",
+            version: 1,
+            hash: { algorithm: "builtin", value: "source.rss.config@1" },
+            schema: {
+                type: "object",
+                properties: { feedUrl: { type: "string", format: "uri" } },
+                required: ["feedUrl"],
+            },
+        },
+    } as const;
+
+    it("parses a source definition manifest with a descriptive configuration schema", () => {
+        const manifest = sourceDefinitionManifestSchema.parse(rssManifest);
+        expect(manifest).toMatchObject({
+            ref: "source.rss@1",
+            connectorId: "rss",
+            status: "enabled",
+        });
+        expect(manifest.configurationSchema.schema).toMatchObject({ type: "object" });
+    });
+
+    it("rejects manifests with an unversioned ref or unknown fields", () => {
+        expect(() => sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            ref: "source.rss@latest",
+        })).toThrow();
+        expect(() => sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            scheduleIntervalMs: 1_800_000,
+        })).toThrow();
+    });
+
+    it("parses the catalog page envelope with items and snapshot metadata", () => {
+        const page = sourceDefinitionPageSchema.parse({
+            items: [rssManifest],
+            nextCursor: null,
+            snapshotAt: "2026-09-02T00:00:00.000Z",
+        });
+        expect(page.items).toHaveLength(1);
+        expect(page.snapshotAt).toBe("2026-09-02T00:00:00.000Z");
+        expect(() => sourceDefinitionPageSchema.parse({
+            items: [rssManifest],
         })).toThrow();
     });
 });

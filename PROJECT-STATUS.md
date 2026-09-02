@@ -1,10 +1,16 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-01。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 master（`793fe10`），已推送 `origin/master`；这不等于真实外网 RSS 产品闭环，仍未部署。
+> 更新于 2026-09-02。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）；未部署。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
 
 ## 一句话结论
 
-Source 身份/revision 持久化合同与默认验收调用方已完成本地 clean cutover：Product API/Web/Node E2E/Windows smoke 使用 `sourceDefinitionRef + operationId + config` 创建默认停用 Source，再以 revision CAS activation command 启用；产品路径不再提交 `kind`、`enabled` 或 `fixturePath`。本轮经五轴审查收口：激活同键重放持久化并返回首结果快照（新 migration `20260824100000_source_activation_result_snapshot`）、API 边界配置校验切换 canonical Zod schema（Bilibili feed 缺 profile 即拒）、未启用 Source 手动 Run 返回 409、RSS `feedUrl` 收紧 http(s)、Idempotency-Key 统一 1–300 字符、迁移回归测试临时目录修复。本地通过全仓类型检查、34 文件/249 单元测试、4 文件/4 Node 进程 E2E、8 个生产浏览器场景、12 个组件实验室浏览器场景和 Windows Node smoke。Docker CLI 不可用，Docker 验收未运行；真实 RSS/AI HOT/Bilibili、未保存配置 Probe、媒体离线链路和发布部署仍未完成。
+Source 身份/revision 持久化合同与默认验收调用方已完成本地 clean cutover：Product API/Web/Node E2E/Windows smoke 使用 `sourceDefinitionRef + operationId + config` 创建默认停用 Source，再以 revision CAS activation command 启用；产品路径不再提交 `kind`、`enabled` 或 `fixturePath`。本轮经五轴审查收口：激活同键重放持久化并返回首结果快照（新 migration `20260824100000_source_activation_result_snapshot`）、API 边界配置校验切换 canonical Zod schema（Bilibili feed 缺 profile 即拒）、未启用 Source 手动 Run 返回 409、RSS `feedUrl` 收紧 http(s)、Idempotency-Key 统一 1–300 字符、迁移回归测试临时目录修复。本地通过全仓类型检查、34 文件/249 单元测试、4 文件/4 Node 进程 E2E、8 个生产浏览器场景、12 个组件实验室浏览器场景和 Windows Node smoke。Docker CLI 不可用，Docker 验收未运行；真实 RSS/AI HOT/Bilibili、媒体离线链路和发布部署仍未完成（未保存配置 Probe 已于 2026-09-02 以 `source-config-probe` 切片合入）。
+
+## 2026-09-02：source-config-probe 切片合入
+
+Task 02 实施顺序第 3 步“未保存配置测试”已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）。产品能力：`POST /api/v1/source-config-probes` 先同步预校验（canonical Zod schema + SourceDefinition 可用性，非法配置 400 且不建 Job），通过后返回 202 + `source-config-probe` Job（幂等键缺省 `config-probe:{uuid}`）；Worker legacy 泳道经 `SourceConfigProbeService` 按 manifest 身份链（ref → manifest.connectorId → ConnectorRegistry）构造瞬态 `SourceSnapshot` 执行 dry-run，结果（`itemCount`、`nextCursorAvailable`、`sampleTitles` 最多 3×200 字符）写回 Job；`GET /api/v1/source-config-probes/:jobId` 独立查询，其他 kind 返回 404。该服务不持有 repository，结构性保证不写 Observation/Entry/Asset/checkpoint；执行失败沿用 Job 默认重试/终态。合同变更：`jobKindSchema` 新增 `source-config-probe`、新增 `sourceConfigProbeCommandSchema`/`sourceConfigProbeJobPayloadSchema`/`sourceConfigProbeResultSchema`/`sourceConfigProbeJobSnapshotSchema`、`CosmosRepository.createConfigProbeJob`；无 Prisma schema/migration 变更。
+
+本地验证：`bun run typecheck` 全仓通过；focused 测试 contracts 15 / application 11 / api 14 / storage 新增 1 全部通过；`bun run test:e2e` 4/4 通过（Windows 本机需 `BUN_BINARY` 指向真实 bun.exe，spawnSync 才能找到 bun）；`bun run docs:check` 302 文件通过；`git diff --check` 通过。全量 `bun run test` 在本机三次运行出现 1/4/2 个既有 SQLite 测试的 5s 超时 + EBUSY 抖动；在未改动 master 对照跑同样失败，判定为环境固有问题，与本切片无关（新增测试每轮均通过）。未运行：真实外网 RSS 探测、Docker/Compose、浏览器 E2E（本切片无 Web 改动）、发布部署。合并时远端仓库尚无任何 Actions 运行记录（历史 CI 编号属于上游原仓库）。探测结果的 Web 展示（“测试这条配置”按钮 + 样例标题列表）归实施顺序第 4 步 Web 切片。
 
 ## 2026-09-01：Worker Registry 状态纠偏
 
@@ -122,7 +128,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-Task 02 的 Source 身份/revision 合同、配置入口、API/Worker 迁移和默认离线 E2E 已通过本地门禁；当前仍未把未保存配置 Probe、RSS 媒体提取/下载、Blob/bytes 映射和断网阅读降级做成产品能力。下一步按 Task 顺序先实现独立 `source-config-probe`（不复用已保存 Source Probe），再完成媒体边界设计与实现，最后用用户填写的真实 RSS URL 做产品验收。Docker、真实来源、发布、部署和删除远端任务分支仍未执行。
+Task 02 的 Source 身份/revision 合同、配置入口、API/Worker 迁移、默认离线 E2E 与未保存配置 Probe（`source-config-probe`，2026-09-02 合入）已通过本地门禁并进入 master；当前仍未把 RSS 媒体提取/下载、Blob/bytes 映射和断网阅读降级做成产品能力。下一步按 Task 顺序先完成媒体边界设计与实现，再用用户填写的真实 RSS URL 做产品验收；产品 Web 侧同步实施 schema 驱动配置流程与探测结果展示（Task 02 实施顺序第 4 步）。Docker、真实来源和发布部署仍未执行。
 
 ## 已完成
 

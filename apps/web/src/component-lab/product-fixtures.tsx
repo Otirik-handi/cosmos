@@ -5,6 +5,8 @@ import {useForm} from "react-hook-form";
 import type {
     FeedItem,
     HealthResponse,
+    SourceConfigProbeResult,
+    SourceDefinitionManifest,
     SourceSnapshot,
     StoryDetail,
 } from "@cosmos/contracts";
@@ -14,6 +16,8 @@ import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
     sourceFormSchema,
+    type ProbeState,
+    type SourceDefinitionState,
     type SourceFormValues,
 } from "@/components/cosmos/source-form";
 import {
@@ -44,6 +48,46 @@ function booleanProp(props: LabProps, name: string, fallback = false): boolean {
     return typeof value === "boolean" ? value : fallback;
 }
 
+/** 合成 manifest：与产品 `source.rss@1` 的 configurationSchema 同构，但无任何网络请求。 */
+const labSourceDefinitionManifest: SourceDefinitionManifest = {
+    id: "rss",
+    version: 1,
+    ref: "source.rss@1",
+    provider: "cosmos",
+    connectorId: "rss",
+    displayName: "RSS",
+    description: "Fetch one RSS or Atom feed page.",
+    manifestHash: {algorithm: "builtin", value: "builtin:source.rss@1"},
+    status: "enabled",
+    operationIds: ["fetch"],
+    capabilities: ["source:read", "cursor"],
+    configurationSchema: {
+        id: "source.rss.config@1",
+        version: 1,
+        hash: {algorithm: "builtin", value: "source.rss.config@1"},
+        schema: {
+            type: "object",
+            properties: {
+                feedUrl: {type: "string", format: "uri"},
+                scheduleIntervalMs: {type: "integer", minimum: 1000, maximum: 2678400000},
+            },
+            required: ["feedUrl"],
+            additionalProperties: false,
+        },
+    },
+};
+
+const labProbeResult: SourceConfigProbeResult = {
+    sourceDefinitionRef: "source.rss@1",
+    operationId: "fetch",
+    connectorId: "rss",
+    itemCount: 3,
+    nextCursorAvailable: false,
+    sampleTitles: ["Cosmos scaffold is ready", "Second fixture item", "第三条样例标题"],
+    checkedAt: fixtureTimestamp,
+    durationMs: 140,
+};
+
 export function renderSourceFormLab(props: LabProps) {
     return <SourceFormLabFixture props={props} />;
 }
@@ -51,13 +95,47 @@ export function renderSourceFormLab(props: LabProps) {
 function SourceFormLabFixture({props}: {props: LabProps}) {
     const name = textProp(props, "name", "Cosmos RSS");
     const feedUrl = textProp(props, "feedUrl", "https://example.com/feed.xml");
-    const values = useMemo<SourceFormValues>(() => ({name, feedUrl}), [feedUrl, name]);
+    const definitionState = optionProp<SourceDefinitionState["status"]>(
+        props,
+        "definitionState",
+        "ready",
+        ["ready", "loading", "error"] as const,
+    );
+    const probeState = optionProp<ProbeState["status"]>(
+        props,
+        "probeState",
+        "idle",
+        ["idle", "running", "succeeded", "failed", "timeout"] as const,
+    );
+    const values = useMemo<SourceFormValues>(
+        () => ({name, feedUrl, scheduleIntervalMinutes: "30"}),
+        [feedUrl, name],
+    );
     const form = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
         defaultValues: values,
         values,
     });
-    return <SourceForm form={form} onSubmit={(event) => event.preventDefault()} />;
+    const resolvedDefinitionState: SourceDefinitionState = definitionState === "ready"
+        ? {status: "ready", manifest: labSourceDefinitionManifest}
+        : definitionState === "error"
+        ? {status: "error", message: "无法连接服务（HTTP 503）。"}
+        : {status: "loading"};
+    const resolvedProbeState: ProbeState = probeState === "succeeded"
+        ? {status: "succeeded", result: labProbeResult}
+        : probeState === "failed"
+        ? {status: "failed", message: "Feed 返回 404。"}
+        : {status: probeState};
+    return (
+        <SourceForm
+            form={form}
+            definitionState={resolvedDefinitionState}
+            onSubmit={(event) => event.preventDefault()}
+            onTest={() => undefined}
+            probeState={resolvedProbeState}
+            onRetryDefinition={() => undefined}
+        />
+    );
 }
 
 export function renderStatusSummaryLab(props: LabProps) {
@@ -108,7 +186,13 @@ export function renderSourceActionsLab(props: LabProps) {
             lastRunAt: null,
             lastError: state === "disabled" ? "Fixture source disabled" : null,
         }];
-    return <SourceActions onRun={async () => undefined} sources={sources} />;
+    return (
+        <SourceActions
+            onRun={async () => undefined}
+            onToggleActivation={async () => undefined}
+            sources={sources}
+        />
+    );
 }
 
 export function renderFeedBrowserLab(props: LabProps) {

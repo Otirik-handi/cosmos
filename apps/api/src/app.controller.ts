@@ -8,6 +8,7 @@ import {
     Header,
     HttpCode,
     Inject,
+    InternalServerErrorException,
     NotFoundException,
     Param,
     Patch,
@@ -39,7 +40,9 @@ import {
     searchQuerySchema,
     idempotencyKeySchema,
     sourceActivationCommandSchema,
+    sourceConfigProbeCommandSchema,
     updateSourceCommandSchema,
+    type CreateSourceCommand,
     type HealthResponse,
     type RunStatus,
     type SourceSnapshot,
@@ -83,8 +86,9 @@ function requireIdempotencyKey(rawHeader?: string): string {
 /**
  * Single error funnel for the Source write endpoints: schema issues become
  * validation failures, storage not-found/conflict codes map to their HTTP
- * contracts, and anything else is a validation failure with the original
- * message preserved.
+ * contracts. Anything else reaching this funnel is a server-side failure
+ * (storage down, migration missing, bug) and must surface as a 500 instead
+ * of masquerading as an invalid client request.
  */
 function sourceCommandError(error: unknown): never {
     if (error instanceof ZodError) validationError(error);
@@ -97,9 +101,9 @@ function sourceCommandError(error: unknown): never {
     if (error instanceof Error && "code" in error && error.code === "conflict") {
         throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
     }
-    throw new BadRequestException({
-        code: "validation_failed",
-        message: error instanceof Error ? error.message : "Source configuration is invalid.",
+    throw new InternalServerErrorException({
+        code: "internal_error",
+        message: error instanceof Error ? error.message : "Source command failed.",
         retryable: false,
     });
 }
@@ -120,10 +124,28 @@ export class AppController {
         @Optional()
         @Inject("COSMOS_WORKFLOW_STORE")
         private readonly workflowStore?: WorkflowHostStore,
-        @Optional()
-        @Inject("COSMOS_CATALOG")
-        private readonly catalog?: CatalogPort,
+    @Optional()
+    @Inject("COSMOS_CATALOG")
+    private readonly catalog?: CatalogPort,
     ) {}
+
+    /**
+     * Unsaved-input availability/schema validation is the client's
+     * responsibility, so its failures are 400s even though the probe service
+     * throws plain Errors; storage and other unexpected failures must not
+     * inherit that status through the shared funnel.
+     */
+    private validateSourceDefinition(input: Pick<CreateSourceCommand, "sourceDefinitionRef" | "operationId" | "config">): void {
+        try {
+            this.sourceProbe.validate(input);
+        } catch (error) {
+            throw new BadRequestException({
+                code: "validation_failed",
+                message: error instanceof Error ? error.message : "Source configuration is invalid.",
+                retryable: false,
+            });
+        }
+    }
 
     @Get("health")
     async health(): Promise<HealthResponse> {
@@ -225,7 +247,7 @@ export class AppController {
     async createSource(body: unknown) {
         try {
             const command = createSourceCommandSchema.parse(body);
-            this.sourceProbe.validate(command);
+            this.validateSourceDefinition(command);
             return toPublicSource(await this.repository.createSource(command));
         } catch (error) {
             sourceCommandError(error);
@@ -246,7 +268,7 @@ export class AppController {
                 });
             }
             if (input.config !== undefined) {
-                this.sourceProbe.validate({
+                this.validateSourceDefinition({
                     sourceDefinitionRef: source.sourceDefinitionRef,
                     operationId: source.operationId,
                     config: input.config,
@@ -274,7 +296,7 @@ export class AppController {
                         retryable: false,
                     });
                 }
-                this.sourceProbe.validate({
+                this.validateSourceDefinition({
                     sourceDefinitionRef: source.sourceDefinitionRef,
                     operationId: source.operationId,
                     config: source.config,
@@ -314,6 +336,48 @@ export class AppController {
             status: job.status,
         });
         return job;
+    }
+
+    /**
+     * Probe an unsaved source configuration. The canonical schema validation
+     * runs synchronously before the Job is created so an invalid config is a
+     * 400, not a wasted Worker round-trip.
+     */
+    @Post("source-config-probes")
+    @HttpCode(202)
+    @Bind(Body(), Headers("idempotency-key"))
+    async createSourceConfigProbe(body: unknown, idempotencyKey?: string) {
+        try {
+            const command = sourceConfigProbeCommandSchema.parse(body);
+            this.validateSourceDefinition(command);
+            const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
+            const job = await this.repository.createConfigProbeJob({
+                command,
+                idempotencyKey: providedKey ?? `config-probe:${randomUUID()}`,
+            });
+            this.logger?.info("job.queued", {
+                jobId: job.id,
+                kind: job.kind,
+                status: job.status,
+            });
+            return job;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("source-config-probes/:jobId")
+    @Bind(Param("jobId"))
+    async sourceConfigProbe(jobId: string) {
+        const result = await this.repository.getJob(jobId);
+        if (!result || result.kind !== "source-config-probe") {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Source config probe job not found: ${jobId}`,
+                retryable: false,
+            });
+        }
+        return result;
     }
 
     @Post("sources/:sourceId/runs")

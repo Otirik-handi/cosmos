@@ -5,6 +5,7 @@ import {
     createBuiltinManifestCatalog,
     IngestionService,
     IngestionWorker,
+    SourceConfigProbeService,
 } from "@cosmos/application";
 import {
     createIngestActions,
@@ -105,6 +106,12 @@ async function bootstrap(): Promise<void> {
             undefined,
             logger,
         );
+        const configProbe = new SourceConfigProbeService(
+            catalog,
+            connectors,
+            undefined,
+            logger,
+        );
         const workflowHost = config.workflowHostEnabled
             ? createWorkflowHost({
                 prisma: repository.prisma,
@@ -141,6 +148,7 @@ async function bootstrap(): Promise<void> {
             owner: instanceId,
             leaseMs: config.leaseMs,
             probe,
+            configProbe,
             schedule: workflowHost === null,
             logger,
         });

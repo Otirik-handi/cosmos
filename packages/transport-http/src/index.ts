@@ -7,6 +7,9 @@ import {
     runSnapshotSchema,
     searchPageSchema,
     sourceActivationCommandSchema,
+    sourceConfigProbeCommandSchema,
+    sourceConfigProbeJobSnapshotSchema,
+    sourceDefinitionPageSchema,
     sourceSnapshotSchema,
     storyDetailSchema,
     entryDetailSchema,
@@ -22,6 +25,9 @@ import {
     type SearchPage,
     type SearchQuery,
     type SourceActivationCommand,
+    type SourceConfigProbeCommand,
+    type SourceConfigProbeJobSnapshot,
+    type SourceDefinitionManifest,
     type SourceSnapshot,
     type StoryDetail,
     type SseEvent,
@@ -91,6 +97,34 @@ export class HttpCosmosClient {
     async listConnectors(): Promise<readonly ConnectorDescriptor[]> {
         return this.request("/api/v1/connectors", {
             schema: connectorDescriptorSchema.array(),
+        });
+    }
+
+    async listSourceDefinitions(): Promise<readonly SourceDefinitionManifest[]> {
+        const page = await this.request("/api/v1/source-definitions", {
+            schema: sourceDefinitionPageSchema,
+        });
+        return page.items;
+    }
+
+    async createSourceConfigProbe(
+        input: SourceConfigProbeCommand,
+        idempotencyKey?: string,
+    ): Promise<SourceConfigProbeJobSnapshot> {
+        const payload = sourceConfigProbeCommandSchema.parse(input);
+        return this.request("/api/v1/source-config-probes", {
+            method: "POST",
+            headers: idempotencyKey
+                ? { "idempotency-key": idempotencyKey }
+                : undefined,
+            body: payload,
+            schema: sourceConfigProbeJobSnapshotSchema,
+        });
+    }
+
+    async getSourceConfigProbe(jobId: string): Promise<SourceConfigProbeJobSnapshot> {
+        return this.request(`/api/v1/source-config-probes/${encodeURIComponent(jobId)}`, {
+            schema: sourceConfigProbeJobSnapshotSchema,
         });
     }
 

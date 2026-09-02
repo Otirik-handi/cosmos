@@ -1,4 +1,4 @@
-import { Play } from "lucide-react";
+import { Play, Power, PowerOff } from "lucide-react";
 
 import type { SourceSnapshot } from "@cosmos/contracts";
 
@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 
 type SourceActionsProps = {
     onRun: (source: SourceSnapshot) => Promise<void>;
+    onToggleActivation: (source: SourceSnapshot, enabled: boolean) => Promise<void>;
+    activatingSourceId?: string | null;
     runningSourceId?: string | null;
     sources: readonly SourceSnapshot[];
 };
@@ -24,14 +26,20 @@ function formatLastRun(value: string | null): string {
     return `上次运行 ${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hours}:${minutes}`;
 }
 
-/** 来源工作台：每行展示名称、启用状态与最近运行诊断，按钮即可访问名保持为来源名。 */
-export function SourceActions({ onRun, runningSourceId = null, sources }: SourceActionsProps) {
+/** 来源工作台：每行展示名称、启用状态与最近运行诊断；启用/停用与手动录入都在行内完成。 */
+export function SourceActions({
+    onRun,
+    onToggleActivation,
+    activatingSourceId = null,
+    runningSourceId = null,
+    sources,
+}: SourceActionsProps) {
     return (
         <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
                 <h2 className="font-display text-lg font-semibold tracking-tight">来源与录入</h2>
                 <p className="text-sm text-muted-foreground">
-                    {sources.length === 0 ? "创建第一个 RSS 来源。" : "选择来源执行一次手动录入。"}
+                    {sources.length === 0 ? "创建第一个 RSS 来源。" : "启用来源后可执行手动录入。"}
                 </p>
             </div>
             {sources.length === 0 ? (
@@ -42,6 +50,7 @@ export function SourceActions({ onRun, runningSourceId = null, sources }: Source
                 <ul className="flex flex-col">
                     {sources.map((source) => {
                         const running = runningSourceId === source.id;
+                        const activating = activatingSourceId === source.id;
                         return (
                             <li
                                 key={source.id}
@@ -67,15 +76,28 @@ export function SourceActions({ onRun, runningSourceId = null, sources }: Source
                                         </span>
                                     )}
                                 </div>
-                                <Button
-                                    size="icon-sm"
-                                    variant="outline"
-                                    disabled={!source.enabled || running}
-                                    onClick={() => void onRun(source)}
-                                >
-                                    <Play aria-hidden={true} />
-                                    <span className="sr-only">{source.name}</span>
-                                </Button>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        size="icon-sm"
+                                        variant="outline"
+                                        disabled={activating || running}
+                                        onClick={() => void onToggleActivation(source, !source.enabled)}
+                                    >
+                                        {source.enabled ? <PowerOff aria-hidden={true} /> : <Power aria-hidden={true} />}
+                                        <span className="sr-only">
+                                            {source.enabled ? `停用 ${source.name}` : `启用 ${source.name}`}
+                                        </span>
+                                    </Button>
+                                    <Button
+                                        size="icon-sm"
+                                        variant="outline"
+                                        disabled={!source.enabled || running || activating}
+                                        onClick={() => void onRun(source)}
+                                    >
+                                        <Play aria-hidden={true} />
+                                        <span className="sr-only">{source.name}</span>
+                                    </Button>
+                                </div>
                             </li>
                         );
                     })}

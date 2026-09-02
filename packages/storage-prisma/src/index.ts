@@ -24,6 +24,7 @@ import {
     type IngestTriggerKind,
     type SourceActivationCommand,
     type SourceCheckpointOutput,
+    type SourceConfigProbeCommand,
     type Publisher,
     type SourceSnapshot,
     type StoryDetail,
@@ -479,6 +480,51 @@ export class PrismaCosmosRepository implements CosmosRepository {
             this.logger?.error("storage.job.queue.failed", {
                 sourceId: input.sourceId,
                 kind: "source-probe",
+            }, error);
+            throw error;
+        }
+    }
+
+    async createConfigProbeJob(input: {
+        command: SourceConfigProbeCommand;
+        idempotencyKey?: string;
+    }): Promise<JobSnapshot> {
+        try {
+            const job = await this.prisma.$transaction(async (tx) => {
+                if (input.idempotencyKey) {
+                    const existing = await tx.job.findUnique({
+                        where: { idempotencyKey: input.idempotencyKey },
+                    });
+                    if (existing) {
+                        return existing;
+                    }
+                }
+
+                const created = await tx.job.create({
+                    data: {
+                        kind: "source-config-probe",
+                        status: "queued",
+                        payloadJson: JSON.stringify({ configProbe: input.command }),
+                        idempotencyKey: input.idempotencyKey
+                            ?? `config-probe:${randomUUID()}`,
+                    },
+                });
+                await appendDomainEvent(tx, {
+                    type: "job.queued.v1",
+                    aggregateType: "Job",
+                    aggregateId: created.id,
+                    payload: {
+                        jobId: created.id,
+                        kind: created.kind,
+                        sourceId: null,
+                    },
+                });
+                return created;
+            });
+            return this.toJobSnapshot(job);
+        } catch (error) {
+            this.logger?.error("storage.job.queue.failed", {
+                kind: "source-config-probe",
             }, error);
             throw error;
         }

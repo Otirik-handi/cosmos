@@ -8,13 +8,14 @@
 
 ## 最后更新
 
-2026-08-24。
+2026-09-02。
 
 ## 组件定位
 
 Web Client 是 `apps/web/src/app/page.tsx` 的一个 client-side Next App Router 页面，
-使用 `HttpCosmosClient` 读取 Feed/Source/Health、创建并启用 RSS Source、手动触发已启用
-Source 的 Run、搜索分页、展开 Story，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
+使用 `HttpCosmosClient` 读取 Feed/Source/Health 与来源定义 Catalog、以未保存配置 Probe
+测试 RSS 配置、创建默认停用的 Source、在来源列表行内启用/停用、手动触发已启用 Source
+的 Run、搜索分页、展开 Story，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
 metadata 和全局样式；`components/ui/*` 是 UI primitive，`lib/utils.ts` 只提供
 Tailwind class 合并。`instrumentation.ts` 是 Next server instrumentation：Node runtime
 按需创建并缓存一个 `cosmos-web` logger，`register()` 写一次 `web.started`，
@@ -34,17 +35,26 @@ AttemptSnapshot/AttemptPage 与 Asset download 虽由 API 提供，但当前 `Ht
 
 ### 使用方式
 浏览器加载 `page.tsx` 后由 client component 调用 `HttpCosmosClient`；需要刷新时监听 SSE，
-创建 RSS 来源、启用或触发 Run 也通过已有 client 方法和 API 路由完成，不直接访问 Prisma。
+配置来源（catalog 读取、未保存配置 Probe、保存停用、行内启用/停用）或触发 Run 也通过
+已有 client 方法和 API 路由完成，不直接访问 Prisma。
 
 ### 典型情景
-本地浏览内容、检查 Source/Health，验证搜索分页或观察一次手动 ingest 的页面刷新时，使用该页面；尚未封装的 Catalog、Attempt 或 Asset download 不由它承担。
+本地浏览内容、检查 Source/Health，验证一次未保存配置的探测结果，保存并启用来源后
+观察手动/定时 ingest 的页面刷新，验证搜索分页或展开 Story；Catalog、Attempt 或
+Asset download 中未被 client 封装的部分不由它承担。
 
 ## 概念与定义
 
 - **Feed**：API `FeedPage.items` 的 Story-level cards；页面展示 title、summary、kind、
   source，并以 `storyId` 作为卡片 key。
-- **Source**：共享合同中的可采集来源快照；当前 Web 新建表单固定提交 `source.rss@1`
-  并在创建后立即通过 activation command 启用，用户随后手动触发录入。
+- **Source**：共享合同中的可采集来源快照；Web 表单由 `source.rss@1` manifest 的
+  descriptive configurationSchema 驱动，创建后默认保持停用，由用户在来源列表行内
+  通过 activation command 单独启用/停用。
+- **未保存配置 Probe**：`source-config-probe` Job 的 dry-run。表单“测试配置”提交
+  `sourceDefinitionRef + operationId + config`（不创建 Source），Web 轮询该 Job 快照
+  直到终态或超时；结果显示抓取条数、耗时、样例标题，失败/超时有独立提示。
+- **来源定义状态**：表单打开时读取 `GET /api/v1/source-definitions` 并定位
+  `source.rss@1`；loading/error/ready 三态，error 提供重试，不回退到硬编码字段。
 - **页面刷新**：按当前 `activeSearch` 重新并行读取 Feed/Search 与 Source，并替换而不是
   合并现有列表；匹配的 feed/run/job SSE 事件使用同一刷新路径，`snapshot_required` 只写 notice。
 - **SSE state**：`connecting`、`connected`、`unavailable` 三态 UI 指示；底层
@@ -62,20 +72,32 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 
 页面提供以下用户流程：
 
-1. **新建来源**：打开“新建来源”卡片，填写 name 和 http(s) `feedUrl`，表单通过 React Hook
-   Form + Zod 校验；先提交 `POST /api/v1/sources` 的 `source.rss@1` command（默认停用），
-   再以独立 `Idempotency-Key` 调用 activation command 启用；成功显示 notice、关闭并
-   reset 表单，然后 refresh。
-2. **手动运行**：对 enabled Source 点击按钮，调用 `triggerSource(source.id)`；queued/
-   running 显示 Run 已排队，随后 refresh；其它 status 显示当前状态。
-3. **搜索**：输入 text/source/date，日期转换为 UTC 当日开始/结束 ISO，调用 search，
+1. **配置来源（schema 驱动）**：打开“新建来源”卡片时读取 `GET /api/v1/source-definitions`，
+   定位 `source.rss@1` 并按其 configurationSchema 渲染字段：`feedUrl`（必填 http(s) URL）、
+   `scheduleIntervalMinutes`（分钟输入，默认 30，清空表示不自动抓取；保存时换算为
+   canonical `scheduleIntervalMs`）。表单通过 React Hook Form + Zod 校验。
+2. **测试未保存配置**：点击“测试配置”先触发表单校验，通过后 `POST
+   /api/v1/source-config-probes`（不携带幂等键，服务端生成缺省键），随后每 1.5s 轮询
+   `GET /api/v1/source-config-probes/:jobId`，30s 未达终态显示超时提示；`succeeded`
+   展示抓取条数、耗时、样例标题与“还有更多内容”提示，`failed_terminal`/`cancelled`
+   显示错误文本。全程不创建 Source、不写事实数据；表单字段变化会使结果立即作废。
+3. **保存停用来源**：提交 `POST /api/v1/sources` 的 `source.rss@1` command（默认停用，
+   含 `scheduleIntervalMs`）；成功显示 notice、关闭并 reset 表单，然后 refresh。不再
+   自动启用。
+4. **行内启用/停用**：来源列表每个来源提供启用或停用按钮（同一 activation command，
+   `baseRevisionId=source.revisionId`，`Idempotency-Key: web-activation:<id>:<revisionId>:enable|disable`）；
+   返回 409 conflict 时提示版本冲突并刷新列表，用户可重试。
+5. **手动运行**：对 enabled Source 点击按钮，调用 `triggerSource(source.id)`；queued/
+   running 显示 Run 已排队，随后 refresh；其它 status 显示当前状态。disabled Source
+   的运行按钮不可点击。
+6. **搜索**：输入 text/source/date，日期转换为 UTC 当日开始/结束 ISO，调用 search，
    保存 `activeSearch` 和第一页结果。无条件搜索清除 active search 语义并恢复 Feed。
-4. **加载更多**：有 `nextCursor` 时按当前搜索或 Feed query 追加下一页 items；没有 cursor
+7. **加载更多**：有 `nextCursor` 时按当前搜索或 Feed query 追加下一页 items；没有 cursor
    不发请求。
-5. **Story 展开**：点击卡片的“打开 Story”调用 `client.story(storyId)`，在页面下方显示
+8. **Story 展开**：点击卡片的“打开 Story”调用 `client.story(storyId)`，在页面下方显示
    Story title、来源、最新正文、Entry id、Revision badges 与 Observation badges；点击
    关闭清除 story。
-6. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+9. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
 ## 输入
@@ -98,10 +120,13 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 ### Form input
 
 - Source form：`name` trim 后 1–200 字符（默认 `Cosmos RSS`）；`feedUrl` 必须是
-  http(s) URL（默认占位 `https://example.com/feed.xml`）。提交固定发送
-  `{name, sourceDefinitionRef: "source.rss@1", operationId: "fetch", config: { feedUrl }}`
-  且不含 enabled；创建成功后立即以 `baseRevisionId=created.revisionId` 与
-  `Idempotency-Key: web-activation:<id>:<revisionId>` 调用 activation command 启用。
+  http(s) URL（默认占位 `https://example.com/feed.xml`），字段集合来自
+  `source.rss@1` manifest 的 descriptive schema，未知类型字段不渲染；
+  `scheduleIntervalMinutes` 为可选整数分钟（默认 `30`，1–44640，清空即关闭定时）。
+  保存固定发送
+  `{name, sourceDefinitionRef: "source.rss@1", operationId: "fetch", config: { feedUrl, scheduleIntervalMs? }}`
+  且不含 enabled；创建后保持停用。测试配置发送
+  `{sourceDefinitionRef, operationId, config}` 到 probe 端点，轮询间隔 1.5s、上限 30s。
 - Search form：text trim/max 500，sourceId、publishedAfter、publishedBefore 可为空；
   search command 固定 `limit: 20`。非空 date 变成 `YYYY-MM-DDT00:00:00.000Z` 或
   `YYYY-MM-DDT23:59:59.999Z`。
@@ -118,8 +143,10 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
   互斥显示最新状态文本。
 - 四个状态卡：服务器部署模式/health（有 health 时显示 service·workerStatus）、Source
   数与启用数、Prisma+SQLite 文案、SSE 已连接/正在连接/SSE 不可用。
-- Source actions：无 Source 显示“创建第一个 RSS 来源。”；每个 enabled Source 有
-  手动录入按钮，disabled Source 按钮禁用。
+- Source actions：无 Source 显示“创建第一个 RSS 来源。”；每个来源行内提供启用/停用
+  按钮，enabled Source 另有手动录入按钮，disabled Source 的运行按钮禁用。
+- Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；
+  ready 时按 manifest 渲染字段，测试结果区显示 running/成功统计/失败原因/超时四态。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
   时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多。
 - Story panel：展示 title、source、revision 数、最新 revision contentText、Entry/source
@@ -135,6 +162,8 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 - `feed`、`nextCursor`、`activeSearch`、`sources`、`story`、`health`；
 - `notice`、`error`、`loading`、`showSourceForm`；
+- `definitionState`（来源定义 loading/ready/error）、`probeState`（idle/running/
+  succeeded/failed/timeout）、`activatingSourceId`（进行中的启用/停用行）；
 - `eventStreamState`（connecting/connected/unavailable）。
 
 唯一的产品 localStorage 持久化是外观主题偏好 `cosmos.theme.preference.v1`
@@ -174,20 +203,30 @@ macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚�
    EventSource error 或 malformed event（transport onError）。
 5. `connected/unavailable → refreshing`：只在匹配 feed/run/job event 时重新读取当前 query；
    `snapshot_required` 仅写 notice “服务要求重新读取快照，正在刷新 Feed。”，不会自动 refresh。
-6. `source-form-open → submitting → closed/notice`：合法创建成功后关闭/reset并刷新；
-   reject 保持 form 并显示 error。
-7. `feed/search → paginating`：存在 nextCursor 时追加 page.items；失败保留已有 items
+6. `source-form-open → loading → ready/error`：打开表单读取 catalog；error 可重试并回到
+   loading；ready 前不渲染表单字段。
+7. `probe idle → running → succeeded/failed/timeout`：测试配置提交后进入 running；
+   轮询到 `succeeded`（含 result）显示统计，`failed_terminal`/`cancelled` 显示失败原因，
+   30s 未终态显示超时；任一表单字段变化或重新打开表单立即回到 idle（作废旧结果）。
+8. `source-form-open → submitting → closed/notice`：合法创建成功后关闭/reset并刷新；
+   reject 保持 form 并显示 error。保存不再触发启用。
+9. `source-row → activating → refreshed/conflict`：行内启用/停用期间该行按钮禁用；
+   成功后 refresh；409 conflict 提示版本冲突并 refresh。
+10. `feed/search → paginating`：存在 nextCursor 时追加 page.items；失败保留已有 items
    并显示 error。
-8. `feed-card → story-open`：Story API 成功写 StoryDetail；失败不打开并显示 error；
+11. `feed-card → story-open`：Story API 成功写 StoryDetail；失败不打开并显示 error；
    close 清除 story。
-9. 页面卸载 → SSE closed：effect cleanup 调用 transport close。
+12. 页面卸载 → SSE closed：effect cleanup 调用 transport close。
 
 ## 副作用
 
-- 浏览器 fetch：初始化/refresh 并行请求 Feed/Search 与 Sources；创建、搜索、分页、health、
-  Story、Run 分别请求对应 API。
+- 浏览器 fetch：初始化/refresh 并行请求 Feed/Search 与 Sources；打开表单读取
+  source-definitions；测试配置提交并轮询 probe Job；保存、启用/停用、搜索、分页、
+  health、Story、Run 分别请求对应 API。
 - 浏览器 EventSource：挂载建立一个 SSE 连接，事件驱动 refresh，卸载关闭连接。
-- API Source create/run 会产生服务端持久副作用；页面自身不直接写业务数据。
+- API Source create/activation/run 与 source-config-probe Job 会产生服务端持久副作用
+  （probe 只持久化 Job 记录，不写 Observation/Entry/Asset/checkpoint）；页面自身不直接
+  写业务数据。
 - React state 更新和表单 reset 是内存副作用；UI primitive 仅影响渲染。
 
 Web server instrumentation 的副作用独立于 client page：在 Node runtime，Next 调用
@@ -201,8 +240,12 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 
 ## 错误与降级
 
-- 初始 refresh、SSE 事件 refresh、Source create、search、pagination、health、run、Story
-  任一请求失败，都不抛出到 React page boundary；捕获后使用 `readError` 写 error/status。
+- 初始 refresh、SSE 事件 refresh、catalog 读取、Source create、activation、probe 提交/轮询、
+  search、pagination、health、run、Story 任一请求失败，都不抛出到 React page boundary；
+  捕获后使用 `readError` 写 error/status 或对应的局部状态（catalog 错误在表单内提供重试，
+  probe 失败在结果区显示原因）。
+- probe 轮询到达 30s 上限显示超时文案，提示可稍后重新“测试配置”；不做后台继续轮询。
+- activation 409 conflict 显示“版本冲突”提示并刷新列表，不自动重试启用。
 - SSE unavailable 时页面明确提示“数据仍可手动刷新；服务恢复后会重新连接。”但当前代码
   不自动重连；用户可使用检查服务、搜索或其它按钮产生请求。
 - Snapshot required 不直接在浏览器恢复某个 cursor；当前代码只写 notice，不自动 refresh 当前 snapshot。
@@ -236,13 +279,18 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 
 1. 使用空 `NEXT_PUBLIC_COSMOS_API_URL` 启动 Web，观察初始化请求为同源 `/api/v1/feed` 与
    `/api/v1/sources`，页面先显示 loading，成功后显示四个状态卡和 Feed/Source 内容。
-2. 在 Source 表单提交空 name 或非法 URL，观察 Zod FieldError 且不发送 POST；提交合法值后
-   先观察 POST `/api/v1/sources`（body 为上表形状），再观察 POST
-   `/api/v1/sources/:id/activation-commands`（header `Idempotency-Key: web-activation:<id>:<revisionId>`），
-   成功后 notice 提示已保存并启用、表单关闭并刷新列表。
+2. 打开“新建来源”，观察 `GET /api/v1/source-definitions` 读取与字段渲染（`feedUrl` 必填、
+   定时默认 30 分钟）；让 catalog 请求失败，观察表单错误与“重试读取”。填写合法值后点击
+   “测试配置”，观察 `POST /api/v1/source-config-probes` 与按间隔的
+   `GET /api/v1/source-config-probes/:jobId` 轮询，成功显示抓取条数与样例标题，且没有
+   `POST /api/v1/sources`。点击“保存来源（停用）”后观察创建请求不含 enabled、表单关闭，
+   来源列表新增停用来源。对停用来源点击启用，观察
+   `POST /api/v1/sources/:id/activation-commands`（header `Idempotency-Key:
+   web-activation:<id>:<revisionId>:enable`）后来源变为启用。
 3. 对 enabled Source 点击录入，观察 POST `/api/v1/sources/:id/runs`，queued/running 时
-   notice 包含 Run id；disabled Source 按钮不可点击，且 API 对未启用 Source 的手动
-   Run 返回 409 conflict。
+   notice 包含 Run id；disabled Source 的录入按钮不可点击，且 API 对未启用 Source 的手动
+   Run 返回 409 conflict。对同一来源点击停用，观察 activation command 以
+   `...:disable` 幂等键发送；在列表过期时并发修改可复现 409 conflict 提示与列表刷新。
 4. 输入 text/source/date 搜索，观察日期边界为 UTC 当日开始/结束、结果替换 Feed、保存
    nextCursor；点击加载更多，观察新 items 追加而不是覆盖。
 5. SSE 收到 `feed.updated.v1`、Run/Job 终态事件时观察 Feed 自动 refresh；收到
@@ -301,9 +349,12 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 
 当前产品展示组件边界：
 
-- `SourceForm`：接收来源表单 `UseFormReturn` 和页面提交事件，展示 Zod 字段错误与 submitting 状态；
+- `SourceForm`：接收来源表单 `UseFormReturn`、来源定义状态（含 manifest）、提交事件、
+  测试回调与 probe 状态、目录重试回调，展示 catalog 加载/错误、Zod 字段错误、submitting
+  状态与 probe 四态反馈；
 - `StatusSummary`：接收 health、source summary 和 connecting/connected/unavailable 状态；
-- `SourceActions`：接收 `SourceSnapshot[]` 与 run 回调，展示空、disabled 和 configured 状态；
+- `SourceActions`：接收 `SourceSnapshot[]`、run 回调与启用/停用回调（含进行中行 id），
+  展示空、disabled 和 configured 状态及行内启停按钮；
 - `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
 - `StoryPanel`：接收 `StoryDetail` 与关闭回调，展示 revision/observation 元数据。
 
@@ -321,12 +372,14 @@ properties，不写 `:root`，因此实验室 chrome 与产品页面不受污染
 
 ## 非目标/边界
 
-- 当前页面只开放 RSS 创建表单；不宣称浏览器端可配置 Bilibili/OpenCLI、Secret、
+- 当前页面只开放 RSS 配置；不宣称浏览器端可配置 Bilibili/OpenCLI、Secret、
   Connection、Plugin、Workflow definition 或 arbitrary Action。
 - 不实现用户认证、授权、跨用户隔离、Saved View、interaction/read-state、文件上传、
   offline cache、service worker 或通知中心。
-- 不把 schema 驱动表单或未保存配置 Probe 写成已实现浏览器行为；当前 UI 固定提交
-  `source.rss@1` 与 `feedUrl`，启用依赖独立的 activation command。
+- Schema 驱动表单只消费 manifest 中 string/integer 字段并按已知字段名渲染展示文案；
+  其它类型的配置字段、多 operation 选择和 catalog 变更的实时刷新不在当前 UI。
+- 未保存配置 Probe 的轮询固定 1.5s/30s；不提供后台继续等待、进度百分比或历史探测列表；
+  真实公网 RSS 的探测/录入端到端仍未验收（当前证据来自受控本地 RSS）。
 - 不把 EventSource unavailable 后“服务恢复会重新连接”文案写成已实现自动 reconnect；
   当前代码只显示 unavailable，后续连接依赖页面重新挂载或上层操作。
 - Browser visual/e2e、Docker、真实网络来源和跨进程 recovery 未在当前代码和测试中验证；本规格的验收步骤需在相应运行环境中单独执行。

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BadRequestException, ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 
 import { WorkflowHostConflictError } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
@@ -319,5 +319,135 @@ describe("AppController WorkflowRun projection", () => {
             status: "succeeded",
             finishedAt: "2026-08-16T00:00:01.000Z",
         });
+    });
+});
+
+describe("AppController source config probes", () => {
+    const probeCommand = {
+        sourceDefinitionRef: "source.rss@1",
+        operationId: "fetch",
+        config: { feedUrl: "https://example.test/feed.xml" },
+    };
+    const probeJob = {
+        id: "probe-job-1",
+        kind: "source-config-probe",
+        sourceId: null,
+        runId: null,
+        status: "queued",
+        attempts: 0,
+        maxAttempts: 3,
+        errorCode: null,
+        error: null,
+        createdAt: "2026-08-24T00:00:00.000Z",
+        updatedAt: "2026-08-24T00:00:00.000Z",
+        result: null,
+    };
+
+    function probeController(repository: Record<string, unknown>, sourceProbe: Record<string, unknown>) {
+        return new AppController(
+            repository as never,
+            sourceProbe as never,
+        );
+    }
+
+    it("queues a config probe job after synchronous validation", async () => {
+        const createConfigProbeJob = vi.fn().mockResolvedValue(probeJob);
+        const validate = vi.fn();
+        const controller = probeController(
+            { createConfigProbeJob },
+            { validate },
+        );
+
+        await expect(controller.createSourceConfigProbe(probeCommand, "probe-key-1")).resolves.toBe(probeJob);
+        expect(validate).toHaveBeenCalledWith(probeCommand);
+        expect(createConfigProbeJob).toHaveBeenCalledWith({
+            command: probeCommand,
+            idempotencyKey: "probe-key-1",
+        });
+    });
+
+    it("generates an idempotency key when the header is absent", async () => {
+        const createConfigProbeJob = vi.fn().mockResolvedValue(probeJob);
+        const controller = probeController(
+            { createConfigProbeJob },
+            { validate: vi.fn() },
+        );
+
+        await controller.createSourceConfigProbe(probeCommand);
+        const call = createConfigProbeJob.mock.calls[0][0] as { idempotencyKey?: string };
+        expect(call.idempotencyKey).toMatch(/^config-probe:/);
+    });
+
+    it("rejects invalid config payloads with 400 before creating a job", async () => {
+        const createConfigProbeJob = vi.fn();
+        const controller = probeController(
+            { createConfigProbeJob },
+            { validate: vi.fn() },
+        );
+
+        const error = await controller.createSourceConfigProbe({
+            ...probeCommand,
+            sourceDefinitionRef: "source.rss@latest",
+        }).catch((value) => value);
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(createConfigProbeJob).not.toHaveBeenCalled();
+    });
+
+    it("rejects configs the validator refuses with 400 before creating a job", async () => {
+        const createConfigProbeJob = vi.fn();
+        const controller = probeController(
+            { createConfigProbeJob },
+            { validate: () => { throw new Error("Source definition is not available: source.rss@1"); } },
+        );
+
+        const error = await controller.createSourceConfigProbe(probeCommand).catch((value) => value);
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
+        expect(createConfigProbeJob).not.toHaveBeenCalled();
+    });
+
+    it("rejects idempotency keys outside the 1-300 budget", async () => {
+        const controller = probeController(
+            { createConfigProbeJob: vi.fn() },
+            { validate: vi.fn() },
+        );
+
+        const error = await controller.createSourceConfigProbe(probeCommand, "x".repeat(301)).catch((value) => value);
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toMatchObject({ message: "Idempotency-Key must be 1-300 characters." });
+    });
+
+    it("maps repository failures after validation to a 500 instead of a validation 400", async () => {
+        const controller = probeController(
+            {
+                createConfigProbeJob: vi.fn()
+                    .mockRejectedValue(new Error("The table `main.Job` does not exist in the current database.")),
+            },
+            { validate: vi.fn() },
+        );
+
+        const error = await controller.createSourceConfigProbe(probeCommand).catch((value) => value);
+
+        expect(error).toBeInstanceOf(InternalServerErrorException);
+        expect(error.getResponse()).toMatchObject({ code: "internal_error" });
+    });
+
+    it("returns the probe job on the dedicated route and 404s other job kinds", async () => {
+        const controller = probeController(
+            {
+                getJob: vi.fn()
+                    .mockResolvedValueOnce(probeJob)
+                    .mockResolvedValueOnce({ ...probeJob, kind: "source-probe" })
+                    .mockResolvedValueOnce(null),
+            },
+            { validate: vi.fn() },
+        );
+
+        await expect(controller.sourceConfigProbe("probe-job-1")).resolves.toBe(probeJob);
+        await expect(controller.sourceConfigProbe("other-job")).rejects.toThrow(NotFoundException);
+        await expect(controller.sourceConfigProbe("missing-job")).rejects.toThrow(NotFoundException);
     });
 });
