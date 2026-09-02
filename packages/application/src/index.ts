@@ -1,4 +1,6 @@
 import {
+    getSourceConfigurationSchema,
+    sourceConfigProbeJobPayloadSchema,
     protocolVersion,
     type CreateSourceCommand,
     type ConnectorDescriptor,
@@ -15,6 +17,9 @@ import {
     type SearchQuery,
     type SourceActivationCommand,
     type SourceCheckpointOutput,
+    type SourceConfigProbeCommand,
+    type SourceConfigProbeResult,
+    type SourceConfig,
     type SourceSnapshot,
     type SourceProbeResult,
     type StoryDetail,
@@ -22,6 +27,7 @@ import {
 } from "@cosmos/contracts";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
+import type { CatalogPort } from "./catalog.js";
 
 export * from "./action.js";
 export * from "./catalog.js";
@@ -137,6 +143,10 @@ export interface CosmosRepository {
     }): Promise<RunSnapshot>;
     createProbeJob(input: {
         sourceId: string;
+        idempotencyKey?: string;
+    }): Promise<JobSnapshot>;
+    createConfigProbeJob(input: {
+        command: SourceConfigProbeCommand;
         idempotencyKey?: string;
     }): Promise<JobSnapshot>;
     startRun(runId: string, lease?: JobLease): Promise<RunSnapshot>;
@@ -457,6 +467,136 @@ export class ConnectorProbeService {
     }
 }
 
+/**
+ * Dry-run probe for an unsaved source configuration. The service never
+ * receives a repository, so a config probe structurally cannot persist
+ * observations, entries, assets or checkpoints.
+ */
+export class SourceConfigProbeService {
+    private readonly logger: LoggerPort;
+
+    constructor(
+        private readonly catalog: CatalogPort,
+        private readonly connectors: ConnectorRegistry,
+        private readonly now: () => string = () => new Date().toISOString(),
+        logger?: LoggerPort,
+    ) {
+        this.logger = resolveLogger(logger);
+    }
+
+    async run(command: SourceConfigProbeCommand): Promise<SourceConfigProbeResult> {
+        const startedAt = Date.now();
+        let stage = "prepare";
+        let logger = this.logger;
+        try {
+            const manifest = this.catalog.getSourceDefinitionByRef(command.sourceDefinitionRef);
+            if (!manifest || manifest.status !== "enabled" || !manifest.operationIds.includes(command.operationId)) {
+                throw new Error(`Source definition is not available: ${command.sourceDefinitionRef}`);
+            }
+            // The canonical Zod schema owns config validation semantics; the
+            // manifest's JSON Schema stays a descriptive projection.
+            const configurationSchema = getSourceConfigurationSchema(command.sourceDefinitionRef);
+            if (!configurationSchema) {
+                throw new Error(`No canonical configuration schema is registered for ${command.sourceDefinitionRef}.`);
+            }
+            const config = configurationSchema.parse(command.config) as SourceConfig;
+            stage = "validate";
+            // Connectors only read config (and log kind); the remaining
+            // identity fields exist to satisfy SourceSnapshot without
+            // inventing a persisted source row.
+            const transientSource: SourceSnapshot = {
+                id: "config-probe",
+                name: "(unsaved configuration)",
+                sourceDefinitionRef: command.sourceDefinitionRef,
+                operationId: command.operationId,
+                connectorId: manifest.connectorId,
+                kind: manifest.id,
+                config,
+                enabled: false,
+                revisionId: "0",
+                createdAt: this.now(),
+                updatedAt: this.now(),
+                lastRunAt: null,
+                lastError: null,
+            };
+            const connector = this.connectors.resolve(transientSource);
+            logger = logger.child({ connectorId: connector.id });
+            logger.info("connector.config_probe.started", {
+                sourceDefinitionRef: command.sourceDefinitionRef,
+                operationId: command.operationId,
+            });
+            try {
+                connector.validate(transientSource);
+            } catch (error) {
+                logger.error("connector.validate.failed", {
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : "invalid_configuration",
+                    retryable: error instanceof ConnectorExecutionError
+                        ? error.retryable
+                        : false,
+                }, error);
+                throw error;
+            }
+            stage = "fetch";
+            const fetchStartedAt = Date.now();
+            let result: Awaited<ReturnType<IngestConnector["fetchItems"]>>;
+            try {
+                result = await logger.withContext(
+                    { connectorId: connector.id },
+                    () => connector.fetchItems({
+                        source: transientSource,
+                        cursor: null,
+                    }),
+                );
+            } catch (error) {
+                logger.error("connector.fetch.failed", {
+                    durationMs: Date.now() - fetchStartedAt,
+                    errorCode: error instanceof ConnectorExecutionError
+                        ? error.code
+                        : null,
+                    retryable: error instanceof ConnectorExecutionError
+                        ? error.retryable
+                        : true,
+                }, error);
+                throw error;
+            }
+            const sampleTitles = result.items
+                .map((item) => item.title.trim())
+                .filter((title) => title.length > 0)
+                .slice(0, 3)
+                .map((title) => title.slice(0, 200));
+            logger.info("connector.config_probe.completed", {
+                itemCount: result.items.length,
+                nextCursorAvailable: result.nextCursor !== null,
+                durationMs: Date.now() - startedAt,
+            });
+            return {
+                sourceDefinitionRef: command.sourceDefinitionRef,
+                operationId: command.operationId,
+                connectorId: connector.id,
+                itemCount: result.items.length,
+                nextCursorAvailable: result.nextCursor !== null,
+                sampleTitles,
+                checkedAt: this.now(),
+                durationMs: Date.now() - startedAt,
+            };
+        } catch (error) {
+            logger.error("connector.config_probe.failed", {
+                stage,
+                durationMs: Date.now() - startedAt,
+                errorCode: error instanceof ConnectorExecutionError
+                    ? error.code
+                    : null,
+                retryable: error instanceof ConnectorExecutionError
+                    ? error.retryable
+                    : true,
+            }, error);
+            throw error;
+        }
+    }
+}
+
 export class IngestionService {
     private readonly logger: LoggerPort;
 
@@ -717,6 +857,7 @@ export interface IngestionWorkerOptions {
     pollIntervalMs?: number;
     now?: () => Date;
     probe?: ConnectorProbeService;
+    configProbe?: SourceConfigProbeService;
     /** Disable legacy schedule enqueue while Workflow envelopes own scheduling. */
     schedule?: boolean;
     logger?: LoggerPort;
@@ -754,7 +895,7 @@ export class IngestionWorker {
         const job = await this.repository.claimNextJob({
             owner: this.options.owner,
             leaseMs: this.options.leaseMs,
-            acceptedKinds: ["source-ingest", "source-probe"],
+            acceptedKinds: ["source-ingest", "source-probe", "source-config-probe"],
         });
         if (!job) {
             return null;
@@ -815,6 +956,32 @@ export class IngestionWorker {
                         () => this.options.probe!.runSource(
                             readSourceId(job.payload),
                         ),
+                    );
+                    const completed = await this.completeClaimedJob(job, logger, {
+                        status: "succeeded",
+                        result,
+                    });
+                    if (completed) {
+                        logger.info("job.completed", {
+                            kind: job.kind,
+                            status: "succeeded",
+                            attempts: job.attempts,
+                        });
+                    }
+                    return completed
+                        ? {
+                            jobId: job.id,
+                            runId: null,
+                            status: "succeeded",
+                            attempts: job.attempts,
+                        }
+                        : null;
+                }
+                if (job.kind === "source-config-probe" && !job.runId && this.options.configProbe) {
+                    const command = readConfigProbeCommand(job.payload);
+                    const result = await logger.withContext(
+                        { jobId: job.id },
+                        () => this.options.configProbe!.run(command),
                     );
                     const completed = await this.completeClaimedJob(job, logger, {
                         status: "succeeded",
@@ -1076,6 +1243,14 @@ function readSourceId(payload: unknown): string {
         throw new Error("Source probe job is missing sourceId.");
     }
     return (payload as { sourceId: string }).sourceId;
+}
+
+function readConfigProbeCommand(payload: unknown): SourceConfigProbeCommand {
+    const parsed = sourceConfigProbeJobPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+        throw new Error("Source config probe job is missing a valid configProbe command.");
+    }
+    return parsed.data.configProbe;
 }
 
 function readOptionalSourceId(payload: unknown): string | null {

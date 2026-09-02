@@ -39,6 +39,7 @@ import {
     searchQuerySchema,
     idempotencyKeySchema,
     sourceActivationCommandSchema,
+    sourceConfigProbeCommandSchema,
     updateSourceCommandSchema,
     type HealthResponse,
     type RunStatus,
@@ -314,6 +315,48 @@ export class AppController {
             status: job.status,
         });
         return job;
+    }
+
+    /**
+     * Probe an unsaved source configuration. The canonical schema validation
+     * runs synchronously before the Job is created so an invalid config is a
+     * 400, not a wasted Worker round-trip.
+     */
+    @Post("source-config-probes")
+    @HttpCode(202)
+    @Bind(Body(), Headers("idempotency-key"))
+    async createSourceConfigProbe(body: unknown, idempotencyKey?: string) {
+        try {
+            const command = sourceConfigProbeCommandSchema.parse(body);
+            this.sourceProbe.validate(command);
+            const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
+            const job = await this.repository.createConfigProbeJob({
+                command,
+                idempotencyKey: providedKey ?? `config-probe:${randomUUID()}`,
+            });
+            this.logger?.info("job.queued", {
+                jobId: job.id,
+                kind: job.kind,
+                status: job.status,
+            });
+            return job;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("source-config-probes/:jobId")
+    @Bind(Param("jobId"))
+    async sourceConfigProbe(jobId: string) {
+        const result = await this.repository.getJob(jobId);
+        if (!result || result.kind !== "source-config-probe") {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Source config probe job not found: ${jobId}`,
+                retryable: false,
+            });
+        }
+        return result;
     }
 
     @Post("sources/:sourceId/runs")

@@ -8,8 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     ConnectorExecutionError,
     ConnectorProbeService,
+    createBuiltinManifestCatalog,
+    ConnectorRegistry,
     IngestionService,
     IngestionWorker,
+    SourceConfigProbeService,
     type LoggerPort,
     type IngestConnector,
 } from "@cosmos/application";
@@ -884,6 +887,90 @@ describe("PrismaCosmosRepository", () => {
             });
             expect((await repository.entries({ limit: 20 })).items).toHaveLength(0);
             expect(await repository.getCheckpoint(source.id)).toBeNull();
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("runs a source config probe job idempotently without persisting library data", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-config-probe-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const command = {
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "https://example.test/feed.xml" },
+            } as const;
+            const job = await repository.createConfigProbeJob({
+                command,
+                idempotencyKey: "config-probe-command-1",
+            });
+            const replayed = await repository.createConfigProbeJob({
+                command,
+                idempotencyKey: "config-probe-command-1",
+            });
+            expect(replayed.id).toBe(job.id);
+            expect(job.kind).toBe("source-config-probe");
+            expect(job.sourceId).toBeNull();
+
+            const connector: IngestConnector = {
+                id: "rss",
+                description: "RSS",
+                configVersion: "source.rss@1",
+                capabilities: ["source:read"],
+                validate: () => undefined,
+                async fetchItems() {
+                    return {
+                        items: [{
+                            externalId: "config-probe-item",
+                            title: "Config probe item",
+                            summary: null,
+                            contentText: "Should not be persisted",
+                            webUrl: null,
+                            kind: "article",
+                            publisher: null,
+                            metrics: null,
+                            publishedAt: null,
+                            updatedAt: null,
+                            sourceLocator: { provider: "rss" },
+                            rawPayload: "{}",
+                            assets: [],
+                        }],
+                        nextCursor: "must-not-be-persisted",
+                    };
+                },
+            };
+            const configProbe = new SourceConfigProbeService(
+                createBuiltinManifestCatalog(),
+                new ConnectorRegistry([connector]),
+            );
+            const worker = new IngestionWorker(
+                repository,
+                new IngestionService(repository, () => connector),
+                {
+                    owner: "config-probe-worker",
+                    leaseMs: 60_000,
+                    configProbe,
+                },
+            );
+
+            const result = await worker.pollOnce();
+
+            expect(result?.status).toBe("succeeded");
+            expect((await repository.getJob(job.id))?.result).toMatchObject({
+                sourceDefinitionRef: "source.rss@1",
+                connectorId: "rss",
+                itemCount: 1,
+                nextCursorAvailable: true,
+                sampleTitles: ["Config probe item"],
+            });
+            expect((await repository.entries({ limit: 20 })).items).toHaveLength(0);
+            expect((await repository.listSources()).filter((source) => source.id === "config-probe")).toHaveLength(0);
         } finally {
             await repository.close();
         }
