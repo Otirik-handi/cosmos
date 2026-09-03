@@ -10,7 +10,7 @@ Task 02 实施顺序第 5 步在 `feat/t02-boards-source-health` 完成三块能
 
 同日维护者实测补充修复（均已实测验证）：其一，新 worktree 的 `bun run dev` 因“API 先建库（仅 FTS5 影子表）后无 migration”整站 500，`scripts/dev.ts` 现已在拉起任何服务前先对数据根 `migrate deploy`，迁移失败即拒绝启动；其二，durable failed run 此前从不写 `workflowRun.errorMessage`（只有 dead-letter 路径会写），来源健康红字因此缺失——这是 durable 路径合入以来的预置投影缺口，被本切片的失败事件可见性暴露；`PrismaWorkflowBackend.toUpdateData` 现持久化 kernel `state.error`，非失败保存保持 null。
 
-合并记录（2026-09-03）：分支 `feat/t02-boards-source-health`（实现提交 `e59dcde`、`96c593c`）经维护者授权快进合入 `master`（无 merge commit，tip `96c593c`）；本地分支与 worktree 已清理；fork 远端保留同名分支，`master` 推送与远端清理另行决定。
+合并记录（2026-09-03）：分支 `feat/t02-boards-source-health`（实现提交 `e59dcde`、`96c593c`）经维护者授权快进合入 `master`（无 merge commit，tip `96c593c`）；本地分支与 worktree 已清理，fork 远端同名分支已删除；`master` 已推送至 fork 远端并与本地同步（`origin/master` = `54ddef8`）。
 
 ## 一句话结论
 
