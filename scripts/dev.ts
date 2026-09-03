@@ -1,6 +1,7 @@
 import {
     execFileSync,
     spawn,
+    spawnSync,
     type ChildProcess,
 } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -54,6 +55,23 @@ function stopAll(exitCode: number): void {
 
 async function start(): Promise<void> {
     const baseEnvironment = createWorkspaceDevEnvironment(rootDirectory);
+
+    // API/Worker 启动会自动创建 SQLite 文件并初始化 FTS5 影子表；若业务表
+    // 尚未迁移，页面查询全部 500，且之后 migrate deploy 会以“schema 非空且无
+    // 基线”拒绝执行。dev 环境必须在拉起任何服务前先把 migration 应用到数据根。
+    const migration = spawnSync(
+        process.execPath,
+        ["run", "scripts/prisma.ts", "migrate", "deploy"],
+        {
+            cwd: rootDirectory,
+            env: { ...process.env, ...baseEnvironment },
+            stdio: "inherit",
+        },
+    );
+    if (migration.status !== 0) {
+        console.error("[dev] database migration failed; refusing to start the stack.");
+        process.exit(migration.status ?? 1);
+    }
 
     const apiHost = baseEnvironment.COSMOS_API_HOST ?? "127.0.0.1";
     const adminHost = baseEnvironment.COSMOS_WORKER_ADMIN_HOST ?? "127.0.0.1";
