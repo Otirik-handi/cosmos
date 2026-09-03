@@ -1,6 +1,12 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-02。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）；未部署。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
+> 更新于 2026-09-03。Task 02 实施顺序第 5 步“两块固定看板与来源健康”已在 `.worktree/boards-source-health` 分支 `feat/t02-boards-source-health` 完成本地实现并通过全部门禁，尚未合并。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）；未部署。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
+
+## 2026-09-03：两块固定看板与来源健康切片（分支实现，待合并）
+
+Task 02 实施顺序第 5 步在 `feat/t02-boards-source-health` 完成三块能力：其一，侧栏来源列表升级为“来源健康”看板，每行解释启用徽章、定时语义（启用+定时“每 N 分钟自动抓取”、启用无定时“未配置定时，仅手动录入”、停用“已停用，定时抓取暂停”）、上次运行时间与最近错误，全部投影自既有 `SourceSnapshot` 字段，无合同/Prisma 变更。其二，Worker 定时调度循环从 `apps/worker/src/main.ts` 提取为 `apps/worker/src/scheduling.ts`，门禁行为（只有已启用且配置 `scheduleIntervalMs` 的 Source 参与 schedule；单来源排队失败不隔离其它来源）首次有了 focused 行为测试；调度门禁代码本身语义未变。其三，Web 修正 SSE 幻影监听（`job.succeeded.v1`/`job.retry_wait.v1` 从未发出，替换为实际类型 `run.queued.v1`/`run.retry_wait.v1`），并在 `PrismaWorkflowBackend` 两个 Kernel 状态保存路径补发 durable Run 终态事件 `run.succeeded.v1`/`run.failed.v1`/`run.cancelled.v1`（payload 与 legacy `completeRun` 一致，幂等键 `workflow-run:<id>:<status>` 与 host store 失败路径共享，复合唯一约束 `(workflowRunId, idempotencyKey)` 防重放）；此前 durable 成功终态无事件，零新增内容的成功 Run 不会刷新 Web，“上次失败红字不消失”。`run.failed.v1` 到达时 Web 额外写失败提示。
+
+本地验证（全部实际运行，2026-09-03）：`bun run typecheck` 全仓通过；focused `apps/worker/src/scheduling.test.ts` 3 用例、`packages/storage-prisma` 4 文件/63 用例通过；全量 `bun run test` 37 文件/292 用例通过；`bun run build` 通过；`COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser` 8/8 通过（ingest 流程新增“已停用，定时抓取暂停”与“每 30 分钟自动抓取”断言，console/page error/request failure 为 0）；component-lab 13/13 通过（SourceActions 新增 untimed 场景）；`BUN_BINARY=<真实 bun.exe> bun run test:e2e` 4/4 通过；`bun run docs:check` 304 文件通过；`git diff --check` 干净。未运行：真实公网 RSS 定时抓取、Docker/Compose（本机无 Docker CLI）、Windows Node smoke、发布部署。“配置与看板”Checkpoint 在隔离环境达成；真实 RSS URL 产品 E2E 仍待执行。
 
 ## 一句话结论
 
@@ -128,7 +134,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-Task 02 的 Source 身份/revision 合同、配置入口、API/Worker 迁移、默认离线 E2E 与未保存配置 Probe（`source-config-probe`，2026-09-02 合入）已通过本地门禁并进入 master；当前仍未把 RSS 媒体提取/下载、Blob/bytes 映射和断网阅读降级做成产品能力。下一步按 Task 顺序先完成媒体边界设计与实现，再用用户填写的真实 RSS URL 做产品验收；产品 Web 侧同步实施 schema 驱动配置流程与探测结果展示（Task 02 实施顺序第 4 步）。Docker、真实来源和发布部署仍未执行。
+Task 02 实施顺序第 5 步“两块固定看板与来源健康”（分支 `feat/t02-boards-source-health`，待合并）已确认只有已启用且配置定时的 Source 参与调度、SSE/Run/Job 状态在看板可解释；“配置与看板”Checkpoint 在隔离环境达成。后续按 Task 顺序先完成媒体边界实现设计（受控流式 Blob 端口、RSS 媒体提取/下载、bytes/BlobRef 映射），实现后用用户填写的真实 RSS URL 完成断网产品验收。Docker、真实来源和发布部署仍未执行。
 
 ## 已完成
 

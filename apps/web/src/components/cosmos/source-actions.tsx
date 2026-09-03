@@ -2,6 +2,7 @@ import { Play, Power, PowerOff } from "lucide-react";
 
 import type { SourceSnapshot } from "@cosmos/contracts";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 type SourceActionsProps = {
@@ -26,7 +27,35 @@ function formatLastRun(value: string | null): string {
     return `上次运行 ${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hours}:${minutes}`;
 }
 
-/** 来源工作台：每行展示名称、启用状态与最近运行诊断；启用/停用与手动录入都在行内完成。 */
+/**
+ * 定时语义一行话：看板读者据此知道该来源何时被 Worker 自动抓取。
+ * 表单入口只允许整数分钟，秒/小时/天分支覆盖 API 直接创建的非整分钟配置。
+ */
+function scheduleLine(source: SourceSnapshot): string {
+    const interval = source.config.scheduleIntervalMs;
+    if (!source.enabled) {
+        return interval ? "已停用，定时抓取暂停" : "已停用";
+    }
+    if (!interval) {
+        return "未配置定时，仅手动录入";
+    }
+    return `每 ${formatInterval(interval)}自动抓取`;
+}
+
+function formatInterval(intervalMs: number): string {
+    if (intervalMs % 86_400_000 === 0) {
+        return `${intervalMs / 86_400_000} 天`;
+    }
+    if (intervalMs % 3_600_000 === 0) {
+        return `${intervalMs / 3_600_000} 小时`;
+    }
+    if (intervalMs % 60_000 === 0) {
+        return `${intervalMs / 60_000} 分钟`;
+    }
+    return `${Math.round(intervalMs / 1000)} 秒`;
+}
+
+/** 来源健康看板：每行解释启用状态、定时计划、最近运行与错误；启停与手动录入都在行内完成。 */
 export function SourceActions({
     onRun,
     onToggleActivation,
@@ -37,9 +66,9 @@ export function SourceActions({
     return (
         <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-                <h2 className="font-display text-lg font-semibold tracking-tight">来源与录入</h2>
+                <h2 className="font-display text-lg font-semibold tracking-tight">来源健康</h2>
                 <p className="text-sm text-muted-foreground">
-                    {sources.length === 0 ? "创建第一个 RSS 来源。" : "启用来源后可执行手动录入。"}
+                    {sources.length === 0 ? "创建第一个 RSS 来源。" : "启用来源后按计划自动抓取；停用即暂停。"}
                 </p>
             </div>
             {sources.length === 0 ? (
@@ -57,13 +86,22 @@ export function SourceActions({
                                 className="flex items-start justify-between gap-3 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
                             >
                                 <div className="flex min-w-0 flex-col gap-0.5">
-                                    <span className="truncate text-sm font-medium">{source.name}</span>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <Badge
+                                            variant={source.enabled ? "secondary" : "outline"}
+                                            className="shrink-0"
+                                        >
+                                            {source.enabled ? "已启用" : "已停用"}
+                                        </Badge>
+                                        <span className="truncate text-sm font-medium">{source.name}</span>
+                                    </div>
                                     <span
                                         title={`${source.kind} · ${source.sourceDefinitionRef}`}
                                         className="min-w-0 truncate text-xs text-muted-foreground"
                                     >
-                                        {source.enabled ? "已启用" : "已停用"} · {source.kind} · {source.sourceDefinitionRef}
+                                        {source.kind} · {source.sourceDefinitionRef}
                                     </span>
+                                    <span className="text-xs">{scheduleLine(source)}</span>
                                     <span className="text-xs text-muted-foreground">
                                         {formatLastRun(source.lastRunAt)}
                                     </span>

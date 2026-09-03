@@ -262,7 +262,7 @@ const statusSummaryControls = [
 
 const sourceActionsControls = [
     control("sourceName", "Source name", "text", "Cosmos fixture"),
-    control("state", "State", "select", "configured", ["configured", "empty", "disabled"]),
+    control("state", "State", "select", "configured", ["configured", "untimed", "empty", "disabled"]),
     control("enabled", "Enabled", "boolean", true),
 ] as const satisfies readonly LabControlDefinition[];
 
@@ -420,6 +420,7 @@ export const labComponentDefinitions = [
         controls: sourceActionsControls,
         scenes: [
             {id: "configured", label: "Configured", props: {sourceName: "Cosmos fixture", state: "configured", enabled: true}},
+            {id: "untimed", label: "Untimed", props: {sourceName: "Cosmos fixture", state: "untimed", enabled: true}},
             {id: "empty", label: "Empty", props: {sourceName: "Cosmos fixture", state: "empty", enabled: true}},
             {id: "disabled", label: "Disabled", props: {sourceName: "Cosmos fixture", state: "disabled", enabled: false}},
         ],

@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-09-02。
+2026-09-03。
 
 ## 组件定位
 
@@ -59,14 +59,21 @@ Asset download 中未被 client 封装的部分不由它承担。
   合并现有列表；匹配的 feed/run/job SSE 事件使用同一刷新路径，`snapshot_required` 只写 notice。
 - **SSE state**：`connecting`、`connected`、`unavailable` 三态 UI 指示；底层
   `HttpCosmosClient` 的 source error 只会把它置为 unavailable。
+- **来源健康**：侧栏看板把 Source 快照解释为一行行可读状态——启用徽章、定时语义
+  （启用+定时显示“每 N 自动抓取”；启用无定时显示“未配置定时，仅手动录入”；停用显示
+  “已停用，定时抓取暂停”或“已停用”）、上次运行时间与最近错误。它不新增合同，全部
+  投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/lastRunAt/lastError`。
 
 ## 外部行为
 首次挂载时页面将 `loading=true`，并行调用 `client.feed()`（或 active search）和
 `client.listSources()`；完成后展示 Feed/空态和 Source summary。随后打开 `/api/v1/events`
 EventSource，页面没有 `afterEventId`，因此 transport 不附带 `after` query，API 缺省 cursor
 按 `parseEventCursor(undefined)` 从 **0** 开始，而不是“服务端当前 cursor”。收到任意合法事件
-置为 connected；收到 `feed.updated.v1`、`run.succeeded.v1`、`run.failed.v1`、`job.succeeded.v1`、
-`job.retry_wait.v1` 或 `job.failed_terminal.v1` 时调用 refresh。收到 `snapshot_required` 只写
+置为 connected；收到 `feed.updated.v1`、`run.queued.v1`、`run.succeeded.v1`、`run.failed.v1`、
+`run.retry_wait.v1` 或 `job.failed_terminal.v1` 时调用 refresh（这些是存储层实际发出的
+类型：Job 成功没有独立事件，Run 终态覆盖它；Job 重试等待以 `run.retry_wait.v1` 表达）。
+收到 `run.failed.v1` 时额外写 notice “一次录入运行失败，已刷新“来源健康”；请在来源行内
+查看错误信息。”。收到 `snapshot_required` 只写
 notice “服务要求重新读取快照，正在刷新 Feed。”，当前代码不会因此调用 refresh；`onError` 把
 状态置为 unavailable。Effect cleanup 关闭 SSE source。
 
@@ -143,8 +150,10 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
   互斥显示最新状态文本。
 - 四个状态卡：服务器部署模式/health（有 health 时显示 service·workerStatus）、Source
   数与启用数、Prisma+SQLite 文案、SSE 已连接/正在连接/SSE 不可用。
-- Source actions：无 Source 显示“创建第一个 RSS 来源。”；每个来源行内提供启用/停用
-  按钮，enabled Source 另有手动录入按钮，disabled Source 的运行按钮禁用。
+- 来源健康看板：无 Source 显示“创建第一个 RSS 来源。”；每个来源行展示启用/停用徽章、
+  名称、`kind · sourceDefinitionRef`、定时语义行（“每 N 分钟自动抓取”/“未配置定时，仅手动
+  录入”/“已停用，定时抓取暂停”/“已停用”）、上次运行时间与最近错误（红色截断）；行内提供
+  启用/停用按钮，enabled Source 另有手动录入按钮，disabled Source 的运行按钮禁用。
 - Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；
   ready 时按 manifest 渲染字段，测试结果区显示 running/成功统计/失败原因/超时四态。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
@@ -202,7 +211,8 @@ macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚�
 4. `connecting → connected`：收到合法 SSE message；`connecting → unavailable`：
    EventSource error 或 malformed event（transport onError）。
 5. `connected/unavailable → refreshing`：只在匹配 feed/run/job event 时重新读取当前 query；
-   `snapshot_required` 仅写 notice “服务要求重新读取快照，正在刷新 Feed。”，不会自动 refresh。
+   `run.failed.v1` 同时写失败 notice；`snapshot_required` 仅写 notice “服务要求重新读取快照，
+   正在刷新 Feed。”，不会自动 refresh。
 6. `source-form-open → loading → ready/error`：打开表单读取 catalog；error 可重试并回到
    loading；ready 前不渲染表单字段。
 7. `probe idle → running → succeeded/failed/timeout`：测试配置提交后进入 running；
@@ -291,9 +301,12 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
    notice 包含 Run id；disabled Source 的录入按钮不可点击，且 API 对未启用 Source 的手动
    Run 返回 409 conflict。对同一来源点击停用，观察 activation command 以
    `...:disable` 幂等键发送；在列表过期时并发修改可复现 409 conflict 提示与列表刷新。
+   来源健康行内文案跟随状态变化：停用且配置定时显示“已停用，定时抓取暂停”，启用后显示
+   “每 30 分钟自动抓取”（与表单默认一致），无定时的启用来源显示“未配置定时，仅手动录入”。
 4. 输入 text/source/date 搜索，观察日期边界为 UTC 当日开始/结束、结果替换 Feed、保存
    nextCursor；点击加载更多，观察新 items 追加而不是覆盖。
-5. SSE 收到 `feed.updated.v1`、Run/Job 终态事件时观察 Feed 自动 refresh；收到
+5. SSE 收到 `feed.updated.v1`、`run.queued.v1` 或 Run/Job 终态事件时观察 Feed 自动 refresh；
+   收到 `run.failed.v1` 时观察失败 notice；收到
    `snapshot_required` 时只观察指定 notice、没有自动 refresh；触发 EventSource error 时观察
    “SSE 不可用”，且不发生自动重连。
 6. 点击 Story 后观察 Story title、最新正文、Entry、Revision、Observation 展开；Story
@@ -354,7 +367,8 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   状态与 probe 四态反馈；
 - `StatusSummary`：接收 health、source summary 和 connecting/connected/unavailable 状态；
 - `SourceActions`：接收 `SourceSnapshot[]`、run 回调与启用/停用回调（含进行中行 id），
-  展示空、disabled 和 configured 状态及行内启停按钮；
+  展示空、configured（含定时）、untimed（启用无定时）和 disabled 状态及行内启停按钮，
+  每行解释启用徽章、定时语义、上次运行与最近错误；
 - `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
 - `StoryPanel`：接收 `StoryDetail` 与关闭回调，展示 revision/observation 元数据。
 

@@ -154,15 +154,20 @@ export default function Home() {
                 if (event.type === "snapshot_required") {
                     setNotice("服务要求重新读取快照，正在刷新 Feed。");
                 }
+                // 只监听存储层实际发出的事件类型：Job 成功没有独立事件
+                // （Run 终态覆盖它），Job 重试等待以 run.retry_wait.v1 表达。
                 if (
                     event.type === "feed.updated.v1"
+                    || event.type === "run.queued.v1"
                     || event.type === "run.succeeded.v1"
                     || event.type === "run.failed.v1"
-                    || event.type === "job.succeeded.v1"
-                    || event.type === "job.retry_wait.v1"
+                    || event.type === "run.retry_wait.v1"
                     || event.type === "job.failed_terminal.v1"
                 ) {
                     void refreshRef.current();
+                }
+                if (event.type === "run.failed.v1") {
+                    setNotice("一次录入运行失败，已刷新“来源健康”；请在来源行内查看错误信息。");
                 }
             },
             onError: () => {
@@ -273,7 +278,7 @@ export default function Home() {
                 operationId: RSS_OPERATION_ID,
                 config: toSourceConfig(values),
             }));
-            setNotice("来源已保存，当前为停用状态；在“来源与录入”列表中启用后开始抓取。");
+            setNotice("来源已保存，当前为停用状态；在“来源健康”列表中启用后开始抓取。");
             setShowSourceForm(false);
             sourceForm.reset();
             await refresh();

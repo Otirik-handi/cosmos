@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
     assertJsonValue,
     canonicalJson,
@@ -254,15 +256,21 @@ export class PrismaWorkflowBackend implements WorkflowBackend {
         }
         assertImmutableRunFields(currentState, next);
         const normalized = normalizeState(next, expectedRevision + 1);
-        const updated = await this.prisma.workflowRun.updateMany({
-            where: {
-                id: next.runId,
-                kernelRevision: expectedRevision,
-                runLeaseOwner: lease.owner,
-                runLeaseToken: lease.leaseToken,
-                runLeaseExpiresAt: { gt: now },
-            },
-            data: toUpdateData(normalized, expectedRevision + 1),
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const result = await tx.workflowRun.updateMany({
+                where: {
+                    id: next.runId,
+                    kernelRevision: expectedRevision,
+                    runLeaseOwner: lease.owner,
+                    runLeaseToken: lease.leaseToken,
+                    runLeaseExpiresAt: { gt: now },
+                },
+                data: toUpdateData(normalized, expectedRevision + 1),
+            });
+            if (result.count === 1) {
+                await appendRunTerminalEvent(tx, normalized);
+            }
+            return result;
         });
         if (updated.count !== 1) {
             const actual = await this.prisma.workflowRun.findUnique({
@@ -313,12 +321,18 @@ export class PrismaWorkflowBackend implements WorkflowBackend {
         }
         assertImmutableRunFields(currentState, next);
         const normalized = normalizeState(next, expectedRevision + 1);
-        const updated = await this.prisma.workflowRun.updateMany({
-            where: {
-                id: next.runId,
-                kernelRevision: expectedRevision,
-            },
-            data: toUpdateData(normalized, expectedRevision + 1),
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const result = await tx.workflowRun.updateMany({
+                where: {
+                    id: next.runId,
+                    kernelRevision: expectedRevision,
+                },
+                data: toUpdateData(normalized, expectedRevision + 1),
+            });
+            if (result.count === 1) {
+                await appendRunTerminalEvent(tx, normalized);
+            }
+            return result;
         });
         if (updated.count !== 1) {
             const actual = await this.prisma.workflowRun.findUnique({
@@ -532,6 +546,10 @@ function toUpdateData(
         manifestHash: state.definition.manifestHash,
         updatedAt: parseDate(state.updatedAt, "updatedAt"),
         finishedAt: terminalFinishedAt(state),
+        // The product Source projection reads this column for source health
+        // lastError; a Kernel-state failure must persist its error text or
+        // the failure stays invisible outside the event stream.
+        errorMessage: state.error ?? null,
     };
 }
 
@@ -749,6 +767,58 @@ function terminalFinishedAt(state: WorkflowRunState): Date | null {
         || state.status === "cancelled"
         ? parseDate(state.updatedAt, "updatedAt")
         : null;
+}
+
+/** Kernel terminal status mapped to the product Run event vocabulary. */
+const RUN_TERMINAL_EVENTS = {
+    completed: { type: "run.succeeded.v1", status: "succeeded" },
+    failed: { type: "run.failed.v1", status: "failed" },
+    cancelled: { type: "run.cancelled.v1", status: "cancelled" },
+} as const;
+
+/**
+ * A durable Run terminal transition must emit the same auditable event the
+ * legacy `completeRun` path emits, or SSE consumers never learn about a
+ * successful run that saved zero entries. The idempotency key matches
+ * `appendWorkflowRunFailedEvent` in the host store, so a Kernel-state
+ * failure save and the store-level failure path share one event.
+ */
+async function appendRunTerminalEvent(
+    tx: Prisma.TransactionClient,
+    state: WorkflowRunState,
+): Promise<void> {
+    if (state.status !== "completed" && state.status !== "failed" && state.status !== "cancelled") {
+        return;
+    }
+    const terminal = RUN_TERMINAL_EVENTS[state.status];
+    const idempotencyKey = `workflow-run:${state.runId}:${terminal.status}`;
+    const existing = await tx.domainEvent.findFirst({
+        where: { workflowRunId: state.runId, idempotencyKey },
+    });
+    if (existing) {
+        return;
+    }
+    try {
+        await tx.domainEvent.create({
+            data: {
+                eventId: randomUUID(),
+                type: terminal.type,
+                version: "v1",
+                payloadJson: canonicalJson({
+                    runId: state.runId,
+                    status: terminal.status,
+                    error: state.error ?? null,
+                }),
+                aggregateType: "WorkflowRun",
+                aggregateId: state.runId,
+                runId: null,
+                workflowRunId: state.runId,
+                idempotencyKey,
+            },
+        });
+    } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+    }
 }
 
 function requireString(

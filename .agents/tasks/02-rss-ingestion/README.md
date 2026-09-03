@@ -308,6 +308,34 @@ SourceInstance
   4. 环境说明：本机 4310/4312 端口被 QQ 进程占用，`bun run dev` 的端口发现会自动跳到可用端口，无需手动配置；诊断过程中曾误将 curl 探测打到 QQ 的本地服务上（得到无意义 HTTP 200），已用 API 日志证据纠正。
   5. 修复后门禁复跑：全仓 `typecheck` 0 错误、全量 `bun run test` 36 文件/286 用例通过、`bun run docs:check` 302 文件通过、`git diff --check` 干净。Node E2E 与浏览器 E2E 未受影响（未改动运行时序）。
 
+### 切片：两块固定看板与来源健康（2026-09-03，实施顺序第 5 步）
+
+- **生命周期阶段**：实施方案已与维护者对齐并拍板三项决策——实施在 `.worktree/boards-source-health` 分支 `feat/t02-boards-source-health` 进行；durable 成功终态事件补发纳入本切片；看板布局沿用现有骨架（主栏 Feed + 侧栏健康看板）做增强。本切片达成“配置与看板”Checkpoint 的 Web/调度可解释部分。
+- **连贯目标**：让用户在 Web 上从两块固定最小看板（“最新内容 Feed” + “来源健康”）读到 Worker 抓取结果与每个来源的调度健康；确认只有已启用且配置了定时的 Source 才参与定时调度，并把 SSE/Run/Job 状态解释为用户可读的看板文案。
+- **可观察验收**（最多三条）：
+  1. 来源健康看板逐行解释启用徽章、定时语义（启用+定时“每 N 分钟自动抓取”、启用无定时“未配置定时，仅手动录入”、停用“已停用，定时抓取暂停”或“已停用”）、上次运行时间与最近错误；启停与手动录入仍在行内完成。全部投影自既有 `SourceSnapshot` 字段，无合同新增。
+  2. 停用/未配置定时的来源不产生 schedule Run（调度循环提取为 `apps/worker/src/scheduling.ts` 并以 focused 测试钉住）；一个来源排队失败不影响其它来源。
+  3. Web 只监听存储层实际发出的 SSE 事件类型（`run.queued.v1`、`run.retry_wait.v1` 等修正后的清单）；durable Workflow Run 到达终态时补发 `run.succeeded.v1`/`run.failed.v1`/`run.cancelled.v1`（与 legacy `completeRun` 同类型同 payload，幂等键 `workflow-run:<id>:<status>`），零新增内容的成功 Run 也会刷新来源健康。
+- **依赖**：Task 02 配置优先切片（`sourceDefinitionRef` 合同、activation command）、schema 驱动 Web 配置流程切片（表单定时字段、行内启停）、Worker durable Ingest 与 `IngestWorkflowControlService.enqueue`、存储层 domainEvent 复合唯一约束 `(workflowRunId, idempotencyKey)`。
+- **受影响合同**：无新增/修改的公开 DTO 或 Prisma schema/migration。事件合同 `run.succeeded.v1`/`run.failed.v1`/`run.cancelled.v1` 的 payload 与既有 legacy `completeRun` 一致（`{runId, status, error}`），只是 durable 路径此前缺失发射；`appendWorkflowRunFailedEvent` 既有幂等键 `workflow-run:<id>:failed` 保持不变并被复用。
+- **实现偏差**：方案原计划只修 Web 幻影监听；实施时确认 durable 路径成功终态完全无事件（失败仅有 host store 的 `failWorkflowRun`），零新增成功会导致“上次失败红字不消失”，经维护者批准把终态事件补发纳入本切片。发射点在 `PrismaWorkflowBackend` 的两个 Kernel 状态保存路径（事务内、仅 `updated.count===1` 时追加），复用 host store 的幂等键约定防重放；调度门禁同时从 `main.ts` 内联闭包提取为可测模块。
+- **实现补充（dev 启动迁移，2026-09-03 同日）**：维护者在本 worktree 实测 `bun run dev` 再次遇到页面 500——新 worktree 无 `.cosmos` 数据根，`scripts/dev.ts` 直接拉起 API/Worker，API 启动自动创建只含 FTS5 影子表的 SQLite（无业务表、无 `_prisma_migrations`），此后 `migrate deploy` 以“schema 非空且无基线”拒绝（与 2026-09-02 诊断同源）。修复分两半：坏库（仅影子表，已核实无业务数据）改名保留为 `cosmos.sqlite.bak-shadow-only-20260903` 后重新 `db:migrate`；`scripts/dev.ts` 在拉起任何服务前先执行 `scripts/prisma.ts migrate deploy`（数据根环境一致，失败即拒绝启动），使每个新 worktree 的首次 dev 都在已迁移库上运行。
+- **实现补充（来源健康 lastError 投影修复，2026-09-03 同日）**：维护者用两个 404 的 RSS URL 实测发现：页面出现“录入运行失败”提示，但来源健康没有红色错误行。诊断（读隔离库证据）：两条 durable failed run 的 kernel state 含 `state.error="RSS fetch failed with HTTP 404."`、本切片补发的 `run.failed.v1` payload 也携带该错误，但 `workflowRun.errorMessage` 为 `null`——kernel 失败终态只经 `PrismaWorkflowBackend` 状态保存更新 status/finishedAt，从不写 `errorMessage`（只有 dead-letter 恢复路径的 `failWorkflowRun` 会写），而来源健康 `lastError` 读的正是该字段。这是 Task 07 durable 路径合入以来的预置投影缺口，此前失败连事件都没有，故从未暴露。修复：`toUpdateData` 持久化 `state.error ?? null`（非失败保存保持 null，不会让运行中来源误显错误）；行为测试锚定“失败行写错误文本、运行中行保持 null”。修复前已存在的旧失败 run 行不回填，重新录入或下一轮定时抓取即会写入。
+- **验证补充（2026-09-03 修复后复跑）**：`bunx vitest run packages/storage-prisma` 4 文件/63 用例通过（含新增 errorMessage 断言；过程中一轮整目录并行出现 4 个用例失败且单文件复跑全绿、目录复跑全绿，与 PROJECT-STATUS 记录的本机 SQLite 并发抖动特征一致，未复现第二次）；全仓 `typecheck`、全量 `bun run test` 37 文件/292 用例通过。真实浏览器复验（重启 dev 后重跑坏 URL 来源）由维护者执行。
+- **预计核心文件**：`apps/worker/src/scheduling.ts`（新）、`apps/worker/src/scheduling.test.ts`（新）、`apps/worker/src/main.ts`、`packages/storage-prisma/src/workflow-backend.ts`、`packages/storage-prisma/src/workflow-backend.test.ts`、`apps/web/src/app/page.tsx`、`apps/web/src/components/cosmos/source-actions.tsx`、`apps/web/src/component-lab/{registry,product-fixtures}.tsx`、`e2e/browser/ingest.spec.ts`、`docs/spec/interfaces/0005-web-client.md`。
+- **验证层级**：worker scheduling focused；storage-prisma focused（终态事件行为测试）；全仓 `typecheck`、`test`；浏览器 E2E（新增健康语义断言）；component-lab 浏览器回归；Node 进程 E2E 回归；`docs:check`、`git diff --check`。真实公网 RSS 定时抓取、Docker、发布部署不在本切片（未运行）。
+- **验证记录（2026-09-03，全部实际运行）**：
+  - `bun run typecheck`（全仓）：通过。
+  - focused：`bunx vitest run apps/worker/src/scheduling.test.ts` 3 用例通过（停用/无定时不排队、间隔到期排队、单来源失败隔离）；`bunx vitest run packages/storage-prisma` 4 文件/63 用例通过（含 3 条新终态事件测试：成功发射、失败映射共享幂等键、取消映射与租约路径、重放防重、非终态不发射）。
+  - 全量 `bun run test`：37 文件 / 292 用例通过，无既有 SQLite 抖动复现。
+  - `bun run build`：通过（packages、API、Worker、Next standalone）。
+  - `COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser`：8/8 通过；ingest 流程新增两条断言——保存停用后来源健康显示“已停用，定时抓取暂停”，行内启用后显示“每 30 分钟自动抓取”；console/page error/request failure 仍为 0。
+  - `COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser:component-lab`：13/13 通过（SourceActions 新增 untimed 场景）。
+  - `BUN_BINARY=<真实 bun.exe> bun run test:e2e`：4 文件 / 4 场景通过（Node 进程 E2E 无回归）。
+  - `bun run docs:check`：通过，checkedFiles=304；`git diff --check` 干净。
+  - 未运行：真实公网 RSS 定时抓取、Docker/Compose（本机无 Docker CLI）、Windows Node smoke（`scripts/smoke-node.ps1`）、发布部署。
+- **Checkpoint 状态（配置与看板）**：配置入口、API、Worker 调度与两块看板已在隔离环境（受控本地 RSS、隔离 Data Root）形成可观察链路，focused/integration/browser 门禁分别通过；真实 RSS URL 产品 E2E 仍未通过，fixture/受控 HTTP 结果不写成应用可用。
+
  ### 实施顺序与检查点（复用本 Task，不新增 Task 编号）
 1. 先以 contracts/API focused tests 固定 `sourceDefinitionRef`、`operationId`、revisionId、保存默认停用、完整配置替换、独立启用和错误映射；第 4–7 项实现建议先保持待冻结，不修改媒体公共合同。
 2. 实现配置 API/持久化垂直切片：按显式 manifest 映射保存 Source，迁移旧 kind 前先预检，保存默认停用、独立启用/停用、完整配置替换、过期 revision 拒写和同步配置校验；产品路径只开放 `rss`，测试必须不写入事实数据。

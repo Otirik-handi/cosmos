@@ -19,6 +19,7 @@ import { createWorkerAdminServer, type ComponentHealth, type WorkerAdminServer }
 import { parseWorkerRuntimeConfig } from "./config.js";
 import { WorkerRuntime } from "./runtime.js";
 import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
+import { createScheduleQueue } from "./scheduling.js";
 import { createWorkflowHost } from "./workflow-host.js";
 
 async function bootstrap(): Promise<void> {
@@ -54,42 +55,6 @@ async function bootstrap(): Promise<void> {
             version: config.version,
         });
         workerAdminServer?.service.markHeartbeat();
-    };
-
-    const queueScheduledWorkflowSources = async (
-        control: IngestWorkflowControlService,
-        now = new Date(),
-    ): Promise<void> => {
-        const sources = await repository.listSources();
-        for (const source of sources) {
-            if (!source.enabled || !source.config.scheduleIntervalMs) continue;
-            const interval = source.config.scheduleIntervalMs;
-            const lastRunAt = source.lastRunAt
-                ? Date.parse(source.lastRunAt)
-                : Number.NEGATIVE_INFINITY;
-            if (Number.isFinite(lastRunAt) && now.getTime() - lastRunAt < interval) continue;
-            const bucket = Math.floor(now.getTime() / interval);
-            try {
-                const envelope = await control.enqueue({
-                    sourceId: source.id,
-                    triggerKind: "schedule",
-                    idempotencyKey: `schedule:${source.id}:${bucket}`,
-                });
-                logger.child({
-                    runId: envelope.runId,
-                    sourceId: source.id,
-                }).info("workflow.run.queued", {
-                    triggerKind: "schedule",
-                    status: envelope.status,
-                });
-            } catch (error) {
-                // One broken source must not prevent another source or any
-                // downstream lane from being polled in this cycle.
-                logger.child({ sourceId: source.id }).error("workflow.run.queue_failed", {
-                    triggerKind: "schedule",
-                }, error);
-            }
-        }
     };
 
     try {
@@ -142,6 +107,13 @@ async function bootstrap(): Promise<void> {
                     return source ?? null;
                 },
                 getCheckpointSnapshot: (sourceId) => repository.getCheckpointSnapshot(sourceId),
+            })
+            : null;
+        const scheduleQueue = workflowControl
+            ? createScheduleQueue({
+                listSources: () => repository.listSources(),
+                queue: workflowControl,
+                logger,
             })
             : null;
         const worker = new IngestionWorker(repository, ingestion, {
@@ -245,9 +217,7 @@ async function bootstrap(): Promise<void> {
             config,
             instanceId,
             heartbeat,
-            queueScheduledWorkflowSources: workflowControl
-                ? () => queueScheduledWorkflowSources(workflowControl!)
-                : async () => undefined,
+            queueScheduledWorkflowSources: scheduleQueue ?? (async () => undefined),
             activeAttemptCount: () => workerAdminServer?.service.status().activeAttemptCount ?? 0,
         });
 

@@ -37,13 +37,17 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     // 保存只创建停用 Source，启用是列表行内的独立动作。
     await page.getByRole("button", { name: "保存来源" }).click();
     await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
-    const ingestSection = page.getByRole("heading", { name: "来源与录入" }).locator("..").locator("..");
-    const enableButton = ingestSection.getByRole("button", { name: "启用 浏览器 RSS 来源", exact: true });
+    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    // 停用来源在健康看板上明确“不参与调度”，即使它配置了定时。
+    await expect(healthSection.getByText("已停用，定时抓取暂停")).toBeVisible();
+    const enableButton = healthSection.getByRole("button", { name: "启用 浏览器 RSS 来源", exact: true });
     await expect(enableButton).toBeVisible();
     await enableButton.click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
+    // 启用后健康看板解释定时计划：表单默认 30 分钟。
+    await expect(healthSection.getByText("每 30 分钟自动抓取")).toBeVisible();
 
-    const runButton = ingestSection.getByRole("button", { name: "浏览器 RSS 来源", exact: true });
+    const runButton = healthSection.getByRole("button", { name: "浏览器 RSS 来源", exact: true });
     await expect(runButton).toBeEnabled();
     await runButton.click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });

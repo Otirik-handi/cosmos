@@ -188,7 +188,112 @@ describe("PrismaWorkflowBackend", () => {
             WorkflowBackendConflictError,
         );
     });
+
+    it("emits one terminal Run event per terminal Kernel-state transition", async () => {
+        const backend = await createBackend();
+        const initial = sampleRun("terminal-event");
+        await backend.createRun(initial);
+
+        // A non-terminal save must not emit a terminal Run event, and a
+        // running Run must not carry a stale error message.
+        await backend.saveRun({
+            ...initial,
+            updatedAt: "2026-08-13T00:00:01.000Z",
+        }, 0);
+        await expect(terminalEvents(backend.prisma, initial.runId)).resolves.toHaveLength(0);
+        await expect(backend.prisma.workflowRun.findUnique({ where: { id: initial.runId } }))
+            .resolves.toMatchObject({ status: "running", errorMessage: null });
+
+        const saved = await backend.saveRun({
+            ...initial,
+            status: "completed",
+            result: { kind: "inline", value: { ok: true } },
+            updatedAt: "2026-08-13T00:00:02.000Z",
+        }, 1);
+        expect(saved.status).toBe("completed");
+        const succeeded = await terminalEvents(backend.prisma, initial.runId);
+        expect(succeeded).toHaveLength(1);
+        expect(succeeded[0]).toMatchObject({
+            type: "run.succeeded.v1",
+            aggregateType: "WorkflowRun",
+            idempotencyKey: `workflow-run:${initial.runId}:succeeded`,
+        });
+        expect(JSON.parse(succeeded[0]?.payloadJson ?? "{}")).toEqual({
+            runId: initial.runId,
+            status: "succeeded",
+            error: null,
+        });
+
+        // A replayed save targeting the consumed revision conflicts and must
+        // not append a second terminal event.
+        await expect(backend.saveRun({
+            ...initial,
+            status: "completed",
+            result: { kind: "inline", value: { ok: true } },
+            updatedAt: "2026-08-13T00:00:03.000Z",
+        }, 1)).rejects.toBeInstanceOf(WorkflowBackendConflictError);
+        await expect(terminalEvents(backend.prisma, initial.runId)).resolves.toHaveLength(1);
+    });
+
+    it("maps Kernel failure states to the shared run.failed event", async () => {
+        const backend = await createBackend();
+        const initial = sampleRun("terminal-failure");
+        await backend.createRun(initial);
+        await backend.saveRun({
+            ...initial,
+            status: "failed",
+            error: "source fetch failed",
+            updatedAt: "2026-08-13T00:00:02.000Z",
+        }, 0);
+
+        const events = await terminalEvents(backend.prisma, initial.runId);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            type: "run.failed.v1",
+            idempotencyKey: `workflow-run:${initial.runId}:failed`,
+        });
+        expect(JSON.parse(events[0]?.payloadJson ?? "{}")).toEqual({
+            runId: initial.runId,
+            status: "failed",
+            error: "source fetch failed",
+        });
+        // The source-health projection reads this column; the kernel-failure
+        // path must persist the error text on the run row itself.
+        await expect(backend.prisma.workflowRun.findUnique({ where: { id: initial.runId } }))
+            .resolves.toMatchObject({ status: "failed", errorMessage: "source fetch failed" });
+    });
+
+    it("maps Kernel cancellations to run.cancelled.v1", async () => {
+        const backend = await createBackend();
+        const initial = sampleRun("terminal-cancel");
+        await backend.createRun(initial);
+        const expiresAt = new Date("2026-08-13T01:00:00.000Z");
+        await backend.prisma.workflowRun.update({
+            where: { id: initial.runId },
+            data: {
+                runLeaseOwner: "worker",
+                runLeaseToken: "token",
+                runLeaseExpiresAt: expiresAt,
+            },
+        });
+        await backend.saveRunWithLease({
+            ...initial,
+            status: "cancelled",
+            updatedAt: "2026-08-13T00:00:02.000Z",
+        }, 0, { runId: initial.runId, leaseToken: "token", owner: "worker" }, new Date("2026-08-13T00:00:01.000Z"));
+
+        const events = await terminalEvents(backend.prisma, initial.runId);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({ type: "run.cancelled.v1" });
+    });
 });
+
+async function terminalEvents(client: PrismaClient, runId: string) {
+    return client.domainEvent.findMany({
+        where: { workflowRunId: runId, type: { in: ["run.succeeded.v1", "run.failed.v1", "run.cancelled.v1"] } },
+        orderBy: { sequence: "asc" },
+    });
+}
 
 async function createBackend(): Promise<PrismaWorkflowBackend> {
     const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-backend-"));
