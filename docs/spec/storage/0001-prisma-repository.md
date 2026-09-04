@@ -116,7 +116,7 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 | `Observation` | Source/run/workflow、ingestCommandId 唯一、entry、external key/revision、locator、内容/时间/Blob/metrics | Source 删除级联；Run/Workflow/Entry 关联 SET NULL；`(sourceInstanceId,runId,externalKey)` 唯一 |
 | `Entry` | `(sourceInstanceId,canonicalExternalId)` 唯一、currentRevisionId 唯一、storyId、metricsJson | 拥有 revisions/observations；Source 删除级联，Story 删除 SET NULL |
 | `EntryRevision` | `(entryId,revision)` 唯一、title/summary/content/fingerprint/url/contentKind/Publisher/Temporal/createdAt | Entry 删除级联；Asset 从属于修订 |
-| `Asset` | revision、kind/status、sourceUrl/storageKey/mimeType/byteSize/error | EntryRevision 删除级联 |
+| `Asset` | revision、kind/status、sourceUrl/storageKey/mimeType/byteSize/errorMessage | EntryRevision 删除级联 |
 | `Story`/`StoryRevision` | Story id/kind/subtype/currentRevisionId；Revision title/summary | Story 拥有 revisions/entries；Revision 删除级联 |
 | `WorkflowRun`/`WorkflowCompletion` | 同库存在，但 kernel state、Run lease、Activity Completion 字段由后续 Host specs 拥有 | 本组件不定义其状态机 |
 

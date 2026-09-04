@@ -33,7 +33,7 @@ Connector 先把来源数据交给本组件的纯函数生成 `NormalizedIngestI
 - **ContentKind** 是领域语义词汇：`post`、`article`、`video`、`audio`、`image`、`comment`、`listing`。这些值与[公共合同](../contracts/0001-public-contracts.md)的 wire enum 对齐，但本文件只规定 domain 如何消费它们，不复制 Zod 校验。
 - **StoryKind** 固定为 `event`、`document`、`media`、`thread`。
 - **PublisherKind** 是领域语义词汇：`user`、`channel`、`subreddit`、`official-account`、`org`、`unknown`；wire 形状和边界解析由[公共合同](../contracts/0001-public-contracts.md)拥有。
-- **NormalizedAssetInput** 是领域侧附件输入：`kind`、可空 `sourceUrl`、`status`（`saved`/`metadata_only`/`skipped`/`failed`）、可空 `mimeType`、可空 `byteSize` 和 `content: Uint8Array | null`。这里的 bytes 是领域运行时值，不是 Workflow JSON 字段；Workflow 中的 BlobRef wire shape 只由[公共合同](../contracts/0001-public-contracts.md)定义，bytes 的 hash/containment 校验由[FileBlobStore](../storage/0005-file-blob-store.md)负责。
+- **NormalizedAssetInput** 是领域侧附件输入：`kind`、可空 `sourceUrl`、`status`（`saved`/`metadata_only`/`skipped`/`failed`）、可空 `mimeType`、可空 `byteSize`、可选可空 `errorMessage`（降级原因）和 `content: Uint8Array | null`。这里的 bytes 是领域运行时值，不是 Workflow JSON 字段；Workflow 中的 BlobRef wire shape 只由[公共合同](../contracts/0001-public-contracts.md)定义，bytes 的 hash/containment 校验由[FileBlobStore](../storage/0005-file-blob-store.md)负责。
 - **NormalizedIngestItem** 包含可选可空 `externalId`、`title`、可空 `summary`、`contentText`、可空 `webUrl`、`kind`、可空 `publisher`、可空 `metrics`、可空 `publishedAt`、可选可空 `updatedAt`、`sourceLocator: Record<string, unknown>`、`rawPayload`、可选 `rawPayloadMimeType` 和只读资产数组。URL 可以为 null；没有 URL 仍可凭 externalId 或 sourceLocator 建立身份。进入 Workflow JSON 前由 contracts schema 做 wire 校验，domain 不再定义第二套边界规则。
 
 ### Publisher

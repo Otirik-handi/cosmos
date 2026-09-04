@@ -44,6 +44,8 @@ Node E2E 通过 `scripts/e2e/helpers.ts` 为每个场景创建 `.agent/tmp/<name
 
 默认 ingest、scheduling、浏览器和 Windows smoke 通过受控本地 HTTP RSS 服务验证产品 `source.rss@1/fetch + feedUrl` 合同；Source 创建默认停用，测试必须再调用 activation command。`fixture-rss` 只保留在 Connector/迁移层测试，不得作为 Product API 或 Web 配置入口。
 
+媒体获取测试使用 `fixtures/rss/basic.xml`（含不可达 enclosure 触发 `skipped`）和 `fixtures/rss/media-av.xml`（音视频 `metadata_only`）覆盖降级分支。Worker 通过 `COSMOS_MEDIA_ALLOWED_HOSTS` 环境变量放行测试媒体源，默认为空即拦截私网；该变量仅用于测试环境，不进入产品 Source 配置（ADR-0005）。
+
 浏览器 Stack 由 `scripts/e2e/web-stack.ts` 管理隔离 API/Worker/Next 进程。动态 API 端口在 Next production build 前注入，Web 使用 same-origin `/api` rewrite；需要先安装 Chromium：
 
 ```text
