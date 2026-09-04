@@ -119,6 +119,60 @@ describe("createScheduleQueue", () => {
         expect(queue.calls[0]?.sourceId).toBe("due-again");
     });
 
+    it("queues due Bilibili and AI HOT sources for scheduled ingestion", async () => {
+        const queue = makeQueue(async () => ({ runId: "run-1", status: "queued" }));
+        const logger = makeLogger();
+        const tick = createScheduleQueue({
+            listSources: async () => [
+                makeSource({
+                    id: "bilibili-hot",
+                    name: "Scheduled Bilibili Hot",
+                    sourceDefinitionRef: "source.bilibili@1",
+                    connectorId: "bilibili",
+                    kind: "bilibili",
+                    config: {
+                        schemaVersion: 1,
+                        mode: "hot",
+                        limit: 20,
+                        scheduleIntervalMs: 60_000,
+                    },
+                }),
+                makeSource({
+                    id: "aihot",
+                    name: "Scheduled AI HOT",
+                    sourceDefinitionRef: "source.aihot@1",
+                    connectorId: "aihot",
+                    kind: "aihot",
+                    config: {
+                        schemaVersion: 1,
+                        scheduleIntervalMs: 120_000,
+                    },
+                }),
+            ],
+            queue,
+            logger,
+        });
+
+        await tick(NOW);
+
+        expect(queue.calls).toEqual([
+            {
+                sourceId: "bilibili-hot",
+                triggerKind: "schedule",
+                idempotencyKey: `schedule:bilibili-hot:${Math.floor(NOW.getTime() / 60_000)}`,
+            },
+            {
+                sourceId: "aihot",
+                triggerKind: "schedule",
+                idempotencyKey: `schedule:aihot:${Math.floor(NOW.getTime() / 120_000)}`,
+            },
+        ]);
+        expect(logger.events).toEqual([
+            "workflow.run.queued",
+            "workflow.run.queued",
+        ]);
+    });
+
     it("continues queuing later sources when one source fails to enqueue", async () => {
         const queue = makeQueue(async (input) => {
             if (input.sourceId === "broken") {

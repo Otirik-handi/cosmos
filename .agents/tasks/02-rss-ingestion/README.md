@@ -379,6 +379,7 @@ SourceInstance
 - 真实源验收：`COSMOS_ALLOW_REAL_NETWORK=true bun run scripts/e2e/real-source.ts bilibili-hot` 通过；Run `run_3411f039-9669-4191-a043-03c33f59688d` 成功，API 返回 `itemCount = 20`。
 - 首次 Bilibili feed 真实源验收因 OpenCLI profile 未登录 Bilibili 返回空数组（`itemCount = 0`）；通过 `opencli bilibili login` 完成登录后复跑通过。
 - 真实源验收：`COSMOS_ALLOW_REAL_NETWORK=true bun run scripts/e2e/real-source.ts bilibili` 通过；Run `run_f1c4cadc-84fe-4a1e-a6dc-281e8f63a394` 成功，API 返回 `itemCount = 20`。
+- Bilibili/AI HOT 调度 focused 测试：`bunx vitest run apps/worker/src/scheduling.test.ts` 通过（4 用例），覆盖两源到期后按各自 interval 进入 scheduled Run 队列。
 
 - `bun install`：通过。
 - `bun run db:validate`、`bun run db:generate`：通过，Prisma schema 合法并生成 Prisma Client 6.19.3。
