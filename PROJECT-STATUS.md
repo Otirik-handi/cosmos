@@ -148,7 +148,7 @@ Task 02 实施顺序第 5 步“两块固定看板与来源健康”（2026-09-0
 
 媒体边界已完成设计评审与实现（2026-09-03~04）：设计接受为 [`docs/proposals/media-boundary-v1.md`](docs/proposals/media-boundary-v1.md)，稳定决定沉淀于 [`docs/adr/0005-media-boundary-v1.md`](docs/adr/0005-media-boundary-v1.md)（PRD ING-008 与架构 §6.4 已同步）；实现经分支 `feat/t02-media-boundary` 合入 master（2026-09-04，push fork 完成）。本地门禁全绿：全仓 typecheck、全量 38 文件/320 用例、Node E2E 4/4、浏览器 E2E 8/8、组件实验室 13/13、packages 构建。维护者手动实测：真实 RSS 图片下载与站内渲染成功；音视频受控源与国内真实音频源（喜马拉雅剧谈社）验证"仅元数据+外链"符合预期。
 
-仍待执行：**断网产品验收**（用户已延后；验收清单已起草待用户批准，按"用户写步骤/批准清单，agent 实测"方式执行）；真实双源（爱范儿+阮一峰）联网媒体验收（需网络授权）；docs/spec 同步（跟随断网验收收口）；Docker/Compose 与发布部署仍未运行。
+已执行（2026-09-04）：真实双源（爱范儿 + 阮一峰）联网媒体验收通过——隔离栈实测两源均成功抓取并保存本地图片（爱范儿 79 saved + 332 预算降级 skipped；阮一峰 100 saved），saved Asset 可经受控下载端点回读字节。仍待执行：**断网产品验收**（用户已延后；验收清单已起草待用户批准，按"用户写步骤/批准清单，agent 实测"方式执行）；docs/spec 同步（跟随断网验收收口）；Docker/Compose 与发布部署仍未运行。
 
 ## 已完成
 
