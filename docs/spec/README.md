@@ -173,7 +173,7 @@
 ### 真实来源与完整产品范围
 
 - **真实 RSS：** fixture/controlled RSS 行为已通过；本轮未运行 `COSMOS_REAL_RSS_URL` 指向的真实外网采集。
-- **真实 Bilibili/OpenCLI：** Connector 代码和输入错误分类存在；本轮未运行真实 OpenCLI、doctor/profile、Bilibili 账号或限流链路。
+- **真实 Bilibili/OpenCLI：** 2026-09-04 Bilibili hot real-source E2E 已通过（隔离栈实测，Run 成功且 `itemCount=20`）；feed/登录态、限流和长期稳定性不能从该结果推断。
 - **完整 Ingest parity/产品全量范围：** 固定 Workflow 主链已接线；完整 parity、Source 删除、完整计划/诊断、全部未来 Knowledge/Research/Delivery 仍不能从规格索引推断。
 
 ### Recovery、fencing 与进程生命周期

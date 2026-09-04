@@ -376,6 +376,7 @@ SourceInstance
 - Durable workflow 修复：`bunx vitest run packages/storage-prisma/src/workflow-backend.test.ts packages/storage-prisma/src/workflow-host-store.test.ts packages/application/src/workflow-host-runtime.test.ts packages/worker/src/workflow-ingest.test.ts` 通过（4 个文件 / 64 个用例）。
 - `bun run typecheck:storage`、`bun run build:storage`、`bun run build:worker`、`bun run build:api`：通过。
 - 真实源验收：`COSMOS_ALLOW_REAL_NETWORK=true bun run test:real:aihot` 通过；Run 成功，API 返回 `itemCount = 50`。
+- 真实源验收：`COSMOS_ALLOW_REAL_NETWORK=true bun run scripts/e2e/real-source.ts bilibili-hot` 通过；Run `run_3411f039-9669-4191-a043-03c33f59688d` 成功，API 返回 `itemCount = 20`。
 
 - `bun install`：通过。
 - `bun run db:validate`、`bun run db:generate`：通过，Prisma schema 合法并生成 Prisma Client 6.19.3。
