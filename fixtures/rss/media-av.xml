@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Cosmos 音视频本地测试源（受控）</title>
+        <link>https://example.test/media-av</link>
+        <description>仅用于验证音视频“仅记录元数据 + 原文外链”分支；v1 不下载音视频本体。</description>
+        <atom:link href="http://127.0.0.1:8900/media-av.xml" rel="self" type="application/rss+xml"/>
+        <item>
+            <guid>media-av-video-1</guid>
+            <title>视频示例：开源发布会录像（页面外链）</title>
+            <link>https://www.bilibili.com/video/BV1GJ411x7h7</link>
+            <description>该条目只携带 video 媒体标签，预期投影为视频且仅保存元数据，外链保留 B 站页面。</description>
+            <pubDate>Fri, 04 Sep 2026 08:00:00 GMT</pubDate>
+            <media:content url="https://www.bilibili.com/video/BV1GJ411x7h7" medium="video"/>
+        </item>
+        <item>
+            <guid>media-av-audio-1</guid>
+            <title>音频示例：剧谈社 Vol.91（原文外链）</title>
+            <link>https://www.ximalaya.com/sound/68094003</link>
+            <description>该条目携带 audio enclosure，预期投影为音频且仅保存元数据，外链保留喜马拉雅声音页。</description>
+            <pubDate>Fri, 04 Sep 2026 07:00:00 GMT</pubDate>
+            <enclosure url="https://www.ximalaya.com/sound/68094003" type="audio/x-m4a" length="0"/>
+        </item>
+    </channel>
+</rss>

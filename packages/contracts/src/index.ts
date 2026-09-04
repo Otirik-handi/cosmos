@@ -176,6 +176,8 @@ export const assetSnapshotSchema = z.object({
     storageKey: z.string().nullable(),
     mimeType: z.string().nullable(),
     byteSize: z.number().nullable(),
+    /** 面向用户的降级原因；非 saved 状态可能携带（ADR-0005）。 */
+    errorMessage: z.string().max(500).nullable().optional(),
 });
 export type AssetSnapshot = z.infer<typeof assetSnapshotSchema>;
 

@@ -9,6 +9,7 @@ import {
     actionKindSchema,
     actionManifestSchema,
     actionRefSchema,
+    assetSnapshotSchema,
     blobRefSchema,
     executionPlacementSchema,
     jobKindSchema,
@@ -206,5 +207,60 @@ describe("Action contracts", () => {
             timeoutMs: 30_000,
             retryPolicy: null,
         })).not.toHaveProperty("inputSchema");
+    });
+});
+
+describe("asset errorMessage contract (ADR-0005)", () => {
+    it("accepts a degraded asset with a bounded errorMessage", () => {
+        const asset = normalizedAssetInputSchema.parse({
+            kind: "image",
+            sourceUrl: "https://example.test/a.png",
+            status: "skipped",
+            mimeType: null,
+            byteSize: null,
+            blobRef: null,
+            errorMessage: "图片超过单文件大小上限（10MB）",
+        });
+        expect(asset.errorMessage).toBe("图片超过单文件大小上限（10MB）");
+    });
+
+    it("keeps errorMessage optional for saved assets", () => {
+        const saved = normalizedAssetInputSchema.parse({
+            kind: "image",
+            sourceUrl: "https://example.test/a.png",
+            status: "saved",
+            mimeType: "image/png",
+            byteSize: 12,
+            blobRef: {
+                key: "sha256/ab/123",
+                hash: "sha256:123",
+                byteSize: 12,
+                mediaType: "image/png",
+            },
+        });
+        expect(saved.errorMessage).toBeUndefined();
+    });
+
+    it("surfaces errorMessage on the public asset snapshot", () => {
+        const snapshot = assetSnapshotSchema.parse({
+            id: "asset-1",
+            kind: "image",
+            status: "failed",
+            sourceUrl: "https://example.test/a.png",
+            storageKey: null,
+            mimeType: null,
+            byteSize: null,
+            errorMessage: "图片下载超时",
+        });
+        expect(snapshot.errorMessage).toBe("图片下载超时");
+        expect(assetSnapshotSchema.parse({
+            id: "asset-2",
+            kind: "image",
+            status: "saved",
+            sourceUrl: "https://example.test/a.png",
+            storageKey: "sha256/ab/123",
+            mimeType: "image/png",
+            byteSize: 12,
+        }).errorMessage).toBeUndefined();
     });
 });

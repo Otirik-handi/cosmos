@@ -94,6 +94,8 @@ export interface NormalizedAssetInput {
     mimeType: string | null;
     byteSize: number | null;
     content: Uint8Array | null;
+    /** 面向用户的降级原因；仅非 saved 状态填写（ADR-0005）。 */
+    errorMessage?: string | null;
 }
 
 export interface NormalizedIngestItem {

@@ -195,6 +195,8 @@ export const normalizedAssetInputSchema = z.object({
     mimeType: z.string().nullable(),
     byteSize: z.number().int().nonnegative().nullable(),
     blobRef: blobRefSchema.nullable().optional(),
+    /** 面向用户的降级原因；仅非 saved 状态填写（ADR-0005）。 */
+    errorMessage: z.string().trim().max(500).nullable().optional(),
 }).strict().superRefine((asset, context) => {
     if (asset.status !== "saved" && asset.blobRef !== undefined && asset.blobRef !== null) {
         context.addIssue({

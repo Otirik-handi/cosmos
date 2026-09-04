@@ -30,6 +30,10 @@ import {
     type RegisteredAction,
 } from "./action.js";
 import { ConnectorExecutionError } from "./index.js";
+import {
+    mediaDownloadCapability,
+    type MediaAcquirer,
+} from "./media-acquisition.js";
 import type {
     ConnectorResolver,
     IngestConnector,
@@ -103,6 +107,7 @@ export interface IngestActionOptions {
     resolveConnector: ConnectorResolver;
     blobs: WorkflowBlobStore;
     domain: WorkflowIngestDomainPort;
+    mediaAcquirer?: MediaAcquirer;
     logger?: LoggerPort;
 }
 
@@ -290,8 +295,18 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                 } catch (error) {
                     throw mapConnectorError(error, connector.id, "fetch");
                 }
+                let acquiredItems = page.items;
+                if (
+                    connector.capabilities.includes(mediaDownloadCapability)
+                    && options.mediaAcquirer
+                ) {
+                    acquiredItems = await options.mediaAcquirer.acquireItems(
+                        page.items,
+                        { signal: context.signal },
+                    );
+                }
                 try {
-                    const items = await Promise.all(page.items.map((item) => toJsonItem(item, options.blobs)));
+                    const items = await Promise.all(acquiredItems.map((item) => toJsonItem(item, options.blobs)));
                     return sourceFetchOutputSchema.parse({
                         items,
                         nextCursor: page.nextCursor,
@@ -361,6 +376,7 @@ async function toJsonItem(
                 mimeType: asset.mimeType,
                 byteSize: asset.byteSize,
                 blobRef: null,
+                errorMessage: asset.errorMessage ?? null,
             };
         }
         const stored = await blobs.put(asset.content, {
@@ -378,6 +394,7 @@ async function toJsonItem(
                 byteSize: stored.byteSize,
                 mediaType: stored.mimeType ?? asset.mimeType ?? "application/octet-stream",
             },
+            errorMessage: null,
         };
     }));
     return normalizedIngestItemSchema.parse({
@@ -410,6 +427,7 @@ async function fromJsonItem(
             status: asset.status,
             mimeType: asset.mimeType,
             byteSize: asset.byteSize,
+            errorMessage: asset.errorMessage ?? null,
             content: asset.blobRef
                 ? await readVerifiedBlobAsActionError(blobs, asset.blobRef)
                 : null,

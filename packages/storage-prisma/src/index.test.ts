@@ -108,6 +108,14 @@ describe("PrismaCosmosRepository", () => {
                     mimeType: "image/png",
                     byteSize: 5,
                     content: new TextEncoder().encode("image"),
+                }, {
+                    kind: "image",
+                    sourceUrl: "https://example.test/broken.png",
+                    status: "failed",
+                    mimeType: null,
+                    byteSize: null,
+                    content: null,
+                    errorMessage: "图片下载超时",
                 }],
             },
             {
@@ -214,6 +222,16 @@ describe("PrismaCosmosRepository", () => {
             expect(savedAsset).toBeDefined();
             const asset = await repository.readAsset(savedAsset!.id);
             expect(new TextDecoder().decode(asset!.content)).toBe("image");
+
+            const failedAsset = stories
+                .flatMap((story) => story?.entry.revisions ?? [])
+                .flatMap((revision) => revision.assets)
+                .find((entry) => entry.status === "failed");
+            expect(failedAsset).toMatchObject({
+                status: "failed",
+                storageKey: null,
+                errorMessage: "图片下载超时",
+            });
         } finally {
             await repository.close();
         }
