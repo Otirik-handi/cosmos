@@ -351,6 +351,14 @@ SourceInstance
 5. 单独完成媒体边界实现设计与必要的稳定文档/ADR：受控流式 Blob 端口、RSS 条目媒体提取/下载、安全/限额/失败状态、domain bytes 与 Workflow BlobRef 映射；设计通过前不改公共媒体字段。
 6. 按批准设计实现阅读与媒体路径，最后用用户填写的实际 RSS URL 完成断网产品 E2E；媒体未保存时展示真实降级，不伪造离线成功。
 
+### 切片：媒体边界设计 + 阅读与媒体路径实现（2026-09-03~04，实施顺序第 5/6 步完成）
+
+- **生命周期阶段**：媒体边界设计经用户评审拍板，接受为 [`docs/proposals/media-boundary-v1.md`](../../../docs/proposals/media-boundary-v1.md)（accepted）；稳定文档同步 PRD ING-008、架构 §6.4、ADR-0005。实现已合入 master（2026-09-04，分支 `feat/t02-media-boundary`），公共媒体字段按批准变更已生效；docs/spec 文档同步待随断网验收一并收口。
+- **冻结边界摘要**：RSS Connector 纯提取条目自身媒体（enclosure、media:content/thumbnail、正文媒体标签），不抓 `webUrl` 全文；Application 统一媒体获取步骤在 Worker fetch 边界受控下载图片（仅 image/enclosure+image mime），音视频与其它类型只存元数据+外链；全局预算默认 10MB/文件、50MB/Run（Run=一页），顺序执行、页内同 URL memo；下载经既有 domain bytes → Workflow BlobRef → Storage → Asset.storageKey 链路，公共 4 态与 Prisma 表结构不变，新增可空 `errorMessage` 最小透传（`Asset.errorMessage` 列已存在，无 migration）；降级显示真实状态+原因+原文外链，不自愈（修订不变不重试，重试/回填/per-source 策略归 ING-009）；`media-download` 作为公开 Connector 能力门控，fixture/probe 不触发下载。
+- **实现摘要（2026-09-04）**：`packages/domain`/`contracts` 增加可空 `errorMessage`；`plugins/rss` 纯提取（enclosure/media:content/thumbnail+media:group/正文 img/audio/video，mime/medium 分类、相对 URL 解析、URL 去重）并声明 `media-download`；新增 `packages/application/src/media-acquisition.ts`（预算 10MB/50MB 常量、逐块计数超限中止、Content-Length/声明预检、魔数嗅探兜底、手动重定向 ≤3 复检、DNS 全公网校验含 IPv6、allowlist、单媒体超时、页内 memo、单媒体失败降级不打断条目、外层 abort 上抛）；接线 durable `source.fetch@1` 与 legacy `IngestionService`（能力门控）；storage 写入并投影 `Asset.errorMessage`；worker 读取 `COSMOS_MEDIA_ALLOWED_HOSTS`（默认空=拦截私网）；Web StoryPanel 附件区渲染 saved 站内图与 metadata_only/skipped/failed 降级文案+errorMessage+原文外链。
+- **验证记录（2026-09-04，全部实际运行）**：全仓 `bun run typecheck` 通过；全量 `bun run test` 38 文件/320 用例通过（新增媒体获取 18、rss 提取 4、contracts errorMessage 3、fetch action 媒体接线 3、storage errorMessage 投影断言）；`bun run build:packages` 通过；`BUN_BINARY=<真实 bun.exe> bun run test:e2e` 4/4；`COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser:component-lab` 13/13；`COSMOS_E2E_WEB_PORT=4183 NODE_ENV= bun run test:browser` 8/8。维护者手动实测：真实 RSS 源图片下载并站内渲染成功；音视频受控源（`fixtures/rss/media-av.xml`）视频/音频仅元数据+外链符合预期；国内真实音频源（喜马拉雅 剧谈社 feed，audio/x-m4a）可用。
+- **未运行/后置**：断网产品验收（用户延后，验收清单已起草待批准）；真实双源（爱范儿+阮一峰）联网媒体验收待网络授权；Docker/Compose、发布部署。docs/spec 跟随断网验收收口。
+
 本切片不扩大为通用 Workflow 编辑器、可配置 Board/Section/Block、登录 UI、其它平台 Connector 或历史媒体回填。
 ## Verification
 

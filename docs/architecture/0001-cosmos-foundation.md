@@ -934,9 +934,9 @@ Blob 使用内容寻址去重。原始媒体与缩略图、转码和 OCR 结果�
 - 认证内容和隐私内容的保留期限；
 - 失败重试次数。
 
-**本次接受的媒体职责方向**只冻结三点：Connector 管线处理媒体，仓库提供 Blob 服务；没有历史媒体，因此不做回填。RSS 条目自身的 enclosure/正文媒体范围、不抓取 `webUrl` 外部全文、受控流式 Blob 能力、domain bytes/Asset → Workflow BlobRef → Storage metadata → Product API 受控下载分层，以及 `local` 作用域，都是实现建议/待冻结，不是当前公共合同。
+**v1 媒体边界（2026-09-03 冻结，见 [`media-boundary-v1 Proposal`](../proposals/media-boundary-v1.md) 与 [`ADR-0005`](../adr/0005-media-boundary-v1.md)）**：Connector 只负责纯提取与分类，不直接接触 Data Root；Application 拥有统一的媒体获取步骤，在 Worker 的 fetch 边界对图片候选做受控下载与预算执行。媒体发现范围固定为 RSS 条目自身的 enclosure、`media:content`/`media:thumbnail` 与正文媒体标签，不抓取 `webUrl` 外部全文。v1 只把图片保存为本地实体（全局默认单文件 10MB、单次 Run 50MB），音频/视频与其它类型只保存元数据与原文外链；媒体获取按 Connector 能力（公开 `media-download`）门控，未保存配置探测与 fixture 不触发下载。
 
-当前优先实现建议是由 Application 控制受限流式媒体能力并复用 `FileBlobStore`，保持 domain `NormalizedAssetInput.content: Uint8Array`，由 Application 在 Workflow 边界映射 BlobRef，Storage 保存 Asset metadata，Product API 提供受控下载；这些建议不构成当前公共合同。流式端口、幂等/重试/大小预算/取消/orphan bytes、媒体提取与下载安全、具体字段映射和 `local` 作用域键仍待设计。不得先新增 `NormalizedIngestItem.localMediaRefs` 或让 Connector 直接访问 Data Root。
+数据分层按既定方向冻结：domain `NormalizedAssetInput.content: Uint8Array` → Application 在 Workflow 边界映射 BlobRef → Storage 保存 Asset metadata 与 storageKey → Product API 提供受控下载。公共 4 态枚举与 Prisma 表结构不变（无 migration）；降级原因以可空可选 `errorMessage` 字段经 domain → ingest wire → Storage（`Asset.errorMessage` 列已存在）→ Asset 快照透传。非 saved 状态一律保留原文外链；媒体失败不阻止条目入库，也不在条目修订不变时重试（不自愈），界面展示真实降级而非伪造离线成功。下载安全边界为仅 http/https、DNS 解析结果全公网、逐跳重定向不超过 3、Content-Type/文件魔数校验、单媒体超时；私网/环回默认拦截，测试用 `COSMOS_MEDIA_ALLOWED_HOSTS` allowlist 放开受控源。per-source 媒体类型/预算/保留期/失败重试与历史回填仍后置 ING-009。`local` 作用域键仍未冻结，是未来认证的候选替换点。
 
 ## 7. 信息库领域模型
 
@@ -2047,8 +2047,8 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 
 78. 第一条可用产品 E2E 必须从 Web 配置入口开始；首版只开放 `rss` schema 驱动入口，用户填写实际 RSS URL；`fixture-rss` 只用于集成/管线测试。
 79. 配置产品流程采用“校验 → 测试未保存配置 → 保存为停用 Source → 单独启用”；默认定时 30 分钟、测试立即执行、用户可修改或关闭定时、已排队 Run 使用创建时配置快照作为实现建议，具体调度合同待冻结。
-80. 已接受的媒体职责方向只有三项：Connector 管线处理媒体，仓库提供 Blob 服务，没有历史媒体因此不做回填。RSS 条目自身媒体范围、不抓取 `webUrl` 外部全文、Blob 端口、bytes/BlobRef 分层和 `local` 作用域键均为全局后置的实现建议/待冻结边界，不覆盖当前配置优先产品 E2E。
-81. 当前优先建议保持 domain bytes/Asset、Application Workflow BlobRef、Storage metadata 和 Product API 受控下载的分层；具体字段、错误/安全/预算合同仍需实现设计，Connector 不直接访问 Data Root。
+80. v1 媒体边界已冻结（media-boundary-v1 Proposal 与 ADR-0005）：媒体发现范围为 RSS 条目自身 enclosure 与正文媒体标签，不抓取 `webUrl` 外部全文；Application 统一媒体获取并受控下载图片，Connector 只纯提取、不直接接触 Data Root；v1 不覆盖 per-source 策略（ING-009）与 `local` 作用域键。
+81. v1 数据分层冻结：domain bytes/Asset → Application Workflow BlobRef → Storage Asset metadata → Product API 受控下载；公共 4 态不变，降级原因以可空 `errorMessage` 透传（无 migration）；媒体失败不自愈且保留原文外链，Connector 不直接访问 Data Root。
 82. SourceInstance 以版本化 `sourceDefinitionRef` 作为唯一业务身份；manifest 显式提供 `connectorId`，旧 `kind` 只在迁移和运行时兼容期间保留，并由 manifest 映射约束，不允许新 API 写入或隐式 kind→ref 推导。
 83. SourceInstance 持久化单调整数 `revision`，公开投影提供不透明 `revisionId`；创建从 revision 1 开始且默认停用，配置更新和启用状态变更都必须使用基于 revision 的 CAS。过期 revision 返回 `conflict`，不得使用 `updatedAt` 代替。
 84. 旧数据迁移先按已登记的 kind→sourceDefinitionRef/operationId 显式映射预检；未知 kind、非唯一映射或 manifest 不可用时阻断迁移并报告，不静默生成 ref。
@@ -2067,7 +2067,7 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 
 ### 20.3 本地数据保留（全局后置策略）
 
-**范围**：以下媒体保留取舍是全局后置策略，不覆盖当前配置优先产品 E2E 的媒体职责方向或待冻结实现建议。
+**范围**：以下媒体保留取舍是全局后置策略，不覆盖当前配置优先产品 E2E，也不改变已冻结的 v1 媒体边界（见 ADR-0005）。
 
 【决策点】Cosmos 默认保存多少原始媒体和历史修订？
 
@@ -2079,7 +2079,7 @@ Cosmos Runtime Spike 只提供历史恢复、lease、Outbox、Ingest parity 和�
 - 最大化保存所有可获取媒体，离线能力最强但成本和风险最高。
 - 只保存文本与外链，空间最小但不满足稳定离线浏览。
 
-【建议状态】第一项仅作全局后置建议，仍待用户最终确认；它不覆盖当前配置优先产品 E2E，也不得据此冻结本切片的媒体发现、下载、Blob、分层、容量或作用域合同。
+【建议状态】第一项仅作全局后置建议，仍待用户最终确认；它不改变已冻结的 v1 媒体边界（ADR-0005），只约束超出 v1 的长期保留、派生数据与清理策略。
 
 【选错代价】策略可调整，但未下载且来源后来消失的内容无法补回；过度保存则需要可靠清理和隐私工具。
 
