@@ -3,8 +3,10 @@ import { hostname } from "node:os";
 import {
     ConnectorProbeService,
     createBuiltinManifestCatalog,
+    createMediaAcquirer,
     IngestionService,
     IngestionWorker,
+    parseAllowedHosts,
     SourceConfigProbeService,
 } from "@cosmos/application";
 import {
@@ -45,6 +47,11 @@ async function bootstrap(): Promise<void> {
         logger,
         fetch: createProxyFetch(),
     });
+    const mediaAcquirer = createMediaAcquirer({
+        fetch: createProxyFetch(),
+        allowedHosts: parseAllowedHosts(process.env.COSMOS_MEDIA_ALLOWED_HOSTS),
+        logger,
+    });
     let workerAdminServer: WorkerAdminServer | null = null;
     let runtime: WorkerRuntime | null = null;
 
@@ -64,6 +71,7 @@ async function bootstrap(): Promise<void> {
             repository,
             (source) => connectors.resolve(source),
             logger,
+            mediaAcquirer,
         );
         const probe = new ConnectorProbeService(
             repository,
@@ -86,6 +94,7 @@ async function bootstrap(): Promise<void> {
                     resolveConnector: (source) => connectors.resolve(source),
                     blobs: repository.blobs,
                     domain: repository,
+                    mediaAcquirer,
                     logger,
                 }),
                 owner: instanceId,

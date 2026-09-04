@@ -122,3 +122,87 @@ describe("RSS connector", () => {
         expect(lines.join("\n")).not.toContain("LEAK");
     });
 });
+
+const mediaFeed = `<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel>
+    <item>
+        <guid>media-1</guid>
+        <title>Media item</title>
+        <link>https://example.test/post/a</link>
+        <description>See body.</description>
+        <enclosure url="https://example.test/cosmos/media.png" type="image/png" length="2048"/>
+        <media:content url="https://cdn.example.test/movie.mp4" type="video/mp4" fileSize="999"/>
+        <media:thumbnail url="https://cdn.example.test/thumb.jpg" type="image/jpeg"/>
+        <content:encoded><![CDATA[
+            <p>Hello</p>
+            <img src="https://cdn.example.test/a.jpg" alt="a"/>
+            <img src="/img/relative.png"/>
+            <audio src="https://cdn.example.test/song.mp3"></audio>
+            <video src="https://cdn.example.test/movie.mp4"></video>
+        ]]></content:encoded>
+    </item>
+</channel></rss>`;
+
+describe("RSS media extraction (ADR-0005)", () => {
+    it("extracts enclosure, media namespace and body media candidates", () => {
+        const [entry] = parseRssXml(mediaFeed, { provider: "rss", feedUrl: "https://example.test/feed.xml" });
+        const assets = entry.assets;
+
+        const enclosure = assets.find((item) => item.sourceUrl === "https://example.test/cosmos/media.png");
+        expect(enclosure).toMatchObject({
+            kind: "image",
+            status: "metadata_only",
+            mimeType: "image/png",
+            byteSize: 2048,
+            content: null,
+        });
+
+        const bodyImage = assets.find((item) => item.sourceUrl === "https://cdn.example.test/a.jpg");
+        expect(bodyImage?.kind).toBe("image");
+
+        const relativeResolved = assets.find((item) => item.sourceUrl === "https://example.test/img/relative.png");
+        expect(relativeResolved?.kind).toBe("image");
+
+        const audio = assets.find((item) => item.sourceUrl === "https://cdn.example.test/song.mp3");
+        expect(audio?.kind).toBe("audio");
+
+        const video = assets.find((item) => item.sourceUrl === "https://cdn.example.test/movie.mp4");
+        expect(video).toMatchObject({ kind: "video", status: "metadata_only" });
+
+        const thumbnail = assets.find((item) => item.sourceUrl === "https://cdn.example.test/thumb.jpg");
+        expect(thumbnail).toMatchObject({ kind: "image", mimeType: "image/jpeg" });
+
+        for (const item of assets) {
+            expect(item.status).toBe("metadata_only");
+            expect(item.content).toBeNull();
+        }
+    });
+
+    it("deduplicates identical media URLs into one candidate", () => {
+        const feed = mediaFeed.replace(
+            '<img src="/img/relative.png"/>',
+            '<img src="https://example.test/cosmos/media.png"/>',
+        );
+        const [entry] = parseRssXml(feed, { provider: "rss", feedUrl: "https://example.test/feed.xml" });
+        const matches = entry.assets.filter(
+            (item) => item.sourceUrl === "https://example.test/cosmos/media.png",
+        );
+        expect(matches).toHaveLength(1);
+    });
+
+    it("keeps an unresolvable relative URL as evidence without a base", () => {
+        const noLink = mediaFeed.replace(
+            '<link>https://example.test/post/a</link>',
+            "",
+        );
+        const [entry] = parseRssXml(noLink, { provider: "fixture-rss" });
+        const image = entry.assets.find((item) => item.kind === "image" && item.sourceUrl === "/img/relative.png");
+        expect(image?.kind).toBe("image");
+        expect(image?.sourceUrl).toBe("/img/relative.png");
+    });
+
+    it("declares the real rss connector media-download capability", () => {
+        const connector = createRssConnector({ fetch: async () => new Response("", { status: 200 }) });
+        expect(connector.capabilities).toContain("media-download");
+    });
+});

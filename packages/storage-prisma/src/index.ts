@@ -1255,6 +1255,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         storageKey: asset.storageKey,
                         mimeType: asset.mimeType,
                         byteSize: asset.byteSize,
+                        errorMessage: asset.errorMessage ?? null,
                     },
                 });
             }
@@ -2159,6 +2160,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
         storageKey: string | null;
         mimeType: string | null;
         byteSize: number | null;
+        errorMessage?: string | null;
     }) {
         return {
             id: asset.id,
@@ -2168,6 +2170,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             storageKey: asset.storageKey,
             mimeType: asset.mimeType,
             byteSize: asset.byteSize,
+            errorMessage: asset.errorMessage ?? null,
         };
     }
 }

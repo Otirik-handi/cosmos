@@ -28,9 +28,14 @@ import {
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
+import {
+    mediaDownloadCapability,
+    type MediaAcquirer,
+} from "./media-acquisition.js";
 
 export * from "./action.js";
 export * from "./catalog.js";
+export * from "./media-acquisition.js";
 export * from "./workflow-host.js";
 export * from "./workflow-host-runtime.js";
 
@@ -604,6 +609,7 @@ export class IngestionService {
         private readonly repository: CosmosRepository,
         private readonly resolveConnector: ConnectorResolver,
         logger?: LoggerPort,
+        private readonly mediaAcquirer?: MediaAcquirer,
     ) {
         this.logger = resolveLogger(logger);
     }
@@ -740,7 +746,12 @@ export class IngestionService {
                 durationMs: Date.now() - fetchStartedAt,
             });
 
-            for (const [index, item] of page.items.entries()) {
+            const acquiredItems = this.mediaAcquirer
+                && connector.capabilities.includes(mediaDownloadCapability)
+                ? await this.mediaAcquirer.acquireItems(page.items)
+                : page.items;
+
+            for (const [index, item] of acquiredItems.entries()) {
                 const result = await this.repository.persistIngestItem({
                     sourceId: source.id,
                     runId,

@@ -4,6 +4,7 @@ import { isAbsolute, resolve } from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import {
     ConnectorExecutionError,
+    mediaDownloadCapability,
     type LoggerPort,
     type IngestConnector,
 } from "@cosmos/application";
@@ -51,7 +52,7 @@ export function createRssConnector(
         id: rssConnectorId,
         description: "Fetch RSS or RSSHub XML feeds.",
         configVersion: "v1",
-        capabilities: ["network", "rss"],
+        capabilities: ["network", "rss", mediaDownloadCapability],
         validate(source) {
             if (!source.config.feedUrl) {
                 throw new Error("RSS source is missing config.feedUrl.");
@@ -268,12 +269,11 @@ export function parseRssXml(
         const item = raw as Record<string, unknown>;
         const title = readText(item.title) || "Untitled RSS item";
         const link = readLink(item.link);
-        const contentText = stripMarkup(
-            readText(item["content:encoded"])
-                || readText(item.description)
-                || readText(item.content)
-                || title,
-        );
+        const rawContentHtml = readText(item["content:encoded"])
+            || readText(item.description)
+            || readText(item.content)
+            || "";
+        const contentText = stripMarkup(rawContentHtml || title);
         const externalId = readText(item.guid)
             || readText(item.id)
             || null;
@@ -286,7 +286,11 @@ export function parseRssXml(
             || readText(item.creator)
             || readText(item["dc:creator"])
             || null;
-        const assets = readAssets(item);
+        const assets = readMediaAssets(
+            item,
+            rawContentHtml,
+            link ?? (typeof locator.feedUrl === "string" ? locator.feedUrl : null),
+        );
 
         return {
             externalId,
@@ -363,20 +367,169 @@ function readLink(value: unknown): string | null {
     return null;
 }
 
-function readAssets(item: Record<string, unknown>): readonly NormalizedAssetInput[] {
-    const enclosure = item.enclosure;
-    if (!enclosure || typeof enclosure !== "object") {
-        return [];
+interface MediaCandidate {
+    kind: string;
+    sourceUrl: string | null;
+    mimeType: string | null;
+    byteSize: number | null;
+}
+
+/**
+ * Entry-scoped media extraction (ADR-0005): enclosure, media:content /
+ * media:thumbnail (with media:group nesting) and body <img>/<audio>/<video>.
+ * Candidates start as metadata_only; the Application media acquirer later
+ * rewrites the image ones to saved/skipped/failed. Duplicate URLs are kept
+ * once so a revision does not accumulate identical media rows.
+ */
+function readMediaAssets(
+    item: Record<string, unknown>,
+    rawContentHtml: string,
+    baseUrl: string | null,
+): readonly NormalizedAssetInput[] {
+    const candidates: MediaCandidate[] = [];
+    for (const data of asObjects(item.enclosure)) {
+        candidates.push({
+            kind: classifyMediaKind(data["@_type"], data["@_medium"]),
+            sourceUrl: readText(data["@_url"]) || null,
+            mimeType: readText(data["@_type"]) || null,
+            byteSize: parseIntAttr(data["@_length"]),
+        });
     }
-    const data = enclosure as Record<string, unknown>;
-    return [{
-        kind: "enclosure",
-        sourceUrl: readText(data["@_url"]) || null,
-        status: "metadata_only",
-        mimeType: readText(data["@_type"]) || null,
-        byteSize: Number.parseInt(readText(data["@_length"]) || "", 10) || null,
-        content: null,
-    }];
+    for (const tag of ["media:content", "media:thumbnail"] as const) {
+        for (const data of asObjects(item[tag])) {
+            candidates.push({
+                kind: tag === "media:thumbnail"
+                    ? "image"
+                    : classifyMediaKind(data["@_type"], data["@_medium"]),
+                sourceUrl: readText(data["@_url"]) || null,
+                mimeType: readText(data["@_type"]) || null,
+                byteSize: parseIntAttr(data["@_fileSize"]) ?? parseIntAttr(data["@_length"]),
+            });
+        }
+    }
+    const group = firstObject(item["media:group"]);
+    if (group) {
+        for (const tag of ["media:content", "media:thumbnail"] as const) {
+            for (const data of asObjects(group[tag])) {
+                candidates.push({
+                    kind: tag === "media:thumbnail"
+                        ? "image"
+                        : classifyMediaKind(data["@_type"], data["@_medium"]),
+                    sourceUrl: readText(data["@_url"]) || null,
+                    mimeType: readText(data["@_type"]) || null,
+                    byteSize: parseIntAttr(data["@_fileSize"]) ?? parseIntAttr(data["@_length"]),
+                });
+            }
+        }
+    }
+    collectBodyMedia(rawContentHtml, candidates);
+
+    const assets: NormalizedAssetInput[] = [];
+    const seen = new Set<string>();
+    for (const candidate of candidates) {
+        const sourceUrl = candidate.sourceUrl
+            ? (resolveMediaUrl(candidate.sourceUrl, baseUrl) ?? candidate.sourceUrl)
+            : null;
+        if (!sourceUrl || seen.has(sourceUrl)) {
+            continue;
+        }
+        seen.add(sourceUrl);
+        assets.push({
+            kind: candidate.kind,
+            sourceUrl,
+            status: "metadata_only",
+            mimeType: candidate.mimeType,
+            byteSize: candidate.byteSize,
+            content: null,
+        });
+    }
+    return assets;
+}
+
+function collectBodyMedia(
+    html: string,
+    candidates: MediaCandidate[],
+): void {
+    const tagPattern = /<(img|audio|video)\b([^>]*)>/gi;
+    for (const match of html.matchAll(tagPattern)) {
+        const kind = match[1].toLowerCase() === "img"
+            ? "image"
+            : match[1].toLowerCase();
+        const src = readAttribute(match[2], "src");
+        if (!src) {
+            continue;
+        }
+        candidates.push({
+            kind,
+            sourceUrl: src,
+            mimeType: null,
+            byteSize: null,
+        });
+    }
+}
+
+function readAttribute(attributes: string, name: string): string | null {
+    const pattern = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s'">]+))`, "i");
+    const match = attributes.match(pattern);
+    if (!match) {
+        return null;
+    }
+    return (match[1] ?? match[2] ?? match[3])?.trim() || null;
+}
+
+function classifyMediaKind(
+    type: unknown,
+    medium: unknown,
+): string {
+    const typeText = readText(type).toLowerCase();
+    if (typeText.startsWith("image/")) {
+        return "image";
+    }
+    if (typeText.startsWith("audio/")) {
+        return "audio";
+    }
+    if (typeText.startsWith("video/")) {
+        return "video";
+    }
+    const mediumText = readText(medium).toLowerCase();
+    if (mediumText === "image") {
+        return "image";
+    }
+    if (mediumText === "audio") {
+        return "audio";
+    }
+    if (mediumText === "video") {
+        return "video";
+    }
+    return "enclosure";
+}
+
+function asObjects(value: unknown): readonly Record<string, unknown>[] {
+    if (Array.isArray(value)) {
+        return value.filter((entry): entry is Record<string, unknown> => {
+            return typeof entry === "object" && entry !== null;
+        });
+    }
+    return typeof value === "object" && value !== null
+        ? [value as Record<string, unknown>]
+        : [];
+}
+
+function firstObject(value: unknown): Record<string, unknown> | null {
+    return asObjects(value)[0] ?? null;
+}
+
+function parseIntAttr(value: unknown): number | null {
+    const parsed = Number.parseInt(readText(value) || "", 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveMediaUrl(sourceUrl: string, baseUrl: string | null): string | null {
+    try {
+        return new URL(sourceUrl, baseUrl ?? undefined).href;
+    } catch {
+        return null;
+    }
 }
 
 function stripMarkup(value: string): string {
