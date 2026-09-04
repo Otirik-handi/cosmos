@@ -265,7 +265,7 @@ export class PrismaWorkflowBackend implements WorkflowBackend {
                     runLeaseToken: lease.leaseToken,
                     runLeaseExpiresAt: { gt: now },
                 },
-                data: toUpdateData(normalized, expectedRevision + 1),
+                data: toUpdateData(normalized, expectedRevision + 1, current.productRunJson),
             });
             if (result.count === 1) {
                 await appendRunTerminalEvent(tx, normalized);
@@ -327,7 +327,7 @@ export class PrismaWorkflowBackend implements WorkflowBackend {
                     id: next.runId,
                     kernelRevision: expectedRevision,
                 },
-                data: toUpdateData(normalized, expectedRevision + 1),
+                data: toUpdateData(normalized, expectedRevision + 1, current.productRunJson),
             });
             if (result.count === 1) {
                 await appendRunTerminalEvent(tx, normalized);
@@ -535,8 +535,9 @@ function toCreateData(state: WorkflowRunState): Prisma.WorkflowRunCreateInput {
 function toUpdateData(
     state: WorkflowRunState,
     revision: number,
+    existingProductRunJson = "{}",
 ): Prisma.WorkflowRunUpdateManyMutationInput {
-    return {
+    const data: Prisma.WorkflowRunUpdateManyMutationInput = {
         stateJson: canonicalJson(state),
         kernelRevision: revision,
         status: state.status,
@@ -551,6 +552,40 @@ function toUpdateData(
         // the failure stays invisible outside the event stream.
         errorMessage: state.error ?? null,
     };
+    const productRunJson = completedProductRunJson(state, existingProductRunJson);
+    if (productRunJson !== undefined) data.productRunJson = productRunJson;
+    return data;
+}
+
+function completedProductRunJson(
+    state: WorkflowRunState,
+    existingProductRunJson: string,
+): string | undefined {
+    if (state.status !== "completed") return undefined;
+    const encodedResult = state.result;
+    if (!isRecord(encodedResult) || encodedResult.kind !== "inline") return undefined;
+    const output = encodedResult.value;
+    if (!isRecord(output) || !isBoundedCount(output.itemCount)) return undefined;
+    const existingValue = safeJsonParse(existingProductRunJson);
+    const existing = isRecord(existingValue) ? existingValue : {};
+    return canonicalJson({
+        ...existing,
+        itemCount: output.itemCount,
+        ...(isBoundedCount(output.createdEntryCount) ? { createdEntryCount: output.createdEntryCount } : {}),
+        ...(isBoundedCount(output.revisedEntryCount) ? { revisedEntryCount: output.revisedEntryCount } : {}),
+    });
+}
+
+function safeJsonParse(value: string): unknown {
+    try {
+        return JSON.parse(value) as unknown;
+    } catch {
+        return null;
+    }
+}
+
+function isBoundedCount(value: unknown): value is number {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function fromRow(row: WorkflowRunRow): WorkflowRunState {
@@ -852,6 +887,9 @@ function parseDate(value: string, field: string): Date {
     return parsed;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function isUniqueConstraintError(error: unknown): boolean {
     return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";

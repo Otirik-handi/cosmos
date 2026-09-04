@@ -196,17 +196,19 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
                 },
                 environment: { COSMOS_ALLOW_REAL_NETWORK: "true" },
             };
-        case "bilibili": {
+        case "bilibili":
+        case "bilibili-hot": {
             requireNetworkPermission();
             const openCliPath = requiredEnvironment("COSMOS_OPENCLI_PATH");
             const profile = requiredEnvironment("OPENCLI_PROFILE");
+            const mode = kind === "bilibili-hot" ? "hot" : "feed";
             return {
                 command: {
-                    name: "Explicit Bilibili",
+                    name: kind === "bilibili-hot" ? "Explicit Bilibili Hot" : "Explicit Bilibili",
                     sourceDefinitionRef: "source.bilibili@1",
                     operationId: "fetch",
                     config: {
-                        mode: "feed",
+                        mode,
                         profile,
                         limit: 20,
                     },
@@ -220,7 +222,7 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
         }
         default:
             throw new Error(
-                "Usage: bun run scripts/e2e/real-source.ts <rss|aihot|bilibili>.",
+                "Usage: bun run scripts/e2e/real-source.ts <rss|aihot|bilibili|bilibili-hot>.",
             );
     }
 }

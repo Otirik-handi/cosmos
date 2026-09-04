@@ -235,6 +235,34 @@ describe("PrismaWorkflowBackend", () => {
         await expect(terminalEvents(backend.prisma, initial.runId)).resolves.toHaveLength(1);
     });
 
+    it("projects completed ingest output counts into the product Run", async () => {
+        const backend = await createBackend();
+        const initial = sampleRun("product-counts");
+        await backend.createRun(initial);
+
+        await backend.saveRun({
+            ...initial,
+            status: "completed",
+            result: {
+                kind: "inline",
+                value: {
+                    itemCount: 3,
+                    createdEntryCount: 2,
+                    revisedEntryCount: 1,
+                },
+            },
+            updatedAt: "2026-08-13T00:00:04.000Z",
+        }, 0);
+
+        const row = await backend.prisma.workflowRun.findUnique({ where: { id: initial.runId } });
+        expect(row).not.toBeNull();
+        expect(JSON.parse(row?.productRunJson ?? "{}")).toEqual({
+            itemCount: 3,
+            createdEntryCount: 2,
+            revisedEntryCount: 1,
+        });
+    });
+
     it("maps Kernel failure states to the shared run.failed event", async () => {
         const backend = await createBackend();
         const initial = sampleRun("terminal-failure");
