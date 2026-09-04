@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-04。Task 02 实施顺序 1–6 步全部完成：媒体边界已合入并经真实双源联网验收；Bilibili hot real-source E2E 已通过（隔离栈实测，Run 成功且 `itemCount=20`）；断网产品 E2E 已通过（Playwright 路由拦截模拟外部不可达，saved 图片从站内加载）；docs/spec 已同步（errorMessage + 媒体测试说明）；媒体边界合入后 Windows Node smoke 回归通过。Task 02 实施顺序第 5 步“两块固定看板与来源健康”已通过分支 `feat/t02-boards-source-health` 快进合入 `master`（tip `96c593c`，含维护者实测验证）；未部署。schema 驱动 Web 配置流程切片已通过 PR #2 合入 `master`（merge commit `fc05e4a`，实现提交 `c1f23be`）。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
+> 更新于 2026-09-04。Task 02 实施顺序 1–6 步全部完成：媒体边界已合入并经真实双源联网验收；Bilibili hot/feed real-source E2E 已通过（隔离栈实测，Run 成功且 `itemCount=20`，feed 在已验证登录态下运行）；断网产品 E2E 已通过（Playwright 路由拦截模拟外部不可达，saved 图片从站内加载）；docs/spec 已同步（errorMessage + 媒体测试说明）；媒体边界合入后 Windows Node smoke 回归通过。Task 02 实施顺序第 5 步“两块固定看板与来源健康”已通过分支 `feat/t02-boards-source-health` 快进合入 `master`（tip `96c593c`，含维护者实测验证）；未部署。schema 驱动 Web 配置流程切片已通过 PR #2 合入 `master`（merge commit `fc05e4a`，实现提交 `c1f23be`）。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
 
 ## 2026-09-03：两块固定看板与来源健康切片合入
 
@@ -550,7 +550,7 @@ strength/version/basis、Source `1 + 2N`、Blob orphan GC 和 generic command pa
 
 - Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；当前环境没有 Docker CLI。
 - 真实 RSS/RSSHub 网络来源验收、跨平台 Node 验收和更长时间的 Worker 重启演练。
-- Bilibili feed（登录态）真实 Entry 保存验收；hot 场景已于 2026-09-04 通过 real-source E2E，feed/登录态、限流和长期稳定性仍未验收。
+- Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E，Run 成功且 `itemCount=20`。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
 - Activity Host 的跨进程 durable recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline 和完整生产 executable registration 验收；当前代码/测试已有部分 Activity Job、lease、completion 和 direct loopback 证据，不能替代这些边界。
 - 固定 `cosmos.ingest@1` parity、Source snapshot/checkpoint 的完整矩阵验收；Worker Host 默认入口已统一开启，显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才关闭。
