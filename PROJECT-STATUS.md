@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-03。Task 02 实施顺序第 5 步“两块固定看板与来源健康”已通过分支 `feat/t02-boards-source-health` 快进合入 `master`（tip `96c593c`，含维护者实测验证）；未部署。schema 驱动 Web 配置流程切片已通过 PR #2 合入 `master`（merge commit `fc05e4a`，实现提交 `c1f23be`）。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
+> 更新于 2026-09-04。Task 02 实施顺序 1–6 步全部完成：媒体边界已合入并经真实双源联网验收；断网产品 E2E 已通过（Playwright 路由拦截模拟外部不可达，saved 图片从站内加载）；docs/spec 已同步（errorMessage + 媒体测试说明）；媒体边界合入后 Windows Node smoke 回归通过。Task 02 实施顺序第 5 步“两块固定看板与来源健康”已通过分支 `feat/t02-boards-source-health` 快进合入 `master`（tip `96c593c`，含维护者实测验证）；未部署。schema 驱动 Web 配置流程切片已通过 PR #2 合入 `master`（merge commit `fc05e4a`，实现提交 `c1f23be`）。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
 
 ## 2026-09-03：两块固定看板与来源健康切片合入
 
