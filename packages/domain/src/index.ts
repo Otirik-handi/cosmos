@@ -160,6 +160,27 @@ export function fingerprintEntryRevision(input: {
     return hashValue(JSON.stringify(input));
 }
 
+export interface StoryRevisionContent {
+    title: string;
+    summary: string | null;
+    kind: StoryKind;
+    subtype: string | null;
+}
+
+/**
+ * Story revision fingerprint covers the user-visible display fields only.
+ * Changes that do not alter any of these fields are no-ops and must not
+ * append a new StoryRevision (ADR-0006 decision 3).
+ */
+export function fingerprintStoryRevision(input: StoryRevisionContent): string {
+    return hashValue(JSON.stringify({
+        title: input.title,
+        summary: input.summary,
+        kind: input.kind,
+        subtype: input.subtype,
+    }));
+}
+
 export function normalizePublisher(input: {
     platformId?: unknown;
     name?: unknown;

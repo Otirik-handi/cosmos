@@ -4,6 +4,7 @@ import {
     createTemporalValue,
     deriveExternalKey,
     fingerprintEntryRevision,
+    fingerprintStoryRevision,
     normalizePublisher,
     projectEntryToStory,
 } from "./index.js";
@@ -129,5 +130,39 @@ describe("ingestion identity", () => {
             title: "Video",
             contentKind: "video",
         }).kind).toBe("media");
+    });
+
+    it("fingerprints story revisions over display fields only", () => {
+        const base = fingerprintStoryRevision({
+            title: "Same event",
+            summary: "summary",
+            kind: "event",
+            subtype: null,
+        });
+        expect(fingerprintStoryRevision({
+            title: "Same event",
+            summary: "summary",
+            kind: "event",
+            subtype: null,
+        })).toBe(base);
+
+        expect(fingerprintStoryRevision({
+            title: "Same event",
+            summary: "changed",
+            kind: "event",
+            subtype: null,
+        })).not.toBe(base);
+        expect(fingerprintStoryRevision({
+            title: "Same event",
+            summary: "summary",
+            kind: "document",
+            subtype: null,
+        })).not.toBe(base);
+        expect(fingerprintStoryRevision({
+            title: "Same event",
+            summary: "summary",
+            kind: "event",
+            subtype: "event.announcement",
+        })).not.toBe(base);
     });
 });

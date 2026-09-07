@@ -261,11 +261,15 @@ model Story {
 model StoryRevision {
     id              String  @id @default(cuid())
     storyId         String
+    revision        Int     @default(1)
+    fingerprint     String?
     title           String
     summary         String?
     createdAt       DateTime @default(now())
     story           Story   @relation("StoryRevisions", fields: [storyId], references: [id], onDelete: Cascade)
     currentForStory Story?  @relation("StoryCurrentRevision")
+
+    @@unique([storyId, revision])
 }
 
 model WorkflowRun {

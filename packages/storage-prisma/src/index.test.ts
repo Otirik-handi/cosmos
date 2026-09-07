@@ -234,6 +234,15 @@ describe("PrismaCosmosRepository", () => {
                 storageKey: null,
                 errorMessage: "图片下载超时",
             });
+
+            expect(revisedStory).toBeDefined();
+            const storyRevisions = await repository.prisma.storyRevision.findMany({
+                where: { storyId: revisedStory!.story.id },
+                orderBy: { revision: "asc" },
+            });
+            // Content revision without display-field change must not append a StoryRevision (ADR-0006).
+            expect(storyRevisions.map((revision) => revision.revision)).toEqual([1]);
+            expect(storyRevisions[0].fingerprint).toHaveLength(64);
         } finally {
             await repository.close();
         }

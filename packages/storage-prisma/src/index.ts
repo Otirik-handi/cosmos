@@ -34,6 +34,7 @@ import {
 import {
     deriveExternalKey,
     fingerprintEntryRevision,
+    fingerprintStoryRevision,
     projectEntryToStory,
     temporalProjection,
     type NormalizedIngestItem,
@@ -1256,15 +1257,41 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     kind: storyProjection.kind,
                 },
             });
-            const storyRevision = await tx.storyRevision.create({
-                data: {
-                    story: {
-                        connect: { id: storyId },
-                    },
-                    title: input.item.title,
-                    summary: input.item.summary,
-                },
+            const storyFingerprint = fingerprintStoryRevision({
+                title: input.item.title,
+                summary: input.item.summary,
+                kind: storyProjection.kind,
+                subtype: storyProjection.subtype,
             });
+            const storyWithCurrent = await tx.story.findUnique({
+                where: { id: storyId },
+                include: { currentRevision: true },
+            });
+            const storyCurrentFingerprint = storyWithCurrent?.currentRevision?.fingerprint ?? null;
+            if (storyCurrentFingerprint !== storyFingerprint) {
+                const latestStoryRevision = await tx.storyRevision.findFirst({
+                    where: { storyId },
+                    orderBy: { revision: "desc" },
+                    select: { revision: true },
+                });
+                const storyRevision = await tx.storyRevision.create({
+                    data: {
+                        story: {
+                            connect: { id: storyId },
+                        },
+                        revision: (latestStoryRevision?.revision ?? 0) + 1,
+                        fingerprint: storyFingerprint,
+                        title: input.item.title,
+                        summary: input.item.summary,
+                    },
+                });
+                await tx.story.update({
+                    where: { id: storyId },
+                    data: {
+                        currentRevisionId: storyRevision.id,
+                    },
+                });
+            }
 
             await tx.entry.update({
                 where: { id: entry.id },
@@ -1272,12 +1299,6 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     storyId,
                     currentRevisionId: revision.id,
                     ...(metricsJson ? { metricsJson } : {}),
-                },
-            });
-            await tx.story.update({
-                where: { id: storyId },
-                data: {
-                    currentRevisionId: storyRevision.id,
                 },
             });
 
