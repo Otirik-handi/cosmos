@@ -421,6 +421,7 @@ SourceInstance
 
 ## Follow-ups
 
+- **2026-09-07 维护者决策（进入 Phase 2 的划线）**：本 Task 验收中仍未运行的 Docker/Compose、发布部署、真实公网 RSS/RSSHub 长时定时抓取、非 Windows 平台 smoke 和长时间故障恢复验收正式划线为 Phase 2 后置债，不作为进入 Phase 2 的阻塞。Phase 2 首切片 Story 域模型已接受（[Proposal `story-domain-v1`](../../../docs/proposals/story-domain-v1.md)，accepted），本 Task 关闭后不随新切片继续扩展。
 - 确认 package manager workspace 组织方式，以及 Bun/Node 的构建、测试和生产脚本。
 - 为 Prisma/SQLite 的 FTS5 migration、触发器和 Raw SQL Adapter 创建实现 Task/ADR。
 - 细化 Service Endpoint 的认证、Blob/Artifact 访问、SSE 恢复和版本协商。

@@ -1,8 +1,8 @@
 # Cosmos 信息模型、相关推荐与持续工作区
 
-> 状态：Draft v0.11
+> 状态：Draft v0.12
 >
-> 最后更新：2026-08-10
+> 最后更新：2026-09-07
 >
 > 产品共同语言：[`../../CONTEXT.md`](../../CONTEXT.md)
 >
@@ -65,6 +65,8 @@
 30. 当前单用户阶段按最大产品权限运行，Agent 可以代替用户执行 GUI 中可执行的操作；不建设审批 UI 或细粒度权限模型。未来多人、远端或不可信扩展再增加独立权限策略。
 31. 第一版不建设细粒度权限 UI 或不可信插件沙箱，只运行用户明确安装的本地可信扩展。
 32. Phase 1 首条真实 Connector 采用 RSS/RSSHub，并配套 fixture Connector。
+
+**v0.12 增量（2026-09-07）**：Story 域模型 v1 已接受（[`story-domain-v1` Proposal](../proposals/story-domain-v1.md)）。本文 §4 的完整目标按 v1 切片排定实施顺序：先交付用户显式编排（Entry 主归属移动、Story Revision 更新、Story merge canonical/alias），自动聚类与 Knowledge Workflow、Story split、`evidence_for`/`mentions` 跨 Story 引用后置；上述长期目标不因 v1 未实现而失效。
 
 ## 2. 当前需要定义或校准的概念
 
@@ -276,6 +278,8 @@ Story: Qwen 3.8 Max 发布
 4. 允许新 Story 长期只有一个 Entry；
 5. 后续证据到来时再归并，或通过 merge/split 修正。
 
+**v1 切片（[`story-domain-v1` Proposal](../proposals/story-domain-v1.md)，2026-09-07 accepted）**：在自动聚类/Knowledge Workflow 上线前，第 2 步“尝试加入已有 Story”不自动执行——ingest 保持 Phase 1 行为直接创建单 Entry Story；跨来源归并、merge/split 修正由用户通过显式编排命令执行（move entry、update Story Revision、merge canonical/alias）。
+
 event Story 聚类建议采用在线两阶段方法：
 
 1. **候选召回**：在合理时间窗内按实体、关键词、来源引用、时间和地点找到少量候选 Story。
@@ -377,6 +381,8 @@ Story 的身份、成员关系和历史事实不能因为摘要刷新而改变�
 - 前一 Revision 及变更摘要。
 
 只有造成语义实质变化时才创建新的 Story Revision；排序分数、Spotlight Placement 和临时运行进度不写入 Story Revision。历史 Artifact、Publication 和批注引用精确 Revision，因此当前 Story 更新不会改写过去已经发布的内容。
+
+**v1 切片（[`story-domain-v1` Proposal](../proposals/story-domain-v1.md)，2026-09-07 accepted）**：首版 Story Revision 最小字段集为 title、summary、kind、subtype，外加 revision 编号、fingerprint 与 actor/理由；“关键事实、时间范围、结构化概览”等扩展字段在后续切片补齐。变化判定与 Entry Revision 同口径使用确定性 fingerprint；无实质变化时更新命令 no-op，不追加 Revision。
 
 人类接受的内容修改可以形成字段级保护。Agent 继续分析时先生成候选 Revision；未被人类保护的字段可以按维护策略自动提升，受保护字段不能被静默覆盖。第一版不引入复杂的三方合并编辑器，候选结果至少可以整体接受、拒绝，并保留每个字段的 producer、actor 和依据。
 
@@ -936,6 +942,10 @@ Topic 的成员和 Workspace 的用户状态不会因为生成 v2 而丢失。
 这些问题已明确标为后置，不阻塞本次 Phase 0 基线，也不继续作为本次 grilling 的问题。
 
 ## 14. 变更记录
+
+### v0.12 - 2026-09-07
+
+- 接受 Story 域模型 v1（[`story-domain-v1` Proposal](../proposals/story-domain-v1.md)）：主归属继续由 `Entry.storyId` 单外键表达；Story Revision 版本化（title/summary/kind/subtype 实质变化才递增）；merge 提供 canonical/alias，split 后置；`evidence_for`/`mentions` 跨 Story 引用与自动聚类后置。
 
 ### v0.11 - 2026-08-10
 

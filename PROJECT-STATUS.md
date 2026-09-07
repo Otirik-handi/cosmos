@@ -1,6 +1,22 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-04。Task 02 实施顺序 1–6 步全部完成：媒体边界已合入并经真实双源联网验收；Bilibili hot/feed real-source E2E 已通过（隔离栈实测，Run 成功且 `itemCount=20`，feed 在已验证登录态下运行）；断网产品 E2E 已通过（Playwright 路由拦截模拟外部不可达，saved 图片从站内加载）；docs/spec 已同步（errorMessage + 媒体测试说明）；媒体边界合入后 Windows Node smoke 回归通过。Task 02 实施顺序第 5 步“两块固定看板与来源健康”已通过分支 `feat/t02-boards-source-health` 快进合入 `master`（tip `96c593c`，含维护者实测验证）；未部署。schema 驱动 Web 配置流程切片已通过 PR #2 合入 `master`（merge commit `fc05e4a`，实现提交 `c1f23be`）。source-config-probe 未保存配置测试切片已通过 PR #1 合入 `master`（merge commit `6f50990`，实现提交 `86b4db8`）。Task 02 配置优先产品 E2E 已通过隔离的受控 HTTP RSS 验收并合入 `master`（`793fe10`）；这不等于真实外网 RSS 产品闭环。
+> 更新于 2026-09-07。Phase 1（Task 02 RSS 录入与离线查询）已于 2026-09-04 close（`adec648`）；Bilibili/AI HOT 定时调度、媒体重复下载修复与浏览器断网验收确定性化等 5 个收尾提交已合入 `master`（本地 = 远端 = `48deeb5`）。2026-09-07 维护者决策：Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复验收明确划线为 Phase 2 后置债，不阻塞进入 Phase 2；Phase 2 首切片 Story 域模型已接受（[`docs/proposals/story-domain-v1.md`](docs/proposals/story-domain-v1.md)，accepted）并同步 PRD/信息模型/ADR-0006，Task 编号待维护者分配。
+
+## 2026-09-07：Phase 1 划线收口与 Phase 2 启动基线
+
+Task 02（Phase 1）于 2026-09-04 close（`adec648`，记录断网产品验收与 Windows Node smoke 通过）。随后 5 个收尾提交合入 `master`（本地 = 远端 = `48deeb5`）：`ed22bf5`/`4199c09` 记录 Bilibili hot/feed real-source 验收、`7faf0dd` 增加 Bilibili/AI HOT 定时调度 focused 测试、`4407547` 修复媒体重复下载（fetch 前只读内容指纹预检，unchanged item 不触发媒体获取）、`48deeb5` 将浏览器断网验收改为本地受控源并确定性化。过程记录见 Task 02 walkthrough（2026-09-07 媒体重复下载修复与 offline 确定性切片）。
+
+**维护者决策（进入 Phase 2 的划线，2026-09-07）**：以下 Phase 1 残留项明确记为后置债，不作为 Phase 2 阻塞：
+
+- Docker/Compose 容器验收（本机无 Docker CLI，长期未运行）；
+- 发布与部署（始终未授权）；
+- 真实公网 RSS/RSSHub 长时定时抓取（真实单次与真实双源联网验收已过，长时间稳定性未验证）；
+- 非 Windows 平台 smoke；
+- 长时间故障恢复 / 跨进程接管压力验收。
+
+**Phase 2 启动基线**：维护者确认 Phase 2 首切片为 Story 域模型——把 Phase 1 的“一个 Entry 一个 Story”最小投影升级为独立 Story 实体（多 Entry 主成员、版本化 Story Revision、受管 kind/subtype、最小 merge/alias），对齐 PRD Phase 2 完成标准“用户能打开一个多来源 Story”。Proposal [`docs/proposals/story-domain-v1.md`](docs/proposals/story-domain-v1.md) 已接受（2026-09-07，用户评审接受三项默认建议：自动单 Entry Story + 显式人工归并；Story Revision 展示字段实质变化时递增；merge 进首切片、split 后置）；自动聚类、Knowledge Workflow、Topic 与可配置看板不在首切片。进入 Phase 2 不改变路线图阶段定义，也不把现有 projection 表述为完整 Story 域能力。
+
+**门禁留底（2026-09-07 实际运行，HEAD `48deeb5` 干净）**：`bun run typecheck` 全仓通过；`bun run docs:check` 通过（312 文件，failures=[]）；`bun run db:validate` 通过；`bun run test` 全量 38 文件/324 用例——首轮 1 例（`source-identity-migration.test.ts` backfill 用例）5s 超时 + EBUSY unlink 抖动失败，单独重跑 2/2 通过，与既有 Windows SQLite 环境固有问题记录一致；`bun run build` 通过（packages/API/Worker/Next standalone）；`git diff --check` 干净。浏览器 E2E、Node 进程 E2E 与 Windows Node smoke 本轮未运行（Task 02 已分别于 2026-09-04~09-07 实测通过，证据见 Task 02 walkthrough）。
 
 ## 2026-09-03：两块固定看板与来源健康切片合入
 
@@ -144,11 +160,10 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-Task 02 实施顺序第 5 步“两块固定看板与来源健康”（2026-09-03 快进合入 master）已确认只有已启用且配置定时的 Source 参与调度、SSE/Run/Job 状态在看板可解释；“配置与看板”Checkpoint 在隔离环境达成。
+（2026-09-07 更新：最新基线、后置债划线、Phase 2 启动方向与门禁留底见顶部“2026-09-07：Phase 1 划线收口与 Phase 2 启动基线”。）
 
-媒体边界已完成设计评审与实现（2026-09-03~04）：设计接受为 [`docs/proposals/media-boundary-v1.md`](docs/proposals/media-boundary-v1.md)，稳定决定沉淀于 [`docs/adr/0005-media-boundary-v1.md`](docs/adr/0005-media-boundary-v1.md)（PRD ING-008 与架构 §6.4 已同步）；实现经分支 `feat/t02-media-boundary` 合入 master（2026-09-04，push fork 完成）。本地门禁全绿：全仓 typecheck、全量 38 文件/320 用例、Node E2E 4/4、浏览器 E2E 8/8、组件实验室 13/13、packages 构建。维护者手动实测：真实 RSS 图片下载与站内渲染成功；音视频受控源与国内真实音频源（喜马拉雅剧谈社）验证"仅元数据+外链"符合预期。
-
-已执行（2026-09-04）：真实双源（爱范儿 + 阮一峰）联网媒体验收通过——隔离栈实测两源均成功抓取并保存本地图片（爱范儿 79 saved + 332 预算降级 skipped；阮一峰 100 saved），saved Asset 可经受控下载端点回读字节。仍待执行：**断网产品验收**（用户已延后；验收清单已起草待用户批准，按"用户写步骤/批准清单，agent 实测"方式执行）；docs/spec 同步（跟随断网验收收口）；Docker/Compose 与发布部署仍未运行。
+- [`docs/proposals/story-domain-v1.md`](docs/proposals/story-domain-v1.md)（Phase 2 首切片：Story 域模型）已接受（2026-09-07），PRD/信息模型/ADR 已按 Proposal 预期改动同步。下一步：由维护者分配 Task 编号（预计 `10-story-domain`）并授权开 worktree 后开始实现切片；代码与测试落地后按仓库流程把当前事实收敛到 `docs/spec/`。
+- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随 Story 域模型切片顺带执行。
 
 ## 已完成
 

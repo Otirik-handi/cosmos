@@ -340,6 +340,8 @@ flowchart LR
 | ORG-021 | Phase 2 | Entry → Story 的组织允许确定性算法、传统模型和 LLM 协同；同步入库不依赖 LLM，异步分析可以提出分类、聚类、实体、关系、重要性和紧急性建议。 | 每个自动结果保存输入 Revision、producer、版本、置信度、evidence 和关联 Run；LLM 不能直接改写 Observation 或绕过确认策略。 |
 | ORG-022 | Phase 2 | Story 支持多 Entry 成员和可审计的成员候选、接受、拒绝、merge、split 与证据关系。 | 多个平台描述同一事件时仍保留各自 Entry/Observation，同时可以在一个 event Story 中展示；相关但不同事件不会被强制合并。 |
 
+**Phase 2 首切片注记（2026-09-07，[`story-domain-v1` Proposal](../proposals/story-domain-v1.md) accepted）**：ORG-001/004/011/012/013/017/020/022 的 v1 实施顺序按 Proposal 冻结——先交付用户显式编排（Entry 主归属移动、Story Revision 更新、Story merge canonical/alias），保持 ingest 自动创建单 Entry Story 不回退；自动聚类与 Knowledge Workflow（ORG-021）、Story split 完整生命周期（ORG-014/020）与 `evidence_for`/`mentions` 跨 Story 引用（ORG-011）后置；`Entry.storyId` 保持主归属唯一真相，不新建并行 membership 表。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |
