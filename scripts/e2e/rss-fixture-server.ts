@@ -3,19 +3,36 @@ import { createServer } from "node:http";
 
 const host = process.env.COSMOS_E2E_RSS_HOST?.trim() || "127.0.0.1";
 const port = readPort(process.env.COSMOS_E2E_RSS_PORT?.trim() || "4380");
-const xml = await readFile(new URL("../../fixtures/rss/basic.xml", import.meta.url), "utf8");
+const basicXml = await readFile(new URL("../../fixtures/rss/basic.xml", import.meta.url), "utf8");
+const offlineXml = await readFile(new URL("../../fixtures/rss/offline-media.xml", import.meta.url), "utf8");
+const fixtureImage = await readFile(new URL("../../fixtures/rss/media/fixture-image.svg", import.meta.url), "utf8");
+const routes: Record<string, { body: string; contentType: string }> = {
+    "/feed.xml": {
+        body: basicXml,
+        contentType: "application/rss+xml; charset=utf-8",
+    },
+    "/offline.xml": {
+        body: offlineXml,
+        contentType: "application/rss+xml; charset=utf-8",
+    },
+    "/media/fixture-image.svg": {
+        body: fixtureImage,
+        contentType: "image/svg+xml; charset=utf-8",
+    },
+};
 const server = createServer((request, response) => {
     const path = new URL(request.url ?? "/", "http://fixture.invalid").pathname;
-    if (request.method !== "GET" || path !== "/feed.xml") {
+    const route = request.method === "GET" ? routes[path] : undefined;
+    if (!route) {
         response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         response.end("Not found");
         return;
     }
     response.writeHead(200, {
-        "content-type": "application/rss+xml; charset=utf-8",
-        "content-length": Buffer.byteLength(xml),
+        "content-type": route.contentType,
+        "content-length": Buffer.byteLength(route.body),
     });
-    response.end(xml);
+    response.end(route.body);
 });
 
 await new Promise<void>((resolve, reject) => {

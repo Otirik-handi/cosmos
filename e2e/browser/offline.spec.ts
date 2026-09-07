@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 
-test("offline: saved images render from local API, degraded items show real status", async ({ page }) => {
+test("offline: locally saved images render from the API after the network is blocked", async ({ page }) => {
     test.setTimeout(300_000);
 
     const consoleErrors: string[] = [];
@@ -11,26 +12,29 @@ test("offline: saved images render from local API, degraded items show real stat
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
 
-    // Create source with real RSS URL (爱范儿) for saved images.
+    // 使用本地受控 RSS：feed 与正文图片都来自 127.0.0.1，避免真实外网决定 CI 结果。
+    const sourceName = `离线媒体-${randomUUID().slice(0, 8)}`;
     await page.getByRole("button", { name: "新建来源" }).click();
     const feedUrlInput = page.getByLabel("Feed URL");
     await expect(feedUrlInput).toBeVisible();
-    await page.getByLabel("名称").fill("爱范儿");
-    await feedUrlInput.fill("https://www.ifanr.com/feed");
+    await page.getByLabel("名称").fill(sourceName);
+    await feedUrlInput.fill("http://127.0.0.1:4380/offline.xml");
     await page.getByRole("button", { name: "保存来源" }).click();
     await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
 
     const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
-    const enableButton = healthSection.getByRole("button", { name: "启用 爱范儿", exact: true });
+    const enableButton = healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true });
     await enableButton.click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
 
-    const runButton = healthSection.getByRole("button", { name: "爱范儿", exact: true });
+    const runButton = healthSection.getByRole("button", { name: sourceName, exact: true });
     await runButton.click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
-    // Wait for ingest to complete.
+    // Wait until this test's own feed items appear; earlier specs may already
+    // have produced stories, so "any Story trigger" is not a completion signal.
     await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
+    await expect(page.getByText("Offline saved media").first()).toBeVisible({ timeout: 180_000 });
     const storyTriggers = page.getByRole("button", { name: "打开 Story" });
     await expect(storyTriggers.first()).toBeVisible({ timeout: 180_000 });
 
@@ -46,8 +50,9 @@ test("offline: saved images render from local API, degraded items show real stat
         if (hasSaved) {
             // Online: verify image loads from local API.
             await expect(savedImage).toHaveAttribute("src", /\/api\/v1\/assets\//);
-            const naturalWidth = await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth);
-            expect(naturalWidth).toBeGreaterThan(0);
+            await expect.poll(async () => (
+                await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
+            )).toBeGreaterThan(0);
             foundSavedImage = true;
             break;
         }
@@ -81,8 +86,9 @@ test("offline: saved images render from local API, degraded items show real stat
         const savedImage = dialog.locator("[data-asset-status=saved] img").first();
         if ((await savedImage.count()) > 0) {
             await expect(savedImage).toHaveAttribute("src", /\/api\/v1\/assets\//);
-            const naturalWidth = await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth);
-            expect(naturalWidth).toBeGreaterThan(0);
+            await expect.poll(async () => (
+                await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
+            )).toBeGreaterThan(0);
             offlineVerified = true;
             break;
         }

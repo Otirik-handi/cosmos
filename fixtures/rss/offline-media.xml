@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Cosmos Offline Media Fixture</title>
+        <link>http://127.0.0.1:4380/offline.xml</link>
+        <description>Deterministic local media fixture for the offline browser acceptance.</description>
+        <item>
+            <guid>offline-media-001</guid>
+            <title>Offline saved media</title>
+            <link>http://127.0.0.1:4380/offline.html</link>
+            <description><![CDATA[<p>This item carries one local image that must be saved before the network is cut.</p><img src="http://127.0.0.1:4380/media/fixture-image.svg" alt="fixture image"/>]]></description>
+            <pubDate>Fri, 07 Aug 2026 12:03:00 GMT</pubDate>
+        </item>
+        <item>
+            <guid>offline-text-002</guid>
+            <title>Offline text item</title>
+            <link>http://127.0.0.1:4380/offline-text.html</link>
+            <description>Plain offline item without media.</description>
+            <pubDate>Fri, 07 Aug 2026 12:04:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

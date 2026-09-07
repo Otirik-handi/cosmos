@@ -54,6 +54,8 @@ bunx playwright install chromium
 
 测试监听 `pageerror`、未预期 console error 和网络失败，并在 teardown 清理全部子进程。截图和 trace 位于被忽略的 `test-results/`，不作为业务状态来源。
 
+浏览器断网场景（`e2e/browser/offline.spec.ts`）使用本地受控 RSS 与本地 SVG 图片（`fixtures/rss/offline-media.xml`、`fixtures/rss/media/fixture-image.svg`），不依赖真实外网；Browser 栈通过 `COSMOS_MEDIA_ALLOWED_HOSTS=127.0.0.1` 放行该测试媒体源，Playwright 再以路由拦截模拟断网并验证站内 `/api/v1/assets` 图片加载。
+
 安全漏洞的完整复现命令、载荷和原始证据只留在 `.agent/tmp/` 或批准的私密报告渠道。公开测试使用能证明授权、containment 或校验边界的泛化输入；Task、PR、截图和日志只写脱敏摘要，不能为了“完整命令”暴露漏洞细节。
 
 ## 可选验收

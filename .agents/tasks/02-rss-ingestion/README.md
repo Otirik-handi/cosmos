@@ -379,6 +379,7 @@ SourceInstance
 - **可调整备选（记录待参考，未采用）**：
   1. **按已保存 URL 跳过**：以 `(Entry, sourceUrl)` 是否已有 saved Asset 为粒度跳过下载；可支持单图部分跳过/失败重试，但会改变“修订不变不重试”的媒体边界语义，需与 ING-009 一起决策。
   2. **媒体移入入库后阶段**：把媒体获取从 `source.fetch` 移到 `library.ingest` 判定新建/修订后再执行；语义最直接，但会让 host/library Action 产生外部副作用，需要重审 Action execution placement 与外部副作用边界。
+- **后续（2026-09-07）：默认 CI offline 改为本地受控源**：`e2e/browser/offline.spec.ts` 原依赖真实爱范儿 RSS/CDN，导致 GitHub Runner 上 “no saved image” 且重试产生重复来源。现改用本地 `offline-media.xml` + 本地 SVG 图片，`rss-fixture-server.ts` 提供 `/offline.xml` 与 `/media/fixture-image.svg`，Browser 栈放行 `127.0.0.1`；用例等待自己的 feed 条目出现并用 `expect.poll` 等待本地图片加载完成，避免被同栈先前测试的 Story 误导。本地全量 `bun run test:browser` 9/9 通过。
 
 ## Verification
 

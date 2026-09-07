@@ -33,6 +33,7 @@ async function main(): Promise<void> {
         COSMOS_WORKER_POLL_MS: "50",
         COSMOS_WORKER_LEASE_MS: "30000",
         COSMOS_WORKER_SHUTDOWN_DEADLINE_MS: "5000",
+        COSMOS_MEDIA_ALLOWED_HOSTS: "127.0.0.1",
         COSMOS_API_HOST: "127.0.0.1",
         COSMOS_API_PORT: String(apiPort),
         COSMOS_API_URL: `http://127.0.0.1:${apiPort}`,
