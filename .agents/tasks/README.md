@@ -30,6 +30,7 @@ Task 导航：
 - [`07-deferred-workflow-host/`](07-deferred-workflow-host/)：Deferred Activity、Cosmos Durable Host、Activity Job、固定 Ingest parity 和 Worker Admin 实施记录。
 - [`08-project-governance/`](08-project-governance/)：治理目录、Proposal、工程标准、测试流程、Task 路径和文档门禁收敛。
 - [`09-react-component-lab/`](09-react-component-lab/)：React 组件实验室、组件/场景登记合同、开发态工作台和现有 Web 产品组件采用。
+- [`10-story-domain/`](10-story-domain/)：Phase 2 首切片 Story 域模型 v1——多 Entry 主归属、版本化 Story Revision、人工 merge canonical/alias 与多来源 Story 详情。
 
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 
