@@ -919,6 +919,42 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return this.toRunSnapshot(run);
     }
 
+    async listContentUnchangedItems(input: {
+        sourceId: string;
+        items: readonly NormalizedIngestItem[];
+    }): Promise<readonly boolean[]> {
+        if (input.items.length === 0) {
+            return [];
+        }
+        const externalKeys = input.items.map((item) => deriveExternalKey(item));
+        const contentFingerprints = input.items.map((item) => fingerprintEntryRevision({
+            title: item.title,
+            summary: item.summary,
+            contentText: item.contentText,
+            webUrl: item.webUrl,
+            kind: item.kind,
+            publisher: item.publisher,
+        }));
+        const existing = await this.prisma.entry.findMany({
+            where: {
+                sourceInstanceId: input.sourceId,
+                canonicalExternalId: { in: externalKeys },
+            },
+            select: {
+                canonicalExternalId: true,
+                currentRevision: {
+                    select: { contentFingerprint: true },
+                },
+            },
+        });
+        const byExternalKey = new Map(
+            existing.map((entry) => [entry.canonicalExternalId, entry.currentRevision]),
+        );
+        return contentFingerprints.map((fingerprint, index) => (
+            byExternalKey.get(externalKeys[index])?.contentFingerprint === fingerprint
+        ));
+    }
+
     async persistWorkflowIngestItem(input: {
         sourceId: string;
         workflowRunId: string;

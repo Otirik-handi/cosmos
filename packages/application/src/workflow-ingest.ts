@@ -31,11 +31,13 @@ import {
 } from "./action.js";
 import { ConnectorExecutionError } from "./index.js";
 import {
+    acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
     type MediaAcquirer,
 } from "./media-acquisition.js";
 import type {
     ConnectorResolver,
+    CosmosRepository,
     IngestConnector,
     LoggerPort,
     PersistIngestItemResult,
@@ -107,6 +109,7 @@ export interface IngestActionOptions {
     resolveConnector: ConnectorResolver;
     blobs: WorkflowBlobStore;
     domain: WorkflowIngestDomainPort;
+    unchangedItems: Pick<CosmosRepository, "listContentUnchangedItems">;
     mediaAcquirer?: MediaAcquirer;
     logger?: LoggerPort;
 }
@@ -300,8 +303,14 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                     connector.capabilities.includes(mediaDownloadCapability)
                     && options.mediaAcquirer
                 ) {
-                    acquiredItems = await options.mediaAcquirer.acquireItems(
+                    const unchanged = await options.unchangedItems.listContentUnchangedItems({
+                        sourceId: parsed.source.id,
+                        items: page.items,
+                    });
+                    acquiredItems = await acquireItemsSkippingUnchanged(
+                        options.mediaAcquirer,
                         page.items,
+                        unchanged,
                         { signal: context.signal },
                     );
                 }

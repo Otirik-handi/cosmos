@@ -48,6 +48,39 @@ export interface MediaAcquirer {
     ): Promise<readonly NormalizedIngestItem[]>;
 }
 
+/**
+ * Acquire media only for items that will persist a new/revised Entry.
+ * Items whose content fingerprint is unchanged stay as the connector returned
+ * them (assets remain metadata_only); the persist duplicate path writes no
+ * Asset rows, so downloading those candidates would be pure side effect.
+ */
+export async function acquireItemsSkippingUnchanged(
+    acquirer: MediaAcquirer,
+    items: readonly NormalizedIngestItem[],
+    unchanged: readonly boolean[],
+    context?: { signal?: AbortSignal },
+): Promise<readonly NormalizedIngestItem[]> {
+    if (items.length !== unchanged.length) {
+        throw new Error("Media preflight length must match the fetched item list.");
+    }
+    const acquireIndexes = unchanged.flatMap((skip, index) => skip ? [] : [index]);
+    if (acquireIndexes.length === 0) {
+        return items;
+    }
+    const acquired = await acquirer.acquireItems(
+        acquireIndexes.map((index) => items[index]),
+        context,
+    );
+    if (acquired.length !== acquireIndexes.length) {
+        throw new Error("Media acquirer returned a different item count than requested.");
+    }
+    const merged = [...items];
+    acquireIndexes.forEach((index, position) => {
+        merged[index] = acquired[position];
+    });
+    return merged;
+}
+
 type SavedMedia = {
     status: "saved";
     bytes: Uint8Array;

@@ -4,7 +4,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import type { IngestConnector } from "../../../packages/application/src/index.js";
+import {
+    createMediaAcquirer,
+    mediaDownloadCapability,
+    type IngestConnector,
+} from "../../../packages/application/src/index.js";
 import type { NormalizedIngestItem } from "../../../packages/domain/src/index.js";
 
 import {
@@ -163,6 +167,7 @@ describe("Worker Ingest Workflow composition", () => {
                     resolveConnector: () => connector,
                     blobs: repository.blobs,
                     domain: repository,
+                    unchangedItems: repository,
                 }),
                 owner,
                 leaseMs: 60_000,
@@ -442,6 +447,108 @@ describe("Worker Ingest Workflow composition", () => {
                 workerId: "workflow-parity-worker",
             });
             expect(await repository.getWorkflowAttempt(attempts[0].id)).toEqual(attempts[0]);
+        } finally {
+            await repository.close();
+        }
+    }, 15_000);
+
+    it("does not re-acquire media when a later run sees unchanged items", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-skip-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const source = await createFixtureSource(repository, "Media skip workflow");
+            const item: NormalizedIngestItem = {
+                externalId: "media-skip-1",
+                title: "Media skip item",
+                summary: null,
+                contentText: "Unchanged media body",
+                webUrl: "https://example.test/media-skip",
+                kind: "article",
+                publisher: null,
+                metrics: null,
+                publishedAt: null,
+                updatedAt: null,
+                sourceLocator: { provider: "fixture", item: "media-skip-1" },
+                rawPayload: "<item>media-skip</item>",
+                assets: [{
+                    kind: "image",
+                    sourceUrl: "https://media.example.test/a.png",
+                    status: "metadata_only",
+                    mimeType: null,
+                    byteSize: null,
+                    content: null,
+                }],
+            };
+            const fetched: string[] = [];
+            const connector: IngestConnector = {
+                id: "rss",
+                description: "Media skip workflow connector",
+                configVersion: "v1",
+                capabilities: [mediaDownloadCapability],
+                validate: () => undefined,
+                fetchItems: async () => ({
+                    items: [item],
+                    nextCursor: null,
+                }),
+            };
+            const mediaAcquirer = createMediaAcquirer({
+                fetch: async (input) => {
+                    fetched.push(String(input));
+                    return new Response(
+                        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+                        { status: 200, headers: { "content-type": "image/png" } },
+                    );
+                },
+                resolveHost: async () => ["93.184.216.34"],
+            });
+            const composition = createWorkflowHost({
+                prisma: repository.prisma,
+                blobs: repository.blobs,
+                definitions: [createIngestWorkflowDefinition()],
+                actions: createIngestActions({
+                    resolveConnector: () => connector,
+                    blobs: repository.blobs,
+                    domain: repository,
+                    unchangedItems: repository,
+                    mediaAcquirer,
+                }),
+                owner: "media-skip-worker",
+                leaseMs: 60_000,
+            });
+            const control = new IngestWorkflowControlService({
+                store: composition.store,
+                getSourceExecutionSnapshot: async (sourceId) => (
+                    await repository.getSource(sourceId) ?? null
+                ),
+                getCheckpointSnapshot: (sourceId) => repository.getCheckpointSnapshot(sourceId),
+            });
+
+            const firstRun = await control.enqueue({
+                sourceId: source.id,
+                triggerKind: "manual",
+                idempotencyKey: "media-skip-run-1",
+            });
+            const secondRun = await control.enqueue({
+                sourceId: source.id,
+                triggerKind: "manual",
+                idempotencyKey: "media-skip-run-2",
+            });
+            await expect(drainWorkflow(composition, firstRun.runId)).resolves.toMatchObject({
+                status: "completed",
+            });
+            await expect(drainWorkflow(composition, secondRun.runId)).resolves.toMatchObject({
+                status: "completed",
+            });
+
+            expect(fetched).toHaveLength(1);
+            const entries = await repository.entries({ sourceId: source.id, limit: 10 });
+            expect(entries.items).toHaveLength(1);
+            expect(entries.items[0]?.revisionCount).toBe(1);
+            expect(entries.items[0]?.observationCount).toBe(2);
         } finally {
             await repository.close();
         }

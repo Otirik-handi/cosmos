@@ -152,6 +152,8 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 
 `source.fetch@1` 先把 `SourceExecutionSnapshot` 扩展为运行时 `SourceSnapshot`（`lastRunAt: null`、`lastError: null`），调用已解析 connector 的 `validate(source)`，再调用 `fetchItems({ source, cursor, idempotencyKey, signal })`，属于外部副作用。该 Action 的返回 item 仍以 JSON-safe `NormalizedIngestItemContract` 传递；`rawPayload` 是字符串，不通过 WorkflowBlobStore 外置。
 
+对声明 `media-download` 能力且注入了 media acquirer 的 connector，`source.fetch@1` 只对“入库后会产生新建/修订 Entry”的 item 执行媒体获取：下载前先用与持久化 duplicate 判定同口径的内容指纹预检（`listContentUnchangedItems`），已存在同 `externalKey` 且当前 Revision 指纹未变的 item 保持 connector 返回的 `metadata_only` 资产，不做网络下载；其后的 duplicate 持久化路径不写 Asset 行。首次采集、内容修订或其它 Source 下的同键 item 仍正常获取媒体。
+
 对每个状态为 `saved` 且带 `content: Uint8Array` 的 asset，`toJsonItem` 调用 `WorkflowBlobStore.put(content, { mimeType })`，并在 Workflow JSON 中写入 `{ key, hash, byteSize, mediaType }` BlobRef；非 saved、无 content 的 asset 写 `blobRef: null`。host `library.ingest@1` 再用 `readVerifiedBlob` 将 BlobRef 恢复为 bytes 后传给领域端口。
 
 `library.ingest@1` 的 Action 元数据为 `effect: none`，但其领域端口在 host fence 与 ingest command idempotency 保护下会持久化 raw payload Blob、资产 Blob、`Observation`、`Entry`、`EntryRevision`、`Story`/`StoryRevision`、`Asset`、FTS，以及 entry/feed events。raw payload Blob 的最终写入由生产 `PrismaCosmosRepository.persistIngestItemInternal` 完成，不由 WorkflowBlobStore 的 asset 转换重复写入。

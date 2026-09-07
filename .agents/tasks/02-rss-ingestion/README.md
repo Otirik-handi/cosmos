@@ -369,6 +369,17 @@ SourceInstance
 
 - **定位**：Workflow completion 创建后必须由 completion dispatcher 领取并交给 Kernel 恢复；Kernel 保存恢复状态时统一写入 `resumeRequired` 和 Run 状态。Run 行的 product 快照此前只记录 queued 状态，没有在 Workflow 输出 completed 时同步 `itemCount`、`createdEntryCount` 和 `revisedEntryCount`。
 
+### 切片：媒体重复下载修复（2026-09-07，实现完成待长跑复验）
+
+- **现象（长跑实测）**：阮一峰 RSS 每 10 分钟定时运行均成功且 `createdEntryCount=0/revisedEntryCount=0`，但 Worker 仍对约 100 张正文图片重新发起下载，运行约 2 分钟；第 4 轮起 cdn.beekka.com 开始返回 HTTP 429，失败 Asset 数 6 → 7 → 8 → 15 递增。库里 Entry/Asset 无重复（去重发生在下载之后）。
+- **定位**：`source.fetch@1`（及 legacy `IngestionService`）在 fetch 后无条件对含 `media-download` 能力的 Connector 调用 `mediaAcquirer.acquireItems`；RSS Connector 每轮重新提取全部正文图片候选；MediaAcquirer 只做页内 memo，不查询既有 Entry/Asset；真正的内容去重在 `library.ingest`/`persistIngestItemInternal` 中，未变化时直接返回 duplicate，不写 Asset 行。
+- **已确认方案（最小修复）**：在媒体下载前增加只读内容指纹预检（复用 domain `deriveExternalKey`/`fingerprintEntryRevision`，与持久化 duplicate 判定同口径），对“入库后只会产生重复 Observation”的 item 跳过整条媒体获取，保持 Connector 原始 `metadata_only` 不变。不新增 Prisma migration，不改 Product API/Action schema。
+- **实现摘要（2026-09-07）**：`CosmosRepository`/`PrismaCosmosRepository` 新增只读 `listContentUnchangedItems`；`media-acquisition.ts` 新增 `acquireItemsSkippingUnchanged` 合并 helper；legacy `IngestionService` 与 durable `source.fetch@1` 均在下载前按 item 预检，unchanged 不触发 mediaAcquirer。
+- **验证记录（2026-09-07，全部实际运行）**：新增 storage legacy 集成用例（含 unchanged/其它 Source/修订三种预检结果 + 第二轮不下载）与 worker durable 两次运行用例（第二轮不下载、仍 2 Observation/1 Revision）；focused 4 文件/43 用例通过，全量 `bun run test` 38 文件/324 用例通过，Node 进程 E2E 4/4 通过，全仓 `bun run typecheck`、`bun run docs:check`（310 文件）与 `git diff --check` 通过。维护者后台阮一峰 10 分钟来源在修复生效后的定时 Run（run_305e3a3a，2026-09-07）已实测：`itemCount=3`、`createdEntryCount=0`、`revisedEntryCount=0`，worker 日志无任何 `media.acquire` 图片下载，仅保留 RSS feed 抓取。
+- **可调整备选（记录待参考，未采用）**：
+  1. **按已保存 URL 跳过**：以 `(Entry, sourceUrl)` 是否已有 saved Asset 为粒度跳过下载；可支持单图部分跳过/失败重试，但会改变“修订不变不重试”的媒体边界语义，需与 ING-009 一起决策。
+  2. **媒体移入入库后阶段**：把媒体获取从 `source.fetch` 移到 `library.ingest` 判定新建/修订后再执行；语义最直接，但会让 host/library Action 产生外部副作用，需要重审 Action execution placement 与外部副作用边界。
+
 ## Verification
 
 已完成：

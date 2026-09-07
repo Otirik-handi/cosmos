@@ -29,6 +29,7 @@ import type { NormalizedIngestItem } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
 import {
+    acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
     type MediaAcquirer,
 } from "./media-acquisition.js";
@@ -164,6 +165,10 @@ export interface CosmosRepository {
         cursor: string | null;
         revision: number;
     }>;
+    listContentUnchangedItems(input: {
+        sourceId: string;
+        items: readonly NormalizedIngestItem[];
+    }): Promise<readonly boolean[]>;
     claimNextJob(input: {
         owner: string;
         leaseMs: number;
@@ -746,10 +751,21 @@ export class IngestionService {
                 durationMs: Date.now() - fetchStartedAt,
             });
 
-            const acquiredItems = this.mediaAcquirer
+            let acquiredItems = page.items;
+            if (
+                this.mediaAcquirer
                 && connector.capabilities.includes(mediaDownloadCapability)
-                ? await this.mediaAcquirer.acquireItems(page.items)
-                : page.items;
+            ) {
+                const unchanged = await this.repository.listContentUnchangedItems({
+                    sourceId: source.id,
+                    items: page.items,
+                });
+                acquiredItems = await acquireItemsSkippingUnchanged(
+                    this.mediaAcquirer,
+                    page.items,
+                    unchanged,
+                );
+            }
 
             for (const [index, item] of acquiredItems.entries()) {
                 const result = await this.repository.persistIngestItem({

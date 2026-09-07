@@ -51,6 +51,9 @@ function actionsWith(fetchItems: () => Promise<never>, validate: () => void = ()
                 committed: true,
             }),
         },
+        unchangedItems: {
+            listContentUnchangedItems: async () => [],
+        },
     }));
 }
 
@@ -165,6 +168,9 @@ function actionsWithMedia(options: {
                 revision: 0,
                 committed: true,
             }),
+        },
+        unchangedItems: {
+            listContentUnchangedItems: async () => items.map(() => false),
         },
         mediaAcquirer: withAcquirer ? acquirer : undefined,
     }));

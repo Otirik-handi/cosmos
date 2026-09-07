@@ -94,6 +94,7 @@ async function bootstrap(): Promise<void> {
                     resolveConnector: (source) => connectors.resolve(source),
                     blobs: repository.blobs,
                     domain: repository,
+                    unchangedItems: repository,
                     mediaAcquirer,
                     logger,
                 }),

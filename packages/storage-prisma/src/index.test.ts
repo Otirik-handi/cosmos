@@ -10,8 +10,10 @@ import {
     ConnectorProbeService,
     createBuiltinManifestCatalog,
     ConnectorRegistry,
+    createMediaAcquirer,
     IngestionService,
     IngestionWorker,
+    mediaDownloadCapability,
     SourceConfigProbeService,
     type LoggerPort,
     type IngestConnector,
@@ -232,6 +234,105 @@ describe("PrismaCosmosRepository", () => {
                 storageKey: null,
                 errorMessage: "图片下载超时",
             });
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("preflights unchanged items and skips media re-download on legacy runs", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-media-skip-legacy-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const source = await createFixtureSource(repository, {
+                name: "Media skip fixture",
+                config: {},
+            });
+            const otherSource = await createFixtureSource(repository, {
+                name: "Other media skip fixture",
+                config: {},
+            });
+            const item: NormalizedIngestItem = {
+                externalId: "media-skip-1",
+                title: "Media skip item",
+                summary: null,
+                contentText: "Unchanged media body",
+                webUrl: "https://example.test/media-skip",
+                kind: "article",
+                publisher: null,
+                metrics: null,
+                publishedAt: null,
+                updatedAt: null,
+                sourceLocator: { provider: "fixture", item: "media-skip-1" },
+                rawPayload: "<item>media-skip</item>",
+                assets: [{
+                    kind: "image",
+                    sourceUrl: "https://media.example.test/a.png",
+                    status: "metadata_only",
+                    mimeType: null,
+                    byteSize: null,
+                    content: null,
+                }],
+            };
+            const fetched: string[] = [];
+            const connector: IngestConnector = {
+                id: "rss",
+                description: "Media skip connector",
+                configVersion: "v1",
+                capabilities: [mediaDownloadCapability],
+                validate: () => undefined,
+                fetchItems: async () => ({
+                    items: [item],
+                    nextCursor: null,
+                }),
+            };
+            const mediaAcquirer = createMediaAcquirer({
+                fetch: async (input) => {
+                    fetched.push(String(input));
+                    return new Response(
+                        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+                        { status: 200, headers: { "content-type": "image/png" } },
+                    );
+                },
+                resolveHost: async () => ["93.184.216.34"],
+            });
+            const service = new IngestionService(
+                repository,
+                () => connector,
+                undefined,
+                mediaAcquirer,
+            );
+
+            const first = await service.runSource(source.id);
+            const unchanged = await repository.listContentUnchangedItems({
+                sourceId: source.id,
+                items: [item],
+            });
+            const otherSourceUnchanged = await repository.listContentUnchangedItems({
+                sourceId: otherSource.id,
+                items: [item],
+            });
+            const changedItem: NormalizedIngestItem = {
+                ...item,
+                contentText: "Revised media body",
+                rawPayload: "<item>media-skip-revised</item>",
+            };
+            const revisedUnchanged = await repository.listContentUnchangedItems({
+                sourceId: source.id,
+                items: [changedItem],
+            });
+            const second = await service.runSource(source.id);
+
+            expect(first.createdEntryCount).toBe(1);
+            expect(second.duplicateObservationCount).toBe(1);
+            expect(unchanged).toEqual([true]);
+            expect(otherSourceUnchanged).toEqual([false]);
+            expect(revisedUnchanged).toEqual([false]);
+            expect(fetched).toHaveLength(1);
         } finally {
             await repository.close();
         }
