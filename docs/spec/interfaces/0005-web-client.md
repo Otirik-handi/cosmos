@@ -134,7 +134,11 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     （`createCollection`）。页面在初次加载时 `listLabels`/`listCollections`，打开 Story 时用
     `listCollections({ storyId })` 取回 `containsStory` 成员标记；所有写命令成功后重读
     Story 与相应列表。面板不直接发 API 请求，全部经 props 回调上抛。
-15. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+15. **批注（Annotation）**：StoryPanel 与 TopicPanel 的“批注”区由 `client.listAnnotations`
+    加载（目标分别为当前 Story/Topic，Story 目标用 canonical id），展示正文、可选引用文本、
+    作者与时间，支持新建（`createAnnotation`）、编辑（`updateAnnotation`）与删除
+    （`deleteAnnotation`）；写命令成功后重读该目标的批注列表。
+16. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
 ## 输入

@@ -246,6 +246,10 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `GET /favorites` | 无 | `FavoriteList`；按加入时间倒序。 |
 | `POST /favorites` | body `FavoriteCommand` | `UserOrganizationAck`（`action: "favorite.set"`）；Schema 失败 400（`topic` 等非法目标），目标缺失 404。 |
 | `POST /favorites/removals` | body `FavoriteCommand` | `UserOrganizationAck`（`action: "favorite.unset"`）；错误同上；缺失收藏为幂等 no-op。 |
+| `GET /annotations` | query `targetType`、`targetId` | `AnnotationList`；目标按 canonical 解析，按 `createdAt` 升序；Schema 失败 400，目标缺失 404。 |
+| `POST /annotations` | body `CreateAnnotationCommand` | `Annotation`；Schema 失败 400（未知 `targetType`、空 body），目标缺失 404。 |
+| `PATCH /annotations/:annotationId` | body `UpdateAnnotationCommand` | `Annotation`；Schema 失败 400，批注缺失 404。 |
+| `POST /annotations/:annotationId/removals` | path `annotationId` | `UserOrganizationAck`（`action: "annotation.deleted"`）；不存在 404。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |
@@ -254,7 +258,7 @@ Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
 日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），Entity/关系写操作仅限上方
 entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，用户组织写操作仅限
-labels/label-assignments/collections/items/favorites 端点，其余路径不在 API 层修改事实。
+labels/label-assignments/collections/items/favorites/annotations 端点，其余路径不在 API 层修改事实。
 
 ### SSE events
 

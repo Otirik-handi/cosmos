@@ -59,8 +59,9 @@ Non-goals（见 Proposal / ADR-0009）：
 
 ## Current State
 
-- 生命周期阶段：子切片 A（Label + Collection + 收藏标记）已实现并通过全部门禁（typecheck、全量 `bun run test` 43 文件/368 用例、build、lint:web 0 error、component-lab 27、docs:check、git diff --check），`docs/spec`（domain/contracts/storage/interfaces/0002+0005）与 `docs/testing` 已同步；分支 `feat/t13-user-organization` 三次分层提交（storage 层 `244461c`、API/transport 层 `1401022`、Web 层 `1a9735d`），待维护者授权合入 master 后进入子切片 B（Annotation）。
-- 迁移：`20260908140000_user_organization_v1`（5 张全新表，forward-only、无 backfill），已在隔离库经 `migrate deploy` 验证。
+- 生命周期阶段：子切片 A（Label/Collection/收藏标记）与子切片 B（Annotation）已实现并通过门禁；子切片 C（Saved View）未开始。分支 `feat/t13-user-organization`，待维护者授权合入 master。
+- 提交：A 层 `244461c`（domain/storage）、`1401022`（API/transport）、`1a9735d`（Web）、`d3d183f`（spec）、`7072fc2`（walkthrough）；B 后端、B Web 层见下方 walkthrough。
+- 迁移：`20260908140000_user_organization_v1`（5 张表）、`20260908160000_annotation_v1`（1 张表），均 forward-only、无 backfill。
 - 未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署（均为既有后置边界）。
 
 ## Decisions and Deviations
@@ -95,6 +96,14 @@ Non-goals（见 Proposal / ADR-0009）：
 - 迁移：`bun run db:validate` 通过；隔离库 `prisma migrate deploy` 应用 `20260908140000_user_organization_v1` 成功（storage 行为测试的 setup 即该路径）。
 
 未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署。
+
+## Implementation Walkthrough（子切片 B：Annotation，2026-09-08）
+
+1. 后端层（`a58438a` 前一提交）：Prisma `Annotation` 表 + migration `20260908160000_annotation_v1`；contracts 新增 `Annotation`/`AnnotationList` DTO 与 `CreateAnnotationCommand`/`UpdateAnnotationCommand`/`AnnotationTargetQuery`；application 新增 `AnnotationNotFoundError` 与 4 个 repository 方法；storage 实现 create（Story 目标固定写入当时 `currentRevisionId`）/update/delete/list，并把 Story merge 时的批注 `targetId` 重定向到 canonical；transport client 4 个方法；API 4 个端点（GET/POST `/annotations`、PATCH `/annotations/:id`、POST `/annotations/:id/removals`）。
+2. Web 层（`a58438a`）：`page.tsx` 新增 story/topic 批注状态与 6 个处理器，打开 Story/Topic 时按 canonical id 加载批注；StoryPanel/TopicPanel 新增“批注”区（列表含正文/引用/作者/时间，新建/编辑/删除），全部 props 可选。
+3. 文档同步：`docs/spec` 四文件 + `docs/testing/README.md` + 本 Task。
+
+验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；聚焦 `bunx vitest run packages/contracts packages/transport-http apps/api/src/app.controller.test.ts packages/storage-prisma/src/user-organization-domain.test.ts` 全部通过（contracts 36、transport 9、api controller 30、storage 7）；`bun run lint:web` 0 error（2 个既有 warning）；component-lab 27 通过；`git diff --check` 干净。子切片 B 收尾前会再跑一次全量 `bun run test`、`bun run build`、`bun run docs:check`。
 
 ## Follow-ups
 
