@@ -230,6 +230,22 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /story-entity-links/removals` | body `UnlinkStoryEntityCommand` | `EntityDetail`；Schema 失败 400，Story/Entity 缺失 404。 |
 | `POST /entity-relations` | body `CreateEntityRelationCommand` | `EntityDetail`；Schema 失败 400，未知关系类型/自环 409，端点 Entity 缺失 404。 |
 | `POST /entity-relations/removals` | body `RemoveEntityRelationCommand` | `EntityDetail`；Schema 失败 400，from Entity 缺失 404。 |
+| `GET /labels` | 无 | `LabelList`；按 name 升序，含 `assignedCount`。 |
+| `GET /labels/:labelId` | path `labelId` | `LabelDetail`（按类型分组的 `assignedStories`/`assignedEntries`/`assignedTopics`，各含解析后的标题）；不存在 404。 |
+| `POST /labels` | body `CreateLabelCommand` | `LabelItem`；Schema 失败 400，重名 409。 |
+| `POST /labels/:labelId/removals` | path `labelId` | `UserOrganizationAck`（`action: "label.deleted"`）；不存在 404。 |
+| `POST /label-assignments` | body `LabelAssignmentCommand` | `UserOrganizationAck`（`action: "label.assigned"`）；Schema 失败 400（未知 `targetType`），Label 缺失 404，目标 Story/Entry/Topic 缺失 404。 |
+| `POST /label-assignments/removals` | body `LabelAssignmentCommand` | `UserOrganizationAck`（`action: "label.unassigned"`）；错误同上；缺失附加为幂等 no-op。 |
+| `GET /collections` | query `storyId?` | `CollectionList`；给出 `storyId` 时每项含 `containsStory`。 |
+| `GET /collections/:collectionId` | path `collectionId` | `CollectionDetail`（成员 Story 含当前标题与 `addedAt`）；不存在 404。 |
+| `POST /collections` | body `CreateCollectionCommand` | `CollectionSummary`；Schema 失败 400。 |
+| `PATCH /collections/:collectionId` | body `UpdateCollectionCommand` | `CollectionSummary`；Schema 失败 400，不存在 404。 |
+| `POST /collections/:collectionId/removals` | path `collectionId` | `UserOrganizationAck`（`action: "collection.deleted"`）；不存在 404。 |
+| `POST /collections/:collectionId/items` | body `CollectionItemCommand` | `UserOrganizationAck`（`action: "collection.item_added"`）；Schema 失败 400，Collection/Story 缺失 404。 |
+| `POST /collections/:collectionId/items/removals` | body `CollectionItemCommand` | `UserOrganizationAck`（`action: "collection.item_removed"`）；错误同上；缺失成员为幂等 no-op。 |
+| `GET /favorites` | 无 | `FavoriteList`；按加入时间倒序。 |
+| `POST /favorites` | body `FavoriteCommand` | `UserOrganizationAck`（`action: "favorite.set"`）；Schema 失败 400（`topic` 等非法目标），目标缺失 404。 |
+| `POST /favorites/removals` | body `FavoriteCommand` | `UserOrganizationAck`（`action: "favorite.unset"`）；错误同上；缺失收藏为幂等 no-op。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |
@@ -237,7 +253,8 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 cursor 在存储层按
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
 日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），Entity/关系写操作仅限上方
-entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，其余路径不在 API 层修改事实。
+entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，用户组织写操作仅限
+labels/label-assignments/collections/items/favorites 端点，其余路径不在 API 层修改事实。
 
 ### SSE events
 

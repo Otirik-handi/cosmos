@@ -66,6 +66,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **StoryRevisionContent** 是 Story Revision 的展示字段集合（title、可空 summary、核心 kind、可空 subtype）；`fingerprintStoryRevision` 对这四个字段做确定性 SHA-256 指纹，用于判定“实质性变化”与 no-op。
 - **TopicRevisionContent** 是 Topic Revision 的展示字段集合（title、purpose、可空 scope）；`fingerprintTopicRevision` 对这三个字段做确定性 SHA-256 指纹，用于判定 Topic 展示内容的“实质性变化”与 no-op（ADR-0007 决策 1）。Topic 成员角色、membership revision 与 merge 去重语义由 storage 命令执行，domain 只提供角色枚举与指纹纯函数。
 - **EntityRevisionContent** 是 Entity Revision 的展示字段集合（`name`、受管 `type`）；`fingerprintEntityRevision` 对这两个字段做确定性 SHA-256 指纹，用于判定 Entity 身份表示的“实质性变化”与 no-op（ADR-0008 决策 2）。Entity 名称别名、Story↔Entity/Entity↔Entity 的 provenance 语义由 storage 命令执行，domain 只提供类型枚举与指纹纯函数。
+- **targetTypes** 是用户组织对象的附加目标受管枚举（`story`/`entry`/`topic`），供 Label 附加与后续 Annotation 目标共用；读取侧未知值降级（ADR-0009 决策 1）。**favoriteTargetTypes** 是收藏标记的目标子集（`story`/`entry`）——Topic 本身已是长期容器，不作为收藏目标（ADR-0009 决策 3）。Label/Collection/Favorite 的注册、附加与成员关系由 storage 命令执行，domain 只提供枚举常量，不产生指纹。
 
 ## 外部行为
 
@@ -118,6 +119,7 @@ exact 成功时返回 `{ exact: ISO, exactPrecision: "second", fallback: null }`
 - Story/StoryRevision 保存最小 Story 投影及当前指针。
 - Topic/TopicRevision/TopicMembership/TopicMembershipRevision/TopicAlias 保存 Topic 的不可变展示版本、`(topicId, storyId)` 唯一成员关系与 revision/tombstone 历史、以及 merge 的 alias 重定向（ADR-0007）。
 - Entity/EntityRevision/EntityAlias/StoryEntity/EntityRelation 保存 Entity 的不可变 name/type 版本与名称别名、`(storyId, entityId)` 唯一 Story↔Entity 关联、以及带方向的 `(fromEntityId, toEntityId, relationType)` 唯一 Entity↔Entity 类型化关系；关联与关系保存 provenance（producer/producerVersion/confidence/evidence/actor/reason）（ADR-0008）。
+- Label/LabelAssignment 保存全局唯一命名的分类标签与 `(labelId, targetType, targetId)` 唯一的多态附加；Collection/CollectionItem 保存命名收藏夹与 `(collectionId, storyId)` 唯一 Story 成员；Favorite 保存 `(targetType, targetId)` 唯一的 Story/Entry 轻量收藏标记。标签不进入被标注对象自身的 revision——它是对象外的用户真相，重分析刷新派生数据不改变它（ADR-0009、NFR-004）。
 
 ## 状态转换
 
@@ -170,12 +172,13 @@ Connector 读取外部来源的网络/进程副作用属于 Connector；storage 
 10. **Story projection**：给定 entry-1/revision-1/title，观察 id=`story:entry-1`、kind=document、subtype/summary 为 null；给定 contentKind=video，观察 kind=media；给定显式 kind，观察其优先于 contentKind；不额外生成非八个字段。
 11. **修订持久语义**：在 storage 测试中给定同 source/run/external key 的重复观察，观察 duplicateObservation=true 且不追加 revision；给定 fingerprint 改变，观察 revision number 增加 1 且 current 指向新修订；给定 fingerprint 不变但 exact 时间变化，观察只更新允许的时间/metrics字段，不产生内容 revision。
 12. **纯函数边界**：调用所有 domain 导出函数并比较调用前后的数据库、Blob Root、网络请求和日志计数，观察均无 domain 直接副作用；进程重启后不应从 domain 模块恢复任何 durable state。
+13. **用户组织枚举**：给定 `targetTypes`，观察其为 `story`/`entry`/`topic`；给定 `favoriteTargetTypes`，观察其为 `story`/`entry` 且是 `targetTypes` 的子集；domain 不导出 Label/Collection/Favorite 的事务或指纹函数。
 
 ## 实现与测试锚点
 
-- `packages/domain/src/index.ts`：`storyKinds`、`contentKinds`、`publisherKinds`、`temporalPrecisions`、`TemporalFallback`/`TemporalValue`/`Publisher`/`ContentMetrics`/`NormalizedAssetInput`/`NormalizedIngestItem`/`StoryRevisionContent` 类型；`deriveExternalKey`、`fingerprintEntryRevision`、`fingerprintStoryRevision`、`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`projectEntryToStory`。
+- `packages/domain/src/index.ts`：`storyKinds`、`topicMemberRoles`、`entityTypes`、`entityRelationTypes`、`targetTypes`、`favoriteTargetTypes`、`contentKinds`、`publisherKinds`、`temporalPrecisions`、`TemporalFallback`/`TemporalValue`/`Publisher`/`ContentMetrics`/`NormalizedAssetInput`/`NormalizedIngestItem`/`StoryRevisionContent`/`TopicRevisionContent`/`EntityRevisionContent` 类型；`deriveExternalKey`、`fingerprintEntryRevision`、`fingerprintStoryRevision`、`fingerprintTopicRevision`、`fingerprintEntityRevision`、`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`projectEntryToStory`。
 - `packages/domain/src/index.ts`：`parseExactTimestamp`、`parseTemporalFallback`、`stableStringify` 是重建时间精度、UTC 和 external key 稳定性的内部锚点。
-- `packages/domain/src/index.test.ts`：ingestion identity 测试覆盖 external id、无 URL fallback key、内容变化 fingerprint、Publisher 缺 platform id、exact numeric timestamp、`3小时前`、`07-29湖南`、`2周前`、stable story id 和 video→media。
+- `packages/domain/src/index.test.ts`：ingestion identity 测试覆盖 external id、无 URL fallback key、内容变化 fingerprint、Publisher 缺 platform id、exact numeric timestamp、`3小时前`、`07-29湖南`、`2周前`、stable story id 和 video→media；topic/entity/user organization 三个 describe 分别锁定受管枚举与指纹 no-op 语义。
 - `plugins/rss/src/index.ts:243-322`：`parseRssXml` 的 RSS 字段到 NormalizedIngestItem 映射；`:366-380` 的 enclosure metadata asset。
 - `plugins/collectors/src/index.ts:433-524`、`:527-610`、`:730-779`：Bilibili/AI HOT item、metadata asset、ContentMetrics 的来源映射。
 - `packages/application/src/index.ts:231-254`：IngestConnector 端口；`packages/application/src/workflow-ingest.ts:351-417`：JSON item 与 BlobRef 往返。

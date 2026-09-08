@@ -59,13 +59,18 @@ Non-goals（见 Proposal / ADR-0009）：
 
 ## Current State
 
-- 生命周期阶段：Proposal accepted，稳定文档已同步（PRD §7.4 第四切片注记、信息模型 §9 v1 注记、ADR-0009、ADR 索引、Task 13 README）；未开始实现；待维护者授权创建 worktree 与分支 `feat/t13-user-organization` 后进入子切片 A。
+- 生命周期阶段：子切片 A（Label + Collection + 收藏标记）已实现并通过全部门禁（typecheck、全量 `bun run test` 43 文件/368 用例、build、lint:web 0 error、component-lab 27、docs:check、git diff --check），`docs/spec`（domain/contracts/storage/interfaces/0002+0005）与 `docs/testing` 已同步；分支 `feat/t13-user-organization` 三次分层提交（storage 层 `244461c`、API/transport 层 `1401022`、Web 层 `1a9735d`），待维护者授权合入 master 后进入子切片 B（Annotation）。
+- 迁移：`20260908140000_user_organization_v1`（5 张全新表，forward-only、无 backfill），已在隔离库经 `migrate deploy` 验证。
+- 未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署（均为既有后置边界）。
 
 ## Decisions and Deviations
 
 - 以 ADR-0009 六条为稳定边界（targetType 受管枚举 + 未知降级、Label 全局注册表 + 多态附加、Collection 与收藏标记分离、Annotation 用可编辑笔记而非 revision 链、Saved View 只存条件不存快照并扩展 search、自动分类/Artifact/片段锚点/Read State/Feed Block 绑定后置）。
 - 交付顺序：3 个子切片逐片合入（Label+Collection → Annotation → Saved View），每片独立验收、独立 commit/merge。
 - Story merge 的成员迁移与 targetId 重定向在子切片 A 一并落地（与 ADR-0007/0008 对称）。
+- 子切片 A 偏差 1：`StoryDetail` 向后兼容新增 `labels: LabelRef[]` 与 `favorited: boolean`，使 Story 侧用户组织区不必二次查询。
+- 子切片 A 偏差 2：用户组织写命令（Label/Collection/Favorite）不带 `actor`/`reason`——它们是单用户本地用户真相，区别于 Story/Topic/Entity 的协作者审计命令；如需协作者审计留待多用户切片。
+- 子切片 A 偏差 3：`LabelAssignment`/`Favorite` 不建到目标行的外键（多态 target 无法固定引用），因此删除 Story/Entry/Topic 不会自动清理这些行；Story merge 的显式迁移覆盖了当前唯一会改变 Story id 的路径。
 
 ## Verification / Gate
 

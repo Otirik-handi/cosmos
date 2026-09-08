@@ -127,7 +127,14 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     StoryDetail `entities`，可解除 `unlinkStoryEntity`），并提供“关联已有 Entity”（下拉
     已有 Entity + `linkStoryEntity`）与“创建 Entity 并关联本 Story”（名称 + 类型，
     `createEntity` 后 `linkStoryEntity`）；关联入口从 Story 侧发起（ADR-0008 决策 3）。
-14. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+14. **用户组织（标签/收藏/收藏夹）**：StoryPanel“用户组织”区显示收藏开关（`setFavorite`/
+    `unsetFavorite`，目标为当前 Story）、已附加标签（`story.labels`，可 `detachLabel`）、
+    未附加标签下拉（`attachLabel`）与新建标签（`createLabel` 后立即 `attachLabel` 到当前
+    Story），以及收藏夹成员勾选（`addCollectionItem`/`removeCollectionItem`）与新建收藏夹
+    （`createCollection`）。页面在初次加载时 `listLabels`/`listCollections`，打开 Story 时用
+    `listCollections({ storyId })` 取回 `containsStory` 成员标记；所有写命令成功后重读
+    Story 与相应列表。面板不直接发 API 请求，全部经 props 回调上抛。
+15. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
 ## 输入
