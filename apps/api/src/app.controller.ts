@@ -44,6 +44,13 @@ import {
     idempotencyKeySchema,
     mergeStoriesCommandSchema,
     moveEntryToStoryCommandSchema,
+    addTopicMemberCommandSchema,
+    createTopicCommandSchema,
+    mergeTopicsCommandSchema,
+    removeTopicMemberCommandSchema,
+    restoreTopicMemberCommandSchema,
+    updateTopicCommandSchema,
+    updateTopicMemberRoleCommandSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
@@ -609,6 +616,149 @@ export class AppController {
                 reason: parsed.reason ?? null,
             });
             return result;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("topics")
+    @Bind(Query("cursor"), Query("limit"))
+    async listTopics(cursor?: string, limit?: string) {
+        return this.repository.listTopics({
+            cursor,
+            limit: clampLimit(limit),
+        });
+    }
+
+    @Get("topics/:topicId")
+    @Bind(Param("topicId"))
+    async topic(topicId: string) {
+        const result = await this.repository.topic(topicId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Topic not found: ${topicId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Post("topics")
+    @Bind(Body())
+    async createTopic(body: unknown) {
+        try {
+            const parsed = createTopicCommandSchema.parse(body);
+            return await this.repository.createTopic({
+                title: parsed.title,
+                purpose: parsed.purpose,
+                scope: parsed.scope ?? null,
+                seedStoryId: parsed.seedStoryId ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("topics/:topicId/revisions")
+    @Bind(Param("topicId"), Body())
+    async updateTopic(topicId: string, body: unknown) {
+        try {
+            const parsed = updateTopicCommandSchema.parse(body);
+            return await this.repository.updateTopic({
+                topicId,
+                baseRevisionId: parsed.baseRevisionId,
+                title: parsed.title,
+                purpose: parsed.purpose,
+                scope: parsed.scope ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("topics/merges")
+    @Bind(Body())
+    async mergeTopics(body: unknown) {
+        try {
+            const parsed = mergeTopicsCommandSchema.parse(body);
+            return await this.repository.mergeTopics({
+                canonicalTopicId: parsed.canonicalTopicId,
+                obsoleteTopicIds: parsed.obsoleteTopicIds,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("topics/:topicId/members")
+    @Bind(Param("topicId"), Body())
+    async addTopicMember(topicId: string, body: unknown) {
+        try {
+            const parsed = addTopicMemberCommandSchema.parse(body);
+            return await this.repository.addTopicMember({
+                topicId,
+                storyId: parsed.storyId,
+                role: parsed.role,
+                reason: parsed.reason ?? null,
+                actor: parsed.actor ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("topics/:topicId/member-role-updates")
+    @Bind(Param("topicId"), Body())
+    async updateTopicMemberRole(topicId: string, body: unknown) {
+        try {
+            const parsed = updateTopicMemberRoleCommandSchema.parse(body);
+            return await this.repository.updateTopicMemberRole({
+                topicId,
+                storyId: parsed.storyId,
+                role: parsed.role,
+                reason: parsed.reason ?? null,
+                actor: parsed.actor ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("topics/:topicId/member-removals")
+    @Bind(Param("topicId"), Body())
+    async removeTopicMember(topicId: string, body: unknown) {
+        try {
+            const parsed = removeTopicMemberCommandSchema.parse(body);
+            return await this.repository.removeTopicMember({
+                topicId,
+                storyId: parsed.storyId,
+                reason: parsed.reason ?? null,
+                actor: parsed.actor ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("topics/:topicId/member-restorations")
+    @Bind(Param("topicId"), Body())
+    async restoreTopicMember(topicId: string, body: unknown) {
+        try {
+            const parsed = restoreTopicMemberCommandSchema.parse(body);
+            return await this.repository.restoreTopicMember({
+                topicId,
+                storyId: parsed.storyId,
+                role: parsed.role,
+                reason: parsed.reason ?? null,
+                actor: parsed.actor ?? null,
+            });
         } catch (error) {
             sourceCommandError(error);
         }

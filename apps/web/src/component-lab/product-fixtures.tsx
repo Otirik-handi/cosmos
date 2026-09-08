@@ -9,6 +9,7 @@ import type {
     SourceDefinitionManifest,
     SourceSnapshot,
     StoryDetail,
+    TopicDetail,
 } from "@cosmos/contracts";
 
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
@@ -25,6 +26,7 @@ import {
     type EventStreamState,
 } from "@/components/cosmos/status-summary";
 import {StoryPanel} from "@/components/cosmos/story-panel";
+import {TopicPanel} from "@/components/cosmos/topic-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
 
 import type {CosmosThemePreference} from "@/theme/theme";
@@ -321,6 +323,48 @@ export function renderThemeSwitcherLab(props: LabProps) {
         <ThemeSwitcher
             onValueChange={() => undefined}
             value={value as CosmosThemePreference}
+        />
+    );
+}
+
+export function renderTopicPanelLab(props: LabProps) {
+    const title = textProp(props, "title", "Cosmos fixture topic");
+    const purpose = textProp(props, "purpose", "一个用于组件检查的合成 Topic。");
+    const state = optionProp(props, "state", "members", ["members", "empty", "removed"] as const);
+    const topic: TopicDetail = {
+        topic: {
+            id: "topic-fixture",
+            revisionId: "rev-t-fixture",
+            title,
+            purpose,
+            scope: null,
+        },
+        members: state === "empty"
+            ? []
+            : [{
+                storyId: "story-fixture-a",
+                role: "core",
+                reason: "seed",
+                actor: "user",
+                revision: 1,
+                removed: false,
+            }, {
+                storyId: "story-fixture-b",
+                role: "background",
+                reason: "背景",
+                actor: "user",
+                revision: 1,
+                removed: state === "removed",
+            }],
+    };
+    return (
+        <TopicPanel
+            onClose={() => undefined}
+            topic={topic}
+            onUpdateTopic={async () => undefined}
+            onUpdateMemberRole={async () => undefined}
+            onRemoveMember={async () => undefined}
+            onRestoreMember={async () => undefined}
         />
     );
 }

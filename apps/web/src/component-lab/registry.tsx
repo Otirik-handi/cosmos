@@ -25,6 +25,7 @@ import {
     renderStatusSummaryLab,
     renderStoryPanelLab,
     renderThemeSwitcherLab,
+    renderTopicPanelLab,
 } from "./product-fixtures";
 
 import type {LabComponentDefinition, LabControlDefinition, LabProps} from "./types";
@@ -277,6 +278,11 @@ const storyPanelControls = [
     control("state", "State", "select", "revision", ["revision", "empty"]),
 ] as const satisfies readonly LabControlDefinition[];
 
+const topicPanelControls = [
+    control("title", "Topic title", "text", "Cosmos fixture topic"),
+    control("state", "State", "select", "members", ["members", "empty", "removed"]),
+] as const satisfies readonly LabControlDefinition[];
+
 export const labComponentDefinitions = [
     {
         id: "badge",
@@ -472,6 +478,21 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderStoryPanelLab,
+    },
+    {
+        id: "topic-panel",
+        label: "TopicPanel",
+        category: "Cosmos",
+        modulePath: "components/cosmos/topic-panel.tsx",
+        defaultSceneId: "members",
+        controls: topicPanelControls,
+        scenes: [
+            {id: "members", label: "Members", props: {title: "Cosmos fixture topic", state: "members"}},
+            {id: "empty", label: "Empty", props: {title: "Cosmos fixture topic", state: "empty"}},
+            {id: "removed", label: "Removed", props: {title: "Cosmos fixture topic", state: "removed"}},
+        ],
+        tokens: sharedTokens,
+        render: renderTopicPanelLab,
     },
     {
         id: "theme-switcher",

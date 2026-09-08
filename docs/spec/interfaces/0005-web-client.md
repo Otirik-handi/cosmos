@@ -108,7 +108,16 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
    （`mergeStories`）；成功后页面用返回的 StoryDetail 刷新面板。面板不直接发 API
    请求，全部经 props 回调上抛。
-9. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+10. **Topic 入口与详情**：侧栏“Topics”列表由 `client.listTopics` 加载，每行显示标题与
+    active 成员数，点击“打开”调用 `client.topic(topicId)` 打开 TopicPanel。TopicPanel 展示
+    title/purpose/scope 与成员列表（role 徽章、story id、reason、actor、removed），支持
+    修改角色（`updateTopicMemberRole`）、移除（`removeTopicMember`）、恢复（`restoreTopicMember`）
+    以及编辑标题/目的（`updateTopic`）。
+11. **从 Story 侧加入/创建 Topic**：StoryPanel 提供“加入 Topic”（选择已有 Topic + 角色，
+    `addTopicMember`）与“创建 Topic 并加入本 Story”（标题 + 目的，`createTopic` 以当前
+    Story 为 seed，seed 恒为 `core` 角色）；成员添加入口从 Story 侧发起，不在 Topic 面板
+    里做 Story 搜索选择器（ADR-0007 决策 4）。
+12. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
 ## 输入

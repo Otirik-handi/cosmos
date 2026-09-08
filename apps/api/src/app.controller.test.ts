@@ -5,6 +5,10 @@ import {
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
+    TopicMembershipNotFoundError,
+    TopicMergeConflictError,
+    TopicNotFoundError,
+    TopicRevisionConflictError,
     WorkflowHostConflictError,
 } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
@@ -569,6 +573,100 @@ describe("AppController story orchestration", () => {
         };
         await expect(createController(validationRepository)
             .moveEntryToStory("story-a", { entryId: "" }))
+            .rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe("AppController topic orchestration", () => {
+    function topicDetailFixture() {
+        return {
+            topic: {
+                id: "topic-a",
+                revisionId: "rev-t-1",
+                title: "Topic A",
+                purpose: "p",
+                scope: null,
+            },
+            members: [{
+                storyId: "story-a",
+                role: "core",
+                reason: "seed",
+                actor: "user",
+                revision: 1,
+                removed: false,
+            }],
+        };
+    }
+
+    function createController(repository: Record<string, unknown>) {
+        return new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+    }
+
+    it("creates a topic and returns the detail", async () => {
+        const repository = {
+            createTopic: vi.fn().mockResolvedValue(topicDetailFixture()),
+        };
+        const controller = createController(repository);
+        const result = await controller.createTopic({
+            title: "Topic A",
+            purpose: "p",
+            scope: null,
+            seedStoryId: "story-a",
+            actor: "user",
+        });
+        expect(result).toMatchObject({ topic: { id: "topic-a" } });
+        expect(repository.createTopic).toHaveBeenCalledWith({
+            title: "Topic A",
+            purpose: "p",
+            scope: null,
+            seedStoryId: "story-a",
+            actor: "user",
+            reason: null,
+        });
+    });
+
+    it("maps missing topic to 404 and conflict cases to 409", async () => {
+        await expect(createController({
+            topic: vi.fn().mockResolvedValue(null),
+        }).topic("topic-missing")).rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({
+            updateTopic: vi.fn().mockRejectedValue(
+                new TopicRevisionConflictError("topic-a"),
+            ),
+        }).updateTopic("topic-a", {
+            baseRevisionId: "rev-t-1",
+            title: "Stale",
+            purpose: "p",
+            scope: null,
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        await expect(createController({
+            mergeTopics: vi.fn().mockRejectedValue(
+                new TopicMergeConflictError("Topic is already merged: topic-b"),
+            ),
+        }).mergeTopics({
+            canonicalTopicId: "topic-a",
+            obsoleteTopicIds: ["topic-b"],
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        await expect(createController({
+            removeTopicMember: vi.fn().mockRejectedValue(
+                new TopicMembershipNotFoundError("Topic member not found"),
+            ),
+        }).removeTopicMember("topic-a", { storyId: "story-missing" }))
+            .rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("rejects malformed member commands with 400", async () => {
+        const repository = { addTopicMember: vi.fn() };
+        await expect(createController(repository)
+            .addTopicMember("topic-a", { storyId: "story-a", role: "not-a-role" }))
             .rejects.toBeInstanceOf(BadRequestException);
     });
 });

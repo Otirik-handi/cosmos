@@ -257,6 +257,7 @@ model Story {
     revisions         StoryRevision[] @relation("StoryRevisions")
     entries           Entry[]
     aliases           StoryAlias[]
+    topicMemberships  TopicMembership[]
 }
 
 model StoryRevision {
@@ -282,6 +283,73 @@ model StoryAlias {
     canonicalStory   Story    @relation(fields: [canonicalStoryId], references: [id], onDelete: Cascade)
 
     @@index([canonicalStoryId])
+}
+
+model Topic {
+    id                String             @id @default(cuid())
+    currentRevisionId String?            @unique
+    createdAt         DateTime           @default(now())
+    updatedAt         DateTime           @updatedAt
+    currentRevision   TopicRevision?     @relation("TopicCurrentRevision", fields: [currentRevisionId], references: [id])
+    revisions         TopicRevision[]    @relation("TopicRevisions")
+    memberships       TopicMembership[]
+    aliases           TopicAlias[]
+}
+
+model TopicRevision {
+    id              String  @id @default(cuid())
+    topicId         String
+    revision        Int     @default(1)
+    fingerprint     String?
+    actorJson       String?
+    reason          String?
+    title           String
+    purpose         String
+    scope           String?
+    createdAt       DateTime @default(now())
+    topic           Topic   @relation("TopicRevisions", fields: [topicId], references: [id], onDelete: Cascade)
+    currentForTopic Topic?  @relation("TopicCurrentRevision")
+
+    @@unique([topicId, revision])
+}
+
+model TopicMembership {
+    id                String                   @id @default(cuid())
+    topicId           String
+    storyId           String
+    currentRevisionId String?                  @unique
+    createdAt         DateTime                 @default(now())
+    updatedAt         DateTime                 @updatedAt
+    topic             Topic                    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+    story             Story                    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+    currentRevision   TopicMembershipRevision? @relation("TopicMembershipCurrentRevision", fields: [currentRevisionId], references: [id])
+    revisions         TopicMembershipRevision[] @relation("TopicMembershipRevisions")
+
+    @@unique([topicId, storyId])
+}
+
+model TopicMembershipRevision {
+    id                    String          @id @default(cuid())
+    membershipId          String
+    revision              Int             @default(1)
+    role                  String
+    reason                String?
+    actorJson             String?
+    tombstone             Boolean         @default(false)
+    createdAt             DateTime        @default(now())
+    membership            TopicMembership @relation("TopicMembershipRevisions", fields: [membershipId], references: [id], onDelete: Cascade)
+    currentForMembership  TopicMembership? @relation("TopicMembershipCurrentRevision")
+
+    @@unique([membershipId, revision])
+}
+
+model TopicAlias {
+    id               String   @id
+    canonicalTopicId String
+    createdAt        DateTime @default(now())
+    canonicalTopic   Topic    @relation(fields: [canonicalTopicId], references: [id], onDelete: Cascade)
+
+    @@index([canonicalTopicId])
 }
 
 model WorkflowRun {

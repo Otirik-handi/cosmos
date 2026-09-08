@@ -211,6 +211,15 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
 | `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期 409 conflict。 |
 | `POST /stories/merges` | body `MergeStoriesCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，归并自身/已 merge Story 409 conflict。 |
+| `GET /topics` | query `cursor?`、`limit?` | `TopicPage`；limit 经 clampLimit，按 Topic `updatedAt` 倒序，nextCursor 为偏移字符串或 null。 |
+| `GET /topics/:topicId` | path `topicId` | `TopicDetail`（topic 摘要 + 成员列表，含 removed/tombstone 成员）；旧 merge id 解析到 canonical Topic，不存在 404。 |
+| `POST /topics` | body `CreateTopicCommand` | `TopicDetail`；Schema 失败 400，`seedStoryId` 不是有效 Story 404。 |
+| `POST /topics/:topicId/revisions` | body `UpdateTopicCommand` | `TopicDetail`；Schema 失败 400，Topic 缺失 404，`baseRevisionId` 过期 409。 |
+| `POST /topics/merges` | body `MergeTopicsCommand` | `TopicDetail`；Schema 失败 400，Topic 缺失 404，归并自身/已 merge Topic 409。 |
+| `POST /topics/:topicId/members` | body `AddTopicMemberCommand` | `TopicDetail`；Schema 失败 400，Topic/Story 缺失 404。 |
+| `POST /topics/:topicId/member-role-updates` | body `UpdateTopicMemberRoleCommand` | `TopicDetail`；Schema 失败 400，Topic/Story 缺失或成员已移除 404。 |
+| `POST /topics/:topicId/member-removals` | body `RemoveTopicMemberCommand` | `TopicDetail`；Schema 失败 400，成员缺失 404。 |
+| `POST /topics/:topicId/member-restorations` | body `RestoreTopicMemberCommand` | `TopicDetail`；Schema 失败 400，成员缺失 404。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |

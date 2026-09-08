@@ -22,7 +22,11 @@ import {
     type SearchQuery,
     type SourceSnapshot,
     type StoryDetail,
+    type TopicDetail,
+    type TopicMemberRole,
+    type TopicSummary,
     type UpdateStoryRevisionCommand,
+    type UpdateTopicCommand,
 } from "@cosmos/contracts";
 import {
     CosmosTransportError,
@@ -42,6 +46,7 @@ import {
 import {StatusSummary, type EventStreamState} from "@/components/cosmos/status-summary";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {StoryPanel} from "@/components/cosmos/story-panel";
+import {TopicPanel} from "@/components/cosmos/topic-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
 import {useTheme} from "@/theme/theme-provider";
 
@@ -82,6 +87,9 @@ export default function Home() {
     const [activeSearch, setActiveSearch] = useState<SearchQuery | null>(null);
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [story, setStory] = useState<StoryDetail | null>(null);
+    const [topics, setTopics] = useState<readonly TopicSummary[]>([]);
+    const [topic, setTopic] = useState<TopicDetail | null>(null);
+    const [openingTopicId, setOpeningTopicId] = useState<string | null>(null);
     const [health, setHealth] = useState<HealthResponse | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -386,6 +394,100 @@ export default function Home() {
         setStory(updated);
     };
 
+    const loadTopics = useCallback(async (): Promise<void> => {
+        try {
+            const page = await client.listTopics({ limit: 50 });
+            setTopics(page.items);
+        } catch {
+            // 话题列表读取失败不阻断主 Feed；显式打开时才暴露错误。
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadTopics();
+    }, [loadTopics]);
+
+    const openTopic = async (topicId: string): Promise<void> => {
+        setOpeningTopicId(topicId);
+        setError(null);
+        try {
+            setTopic(await client.topic(topicId));
+        } catch (caught) {
+            setError(readError(caught));
+        } finally {
+            setOpeningTopicId(null);
+        }
+    };
+
+    const updateTopic = async (command: UpdateTopicCommand): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        const updated = await client.updateTopic(topic.topic.id, command);
+        setTopic(updated);
+        await loadTopics();
+    };
+
+    const updateTopicMemberRole = async (
+        storyId: string,
+        role: TopicMemberRole,
+    ): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        const updated = await client.updateTopicMemberRole(topic.topic.id, {
+            storyId,
+            role,
+        });
+        setTopic(updated);
+    };
+
+    const removeTopicMember = async (storyId: string): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        const updated = await client.removeTopicMember(topic.topic.id, { storyId });
+        setTopic(updated);
+    };
+
+    const restoreTopicMember = async (
+        storyId: string,
+        role: TopicMemberRole,
+    ): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        const updated = await client.restoreTopicMember(topic.topic.id, {
+            storyId,
+            role,
+        });
+        setTopic(updated);
+    };
+
+    const joinTopic = async (topicId: string, role: TopicMemberRole): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.addTopicMember(topicId, {
+            storyId: story.story.id,
+            role,
+        });
+        await loadTopics();
+    };
+
+    const createTopicFromStory = async (title: string, purpose: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.createTopic({
+            title,
+            purpose,
+            seedStoryId: story.story.id,
+        });
+        setNotice(`已创建 Topic「${title}」并把当前 Story 加入为核心成员。`);
+        await loadTopics();
+    };
+
     const loadMore = async (): Promise<void> => {
         if (!nextCursor || loadingMore) {
             return;
@@ -507,6 +609,31 @@ export default function Home() {
                         runningSourceId={runningSourceId}
                         sources={sources}
                     />
+                    <section aria-label="Topics" className="grid gap-2">
+                        <h2 className="font-display text-lg font-semibold">Topics</h2>
+                        {topics.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                尚未创建 Topic；在 Story 详情里可创建并加入。
+                            </p>
+                        ) : (
+                            <ul className="grid gap-1">
+                                {topics.map((item) => (
+                                    <li key={item.id}>
+                                        <button
+                                            type="button"
+                                            data-topic-id={item.id}
+                                            disabled={openingTopicId === item.id}
+                                            onClick={() => void openTopic(item.id)}
+                                            className="flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
+                                        >
+                                            <span className="truncate">{item.title}</span>
+                                            <Badge variant="secondary">{item.memberCount}</Badge>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
                     {showSourceForm && (
                         <SourceForm
                             form={sourceForm}
@@ -541,6 +668,20 @@ export default function Home() {
                     story={story}
                     onUpdateStoryRevision={updateStoryRevision}
                     onMergeStory={mergeStory}
+                    topics={topics}
+                    onJoinTopic={joinTopic}
+                    onCreateTopic={createTopicFromStory}
+                />
+            )}
+
+            {topic && (
+                <TopicPanel
+                    onClose={() => setTopic(null)}
+                    topic={topic}
+                    onUpdateTopic={updateTopic}
+                    onUpdateMemberRole={updateTopicMemberRole}
+                    onRemoveMember={removeTopicMember}
+                    onRestoreMember={restoreTopicMember}
                 />
             )}
         </main>

@@ -32,6 +32,7 @@ Connector 先把来源数据交给本组件的纯函数生成 `NormalizedIngestI
 
 - **ContentKind** 是领域语义词汇：`post`、`article`、`video`、`audio`、`image`、`comment`、`listing`。这些值与[公共合同](../contracts/0001-public-contracts.md)的 wire enum 对齐，但本文件只规定 domain 如何消费它们，不复制 Zod 校验。
 - **StoryKind** 固定为 `event`、`document`、`media`、`thread`。
+- **TopicMemberRole** 是 Topic 成员角色的受管枚举：`core`、`update`、`background`、`analysis`、`counterpoint`、`tutorial`（ADR-0007）；写入侧由[公共合同](../contracts/0001-public-contracts.md)校验，读取侧允许未知值降级展示。
 - **PublisherKind** 是领域语义词汇：`user`、`channel`、`subreddit`、`official-account`、`org`、`unknown`；wire 形状和边界解析由[公共合同](../contracts/0001-public-contracts.md)拥有。
 - **NormalizedAssetInput** 是领域侧附件输入：`kind`、可空 `sourceUrl`、`status`（`saved`/`metadata_only`/`skipped`/`failed`）、可空 `mimeType`、可空 `byteSize`、可选可空 `errorMessage`（降级原因）和 `content: Uint8Array | null`。这里的 bytes 是领域运行时值，不是 Workflow JSON 字段；Workflow 中的 BlobRef wire shape 只由[公共合同](../contracts/0001-public-contracts.md)定义，bytes 的 hash/containment 校验由[FileBlobStore](../storage/0005-file-blob-store.md)负责。
 - **NormalizedIngestItem** 包含可选可空 `externalId`、`title`、可空 `summary`、`contentText`、可空 `webUrl`、`kind`、可空 `publisher`、可空 `metrics`、可空 `publishedAt`、可选可空 `updatedAt`、`sourceLocator: Record<string, unknown>`、`rawPayload`、可选 `rawPayloadMimeType` 和只读资产数组。URL 可以为 null；没有 URL 仍可凭 externalId 或 sourceLocator 建立身份。进入 Workflow JSON 前由 contracts schema 做 wire 校验，domain 不再定义第二套边界规则。
@@ -62,12 +63,13 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **Asset** 是附着在修订上的媒体/附件持久投影；领域输入中的 bytes 在 application/storage 边界外置到 Blob 后才进入持久资产 metadata。
 - **Story** 是稳定、可编排的规范内容单元（ADR-0006）：一个 Story 承载多个 Entry 的主归属，Story 的展示内容通过版本化 StoryRevision 表达。domain 仍提供 `projectEntryToStory` 作为 ingest 自动创建默认单 Entry Story 的确定性门槛（id=`story:${entryId}`），跨来源归并/merge 由 storage 命令执行；domain 只产生纯函数与投影，不执行 Story 事务。
 - **StoryRevisionContent** 是 Story Revision 的展示字段集合（title、可空 summary、核心 kind、可空 subtype）；`fingerprintStoryRevision` 对这四个字段做确定性 SHA-256 指纹，用于判定“实质性变化”与 no-op。
+- **TopicRevisionContent** 是 Topic Revision 的展示字段集合（title、purpose、可空 scope）；`fingerprintTopicRevision` 对这三个字段做确定性 SHA-256 指纹，用于判定 Topic 展示内容的“实质性变化”与 no-op（ADR-0007 决策 1）。Topic 成员角色、membership revision 与 merge 去重语义由 storage 命令执行，domain 只提供角色枚举与指纹纯函数。
 
 ## 外部行为
 
 所有导出的函数都是同步纯函数，除 `createTemporalValue` 在未提供 now 时读取当前时钟外，不访问外部资源。Connector 先把各来源字段转换为本模型，再由 storage 用 external key 和 fingerprint 判断是否新建、重复或追加修订。
 
-`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
+`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段做摘要，`fingerprintTopicRevision` 只对 Topic 展示字段做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
 
 ## 输入
 
@@ -85,7 +87,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 
 ### 身份和 Story 输入
 
-`deriveExternalKey` 接受 optional externalId/webUrl、必需 title、可选 contentText/publishedAt/sourceLocator。`fingerprintEntryRevision` 只接受 title、summary、contentText、webUrl、kind、publisher。`projectEntryToStory` 接受 entryId、revisionId、title 和可选 summary/kind/subtype/contentKind。
+`deriveExternalKey` 接受 optional externalId/webUrl、必需 title、可选 contentText/publishedAt/sourceLocator。`fingerprintEntryRevision` 只接受 title、summary、contentText、webUrl、kind、publisher。`projectEntryToStory` 接受 entryId、revisionId、title 和可选 summary/kind/subtype/contentKind。`fingerprintTopicRevision` 接受 title、purpose、可空 scope。
 
 ## 输出
 
@@ -101,7 +103,7 @@ exact 成功时返回 `{ exact: ISO, exactPrecision: "second", fallback: null }`
 
 `deriveExternalKey` 返回：`external:<trimmed externalId>`、`url:<trimmed webUrl>`，或 `fallback:<64位 sha256 hex>`。`fingerprintEntryRevision` 返回 64 位 SHA-256 十六进制字符串。
 
-`projectEntryToStory` 返回 `MinimalStoryProjection` 的八个字段：`id`、`kind`、`subtype`、`title`、`summary`、`entryId`、`revisionId`。id 固定为 `story:${entryId}`；显式 kind 优先；否则 video/audio/image 映射为 media、comment 映射为 thread、post/article/listing 映射为 document，缺省为 document；subtype 和 summary 默认 null，title 与 ID 原样保留。`fingerprintStoryRevision` 接受 `StoryRevisionContent` 并返回 64 位 SHA-256 十六进制字符串；相同展示字段重复计算得到同一指纹。
+`projectEntryToStory` 返回 `MinimalStoryProjection` 的八个字段：`id`、`kind`、`subtype`、`title`、`summary`、`entryId`、`revisionId`。id 固定为 `story:${entryId}`；显式 kind 优先；否则 video/audio/image 映射为 media、comment 映射为 thread、post/article/listing 映射为 document，缺省为 document；subtype 和 summary 默认 null，title 与 ID 原样保留。`fingerprintStoryRevision` 接受 `StoryRevisionContent` 并返回 64 位 SHA-256 十六进制字符串；相同展示字段重复计算得到同一指纹。`fingerprintTopicRevision` 接受 `TopicRevisionContent` 并返回 64 位 SHA-256 十六进制字符串；title/purpose/scope 任一变化都会改变指纹。
 
 ## 状态与持久化
 
@@ -112,6 +114,7 @@ exact 成功时返回 `{ exact: ISO, exactPrecision: "second", fallback: null }`
 - EntryRevision 追加 title、summary、contentText、webUrl、kind、publisher、时间 JSON、sourcePublishedAt、fingerprint 和 revision number。
 - Asset 记录修订下的 kind/status/sourceUrl/storageKey/mimeType/byteSize；bytes 通过 application/storage 的 Blob 边界保存。
 - Story/StoryRevision 保存最小 Story 投影及当前指针。
+- Topic/TopicRevision/TopicMembership/TopicMembershipRevision/TopicAlias 保存 Topic 的不可变展示版本、`(topicId, storyId)` 唯一成员关系与 revision/tombstone 历史、以及 merge 的 alias 重定向（ADR-0007）。
 
 ## 状态转换
 

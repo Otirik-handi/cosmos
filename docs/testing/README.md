@@ -26,6 +26,8 @@
 
 StoryRevision 版本化与 merge alias 的迁移升级以 `packages/storage-prisma/src/story-revision-versioning.test.ts` 为锚点（legacy 库 → backfill per-story revision → 唯一约束）；Story 编排命令行为（move/update/merge、alias 重定向与冲突）由 `story-orchestration.test.ts` 使用隔离库 seed 覆盖。浏览器产品流程中的归并/标题更新/旧 ID 重定向由 `e2e/browser/ingest.spec.ts` 覆盖。
 
+Topic 域模型 v1（ADR-0007）的迁移为全新表（`20260908000000_topic_domain_v1`），无旧数据 backfill，仍按门禁跑 fresh + 旧库 upgrade 两态。Topic 语义（TopicRevision 指纹、membership revision/tombstone、merge 去重、Story merge 的 membership 迁移）由 `packages/storage-prisma/src/topic-domain.test.ts` 使用隔离库 seed 覆盖；角色枚举的写入校验/读取降级由 `packages/contracts/src/index.test.ts` 覆盖；API 错误映射由 `apps/api/src/app.controller.test.ts` 覆盖；Web 组件由 `apps/web/src/component-lab/registry.test.ts` 登记。
+
 性能修复使用 Task 记录的确定性 seed 或本地生成器，数据位于 `.agent/tmp/`。修复前后必须使用同一数据形状、规模、环境、命令和测量口径并重复采样；墙钟阈值不进入默认 `bun run test`，优先用查询次数、查询计划/索引、复杂度或有界结果等确定性断言防回归。原始基准输出不入库，Task/PR 记录完整命令、数据规模、环境、样本统计、波动和结论。
 
 ## 文档治理

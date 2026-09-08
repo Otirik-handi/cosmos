@@ -4,6 +4,17 @@ export const storyKinds = ["event", "document", "media", "thread"] as const;
 
 export type StoryKind = (typeof storyKinds)[number];
 
+export const topicMemberRoles = [
+    "core",
+    "update",
+    "background",
+    "analysis",
+    "counterpoint",
+    "tutorial",
+] as const;
+
+export type TopicMemberRole = (typeof topicMemberRoles)[number];
+
 export const contentKinds = [
     "post",
     "article",
@@ -178,6 +189,25 @@ export function fingerprintStoryRevision(input: StoryRevisionContent): string {
         summary: input.summary,
         kind: input.kind,
         subtype: input.subtype,
+    }));
+}
+
+export interface TopicRevisionContent {
+    title: string;
+    purpose: string;
+    scope: string | null;
+}
+
+/**
+ * Topic revision fingerprint covers the user-visible display fields only.
+ * Changes that do not alter any of these fields are no-ops and must not
+ * append a new TopicRevision (ADR-0007 decision 1).
+ */
+export function fingerprintTopicRevision(input: TopicRevisionContent): string {
+    return hashValue(JSON.stringify({
+        title: input.title,
+        purpose: input.purpose,
+        scope: input.scope,
     }));
 }
 

@@ -60,7 +60,7 @@ Non-goals（见 Proposal / ADR-0007）：
 
 ## Current State
 
-- 生命周期阶段：提案已接受、稳定文档（PRD/信息模型/ADR-0007）已同步；切片 1 尚未开始，待维护者授权创建 worktree 与分支。
+- 生命周期阶段：三切片（domain/migration/storage → contracts/transport/API → Web）已实现并通过各自聚焦验收与全量门禁；分支 `feat/t11-topic-domain`，待维护者授权合入 master。过程记录见 [walkthrough.md](walkthrough.md)。
 
 ## Decisions and Deviations
 
@@ -75,5 +75,5 @@ Non-goals（见 Proposal / ADR-0007）：
 
 ## Follow-ups
 
-- 人工浏览器验收（含 Story ID 展示方式与 move entry UI 入口，Task 10 遗留 follow-up 由本切片 Web 方向顺带收敛）。
+- 浏览器产品 E2E（Topic 流程）与 `test:browser:component-lab` 未运行（组件实验室/API/存储行为测试已覆盖主路径）；人工浏览器验收留待后续。
 - 后续 Phase 2 切片：Entity/关系、标签/批注/集合/Saved View、可配置 Board/Spotlight、自动聚类/Knowledge Workflow、`TopicMaintenanceBinding`/Spotlight。

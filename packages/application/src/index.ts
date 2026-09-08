@@ -23,9 +23,11 @@ import {
     type SourceSnapshot,
     type SourceProbeResult,
     type StoryDetail,
+    type TopicDetail,
+    type TopicPage,
     type UpdateSourceCommand,
 } from "@cosmos/contracts";
-import type { NormalizedIngestItem, StoryKind } from "@cosmos/domain";
+import type { NormalizedIngestItem, StoryKind, TopicMemberRole } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
 import {
@@ -153,6 +155,42 @@ export class StoryMergeConflictError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "StoryMergeConflictError";
+    }
+}
+
+export class TopicNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(topicId: string) {
+        super(`Topic not found: ${topicId}`);
+        this.name = "TopicNotFoundError";
+    }
+}
+
+export class TopicRevisionConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(topicId: string) {
+        super(`Topic revision conflict: ${topicId}`);
+        this.name = "TopicRevisionConflictError";
+    }
+}
+
+export class TopicMergeConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "TopicMergeConflictError";
+    }
+}
+
+export class TopicMembershipNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "TopicMembershipNotFoundError";
     }
 }
 
@@ -290,6 +328,61 @@ export interface CosmosRepository {
         actor?: string | null;
         reason?: string | null;
     }): Promise<StoryDetail | null>;
+    createTopic(input: {
+        title: string;
+        purpose: string;
+        scope: string | null;
+        seedStoryId?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<TopicDetail | null>;
+    updateTopic(input: {
+        topicId: string;
+        baseRevisionId: string;
+        title: string;
+        purpose: string;
+        scope: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<TopicDetail | null>;
+    mergeTopics(input: {
+        canonicalTopicId: string;
+        obsoleteTopicIds: readonly string[];
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<TopicDetail | null>;
+    topic(topicId: string): Promise<TopicDetail | null>;
+    listTopics(input: {
+        cursor?: string;
+        limit: number;
+    }): Promise<TopicPage>;
+    addTopicMember(input: {
+        topicId: string;
+        storyId: string;
+        role: TopicMemberRole;
+        reason?: string | null;
+        actor?: string | null;
+    }): Promise<TopicDetail | null>;
+    updateTopicMemberRole(input: {
+        topicId: string;
+        storyId: string;
+        role: TopicMemberRole;
+        reason?: string | null;
+        actor?: string | null;
+    }): Promise<TopicDetail | null>;
+    removeTopicMember(input: {
+        topicId: string;
+        storyId: string;
+        reason?: string | null;
+        actor?: string | null;
+    }): Promise<TopicDetail | null>;
+    restoreTopicMember(input: {
+        topicId: string;
+        storyId: string;
+        role: TopicMemberRole;
+        reason?: string | null;
+        actor?: string | null;
+    }): Promise<TopicDetail | null>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {

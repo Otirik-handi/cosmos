@@ -5,9 +5,37 @@ import {
     deriveExternalKey,
     fingerprintEntryRevision,
     fingerprintStoryRevision,
+    fingerprintTopicRevision,
     normalizePublisher,
     projectEntryToStory,
+    topicMemberRoles,
 } from "./index.js";
+
+describe("topic domain semantics", () => {
+    it("fingerprints topic display fields only and keeps the managed role enum stable", () => {
+        expect(topicMemberRoles).toEqual([
+            "core",
+            "update",
+            "background",
+            "analysis",
+            "counterpoint",
+            "tutorial",
+        ]);
+
+        const base = fingerprintTopicRevision({
+            title: "T",
+            purpose: "P",
+            scope: null,
+        });
+        expect(fingerprintTopicRevision({ title: "T", purpose: "P", scope: null }))
+            .toBe(base);
+        expect(fingerprintTopicRevision({ title: "T2", purpose: "P", scope: null }))
+            .not.toBe(base);
+        expect(fingerprintTopicRevision({ title: "T", purpose: "P", scope: "S" }))
+            .not.toBe(base);
+    });
+});
+
 
 describe("ingestion identity", () => {
     it("prefers a source stable id and falls back without requiring a URL", () => {

@@ -14,6 +14,15 @@ import {
     sourceDefinitionPageSchema,
     sourceSnapshotSchema,
     storyDetailSchema,
+    topicDetailSchema,
+    topicPageSchema,
+    addTopicMemberCommandSchema,
+    createTopicCommandSchema,
+    mergeTopicsCommandSchema,
+    removeTopicMemberCommandSchema,
+    restoreTopicMemberCommandSchema,
+    updateTopicCommandSchema,
+    updateTopicMemberRoleCommandSchema,
     updateStoryRevisionCommandSchema,
     entryDetailSchema,
     entryPageSchema,
@@ -34,6 +43,15 @@ import {
     type SourceSnapshot,
     type StoryDetail,
     type SseEvent,
+    type TopicDetail,
+    type TopicPage,
+    type AddTopicMemberCommand,
+    type CreateTopicCommand,
+    type MergeTopicsCommand,
+    type RemoveTopicMemberCommand,
+    type RestoreTopicMemberCommand,
+    type UpdateTopicCommand,
+    type UpdateTopicMemberRoleCommand,
     type EntryDetail,
     type EntryListQuery,
     type EntryPage,
@@ -286,6 +304,94 @@ export class HttpCosmosClient {
             method: "POST",
             body: payload,
             schema: storyDetailSchema,
+        });
+    }
+
+    async listTopics(query: { cursor?: string; limit?: number } = {}): Promise<TopicPage> {
+        const params = new URLSearchParams();
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/topics?${params.toString()}`, {
+            schema: topicPageSchema,
+        });
+    }
+
+    async topic(topicId: string): Promise<TopicDetail> {
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}`, {
+            schema: topicDetailSchema,
+        });
+    }
+
+    async createTopic(input: CreateTopicCommand): Promise<TopicDetail> {
+        const payload = createTopicCommandSchema.parse(input);
+        return this.request("/api/v1/topics", {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async updateTopic(topicId: string, input: UpdateTopicCommand): Promise<TopicDetail> {
+        const payload = updateTopicCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/revisions`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async mergeTopics(input: MergeTopicsCommand): Promise<TopicDetail> {
+        const payload = mergeTopicsCommandSchema.parse(input);
+        return this.request("/api/v1/topics/merges", {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async addTopicMember(topicId: string, input: AddTopicMemberCommand): Promise<TopicDetail> {
+        const payload = addTopicMemberCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/members`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async updateTopicMemberRole(
+        topicId: string,
+        input: UpdateTopicMemberRoleCommand,
+    ): Promise<TopicDetail> {
+        const payload = updateTopicMemberRoleCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/member-role-updates`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async removeTopicMember(topicId: string, input: RemoveTopicMemberCommand): Promise<TopicDetail> {
+        const payload = removeTopicMemberCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/member-removals`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async restoreTopicMember(
+        topicId: string,
+        input: RestoreTopicMemberCommand,
+    ): Promise<TopicDetail> {
+        const payload = restoreTopicMemberCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/member-restorations`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
         });
     }
 
