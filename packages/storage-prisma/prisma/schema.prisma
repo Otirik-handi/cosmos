@@ -258,6 +258,7 @@ model Story {
     entries           Entry[]
     aliases           StoryAlias[]
     topicMemberships  TopicMembership[]
+    storyEntities     StoryEntity[]
 }
 
 model StoryRevision {
@@ -350,6 +351,83 @@ model TopicAlias {
     canonicalTopic   Topic    @relation(fields: [canonicalTopicId], references: [id], onDelete: Cascade)
 
     @@index([canonicalTopicId])
+}
+
+model Entity {
+    id                String             @id @default(cuid())
+    type              String
+    currentRevisionId String?            @unique
+    createdAt         DateTime           @default(now())
+    updatedAt         DateTime           @updatedAt
+    currentRevision   EntityRevision?    @relation("EntityCurrentRevision", fields: [currentRevisionId], references: [id])
+    revisions         EntityRevision[]   @relation("EntityRevisions")
+    aliases           EntityAlias[]
+    storyLinks        StoryEntity[]
+    fromRelations     EntityRelation[]   @relation("EntityRelationFrom")
+    toRelations       EntityRelation[]   @relation("EntityRelationTo")
+}
+
+model EntityRevision {
+    id                String   @id @default(cuid())
+    entityId          String
+    revision          Int      @default(1)
+    fingerprint       String?
+    actorJson         String?
+    reason            String?
+    name              String
+    type              String
+    createdAt         DateTime @default(now())
+    entity            Entity   @relation("EntityRevisions", fields: [entityId], references: [id], onDelete: Cascade)
+    currentForEntity  Entity?  @relation("EntityCurrentRevision")
+
+    @@unique([entityId, revision])
+}
+
+model EntityAlias {
+    id        String   @id @default(cuid())
+    entityId  String
+    name      String
+    createdAt DateTime @default(now())
+    entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+    @@unique([entityId, name])
+}
+
+model StoryEntity {
+    id              String   @id @default(cuid())
+    storyId         String
+    entityId        String
+    producer        String   @default("human")
+    producerVersion String?
+    confidence      Float    @default(1)
+    evidence        String?
+    actorJson       String?
+    reason          String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+    entity          Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+    @@unique([storyId, entityId])
+}
+
+model EntityRelation {
+    id              String   @id @default(cuid())
+    fromEntityId    String
+    toEntityId      String
+    relationType    String
+    producer        String   @default("human")
+    producerVersion String?
+    confidence      Float    @default(1)
+    evidence        String?
+    actorJson       String?
+    reason          String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    fromEntity      Entity   @relation("EntityRelationFrom", fields: [fromEntityId], references: [id], onDelete: Cascade)
+    toEntity        Entity   @relation("EntityRelationTo", fields: [toEntityId], references: [id], onDelete: Cascade)
+
+    @@unique([fromEntityId, toEntityId, relationType])
 }
 
 model WorkflowRun {

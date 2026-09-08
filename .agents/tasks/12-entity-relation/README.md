@@ -59,12 +59,15 @@ Non-goals（见 Proposal / ADR-0008）：
 
 ## Current State
 
-- 生命周期阶段：Proposal accepted，稳定文档已同步（PRD §7.5 第三切片注记、信息模型 §9 v1 注记、ADR-0008、ADR 索引、Task 12 README）；未开始实现；待维护者授权创建 worktree 与分支 `feat/t12-entity-relation` 后进入切片 1。
+- 生命周期阶段：三切片（domain/contracts → migration/storage/application → transport/API/Web）已实现并通过各自聚焦验收（domain 8、contracts 21、transport-http 7、api controller 25、storage entity 5、component-lab registry 12）与 web typecheck；分支 `feat/t12-entity-relation`，待全量门禁与维护者授权合入 master。过程与偏差见 [walkthrough.md](walkthrough.md)。
 
 ## Decisions and Deviations
 
 - 以 ADR-0008 五条为稳定边界（实体类型受管枚举 + 未知降级、名字走不可变 `EntityRevision`、Story↔Entity/Entity↔Entity 用「当前关系 + provenance」、关系类型受管枚举 + 未知降级、自动识别与 merge/dedup 后置）。
-- 切片顺序沿用 Task 10/11：存储/领域 → 契约/API → Web，每切片独立验收。
+- 偏差 1：`StoryDetail` 增加 `entities` 数组（向后兼容新增字段），使 Story 侧关联入口不二次查询实体。
+- 偏差 2：`mergeStories` 在同一事务内迁移指向 obsolete Story 的 `StoryEntity` 到 canonical（move/collision，写 `story_entity.merged.v1`）——与 ADR-0007 的 TopicMembership 迁移对称，防止 `(story, entity)` 在 alias 侧留下悬空/重复关联。
+- 偏差 3：entity link/relation 的 provenance schema 在写入侧为可选（缺省 storage 兜底 human/1），避免命令必须携带 producer/confidence。
+- 切片顺序沿用 Task 10/11：存储/领域 → 契约/API → Web，每层独立验收。
 
 ## Verification / Gate
 

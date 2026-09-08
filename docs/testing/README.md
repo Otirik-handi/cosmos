@@ -28,6 +28,8 @@ StoryRevision 版本化与 merge alias 的迁移升级以 `packages/storage-pris
 
 Topic 域模型 v1（ADR-0007）的迁移为全新表（`20260908000000_topic_domain_v1`），无旧数据 backfill，仍按门禁跑 fresh + 旧库 upgrade 两态。Topic 语义（TopicRevision 指纹、membership revision/tombstone、merge 去重、Story merge 的 membership 迁移）由 `packages/storage-prisma/src/topic-domain.test.ts` 使用隔离库 seed 覆盖；角色枚举的写入校验/读取降级由 `packages/contracts/src/index.test.ts` 覆盖；API 错误映射由 `apps/api/src/app.controller.test.ts` 覆盖；Web 组件由 `apps/web/src/component-lab/registry.test.ts` 登记。
 
+Entity/关系 v1（ADR-0008）的迁移为全新表（`20260908120000_entity_relation_v1`），无旧数据 backfill，仍按门禁跑 fresh + 旧库 upgrade 两态。Entity 语义（EntityRevision 指纹/no-op、Story↔Entity 幂等 link/unlink 与 provenance、Entity↔Entity 类型化关系与唯一约束、Story merge 的 StoryEntity 迁移 move/collision）由 `packages/storage-prisma/src/entity-relation-domain.test.ts` 使用隔离库 seed 覆盖；类型枚举写入校验/读取降级与命令 schema 由 `packages/contracts/src/index.test.ts` 覆盖；API 错误映射与 transport client 由 `apps/api/src/app.controller.test.ts`、`packages/transport-http/src/index.test.ts` 覆盖；Web EntityPanel/StoryPanel 关联入口由 `apps/web/src/component-lab/registry.test.ts` 登记。
+
 性能修复使用 Task 记录的确定性 seed 或本地生成器，数据位于 `.agent/tmp/`。修复前后必须使用同一数据形状、规模、环境、命令和测量口径并重复采样；墙钟阈值不进入默认 `bun run test`，优先用查询次数、查询计划/索引、复杂度或有界结果等确定性断言防回归。原始基准输出不入库，Task/PR 记录完整命令、数据规模、环境、样本统计、波动和结论。
 
 ## 文档治理

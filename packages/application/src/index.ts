@@ -26,8 +26,16 @@ import {
     type TopicDetail,
     type TopicPage,
     type UpdateSourceCommand,
+    type EntityDetail,
+    type EntityPage,
 } from "@cosmos/contracts";
-import type { NormalizedIngestItem, StoryKind, TopicMemberRole } from "@cosmos/domain";
+import type {
+    EntityRelationType,
+    EntityType,
+    NormalizedIngestItem,
+    StoryKind,
+    TopicMemberRole,
+} from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
 import {
@@ -192,6 +200,49 @@ export class TopicMembershipNotFoundError extends Error {
         super(message);
         this.name = "TopicMembershipNotFoundError";
     }
+}
+
+export class EntityNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(entityId: string) {
+        super(`Entity not found: ${entityId}`);
+        this.name = "EntityNotFoundError";
+    }
+}
+
+export class EntityRevisionConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(entityId: string) {
+        super(`Entity revision conflict: ${entityId}`);
+        this.name = "EntityRevisionConflictError";
+    }
+}
+
+export class EntityRelationConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "EntityRelationConflictError";
+    }
+}
+
+export class EntityAliasConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "EntityAliasConflictError";
+    }
+}
+
+export interface EntityLinkProvenanceInput {
+    producer?: string | null;
+    producerVersion?: string | null;
+    confidence?: number | null;
+    evidence?: string | null;
 }
 
 export interface CosmosRepository {
@@ -383,6 +434,72 @@ export interface CosmosRepository {
         reason?: string | null;
         actor?: string | null;
     }): Promise<TopicDetail | null>;
+    createEntity(input: {
+        name: string;
+        type: EntityType;
+        alias?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    updateEntity(input: {
+        entityId: string;
+        baseRevisionId: string;
+        name: string;
+        type: EntityType;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    addEntityAlias(input: {
+        entityId: string;
+        name: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    removeEntityAlias(input: {
+        entityId: string;
+        name: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    linkStoryEntity(input: {
+        storyId: string;
+        entityId: string;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    unlinkStoryEntity(input: {
+        storyId: string;
+        entityId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    createEntityRelation(input: {
+        fromEntityId: string;
+        toEntityId: string;
+        relationType: EntityRelationType;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    removeEntityRelation(input: {
+        fromEntityId: string;
+        toEntityId: string;
+        relationType: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null>;
+    entity(entityId: string): Promise<EntityDetail | null>;
+    listEntities(input: {
+        cursor?: string;
+        limit: number;
+    }): Promise<EntityPage>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {

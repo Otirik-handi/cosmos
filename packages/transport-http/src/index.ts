@@ -60,6 +60,26 @@ import {
     type RevisionDetail,
     type UpdateStoryRevisionCommand,
     type UpdateSourceCommand,
+    entityDetailSchema,
+    entityPageSchema,
+    createEntityCommandSchema,
+    updateEntityCommandSchema,
+    addEntityAliasCommandSchema,
+    removeEntityAliasCommandSchema,
+    linkStoryEntityCommandSchema,
+    unlinkStoryEntityCommandSchema,
+    createEntityRelationCommandSchema,
+    removeEntityRelationCommandSchema,
+    type EntityDetail,
+    type EntityPage,
+    type CreateEntityCommand,
+    type UpdateEntityCommand,
+    type AddEntityAliasCommand,
+    type RemoveEntityAliasCommand,
+    type LinkStoryEntityCommand,
+    type UnlinkStoryEntityCommand,
+    type CreateEntityRelationCommand,
+    type RemoveEntityRelationCommand,
 } from "@cosmos/contracts";
 
 export interface CosmosEventSource {
@@ -392,6 +412,97 @@ export class HttpCosmosClient {
             method: "POST",
             body: payload,
             schema: topicDetailSchema,
+        });
+    }
+
+    async listEntities(query: { cursor?: string; limit?: number } = {}): Promise<EntityPage> {
+        const params = new URLSearchParams();
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/entities?${params.toString()}`, {
+            schema: entityPageSchema,
+        });
+    }
+
+    async entity(entityId: string): Promise<EntityDetail> {
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}`, {
+            schema: entityDetailSchema,
+        });
+    }
+
+    async createEntity(input: CreateEntityCommand): Promise<EntityDetail> {
+        const payload = createEntityCommandSchema.parse(input);
+        return this.request("/api/v1/entities", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async updateEntity(entityId: string, input: UpdateEntityCommand): Promise<EntityDetail> {
+        const payload = updateEntityCommandSchema.parse(input);
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}/revisions`, {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async addEntityAlias(entityId: string, input: AddEntityAliasCommand): Promise<EntityDetail> {
+        const payload = addEntityAliasCommandSchema.parse(input);
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}/aliases`, {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async removeEntityAlias(entityId: string, input: RemoveEntityAliasCommand): Promise<EntityDetail> {
+        const payload = removeEntityAliasCommandSchema.parse(input);
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}/alias-removals`, {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async linkStoryEntity(input: LinkStoryEntityCommand): Promise<EntityDetail> {
+        const payload = linkStoryEntityCommandSchema.parse(input);
+        return this.request("/api/v1/story-entity-links", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async unlinkStoryEntity(input: UnlinkStoryEntityCommand): Promise<EntityDetail> {
+        const payload = unlinkStoryEntityCommandSchema.parse(input);
+        return this.request("/api/v1/story-entity-links/removals", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async createEntityRelation(input: CreateEntityRelationCommand): Promise<EntityDetail> {
+        const payload = createEntityRelationCommandSchema.parse(input);
+        return this.request("/api/v1/entity-relations", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async removeEntityRelation(input: RemoveEntityRelationCommand): Promise<EntityDetail> {
+        const payload = removeEntityRelationCommandSchema.parse(input);
+        return this.request("/api/v1/entity-relations/removals", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
         });
     }
 

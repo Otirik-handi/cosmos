@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
     createTemporalValue,
     deriveExternalKey,
+    entityRelationTypes,
+    entityTypes,
+    fingerprintEntityRevision,
     fingerprintEntryRevision,
     fingerprintStoryRevision,
     fingerprintTopicRevision,
@@ -32,6 +35,38 @@ describe("topic domain semantics", () => {
         expect(fingerprintTopicRevision({ title: "T2", purpose: "P", scope: null }))
             .not.toBe(base);
         expect(fingerprintTopicRevision({ title: "T", purpose: "P", scope: "S" }))
+            .not.toBe(base);
+    });
+});
+
+describe("entity domain semantics", () => {
+    it("keeps managed type and relation-type enums stable and fingerprints identity fields", () => {
+        expect(entityTypes).toEqual([
+            "person",
+            "organization",
+            "product",
+            "project",
+            "model",
+            "location",
+        ]);
+        expect(entityRelationTypes).toEqual([
+            "founded",
+            "works_at",
+            "located_in",
+            "produced",
+            "part_of",
+            "related_to",
+        ]);
+
+        const base = fingerprintEntityRevision({
+            name: "Jeff Dean",
+            type: "person",
+        });
+        expect(fingerprintEntityRevision({ name: "Jeff Dean", type: "person" }))
+            .toBe(base);
+        expect(fingerprintEntityRevision({ name: "Jeffrey Dean", type: "person" }))
+            .not.toBe(base);
+        expect(fingerprintEntityRevision({ name: "Jeff Dean", type: "organization" }))
             .not.toBe(base);
     });
 });

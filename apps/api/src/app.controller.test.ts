@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 
 import {
+    EntityNotFoundError,
+    EntityRelationConflictError,
+    EntityRevisionConflictError,
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
@@ -668,5 +671,131 @@ describe("AppController topic orchestration", () => {
         await expect(createController(repository)
             .addTopicMember("topic-a", { storyId: "story-a", role: "not-a-role" }))
             .rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe("AppController entity orchestration", () => {
+    function entityDetailFixture() {
+        return {
+            entity: {
+                id: "entity-a",
+                revisionId: "rev-e-1",
+                type: "person",
+                name: "Jeff Dean",
+            },
+            aliases: ["Jeffrey Dean"],
+            stories: [{
+                storyId: "story-a",
+                producer: "human",
+                producerVersion: null,
+                confidence: 1,
+                evidence: null,
+                actor: "user",
+                reason: null,
+            }],
+            relations: [{
+                fromEntityId: "entity-a",
+                toEntityId: "entity-b",
+                relationType: "founded",
+                producer: "human",
+                producerVersion: null,
+                confidence: 0.9,
+                evidence: null,
+                actor: null,
+                reason: null,
+            }],
+        };
+    }
+
+    function createController(repository: Record<string, unknown>) {
+        return new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+    }
+
+    it("creates an entity and returns the detail", async () => {
+        const repository = {
+            createEntity: vi.fn().mockResolvedValue(entityDetailFixture()),
+        };
+        const controller = createController(repository);
+        const result = await controller.createEntity({
+            name: "Jeff Dean",
+            type: "person",
+            alias: "Jeffrey Dean",
+            actor: "user",
+        });
+        expect(result).toMatchObject({ entity: { id: "entity-a" } });
+        expect(repository.createEntity).toHaveBeenCalledWith({
+            name: "Jeff Dean",
+            type: "person",
+            alias: "Jeffrey Dean",
+            actor: "user",
+            reason: null,
+        });
+    });
+
+    it("links a story and maps missing entity to 404", async () => {
+        const repository = {
+            linkStoryEntity: vi.fn().mockResolvedValue(entityDetailFixture()),
+        };
+        const result = await createController(repository).linkStoryEntity({
+            storyId: "story-a",
+            entityId: "entity-a",
+        });
+        expect(result).toMatchObject({ entity: { id: "entity-a" } });
+        expect(repository.linkStoryEntity).toHaveBeenCalledWith({
+            storyId: "story-a",
+            entityId: "entity-a",
+            producer: null,
+            producerVersion: null,
+            confidence: null,
+            evidence: null,
+            actor: null,
+            reason: null,
+        });
+
+        await expect(createController({
+            entity: vi.fn().mockResolvedValue(null),
+        }).entity("entity-missing")).rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({
+            linkStoryEntity: vi.fn().mockRejectedValue(
+                new EntityNotFoundError("entity-missing"),
+            ),
+        }).linkStoryEntity({ storyId: "story-a", entityId: "entity-missing" }))
+            .rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("maps stale entity edits and invalid relations to 409", async () => {
+        await expect(createController({
+            updateEntity: vi.fn().mockRejectedValue(
+                new EntityRevisionConflictError("entity-a"),
+            ),
+        }).updateEntity("entity-a", {
+            baseRevisionId: "rev-e-0",
+            name: "Stale",
+            type: "person",
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        await expect(createController({
+            createEntityRelation: vi.fn().mockRejectedValue(
+                new EntityRelationConflictError("Entity relation must be between distinct entities: entity-a"),
+            ),
+        }).createEntityRelation({
+            fromEntityId: "entity-a",
+            toEntityId: "entity-a",
+            relationType: "related_to",
+        })).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("rejects malformed entity commands with 400", async () => {
+        const repository = { createEntity: vi.fn() };
+        await expect(createController(repository).createEntity({
+            name: "Jeff Dean",
+            type: "superhero",
+        })).rejects.toBeInstanceOf(BadRequestException);
     });
 });

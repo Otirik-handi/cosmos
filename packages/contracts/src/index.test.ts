@@ -21,7 +21,105 @@ import {
     addTopicMemberCommandSchema,
     createTopicCommandSchema,
     topicDetailSchema,
+    createEntityCommandSchema,
+    createEntityRelationCommandSchema,
+    entityDetailSchema,
+    linkStoryEntityCommandSchema,
+    storyDetailSchema,
 } from "./index.js";
+
+describe("entity and relation contracts", () => {
+    it("rejects unknown types on write and accepts them on read", () => {
+        expect(() => createEntityCommandSchema.parse({
+            name: "Jeff Dean",
+            type: "superhero",
+        })).toThrow();
+        expect(() => createEntityCommandSchema.parse({
+            name: "Jeff Dean",
+            type: "person",
+        })).not.toThrow();
+        expect(() => createEntityRelationCommandSchema.parse({
+            fromEntityId: "entity-a",
+            toEntityId: "entity-b",
+            relationType: "mentored",
+        })).toThrow();
+
+        const detail = entityDetailSchema.parse({
+            entity: {
+                id: "entity-a",
+                revisionId: "rev-e-1",
+                type: "future-type",
+                name: "Future Thing",
+            },
+            aliases: ["FT"],
+            stories: [{
+                storyId: "story-a",
+                producer: "human",
+                producerVersion: null,
+                confidence: 0.9,
+                evidence: null,
+                actor: "user",
+                reason: null,
+            }],
+            relations: [{
+                fromEntityId: "entity-a",
+                toEntityId: "entity-b",
+                relationType: "future-relation",
+                producer: "human",
+                producerVersion: null,
+                confidence: 0.8,
+                evidence: null,
+                actor: null,
+                reason: null,
+            }],
+        });
+        expect(detail.entity.type).toBe("future-type");
+        expect(detail.relations[0].relationType).toBe("future-relation");
+    });
+
+    it("leaves provenance unset on write and requires a canonical link", () => {
+        const parsed = linkStoryEntityCommandSchema.parse({
+            storyId: "story-a",
+            entityId: "entity-b",
+        });
+        expect(parsed.producer).toBeUndefined();
+        expect(parsed.confidence).toBeUndefined();
+
+        const story = storyDetailSchema.parse({
+            story: {
+                id: "story-a",
+                kind: "document",
+                subtype: null,
+                revisionId: "rev-s-1",
+                title: "T",
+                summary: null,
+            },
+            entry: {
+                id: "entry-a",
+                sourceId: "source-a",
+                sourceName: "S",
+                sourceKind: "rss",
+                currentRevisionId: "er-1",
+                metrics: null,
+                revisions: [],
+                observations: [],
+            },
+            entries: [],
+            entities: [{
+                entityId: "entity-b",
+                name: "Jeff Dean",
+                type: "person",
+                producer: "human",
+                producerVersion: null,
+                confidence: 1,
+                evidence: null,
+                actor: null,
+                reason: null,
+            }],
+        });
+        expect(story.entities[0].name).toBe("Jeff Dean");
+    });
+});
 
 describe("topic contracts", () => {
     it("rejects unknown member roles on write and accepts them on read", () => {

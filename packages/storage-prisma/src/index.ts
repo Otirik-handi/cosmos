@@ -33,19 +33,29 @@ import {
     type TopicPage,
     type TopicSummary,
     type UpdateSourceCommand,
+    type EntityDetail,
+    type EntityPage,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
+    entityRelationTypes,
+    entityTypes,
+    fingerprintEntityRevision,
     fingerprintEntryRevision,
     fingerprintStoryRevision,
     fingerprintTopicRevision,
     projectEntryToStory,
     temporalProjection,
+    type EntityRelationType,
+    type EntityType,
     type NormalizedIngestItem,
     type TopicMemberRole,
 } from "@cosmos/domain";
 import {
     createBuiltinManifestCatalog,
+    EntityNotFoundError,
+    EntityRelationConflictError,
+    EntityRevisionConflictError,
     SourceNotFoundError,
     SourceRevisionConflictError,
     StoryMergeConflictError,
@@ -1958,6 +1968,44 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         });
                     }
                 }
+                // Story↔Entity links point at the same Story id space and must
+                // follow the merge to the canonical Story, collapsing to one per
+                // (story, entity) (ADR-0008 decision 3).
+                const obsoleteStoryEntities = await tx.storyEntity.findMany({
+                    where: { storyId: obsoleteStoryId },
+                });
+                for (const link of obsoleteStoryEntities) {
+                    const existing = await tx.storyEntity.findUnique({
+                        where: {
+                            storyId_entityId: {
+                                storyId: canonicalStoryId,
+                                entityId: link.entityId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.storyEntity.update({
+                            where: { id: link.id },
+                            data: { storyId: canonicalStoryId },
+                        });
+                    } else {
+                        await tx.storyEntity.delete({
+                            where: { id: link.id },
+                        });
+                        await appendDomainEvent(tx, {
+                            type: "story_entity.merged.v1",
+                            aggregateType: "Entity",
+                            aggregateId: link.entityId,
+                            payload: {
+                                entityId: link.entityId,
+                                obsoleteStoryId,
+                                canonicalStoryId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
                 await tx.storyAlias.create({
                     data: { id: obsoleteStoryId, canonicalStoryId },
                 });
@@ -1986,6 +2034,13 @@ export class PrismaCosmosRepository implements CosmosRepository {
             where: { id: canonicalId },
             include: {
                 currentRevision: true,
+                storyEntities: {
+                    include: {
+                        entity: {
+                            include: { currentRevision: true },
+                        },
+                    },
+                },
                 entries: {
                     orderBy: { updatedAt: "desc" },
                     include: {
@@ -2043,6 +2098,19 @@ export class PrismaCosmosRepository implements CosmosRepository {
         const entries = story.entries
             .filter((entry) => entry.currentRevision !== null)
             .map(toEntryDetail);
+        const entities = story.storyEntities
+            .filter((link) => link.entity.currentRevision !== null)
+            .map((link) => ({
+                entityId: link.entityId,
+                name: link.entity.currentRevision!.name,
+                type: link.entity.currentRevision!.type,
+                producer: link.producer,
+                producerVersion: link.producerVersion,
+                confidence: link.confidence,
+                evidence: link.evidence,
+                actor: link.actorJson == null ? null : parseJson<string>(link.actorJson),
+                reason: link.reason,
+            }));
         return {
             story: {
                 id: story.id,
@@ -2054,6 +2122,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             },
             entry: entries[0],
             entries,
+            entities,
         };
     }
 
@@ -2631,6 +2700,536 @@ export class PrismaCosmosRepository implements CosmosRepository {
             });
         });
         return this.toTopicDetail(canonicalTopicId);
+    }
+
+    async createEntity(input: {
+        name: string;
+        type: EntityType;
+        alias?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        if (!(entityTypes as readonly string[]).includes(input.type)) {
+            throw new EntityRevisionConflictError(`Unknown entity type: ${input.type}`);
+        }
+        const aliasName = input.alias?.trim() || null;
+        const fingerprint = fingerprintEntityRevision({
+            name: input.name,
+            type: input.type,
+        });
+        const entityId = await this.prisma.$transaction(async (tx) => {
+            const entity = await tx.entity.create({ data: { type: input.type } });
+            const revision = await tx.entityRevision.create({
+                data: {
+                    entityId: entity.id,
+                    revision: 1,
+                    fingerprint,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                    reason: input.reason ?? null,
+                    name: input.name,
+                    type: input.type,
+                },
+            });
+            await tx.entity.update({
+                where: { id: entity.id },
+                data: { currentRevisionId: revision.id },
+            });
+            if (aliasName) {
+                await tx.entityAlias.create({
+                    data: { entityId: entity.id, name: aliasName },
+                });
+            }
+            await appendDomainEvent(tx, {
+                type: "entity.created.v1",
+                aggregateType: "Entity",
+                aggregateId: entity.id,
+                payload: {
+                    entityId: entity.id,
+                    name: input.name,
+                    type: input.type,
+                    alias: aliasName,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+            return entity.id;
+        });
+        return this.toEntityDetail(entityId);
+    }
+
+    async updateEntity(input: {
+        entityId: string;
+        baseRevisionId: string;
+        name: string;
+        type: EntityType;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: input.entityId },
+            include: { currentRevision: true },
+        });
+        if (!entity) {
+            throw new EntityNotFoundError(input.entityId);
+        }
+        if (!entity.currentRevision || entity.currentRevision.id !== input.baseRevisionId) {
+            throw new EntityRevisionConflictError(input.entityId);
+        }
+        const fingerprint = fingerprintEntityRevision({
+            name: input.name,
+            type: input.type,
+        });
+        if (entity.currentRevision.fingerprint === fingerprint) {
+            return this.toEntityDetail(input.entityId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const latest = await tx.entityRevision.findFirst({
+                where: { entityId: input.entityId },
+                orderBy: { revision: "desc" },
+                select: { revision: true },
+            });
+            const created = await tx.entityRevision.create({
+                data: {
+                    entityId: input.entityId,
+                    revision: (latest?.revision ?? 0) + 1,
+                    fingerprint,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                    reason: input.reason ?? null,
+                    name: input.name,
+                    type: input.type,
+                },
+            });
+            await tx.entity.update({
+                where: { id: input.entityId },
+                data: { currentRevisionId: created.id },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.revision_created.v1",
+                aggregateType: "Entity",
+                aggregateId: input.entityId,
+                payload: {
+                    entityId: input.entityId,
+                    baseRevisionId: input.baseRevisionId,
+                    revision: created.revision,
+                    name: input.name,
+                    type: input.type,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.entityId);
+    }
+
+    async addEntityAlias(input: {
+        entityId: string;
+        name: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: input.entityId },
+            select: { id: true },
+        });
+        if (!entity) {
+            throw new EntityNotFoundError(input.entityId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.entityAlias.findUnique({
+                where: { entityId_name: { entityId: input.entityId, name: input.name } },
+                select: { id: true },
+            });
+            if (existing) {
+                return;
+            }
+            await tx.entityAlias.create({
+                data: { entityId: input.entityId, name: input.name },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.alias_added.v1",
+                aggregateType: "Entity",
+                aggregateId: input.entityId,
+                payload: {
+                    entityId: input.entityId,
+                    name: input.name,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.entityId);
+    }
+
+    async removeEntityAlias(input: {
+        entityId: string;
+        name: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: input.entityId },
+            select: { id: true },
+        });
+        if (!entity) {
+            throw new EntityNotFoundError(input.entityId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.entityAlias.findUnique({
+                where: { entityId_name: { entityId: input.entityId, name: input.name } },
+                select: { id: true },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.entityAlias.delete({
+                where: { id: existing.id },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.alias_removed.v1",
+                aggregateType: "Entity",
+                aggregateId: input.entityId,
+                payload: {
+                    entityId: input.entityId,
+                    name: input.name,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.entityId);
+    }
+
+    async linkStoryEntity(input: {
+        storyId: string;
+        entityId: string;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: input.entityId },
+            select: { id: true },
+        });
+        if (!entity) {
+            throw new EntityNotFoundError(input.entityId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.storyEntity.findUnique({
+                where: {
+                    storyId_entityId: {
+                        storyId: canonicalStoryId,
+                        entityId: input.entityId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (existing) {
+                return;
+            }
+            const producer = input.producer?.trim() || "human";
+            await tx.storyEntity.create({
+                data: {
+                    storyId: canonicalStoryId,
+                    entityId: input.entityId,
+                    producer,
+                    producerVersion: input.producerVersion ?? null,
+                    confidence: input.confidence ?? 1,
+                    evidence: input.evidence ?? null,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                    reason: input.reason ?? null,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.story_linked.v1",
+                aggregateType: "Entity",
+                aggregateId: input.entityId,
+                payload: {
+                    entityId: input.entityId,
+                    storyId: canonicalStoryId,
+                    producer,
+                    confidence: input.confidence ?? 1,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.entityId);
+    }
+
+    async unlinkStoryEntity(input: {
+        storyId: string;
+        entityId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: input.entityId },
+            select: { id: true },
+        });
+        if (!entity) {
+            throw new EntityNotFoundError(input.entityId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.storyEntity.findUnique({
+                where: {
+                    storyId_entityId: {
+                        storyId: canonicalStoryId,
+                        entityId: input.entityId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.storyEntity.delete({
+                where: { id: existing.id },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.story_unlinked.v1",
+                aggregateType: "Entity",
+                aggregateId: input.entityId,
+                payload: {
+                    entityId: input.entityId,
+                    storyId: canonicalStoryId,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.entityId);
+    }
+
+    async createEntityRelation(input: {
+        fromEntityId: string;
+        toEntityId: string;
+        relationType: EntityRelationType;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        if (!(entityRelationTypes as readonly string[]).includes(input.relationType)) {
+            throw new EntityRelationConflictError(`Unknown relation type: ${input.relationType}`);
+        }
+        if (input.fromEntityId === input.toEntityId) {
+            throw new EntityRelationConflictError(
+                `Entity relation must be between distinct entities: ${input.fromEntityId}`,
+            );
+        }
+        const entities = await this.prisma.entity.findMany({
+            where: { id: { in: [input.fromEntityId, input.toEntityId] } },
+            select: { id: true },
+        });
+        if (entities.length !== 2) {
+            const found = new Set(entities.map((entity) => entity.id));
+            const missing = [input.fromEntityId, input.toEntityId]
+                .find((id) => !found.has(id))!;
+            throw new EntityNotFoundError(missing);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.entityRelation.findUnique({
+                where: {
+                    fromEntityId_toEntityId_relationType: {
+                        fromEntityId: input.fromEntityId,
+                        toEntityId: input.toEntityId,
+                        relationType: input.relationType,
+                    },
+                },
+                select: { id: true },
+            });
+            if (existing) {
+                return;
+            }
+            const producer = input.producer?.trim() || "human";
+            await tx.entityRelation.create({
+                data: {
+                    fromEntityId: input.fromEntityId,
+                    toEntityId: input.toEntityId,
+                    relationType: input.relationType,
+                    producer,
+                    producerVersion: input.producerVersion ?? null,
+                    confidence: input.confidence ?? 1,
+                    evidence: input.evidence ?? null,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                    reason: input.reason ?? null,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.relation_created.v1",
+                aggregateType: "Entity",
+                aggregateId: input.fromEntityId,
+                payload: {
+                    fromEntityId: input.fromEntityId,
+                    toEntityId: input.toEntityId,
+                    relationType: input.relationType,
+                    producer,
+                    confidence: input.confidence ?? 1,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.fromEntityId);
+    }
+
+    async removeEntityRelation(input: {
+        fromEntityId: string;
+        toEntityId: string;
+        relationType: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntityDetail | null> {
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: input.fromEntityId },
+            select: { id: true },
+        });
+        if (!entity) {
+            throw new EntityNotFoundError(input.fromEntityId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.entityRelation.findUnique({
+                where: {
+                    fromEntityId_toEntityId_relationType: {
+                        fromEntityId: input.fromEntityId,
+                        toEntityId: input.toEntityId,
+                        relationType: input.relationType,
+                    },
+                },
+                select: { id: true },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.entityRelation.delete({
+                where: { id: existing.id },
+            });
+            await appendDomainEvent(tx, {
+                type: "entity.relation_removed.v1",
+                aggregateType: "Entity",
+                aggregateId: input.fromEntityId,
+                payload: {
+                    fromEntityId: input.fromEntityId,
+                    toEntityId: input.toEntityId,
+                    relationType: input.relationType,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.toEntityDetail(input.fromEntityId);
+    }
+
+    async entity(entityId: string): Promise<EntityDetail | null> {
+        return this.toEntityDetail(entityId);
+    }
+
+    async listEntities(input: {
+        cursor?: string;
+        limit: number;
+    }): Promise<EntityPage> {
+        const parsed = input.cursor ? Number.parseInt(input.cursor, 10) : 0;
+        const offset = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+        const entities = await this.prisma.entity.findMany({
+            orderBy: { updatedAt: "desc" },
+            skip: offset,
+            take: input.limit + 1,
+            include: {
+                currentRevision: true,
+                storyLinks: { select: { id: true } },
+                fromRelations: { select: { id: true } },
+                toRelations: { select: { id: true } },
+            },
+        });
+        const hasNext = entities.length > input.limit;
+        const page = hasNext ? entities.slice(0, input.limit) : entities;
+        const items: EntityPage["items"] = page.map((entity) => ({
+            id: entity.id,
+            revisionId: entity.currentRevision?.id ?? "",
+            type: entity.currentRevision?.type ?? "",
+            name: entity.currentRevision?.name ?? "",
+            storyCount: entity.storyLinks.length,
+            relationCount: entity.fromRelations.length + entity.toRelations.length,
+            updatedAt: entity.updatedAt.toISOString(),
+        }));
+        return {
+            items,
+            nextCursor: hasNext ? String(offset + input.limit) : null,
+        };
+    }
+
+    private async toEntityDetail(entityId: string): Promise<EntityDetail | null> {
+        const entity = await this.prisma.entity.findUnique({
+            where: { id: entityId },
+            include: {
+                currentRevision: true,
+                aliases: {
+                    orderBy: { name: "asc" },
+                },
+                storyLinks: true,
+                fromRelations: true,
+                toRelations: true,
+            },
+        });
+        if (!entity || !entity.currentRevision) {
+            return null;
+        }
+        const relations = [
+            ...entity.fromRelations.map((relation) => ({
+                fromEntityId: relation.fromEntityId,
+                relationType: relation.relationType,
+                toEntityId: relation.toEntityId,
+                producer: relation.producer,
+                producerVersion: relation.producerVersion,
+                confidence: relation.confidence,
+                evidence: relation.evidence,
+                actor: relation.actorJson == null ? null : parseJson<string>(relation.actorJson),
+                reason: relation.reason,
+            })),
+            ...entity.toRelations.map((relation) => ({
+                fromEntityId: relation.fromEntityId,
+                relationType: relation.relationType,
+                toEntityId: relation.toEntityId,
+                producer: relation.producer,
+                producerVersion: relation.producerVersion,
+                confidence: relation.confidence,
+                evidence: relation.evidence,
+                actor: relation.actorJson == null ? null : parseJson<string>(relation.actorJson),
+                reason: relation.reason,
+            })),
+        ];
+        return {
+            entity: {
+                id: entity.id,
+                revisionId: entity.currentRevision.id,
+                type: entity.currentRevision.type,
+                name: entity.currentRevision.name,
+            },
+            aliases: entity.aliases.map((alias) => alias.name),
+            stories: entity.storyLinks.map((link) => ({
+                storyId: link.storyId,
+                producer: link.producer,
+                producerVersion: link.producerVersion,
+                confidence: link.confidence,
+                evidence: link.evidence,
+                actor: link.actorJson == null ? null : parseJson<string>(link.actorJson),
+                reason: link.reason,
+            })),
+            relations,
+        };
     }
 
     async entry(entryId: string): Promise<EntryDetail | null> {

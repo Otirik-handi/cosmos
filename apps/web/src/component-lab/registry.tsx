@@ -26,6 +26,7 @@ import {
     renderStoryPanelLab,
     renderThemeSwitcherLab,
     renderTopicPanelLab,
+    renderEntityPanelLab,
 } from "./product-fixtures";
 
 import type {LabComponentDefinition, LabControlDefinition, LabProps} from "./types";
@@ -283,6 +284,12 @@ const topicPanelControls = [
     control("state", "State", "select", "members", ["members", "empty", "removed"]),
 ] as const satisfies readonly LabControlDefinition[];
 
+const entityPanelControls = [
+    control("name", "Entity name", "text", "Jeff Dean"),
+    control("type", "Type", "select", "person", ["person", "organization", "model"]),
+    control("state", "State", "select", "linked", ["linked", "empty"]),
+] as const satisfies readonly LabControlDefinition[];
+
 export const labComponentDefinitions = [
     {
         id: "badge",
@@ -493,6 +500,20 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderTopicPanelLab,
+    },
+    {
+        id: "entity-panel",
+        label: "EntityPanel",
+        category: "Cosmos",
+        modulePath: "components/cosmos/entity-panel.tsx",
+        defaultSceneId: "linked",
+        controls: entityPanelControls,
+        scenes: [
+            {id: "linked", label: "Linked", props: {name: "Jeff Dean", type: "person", state: "linked"}},
+            {id: "empty", label: "Empty", props: {name: "Jeff Dean", type: "person", state: "empty"}},
+        ],
+        tokens: sharedTokens,
+        render: renderEntityPanelLab,
     },
     {
         id: "theme-switcher",

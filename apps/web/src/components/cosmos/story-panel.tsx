@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, type FormEventHandler } from "react";
 
 import type {
     AssetSnapshot,
+    EntitySummary,
     StoryDetail,
+    StoryEntitySummary,
     TopicMemberRole,
     TopicSummary,
     UpdateStoryRevisionCommand,
@@ -13,6 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ROLE_OPTIONS } from "@/components/cosmos/topic-panel";
+import {
+    ENTITY_TYPE_OPTIONS,
+    entityTypeLabel,
+} from "@/components/cosmos/entity-panel";
 
 type StoryPanelProps = {
     onClose: () => void;
@@ -22,7 +28,43 @@ type StoryPanelProps = {
     topics?: readonly TopicSummary[];
     onJoinTopic?: (topicId: string, role: TopicMemberRole) => Promise<void>;
     onCreateTopic?: (title: string, purpose: string) => Promise<void>;
+    entityOptions?: readonly EntitySummary[];
+    onLinkEntity?: (entityId: string) => Promise<void>;
+    onCreateEntityLinked?: (name: string, type: string) => Promise<void>;
+    onUnlinkEntity?: (entityId: string) => Promise<void>;
 };
+
+function EntityRow({
+    link,
+    busy,
+    onUnlink,
+}: {
+    link: StoryEntitySummary;
+    busy: boolean;
+    onUnlink: (entityId: string) => Promise<void>;
+}) {
+    return (
+        <li
+            data-story-entity-id={link.entityId}
+            className="flex flex-wrap items-center gap-2 border-t py-3 first:border-t-0"
+        >
+            <Badge variant="secondary">{entityTypeLabel(link.type)}</Badge>
+            <span className="min-w-0 flex-1 truncate text-sm">{link.name}</span>
+            <span className="text-xs text-muted-foreground">{link.entityId}</span>
+            {link.actor && (
+                <span className="text-xs text-muted-foreground">· {link.actor}</span>
+            )}
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => void onUnlink(link.entityId)}
+            >
+                解除关联
+            </Button>
+        </li>
+    );
+}
 
 const KIND_LABELS: Record<string, string> = {
     image: "图片",
@@ -134,6 +176,10 @@ export function StoryPanel({
     topics,
     onJoinTopic,
     onCreateTopic,
+    entityOptions,
+    onLinkEntity,
+    onCreateEntityLinked,
+    onUnlinkEntity,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -145,6 +191,9 @@ export function StoryPanel({
     const [joinRole, setJoinRole] = useState<TopicMemberRole>("core");
     const [newTopicTitle, setNewTopicTitle] = useState("");
     const [newTopicPurpose, setNewTopicPurpose] = useState("");
+    const [linkEntityId, setLinkEntityId] = useState("");
+    const [newEntityName, setNewEntityName] = useState("");
+    const [newEntityType, setNewEntityType] = useState("person");
 
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -243,6 +292,58 @@ export function StoryPanel({
             setNewTopicPurpose("");
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "创建 Topic 失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitLinkEntity = async (): Promise<void> => {
+        if (!onLinkEntity || !linkEntityId) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onLinkEntity(linkEntityId);
+            setLinkEntityId("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "关联 Entity 失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitCreateEntity = async (): Promise<void> => {
+        if (!onCreateEntityLinked) {
+            return;
+        }
+        const normalizedName = newEntityName.trim();
+        if (!normalizedName) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onCreateEntityLinked(normalizedName, newEntityType);
+            setNewEntityName("");
+            setNewEntityType("person");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "创建 Entity 失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitUnlinkEntity = async (entityId: string): Promise<void> => {
+        if (!onUnlinkEntity) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onUnlinkEntity(entityId);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "解除 Entity 关联失败。");
         } finally {
             setBusy(false);
         }
@@ -400,6 +501,99 @@ export function StoryPanel({
                             </p>
                         )}
                     </section>
+                    {story.entities.length > 0 && (
+                        <section
+                            aria-label="关联实体"
+                            className="grid gap-3 border-t pt-4"
+                        >
+                            <h3 className="font-medium">
+                                关联实体（{story.entities.length}）
+                            </h3>
+                            <ul>
+                                {story.entities.map((link) => (
+                                    <EntityRow
+                                        key={link.entityId}
+                                        link={link}
+                                        busy={busy}
+                                        onUnlink={submitUnlinkEntity}
+                                    />
+                                ))}
+                            </ul>
+                        </section>
+                    )}
+                    {entityOptions && entityOptions.length > 0 && (
+                        <section
+                            aria-label="关联 Entity"
+                            className="grid gap-3 border-t pt-4"
+                        >
+                            <h3 className="font-medium">关联已有 Entity</h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                    aria-label="选择 Entity"
+                                    value={linkEntityId}
+                                    disabled={busy}
+                                    className="rounded-sm border bg-card px-2 py-1 text-sm"
+                                    onChange={(event) => setLinkEntityId(event.target.value)}
+                                >
+                                    <option value="">选择 Entity…</option>
+                                    {entityOptions.map((item) => (
+                                        <option
+                                            key={item.id}
+                                            value={item.id}
+                                            disabled={story.entities.some((link) => {
+                                                return link.entityId === item.id;
+                                            })}
+                                        >
+                                            {item.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <Button
+                                    variant="outline"
+                                    disabled={busy || !linkEntityId}
+                                    onClick={() => void submitLinkEntity()}
+                                >
+                                    关联
+                                </Button>
+                            </div>
+                        </section>
+                    )}
+                    {onCreateEntityLinked && (
+                        <section
+                            aria-label="创建 Entity"
+                            className="grid gap-3 border-t pt-4"
+                        >
+                            <h3 className="font-medium">创建 Entity 并关联本 Story</h3>
+                            <Input
+                                id="cosmos-new-entity-name"
+                                value={newEntityName}
+                                onChange={(event) => setNewEntityName(event.target.value)}
+                                disabled={busy}
+                                placeholder="Entity 名称，例如 Jeff Dean"
+                            />
+                            <select
+                                aria-label="Entity 类型"
+                                value={newEntityType}
+                                disabled={busy}
+                                className="w-fit rounded-sm border bg-card px-2 py-1 text-sm"
+                                onChange={(event) => setNewEntityType(event.target.value)}
+                            >
+                                {ENTITY_TYPE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <Button
+                                variant="outline"
+                                className="w-fit"
+                                disabled={busy || !newEntityName.trim()}
+                                onClick={() => void submitCreateEntity()}
+                            >
+                                创建并关联
+                            </Button>
+                        </section>
+                    )}
                     {topics && topics.length > 0 && (
                         <section
                             aria-label="加入 Topic"

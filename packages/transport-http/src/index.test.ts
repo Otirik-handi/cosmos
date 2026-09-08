@@ -247,4 +247,57 @@ describe("HttpCosmosClient", () => {
         expect(openedUrl).toBe("http://localhost:4310/api/v1/events?after=12");
         expect(received).toBe("feed.updated.v1");
     });
+
+    it("posts entity commands to the versioned endpoints and validates details", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                return new Response(JSON.stringify({
+                    entity: {
+                        id: "entity-a",
+                        revisionId: "rev-e-1",
+                        type: "person",
+                        name: "Jeff Dean",
+                    },
+                    aliases: ["Jeffrey Dean"],
+                    stories: [{
+                        storyId: "story-a",
+                        producer: "human",
+                        producerVersion: null,
+                        confidence: 1,
+                        evidence: null,
+                        actor: "user",
+                        reason: null,
+                    }],
+                    relations: [],
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const created = await client.createEntity({
+            name: "Jeff Dean",
+            type: "person",
+            alias: "Jeffrey Dean",
+        });
+        expect(created.entity.name).toBe("Jeff Dean");
+        expect(created.aliases).toEqual(["Jeffrey Dean"]);
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/entities");
+        expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+            name: "Jeff Dean",
+            type: "person",
+            alias: "Jeffrey Dean",
+        });
+
+        const linked = await client.linkStoryEntity({
+            storyId: "story-a",
+            entityId: "entity-a",
+        });
+        expect(linked.stories[0].storyId).toBe("story-a");
+        expect(requests[1]?.url).toBe("http://localhost:4310/api/v1/story-entity-links");
+    });
 });

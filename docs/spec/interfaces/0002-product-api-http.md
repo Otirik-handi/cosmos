@@ -207,7 +207,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `GET /feed` | query `cursor?`、`limit?` | `FeedPage`。limit 缺省 20；非数字回退 20，随后 clamp 到 1–100；cursor 交给 repository。按更新倒序返回 Story Feed，nextCursor 是偏移字符串或 null。 |
 | `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；Zod 解析失败 400。无写副作用。 |
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
-| `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要、`entry`（最近成员，兼容位）与 `entries`（全部成员，updatedAt 倒序）。旧 merge id 先解析到 canonical Story；不存在/无可投影内容 404。 |
+| `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要、`entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）与 `entities`（关联 Entity 快照列表）。旧 merge id 先解析到 canonical Story；不存在/无可投影内容 404。 |
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
 | `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期 409 conflict。 |
 | `POST /stories/merges` | body `MergeStoriesCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，归并自身/已 merge Story 409 conflict。 |
@@ -220,13 +220,24 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /topics/:topicId/member-role-updates` | body `UpdateTopicMemberRoleCommand` | `TopicDetail`；Schema 失败 400，Topic/Story 缺失或成员已移除 404。 |
 | `POST /topics/:topicId/member-removals` | body `RemoveTopicMemberCommand` | `TopicDetail`；Schema 失败 400，成员缺失 404。 |
 | `POST /topics/:topicId/member-restorations` | body `RestoreTopicMemberCommand` | `TopicDetail`；Schema 失败 400，成员缺失 404。 |
+| `GET /entities` | query `cursor?`、`limit?` | `EntityPage`；limit 经 clampLimit，按 Entity `updatedAt` 倒序，nextCursor 为偏移字符串或 null。 |
+| `GET /entities/:entityId` | path `entityId` | `EntityDetail`（current name/type、aliases、关联 Story 列表、双向关系列表）；不存在 404。 |
+| `POST /entities` | body `CreateEntityCommand` | `EntityDetail`；Schema 失败 400（未知 `type`/超长等）。 |
+| `POST /entities/:entityId/revisions` | body `UpdateEntityCommand` | `EntityDetail`；Schema 失败 400，Entity 缺失 404，`baseRevisionId` 过期 409。 |
+| `POST /entities/:entityId/aliases` | body `AddEntityAliasCommand` | `EntityDetail`；Schema 失败 400，Entity 缺失 404。 |
+| `POST /entities/:entityId/alias-removals` | body `RemoveEntityAliasCommand` | `EntityDetail`；Schema 失败 400，Entity 缺失 404。 |
+| `POST /story-entity-links` | body `LinkStoryEntityCommand` | `EntityDetail`；Schema 失败 400，Story/Entity 缺失 404。 |
+| `POST /story-entity-links/removals` | body `UnlinkStoryEntityCommand` | `EntityDetail`；Schema 失败 400，Story/Entity 缺失 404。 |
+| `POST /entity-relations` | body `CreateEntityRelationCommand` | `EntityDetail`；Schema 失败 400，未知关系类型/自环 409，端点 Entity 缺失 404。 |
+| `POST /entity-relations/removals` | body `RemoveEntityRelationCommand` | `EntityDetail`；Schema 失败 400，from Entity 缺失 404。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |
 
 Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 cursor 在存储层按
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
-日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），其余路径不在 API 层修改事实。
+日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），Entity/关系写操作仅限上方
+entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，其余路径不在 API 层修改事实。
 
 ### SSE events
 

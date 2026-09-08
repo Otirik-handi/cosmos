@@ -17,6 +17,10 @@ import { useForm } from "react-hook-form";
 
 import {
     createSourceCommandSchema,
+    type EntityDetail,
+    type EntityRelationType,
+    type EntitySummary,
+    type EntityType,
     type FeedItem,
     type HealthResponse,
     type SearchQuery,
@@ -25,6 +29,7 @@ import {
     type TopicDetail,
     type TopicMemberRole,
     type TopicSummary,
+    type UpdateEntityCommand,
     type UpdateStoryRevisionCommand,
     type UpdateTopicCommand,
 } from "@cosmos/contracts";
@@ -47,6 +52,7 @@ import {StatusSummary, type EventStreamState} from "@/components/cosmos/status-s
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {StoryPanel} from "@/components/cosmos/story-panel";
 import {TopicPanel} from "@/components/cosmos/topic-panel";
+import {EntityPanel} from "@/components/cosmos/entity-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
 import {useTheme} from "@/theme/theme-provider";
 
@@ -90,6 +96,9 @@ export default function Home() {
     const [topics, setTopics] = useState<readonly TopicSummary[]>([]);
     const [topic, setTopic] = useState<TopicDetail | null>(null);
     const [openingTopicId, setOpeningTopicId] = useState<string | null>(null);
+    const [entities, setEntities] = useState<readonly EntitySummary[]>([]);
+    const [entity, setEntity] = useState<EntityDetail | null>(null);
+    const [openingEntityId, setOpeningEntityId] = useState<string | null>(null);
     const [health, setHealth] = useState<HealthResponse | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -403,9 +412,19 @@ export default function Home() {
         }
     }, []);
 
+    const loadEntities = useCallback(async (): Promise<void> => {
+        try {
+            const page = await client.listEntities({ limit: 50 });
+            setEntities(page.items);
+        } catch {
+            // 实体列表读取失败不阻断主 Feed；显式打开时才暴露错误。
+        }
+    }, []);
+
     useEffect(() => {
         void loadTopics();
-    }, [loadTopics]);
+        void loadEntities();
+    }, [loadTopics, loadEntities]);
 
     const openTopic = async (topicId: string): Promise<void> => {
         setOpeningTopicId(topicId);
@@ -417,6 +436,138 @@ export default function Home() {
         } finally {
             setOpeningTopicId(null);
         }
+    };
+
+    const openEntity = async (entityId: string): Promise<void> => {
+        setOpeningEntityId(entityId);
+        setError(null);
+        try {
+            setEntity(await client.entity(entityId));
+        } catch (caught) {
+            setError(readError(caught));
+        } finally {
+            setOpeningEntityId(null);
+        }
+    };
+
+    const updateEntityPage = async (command: UpdateEntityCommand): Promise<void> => {
+        if (!entity) {
+            return;
+        }
+        const updated = await client.updateEntity(entity.entity.id, command);
+        setEntity(updated);
+        await loadEntities();
+    };
+
+    const addEntityAliasPage = async (name: string): Promise<void> => {
+        if (!entity) {
+            return;
+        }
+        const updated = await client.addEntityAlias(entity.entity.id, { name });
+        setEntity(updated);
+        await loadEntities();
+    };
+
+    const removeEntityAliasPage = async (name: string): Promise<void> => {
+        if (!entity) {
+            return;
+        }
+        const updated = await client.removeEntityAlias(entity.entity.id, { name });
+        setEntity(updated);
+        await loadEntities();
+    };
+
+    const refreshStoryAfterEntityChange = async (): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        setStory(await client.story(story.story.id));
+        await loadEntities();
+    };
+
+    const unlinkStoryFromEntityPage = async (storyId: string): Promise<void> => {
+        if (!entity) {
+            return;
+        }
+        const updated = await client.unlinkStoryEntity({
+            storyId,
+            entityId: entity.entity.id,
+        });
+        setEntity(updated);
+        await loadEntities();
+        if (story?.story.id === storyId) {
+            setStory(await client.story(storyId));
+        }
+    };
+
+    const createRelationFromEntityPage = async (
+        toEntityId: string,
+        relationType: EntityRelationType,
+    ): Promise<void> => {
+        if (!entity) {
+            return;
+        }
+        const updated = await client.createEntityRelation({
+            fromEntityId: entity.entity.id,
+            toEntityId,
+            relationType,
+        });
+        setEntity(updated);
+        await loadEntities();
+    };
+
+    const removeRelationFromEntityPage = async (relation: {
+        fromEntityId: string;
+        toEntityId: string;
+        relationType: string;
+    }): Promise<void> => {
+        if (!entity) {
+            return;
+        }
+        const updated = await client.removeEntityRelation(relation);
+        setEntity(updated);
+        await loadEntities();
+    };
+
+    const linkEntityToStory = async (entityId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.linkStoryEntity({
+            storyId: story.story.id,
+            entityId,
+        });
+        await refreshStoryAfterEntityChange();
+    };
+
+    const createEntityLinkedToStory = async (
+        name: string,
+        type: string,
+    ): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const created = await client.createEntity({
+            name,
+            type: type as EntityType,
+        });
+        await client.linkStoryEntity({
+            storyId: story.story.id,
+            entityId: created.entity.id,
+        });
+        setNotice(`已创建 Entity「${name}」并关联当前 Story。`);
+        await refreshStoryAfterEntityChange();
+    };
+
+    const unlinkEntityFromStory = async (entityId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.unlinkStoryEntity({
+            storyId: story.story.id,
+            entityId,
+        });
+        await refreshStoryAfterEntityChange();
     };
 
     const updateTopic = async (command: UpdateTopicCommand): Promise<void> => {
@@ -634,6 +785,31 @@ export default function Home() {
                             </ul>
                         )}
                     </section>
+                    <section aria-label="Entities" className="grid gap-2">
+                        <h2 className="font-display text-lg font-semibold">Entities</h2>
+                        {entities.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                尚未创建 Entity；在 Story 详情里可创建并关联。
+                            </p>
+                        ) : (
+                            <ul className="grid gap-1">
+                                {entities.map((item) => (
+                                    <li key={item.id}>
+                                        <button
+                                            type="button"
+                                            data-entity-id={item.id}
+                                            disabled={openingEntityId === item.id}
+                                            onClick={() => void openEntity(item.id)}
+                                            className="flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
+                                        >
+                                            <span className="truncate">{item.name}</span>
+                                            <Badge variant="secondary">{item.storyCount}</Badge>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
                     {showSourceForm && (
                         <SourceForm
                             form={sourceForm}
@@ -671,6 +847,10 @@ export default function Home() {
                     topics={topics}
                     onJoinTopic={joinTopic}
                     onCreateTopic={createTopicFromStory}
+                    entityOptions={entities}
+                    onLinkEntity={linkEntityToStory}
+                    onCreateEntityLinked={createEntityLinkedToStory}
+                    onUnlinkEntity={unlinkEntityFromStory}
                 />
             )}
 
@@ -682,6 +862,20 @@ export default function Home() {
                     onUpdateMemberRole={updateTopicMemberRole}
                     onRemoveMember={removeTopicMember}
                     onRestoreMember={restoreTopicMember}
+                />
+            )}
+
+            {entity && (
+                <EntityPanel
+                    onClose={() => setEntity(null)}
+                    entity={entity}
+                    entityOptions={entities}
+                    onUpdateEntity={updateEntityPage}
+                    onAddAlias={addEntityAliasPage}
+                    onRemoveAlias={removeEntityAliasPage}
+                    onUnlinkStory={unlinkStoryFromEntityPage}
+                    onCreateRelation={createRelationFromEntityPage}
+                    onRemoveRelation={removeRelationFromEntityPage}
                 />
             )}
         </main>

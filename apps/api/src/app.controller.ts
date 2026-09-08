@@ -51,6 +51,14 @@ import {
     restoreTopicMemberCommandSchema,
     updateTopicCommandSchema,
     updateTopicMemberRoleCommandSchema,
+    createEntityCommandSchema,
+    updateEntityCommandSchema,
+    addEntityAliasCommandSchema,
+    removeEntityAliasCommandSchema,
+    linkStoryEntityCommandSchema,
+    unlinkStoryEntityCommandSchema,
+    createEntityRelationCommandSchema,
+    removeEntityRelationCommandSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
@@ -758,6 +766,170 @@ export class AppController {
                 role: parsed.role,
                 reason: parsed.reason ?? null,
                 actor: parsed.actor ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("entities")
+    @Bind(Query("cursor"), Query("limit"))
+    async listEntities(cursor?: string, limit?: string) {
+        return this.repository.listEntities({
+            cursor,
+            limit: clampLimit(limit),
+        });
+    }
+
+    @Get("entities/:entityId")
+    @Bind(Param("entityId"))
+    async entity(entityId: string) {
+        const result = await this.repository.entity(entityId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Entity not found: ${entityId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Post("entities")
+    @Bind(Body())
+    async createEntity(body: unknown) {
+        try {
+            const parsed = createEntityCommandSchema.parse(body);
+            return await this.repository.createEntity({
+                name: parsed.name,
+                type: parsed.type,
+                alias: parsed.alias ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entities/:entityId/revisions")
+    @Bind(Param("entityId"), Body())
+    async updateEntity(entityId: string, body: unknown) {
+        try {
+            const parsed = updateEntityCommandSchema.parse(body);
+            return await this.repository.updateEntity({
+                entityId,
+                baseRevisionId: parsed.baseRevisionId,
+                name: parsed.name,
+                type: parsed.type,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entities/:entityId/aliases")
+    @Bind(Param("entityId"), Body())
+    async addEntityAlias(entityId: string, body: unknown) {
+        try {
+            const parsed = addEntityAliasCommandSchema.parse(body);
+            return await this.repository.addEntityAlias({
+                entityId,
+                name: parsed.name,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entities/:entityId/alias-removals")
+    @Bind(Param("entityId"), Body())
+    async removeEntityAlias(entityId: string, body: unknown) {
+        try {
+            const parsed = removeEntityAliasCommandSchema.parse(body);
+            return await this.repository.removeEntityAlias({
+                entityId,
+                name: parsed.name,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("story-entity-links")
+    @Bind(Body())
+    async linkStoryEntity(body: unknown) {
+        try {
+            const parsed = linkStoryEntityCommandSchema.parse(body);
+            return await this.repository.linkStoryEntity({
+                storyId: parsed.storyId,
+                entityId: parsed.entityId,
+                producer: parsed.producer ?? null,
+                producerVersion: parsed.producerVersion ?? null,
+                confidence: parsed.confidence ?? null,
+                evidence: parsed.evidence ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("story-entity-links/removals")
+    @Bind(Body())
+    async unlinkStoryEntity(body: unknown) {
+        try {
+            const parsed = unlinkStoryEntityCommandSchema.parse(body);
+            return await this.repository.unlinkStoryEntity({
+                storyId: parsed.storyId,
+                entityId: parsed.entityId,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entity-relations")
+    @Bind(Body())
+    async createEntityRelation(body: unknown) {
+        try {
+            const parsed = createEntityRelationCommandSchema.parse(body);
+            return await this.repository.createEntityRelation({
+                fromEntityId: parsed.fromEntityId,
+                toEntityId: parsed.toEntityId,
+                relationType: parsed.relationType,
+                producer: parsed.producer ?? null,
+                producerVersion: parsed.producerVersion ?? null,
+                confidence: parsed.confidence ?? null,
+                evidence: parsed.evidence ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entity-relations/removals")
+    @Bind(Body())
+    async removeEntityRelation(body: unknown) {
+        try {
+            const parsed = removeEntityRelationCommandSchema.parse(body);
+            return await this.repository.removeEntityRelation({
+                fromEntityId: parsed.fromEntityId,
+                toEntityId: parsed.toEntityId,
+                relationType: parsed.relationType,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
             });
         } catch (error) {
             sourceCommandError(error);

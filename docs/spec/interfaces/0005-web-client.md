@@ -117,7 +117,17 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     `addTopicMember`）与“创建 Topic 并加入本 Story”（标题 + 目的，`createTopic` 以当前
     Story 为 seed，seed 恒为 `core` 角色）；成员添加入口从 Story 侧发起，不在 Topic 面板
     里做 Story 搜索选择器（ADR-0007 决策 4）。
-12. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+12. **Entity 入口与详情**：侧栏“Entities”列表由 `client.listEntities` 加载，每行显示名称与
+    关联 Story 数，点击“打开”调用 `client.entity(entityId)` 打开 EntityPanel。EntityPanel
+    展示规范名/类型/别名与关联 Story、双向类型化关系，支持改名/改类型（`updateEntity`，
+    携带 `baseRevisionId`）、别名增删（`addEntityAlias`/`removeEntityAlias`）、解除 Story
+    关联（`unlinkStoryEntity`）、添加/移除 Entity↔Entity 关系（`createEntityRelation`/
+    `removeEntityRelation`，关系目标从已有 Entity 列表选择）。
+13. **从 Story 侧关联/创建 Entity**：StoryPanel 显示当前 Story 已关联的 Entity（来自
+    StoryDetail `entities`，可解除 `unlinkStoryEntity`），并提供“关联已有 Entity”（下拉
+    已有 Entity + `linkStoryEntity`）与“创建 Entity 并关联本 Story”（名称 + 类型，
+    `createEntity` 后 `linkStoryEntity`）；关联入口从 Story 侧发起（ADR-0008 决策 3）。
+14. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
 ## 输入

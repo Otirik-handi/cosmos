@@ -15,6 +15,28 @@ export const topicMemberRoles = [
 
 export type TopicMemberRole = (typeof topicMemberRoles)[number];
 
+export const entityTypes = [
+    "person",
+    "organization",
+    "product",
+    "project",
+    "model",
+    "location",
+] as const;
+
+export type EntityType = (typeof entityTypes)[number];
+
+export const entityRelationTypes = [
+    "founded",
+    "works_at",
+    "located_in",
+    "produced",
+    "part_of",
+    "related_to",
+] as const;
+
+export type EntityRelationType = (typeof entityRelationTypes)[number];
+
 export const contentKinds = [
     "post",
     "article",
@@ -208,6 +230,23 @@ export function fingerprintTopicRevision(input: TopicRevisionContent): string {
         title: input.title,
         purpose: input.purpose,
         scope: input.scope,
+    }));
+}
+
+export interface EntityRevisionContent {
+    name: string;
+    type: EntityType;
+}
+
+/**
+ * Entity revision fingerprint covers the user-visible identity fields only.
+ * Changes that do not alter either field are no-ops and must not append a
+ * new EntityRevision (ADR-0008 decision 2).
+ */
+export function fingerprintEntityRevision(input: EntityRevisionContent): string {
+    return hashValue(JSON.stringify({
+        name: input.name,
+        type: input.type,
     }));
 }
 

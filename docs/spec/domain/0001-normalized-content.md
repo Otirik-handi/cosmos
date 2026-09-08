@@ -33,6 +33,7 @@ Connector 先把来源数据交给本组件的纯函数生成 `NormalizedIngestI
 - **ContentKind** 是领域语义词汇：`post`、`article`、`video`、`audio`、`image`、`comment`、`listing`。这些值与[公共合同](../contracts/0001-public-contracts.md)的 wire enum 对齐，但本文件只规定 domain 如何消费它们，不复制 Zod 校验。
 - **StoryKind** 固定为 `event`、`document`、`media`、`thread`。
 - **TopicMemberRole** 是 Topic 成员角色的受管枚举：`core`、`update`、`background`、`analysis`、`counterpoint`、`tutorial`（ADR-0007）；写入侧由[公共合同](../contracts/0001-public-contracts.md)校验，读取侧允许未知值降级展示。
+- **EntityType** 是 Entity 本体类型的受管枚举：`person`、`organization`、`product`、`project`、`model`、`location`（ORG-003、ADR-0008）。**EntityRelationType** 是 Entity↔Entity 类型化关系的受管枚举：`founded`、`works_at`、`located_in`、`produced`、`part_of`、`related_to`（ADR-0008 决策 4）。两者写入侧由公共合同校验，读取侧允许未知值降级展示；domain 只提供枚举语义，不执行关系写入事务。
 - **PublisherKind** 是领域语义词汇：`user`、`channel`、`subreddit`、`official-account`、`org`、`unknown`；wire 形状和边界解析由[公共合同](../contracts/0001-public-contracts.md)拥有。
 - **NormalizedAssetInput** 是领域侧附件输入：`kind`、可空 `sourceUrl`、`status`（`saved`/`metadata_only`/`skipped`/`failed`）、可空 `mimeType`、可空 `byteSize`、可选可空 `errorMessage`（降级原因）和 `content: Uint8Array | null`。这里的 bytes 是领域运行时值，不是 Workflow JSON 字段；Workflow 中的 BlobRef wire shape 只由[公共合同](../contracts/0001-public-contracts.md)定义，bytes 的 hash/containment 校验由[FileBlobStore](../storage/0005-file-blob-store.md)负责。
 - **NormalizedIngestItem** 包含可选可空 `externalId`、`title`、可空 `summary`、`contentText`、可空 `webUrl`、`kind`、可空 `publisher`、可空 `metrics`、可空 `publishedAt`、可选可空 `updatedAt`、`sourceLocator: Record<string, unknown>`、`rawPayload`、可选 `rawPayloadMimeType` 和只读资产数组。URL 可以为 null；没有 URL 仍可凭 externalId 或 sourceLocator 建立身份。进入 Workflow JSON 前由 contracts schema 做 wire 校验，domain 不再定义第二套边界规则。
@@ -64,12 +65,13 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **Story** 是稳定、可编排的规范内容单元（ADR-0006）：一个 Story 承载多个 Entry 的主归属，Story 的展示内容通过版本化 StoryRevision 表达。domain 仍提供 `projectEntryToStory` 作为 ingest 自动创建默认单 Entry Story 的确定性门槛（id=`story:${entryId}`），跨来源归并/merge 由 storage 命令执行；domain 只产生纯函数与投影，不执行 Story 事务。
 - **StoryRevisionContent** 是 Story Revision 的展示字段集合（title、可空 summary、核心 kind、可空 subtype）；`fingerprintStoryRevision` 对这四个字段做确定性 SHA-256 指纹，用于判定“实质性变化”与 no-op。
 - **TopicRevisionContent** 是 Topic Revision 的展示字段集合（title、purpose、可空 scope）；`fingerprintTopicRevision` 对这三个字段做确定性 SHA-256 指纹，用于判定 Topic 展示内容的“实质性变化”与 no-op（ADR-0007 决策 1）。Topic 成员角色、membership revision 与 merge 去重语义由 storage 命令执行，domain 只提供角色枚举与指纹纯函数。
+- **EntityRevisionContent** 是 Entity Revision 的展示字段集合（`name`、受管 `type`）；`fingerprintEntityRevision` 对这两个字段做确定性 SHA-256 指纹，用于判定 Entity 身份表示的“实质性变化”与 no-op（ADR-0008 决策 2）。Entity 名称别名、Story↔Entity/Entity↔Entity 的 provenance 语义由 storage 命令执行，domain 只提供类型枚举与指纹纯函数。
 
 ## 外部行为
 
 所有导出的函数都是同步纯函数，除 `createTemporalValue` 在未提供 now 时读取当前时钟外，不访问外部资源。Connector 先把各来源字段转换为本模型，再由 storage 用 external key 和 fingerprint 判断是否新建、重复或追加修订。
 
-`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段做摘要，`fingerprintTopicRevision` 只对 Topic 展示字段做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
+`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段做摘要，`fingerprintTopicRevision` 只对 Topic 展示字段做摘要，`fingerprintEntityRevision` 只对 Entity 的 name/type 做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
 
 ## 输入
 
@@ -115,6 +117,7 @@ exact 成功时返回 `{ exact: ISO, exactPrecision: "second", fallback: null }`
 - Asset 记录修订下的 kind/status/sourceUrl/storageKey/mimeType/byteSize；bytes 通过 application/storage 的 Blob 边界保存。
 - Story/StoryRevision 保存最小 Story 投影及当前指针。
 - Topic/TopicRevision/TopicMembership/TopicMembershipRevision/TopicAlias 保存 Topic 的不可变展示版本、`(topicId, storyId)` 唯一成员关系与 revision/tombstone 历史、以及 merge 的 alias 重定向（ADR-0007）。
+- Entity/EntityRevision/EntityAlias/StoryEntity/EntityRelation 保存 Entity 的不可变 name/type 版本与名称别名、`(storyId, entityId)` 唯一 Story↔Entity 关联、以及带方向的 `(fromEntityId, toEntityId, relationType)` 唯一 Entity↔Entity 类型化关系；关联与关系保存 provenance（producer/producerVersion/confidence/evidence/actor/reason）（ADR-0008）。
 
 ## 状态转换
 
@@ -129,7 +132,7 @@ domain 函数本身没有可变状态机；storage 按这些语义转换 durable
 
 ## 副作用
 
-`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`deriveExternalKey`、`fingerprintEntryRevision`、`fingerprintStoryRevision` 和 `projectEntryToStory` 不写数据库、不写 Blob、不发网络请求、不写日志、不发 Domain Event。唯一的时间外部输入是 createTemporalValue 在缺少 now 时读取本地进程时钟；hash 使用 `node:crypto`。
+`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`deriveExternalKey`、`fingerprintEntryRevision`、`fingerprintStoryRevision`、`fingerprintTopicRevision`、`fingerprintEntityRevision` 和 `projectEntryToStory` 不写数据库、不写 Blob、不发网络请求、不写日志、不发 Domain Event。唯一的时间外部输入是 createTemporalValue 在缺少 now 时读取本地进程时钟；hash 使用 `node:crypto`。
 
 Connector 读取外部来源的网络/进程副作用属于 Connector；storage 将 item 写入数据库、保存 raw payload/asset bytes、更新 run 计数、写事件属于 storage/application。不能把这些邻接副作用归入 domain。
 

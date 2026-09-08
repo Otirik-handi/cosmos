@@ -3,6 +3,8 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {useForm} from "react-hook-form";
 
 import type {
+    EntityDetail,
+    EntitySummary,
     FeedItem,
     HealthResponse,
     SourceConfigProbeResult,
@@ -27,6 +29,7 @@ import {
 } from "@/components/cosmos/status-summary";
 import {StoryPanel} from "@/components/cosmos/story-panel";
 import {TopicPanel} from "@/components/cosmos/topic-panel";
+import {EntityPanel} from "@/components/cosmos/entity-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
 
 import type {CosmosThemePreference} from "@/theme/theme";
@@ -301,6 +304,7 @@ export function renderStoryPanelLab(props: LabProps) {
             }],
         },
         entries: [],
+        entities: [],
     };
     return (
         <StoryPanel
@@ -365,6 +369,67 @@ export function renderTopicPanelLab(props: LabProps) {
             onUpdateMemberRole={async () => undefined}
             onRemoveMember={async () => undefined}
             onRestoreMember={async () => undefined}
+        />
+    );
+}
+
+export function renderEntityPanelLab(props: LabProps) {
+    const name = textProp(props, "name", "Jeff Dean");
+    const type = optionProp(props, "type", "person", ["person", "organization", "model"] as const);
+    const state = optionProp(props, "state", "linked", ["linked", "empty"] as const);
+    const targetOptions: readonly EntitySummary[] = [{
+        id: "entity-fixture-loop",
+        revisionId: "rev-e-fixture-loop",
+        type: "organization",
+        name: "Discovery Loop",
+        storyCount: 0,
+        relationCount: 0,
+        updatedAt: fixtureTimestamp,
+    }];
+    const entity: EntityDetail = {
+        entity: {
+            id: "entity-fixture",
+            revisionId: "rev-e-fixture",
+            type,
+            name,
+        },
+        aliases: ["Jeffrey Dean"],
+        stories: state === "empty"
+            ? []
+            : [{
+                storyId: "story-fixture-a",
+                producer: "human",
+                producerVersion: null,
+                confidence: 1,
+                evidence: null,
+                actor: "user",
+                reason: null,
+            }],
+        relations: state === "empty"
+            ? []
+            : [{
+                fromEntityId: "entity-fixture",
+                toEntityId: "entity-fixture-loop",
+                relationType: "founded",
+                producer: "human",
+                producerVersion: null,
+                confidence: 0.9,
+                evidence: null,
+                actor: "user",
+                reason: "已知履历",
+            }],
+    };
+    return (
+        <EntityPanel
+            onClose={() => undefined}
+            entity={entity}
+            entityOptions={targetOptions}
+            onUpdateEntity={async () => undefined}
+            onAddAlias={async () => undefined}
+            onRemoveAlias={async () => undefined}
+            onUnlinkStory={async () => undefined}
+            onCreateRelation={async () => undefined}
+            onRemoveRelation={async () => undefined}
         />
     );
 }
