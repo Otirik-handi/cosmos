@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-08。Phase 2 第二切片 Topic 域模型 v1（Task 11）已实现并合入 `master`（`ff7cc00..addcefc`，本地 = 远端前状态）。Topic 不可变 Revision、Topic Membership（受管角色 + revision/tombstone 可恢复）、Topic merge canonical/alias、Story merge 同步迁移 membership、Product API 九个端点与 Web TopicPanel/从 Story 侧加入创建入口均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-08。Phase 2 第二切片 Topic 域模型 v1（Task 11）已实现并合入 `master`（`ff7cc00..addcefc`），随后已推送至远端（`origin/master` = `1f6c58c`）。Topic 不可变 Revision、Topic Membership（受管角色 + revision/tombstone 可恢复）、Topic merge canonical/alias、Story merge 同步迁移 membership、Product API 九个端点与 Web TopicPanel/从 Story 侧加入创建入口均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 2026-09-08：Topic 域模型 v1 实现合入（Phase 2 第二切片，Task 11）
 
@@ -185,7 +185,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 （2026-09-08 更新：最新基线、Topic 切片合入与门禁见顶部“2026-09-08：Topic 域模型 v1 实现合入”。）
 
-- Topic 域模型 v1（Task 11）已合入 `master`（`addcefc`）；worktree `.worktree/topic-domain` 与分支 `feat/t11-topic-domain` 待清理（需授权）。
+- Topic 域模型 v1（Task 11）已合入 `master`（`addcefc`）并推送至远端（`1f6c58c`）；worktree `.worktree/topic-domain` 与分支 `feat/t11-topic-domain` 已清理（`git worktree remove` + PowerShell 清残留 node_modules + `git branch -d`）。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随 Topic 切片顺带执行。
 - 后续 Phase 2 切片候选（按 PRD 顺序）：Entity/关系、Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期与 `evidence_for`/`mentions` 跨 Story 引用后置；Topic 流程浏览器 E2E 与人工验收留待后续。
 
