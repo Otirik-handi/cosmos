@@ -2,6 +2,7 @@ import { ExternalLink, Image as ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEventHandler } from "react";
 
 import type {
+    Annotation,
     AssetSnapshot,
     CollectionSummary,
     EntitySummary,
@@ -16,6 +17,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ROLE_OPTIONS } from "@/components/cosmos/topic-panel";
 import {
     ENTITY_TYPE_OPTIONS,
@@ -42,6 +44,13 @@ type StoryPanelProps = {
     onCreateLabel?: (name: string) => Promise<void>;
     onToggleCollection?: (collectionId: string, member: boolean) => Promise<void>;
     onCreateCollection?: (name: string) => Promise<void>;
+    annotations?: readonly Annotation[];
+    onCreateAnnotation?: (input: { body: string; quote?: string | null }) => Promise<void>;
+    onUpdateAnnotation?: (
+        annotationId: string,
+        input: { body: string; quote?: string | null },
+    ) => Promise<void>;
+    onDeleteAnnotation?: (annotationId: string) => Promise<void>;
 };
 
 function EntityRow({
@@ -198,6 +207,10 @@ export function StoryPanel({
     onCreateLabel,
     onToggleCollection,
     onCreateCollection,
+    annotations,
+    onCreateAnnotation,
+    onUpdateAnnotation,
+    onDeleteAnnotation,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -215,6 +228,11 @@ export function StoryPanel({
     const [attachLabelId, setAttachLabelId] = useState("");
     const [newLabelName, setNewLabelName] = useState("");
     const [newCollectionName, setNewCollectionName] = useState("");
+    const [newAnnotationBody, setNewAnnotationBody] = useState("");
+    const [newAnnotationQuote, setNewAnnotationQuote] = useState("");
+    const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
+    const [editingAnnotationBody, setEditingAnnotationBody] = useState("");
+    const [editingAnnotationQuote, setEditingAnnotationQuote] = useState("");
 
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -474,6 +492,82 @@ export function StoryPanel({
         }
     };
 
+    const submitCreateAnnotation = async (): Promise<void> => {
+        if (!onCreateAnnotation) {
+            return;
+        }
+        const normalizedBody = newAnnotationBody.trim();
+        if (!normalizedBody) {
+            return;
+        }
+        const normalizedQuote = newAnnotationQuote.trim();
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onCreateAnnotation({
+                body: normalizedBody,
+                quote: normalizedQuote || null,
+            });
+            setNewAnnotationBody("");
+            setNewAnnotationQuote("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "添加批注失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const startEditAnnotation = (annotation: Annotation): void => {
+        setEditingAnnotationId(annotation.id);
+        setEditingAnnotationBody(annotation.body);
+        setEditingAnnotationQuote(annotation.quote ?? "");
+    };
+
+    const cancelEditAnnotation = (): void => {
+        setEditingAnnotationId(null);
+        setEditingAnnotationBody("");
+        setEditingAnnotationQuote("");
+    };
+
+    const submitUpdateAnnotation = async (annotationId: string): Promise<void> => {
+        if (!onUpdateAnnotation) {
+            return;
+        }
+        const normalizedBody = editingAnnotationBody.trim();
+        if (!normalizedBody) {
+            return;
+        }
+        const normalizedQuote = editingAnnotationQuote.trim();
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onUpdateAnnotation(annotationId, {
+                body: normalizedBody,
+                quote: normalizedQuote || null,
+            });
+            cancelEditAnnotation();
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "更新批注失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitDeleteAnnotation = async (annotationId: string): Promise<void> => {
+        if (!onDeleteAnnotation) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onDeleteAnnotation(annotationId);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "删除批注失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
     /** 下拉只列尚未打到本条 Story 的标签，避免重复添加。 */
     const attachableLabels = (labelOptions ?? []).filter((option) => {
         return !story.labels.some((label) => label.id === option.id);
@@ -636,7 +730,10 @@ export function StoryPanel({
                         || onDetachLabel
                         || onCreateLabel
                         || onToggleCollection
-                        || onCreateCollection) && (
+                        || onCreateCollection
+                        || onCreateAnnotation
+                        || onUpdateAnnotation
+                        || onDeleteAnnotation) && (
                         <section
                             aria-label="用户组织"
                             className="grid gap-4 border-t pt-4"
@@ -791,6 +888,128 @@ export function StoryPanel({
                                                 onClick={() => void submitCreateCollection()}
                                             >
                                                 新建收藏夹
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {(onCreateAnnotation
+                                || onUpdateAnnotation
+                                || onDeleteAnnotation) && (
+                                <div className="grid gap-3">
+                                    <h4 className="text-sm font-medium">批注</h4>
+                                    {annotations && annotations.length > 0 ? (
+                                        <ul className="grid gap-3">
+                                            {annotations.map((annotation) => (
+                                                <li
+                                                    key={annotation.id}
+                                                    data-story-annotation-id={annotation.id}
+                                                    className="grid gap-2 rounded-sm border bg-muted/40 p-3 text-sm"
+                                                >
+                                                    {editingAnnotationId === annotation.id ? (
+                                                        <div className="grid gap-2">
+                                                            <Textarea
+                                                                aria-label="批注正文"
+                                                                value={editingAnnotationBody}
+                                                                onChange={(event) => setEditingAnnotationBody(event.target.value)}
+                                                                disabled={busy}
+                                                            />
+                                                            <Input
+                                                                aria-label="批注引文"
+                                                                value={editingAnnotationQuote}
+                                                                onChange={(event) => setEditingAnnotationQuote(event.target.value)}
+                                                                disabled={busy}
+                                                                placeholder="引文（可选）"
+                                                            />
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    disabled={busy || !editingAnnotationBody.trim()}
+                                                                    onClick={() => void submitUpdateAnnotation(annotation.id)}
+                                                                >
+                                                                    保存
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    disabled={busy}
+                                                                    onClick={cancelEditAnnotation}
+                                                                >
+                                                                    取消
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <p className="whitespace-pre-wrap leading-6">
+                                                                {annotation.body}
+                                                            </p>
+                                                            {annotation.quote && (
+                                                                <p className="border-l-2 pl-2 text-xs text-muted-foreground">
+                                                                    {annotation.quote}
+                                                                </p>
+                                                            )}
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {annotation.actor ?? "未署名"} ·{" "}
+                                                                {new Date(annotation.createdAt).toLocaleString()}
+                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {onUpdateAnnotation && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        disabled={busy}
+                                                                        onClick={() => startEditAnnotation(annotation)}
+                                                                    >
+                                                                        编辑
+                                                                    </Button>
+                                                                )}
+                                                                {onDeleteAnnotation && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        disabled={busy}
+                                                                        onClick={() => void submitDeleteAnnotation(annotation.id)}
+                                                                    >
+                                                                        删除
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">
+                                            本条 Story 还没有批注；可在下方记录摘录与想法。
+                                        </p>
+                                    )}
+                                    {onCreateAnnotation && (
+                                        <div className="grid gap-2">
+                                            <Textarea
+                                                aria-label="新批注正文"
+                                                value={newAnnotationBody}
+                                                onChange={(event) => setNewAnnotationBody(event.target.value)}
+                                                disabled={busy}
+                                                placeholder="写下批注正文"
+                                            />
+                                            <Input
+                                                aria-label="新批注引文"
+                                                value={newAnnotationQuote}
+                                                onChange={(event) => setNewAnnotationQuote(event.target.value)}
+                                                disabled={busy}
+                                                placeholder="引文（可选）"
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-fit"
+                                                disabled={busy || !newAnnotationBody.trim()}
+                                                onClick={() => void submitCreateAnnotation()}
+                                            >
+                                                添加批注
                                             </Button>
                                         </div>
                                     )}

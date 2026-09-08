@@ -17,6 +17,7 @@ import { useForm } from "react-hook-form";
 
 import {
     createSourceCommandSchema,
+    type Annotation,
     type CollectionList,
     type EntityDetail,
     type EntityRelationType,
@@ -103,6 +104,8 @@ export default function Home() {
     const [openingEntityId, setOpeningEntityId] = useState<string | null>(null);
     const [labels, setLabels] = useState<LabelList>({ items: [] });
     const [collections, setCollections] = useState<CollectionList>({ items: [] });
+    const [storyAnnotations, setStoryAnnotations] = useState<readonly Annotation[]>([]);
+    const [topicAnnotations, setTopicAnnotations] = useState<readonly Annotation[]>([]);
     const [health, setHealth] = useState<HealthResponse | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -389,8 +392,14 @@ export default function Home() {
                 client.story(storyId),
                 client.listCollections({ storyId }),
             ]);
+            // 批注按 canonical Story id 归属：Feed 传入的 id 可能指向已归并的旧 Story。
+            const annotationList = await client.listAnnotations({
+                targetType: "story",
+                targetId: storyDetail.story.id,
+            });
             setStory(storyDetail);
             setCollections(storyCollections);
+            setStoryAnnotations(annotationList.items);
         } catch (caught) {
             setError(readError(caught));
         } finally {
@@ -520,6 +529,58 @@ export default function Home() {
         await refreshStoryCollections();
     };
 
+    const refreshStoryAnnotations = async (): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const list = await client.listAnnotations({
+            targetType: "story",
+            targetId: story.story.id,
+        });
+        setStoryAnnotations(list.items);
+    };
+
+    const createStoryAnnotation = async (input: {
+        body: string;
+        quote?: string | null;
+    }): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.createAnnotation({
+            targetType: "story",
+            targetId: story.story.id,
+            body: input.body,
+            quote: input.quote ?? null,
+        });
+        setNotice("已添加批注。");
+        await refreshStoryAnnotations();
+    };
+
+    const updateStoryAnnotation = async (
+        annotationId: string,
+        input: { body: string; quote?: string | null },
+    ): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.updateAnnotation(annotationId, {
+            body: input.body,
+            quote: input.quote ?? null,
+        });
+        setNotice("已更新批注。");
+        await refreshStoryAnnotations();
+    };
+
+    const deleteStoryAnnotation = async (annotationId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.deleteAnnotation(annotationId);
+        setNotice("已删除批注。");
+        await refreshStoryAnnotations();
+    };
+
     const loadTopics = useCallback(async (): Promise<void> => {
         try {
             const page = await client.listTopics({ limit: 50 });
@@ -547,7 +608,13 @@ export default function Home() {
         setOpeningTopicId(topicId);
         setError(null);
         try {
-            setTopic(await client.topic(topicId));
+            const topicDetail = await client.topic(topicId);
+            const annotationList = await client.listAnnotations({
+                targetType: "topic",
+                targetId: topicDetail.topic.id,
+            });
+            setTopic(topicDetail);
+            setTopicAnnotations(annotationList.items);
         } catch (caught) {
             setError(readError(caught));
         } finally {
@@ -730,6 +797,58 @@ export default function Home() {
             role,
         });
         setTopic(updated);
+    };
+
+    const refreshTopicAnnotations = async (): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        const list = await client.listAnnotations({
+            targetType: "topic",
+            targetId: topic.topic.id,
+        });
+        setTopicAnnotations(list.items);
+    };
+
+    const createTopicAnnotation = async (input: {
+        body: string;
+        quote?: string | null;
+    }): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        await client.createAnnotation({
+            targetType: "topic",
+            targetId: topic.topic.id,
+            body: input.body,
+            quote: input.quote ?? null,
+        });
+        setNotice("已添加批注。");
+        await refreshTopicAnnotations();
+    };
+
+    const updateTopicAnnotation = async (
+        annotationId: string,
+        input: { body: string; quote?: string | null },
+    ): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        await client.updateAnnotation(annotationId, {
+            body: input.body,
+            quote: input.quote ?? null,
+        });
+        setNotice("已更新批注。");
+        await refreshTopicAnnotations();
+    };
+
+    const deleteTopicAnnotation = async (annotationId: string): Promise<void> => {
+        if (!topic) {
+            return;
+        }
+        await client.deleteAnnotation(annotationId);
+        setNotice("已删除批注。");
+        await refreshTopicAnnotations();
     };
 
     const joinTopic = async (topicId: string, role: TopicMemberRole): Promise<void> => {
@@ -976,6 +1095,10 @@ export default function Home() {
                     onCreateLabel={createLabelForStory}
                     onToggleCollection={toggleStoryCollection}
                     onCreateCollection={createCollectionFromPanel}
+                    annotations={storyAnnotations}
+                    onCreateAnnotation={createStoryAnnotation}
+                    onUpdateAnnotation={updateStoryAnnotation}
+                    onDeleteAnnotation={deleteStoryAnnotation}
                 />
             )}
 
@@ -987,6 +1110,10 @@ export default function Home() {
                     onUpdateMemberRole={updateTopicMemberRole}
                     onRemoveMember={removeTopicMember}
                     onRestoreMember={restoreTopicMember}
+                    annotations={topicAnnotations}
+                    onCreateAnnotation={createTopicAnnotation}
+                    onUpdateAnnotation={updateTopicAnnotation}
+                    onDeleteAnnotation={deleteTopicAnnotation}
                 />
             )}
 
