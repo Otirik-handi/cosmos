@@ -41,3 +41,29 @@ bun run typecheck                         -> 全仓通过
 未运行：`bun run test` 全量、浏览器、Node E2E、build（worktree 尚未同步 Task/代码到 master，发布门禁在切片合入前统一跑）。
 
 下一步：切片 1b（Story 编排仓储命令：move entry、update Story Revision、merge canonical/alias），仍无公共 API。
+
+## 2026-09-07：切片 1b 完成——Story 编排仓储命令（RED→GREEN）
+
+1a 已提交（`bd64bfc` 文档、`d76ec5b` 实现）。1b 在 application port 与 storage 落地编排命令，仍无公共 API：
+
+- `schema.prisma`：`StoryRevision` 增加可空 `actorJson`/`reason`；新增 `StoryAlias` 表（id=obsolete Story id → canonicalStoryId）；`Story.aliases` 反向关系。
+- 新 migration `20260907130000_story_merge_alias`：加 actor/reason 列 + StoryAlias 表与 `canonicalStoryId` 索引（fresh/旧库均验证）。
+- `@cosmos/application`：新增 `StoryNotFoundError`、`StoryRevisionConflictError`、`StoryMergeConflictError`；`CosmosRepository` 增加 `moveEntryToStory`、`updateStoryRevision`、`mergeStories` 三个命令签名（kind 使用 domain `StoryKind`；update 带 `baseRevisionId` CAS）。
+- `PrismaCosmosRepository`：实现私有 `resolveCanonicalStoryId`（merge alias 优先）并让 `story()` 读取 alias 重定向；三个命令均在事务内写入并落 `story.entry_moved.v1`/`story.revision_created.v1`/`story.merged.v1` 领域事件（payload 含 actor/reason）。
+- 语义：move 幂等 no-op；update 仅在展示字段 fingerprint 变化时追加 Revision，stale `baseRevisionId` 抛 conflict；merge 移动成员、保留 obsolete Story 历史壳、创建 alias，已 merge Story 再次 merge 抛 conflict。
+
+偏差记录：`StoryDetail` 公共 shape 仍是单 Entry（契约层切片 2 扩展为多成员）；1b 验收通过直接数据库断言与命令返回值，多成员详情 UI/API 归切片 2。
+
+验证（2026-09-07，全部实际运行）：
+
+```text
+bunx vitest run packages/storage-prisma/src/story-orchestration.test.ts        -> 2/2 通过
+bunx vitest run packages/storage-prisma/src/story-revision-versioning.test.ts   -> 1/1 通过
+bunx vitest run packages/storage-prisma/src/index.test.ts                       -> 18/18 通过
+bun run typecheck:storage                                                      -> 通过
+bun run typecheck:application                                                  -> 通过
+```
+
+未运行：全量 `bun run test`、浏览器、Node E2E、build（在切片 2/3 或合入前统一跑）。
+
+下一步：切片 2——公共合同与 Product API（Story 命令 schema、详情多 Entry、HTTP 端点）。

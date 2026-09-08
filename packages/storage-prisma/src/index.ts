@@ -43,6 +43,9 @@ import {
     createBuiltinManifestCatalog,
     SourceNotFoundError,
     SourceRevisionConflictError,
+    StoryMergeConflictError,
+    StoryNotFoundError,
+    StoryRevisionConflictError,
     type CatalogPort,
     type CosmosRepository,
     type HostActionExecutionFence,
@@ -1752,9 +1755,187 @@ export class PrismaCosmosRepository implements CosmosRepository {
         };
     }
 
-    async story(storyId: string): Promise<StoryDetail | null> {
+    private async resolveCanonicalStoryId(storyId: string): Promise<string | null> {
+        const alias = await this.prisma.storyAlias.findUnique({
+            where: { id: storyId },
+            select: { canonicalStoryId: true },
+        });
+        if (alias) {
+            return alias.canonicalStoryId;
+        }
         const story = await this.prisma.story.findUnique({
             where: { id: storyId },
+            select: { id: true },
+        });
+        return story?.id ?? null;
+    }
+
+    async moveEntryToStory(input: {
+        entryId: string;
+        storyId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null> {
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        const entry = await this.prisma.entry.findUnique({
+            where: { id: input.entryId },
+            select: { id: true, storyId: true },
+        });
+        if (!entry) {
+            return null;
+        }
+        if (entry.storyId === canonicalStoryId) {
+            return this.story(canonicalStoryId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            await tx.entry.update({
+                where: { id: entry.id },
+                data: { storyId: canonicalStoryId },
+            });
+            await appendDomainEvent(tx, {
+                type: "story.entry_moved.v1",
+                aggregateType: "Story",
+                aggregateId: canonicalStoryId,
+                payload: {
+                    entryId: entry.id,
+                    fromStoryId: entry.storyId ?? null,
+                    toStoryId: canonicalStoryId,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.story(canonicalStoryId);
+    }
+
+    async updateStoryRevision(input: {
+        storyId: string;
+        baseRevisionId: string;
+        title: string;
+        summary: string | null;
+        kind: "event" | "document" | "media" | "thread";
+        subtype: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null> {
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        const story = await this.prisma.story.findUnique({
+            where: { id: canonicalStoryId },
+            include: { currentRevision: true },
+        });
+        if (!story) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        if (!story.currentRevision || story.currentRevision.id !== input.baseRevisionId) {
+            throw new StoryRevisionConflictError(input.storyId);
+        }
+        const fingerprint = fingerprintStoryRevision({
+            title: input.title,
+            summary: input.summary,
+            kind: input.kind,
+            subtype: input.subtype,
+        });
+        if (story.currentRevision.fingerprint === fingerprint) {
+            return this.story(canonicalStoryId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const latest = await tx.storyRevision.findFirst({
+                where: { storyId: canonicalStoryId },
+                orderBy: { revision: "desc" },
+                select: { revision: true },
+            });
+            const created = await tx.storyRevision.create({
+                data: {
+                    story: { connect: { id: canonicalStoryId } },
+                    revision: (latest?.revision ?? 0) + 1,
+                    fingerprint,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                    reason: input.reason ?? null,
+                    title: input.title,
+                    summary: input.summary,
+                },
+            });
+            await tx.story.update({
+                where: { id: canonicalStoryId },
+                data: { currentRevisionId: created.id },
+            });
+            await appendDomainEvent(tx, {
+                type: "story.revision_created.v1",
+                aggregateType: "Story",
+                aggregateId: canonicalStoryId,
+                payload: {
+                    storyId: canonicalStoryId,
+                    baseRevisionId: input.baseRevisionId,
+                    revision: created.revision,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.story(canonicalStoryId);
+    }
+
+    async mergeStories(input: {
+        canonicalStoryId: string;
+        obsoleteStoryIds: readonly string[];
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null> {
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.canonicalStoryId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.canonicalStoryId);
+        }
+        const obsoleteStoryIds = [...new Set(input.obsoleteStoryIds)];
+        if (obsoleteStoryIds.includes(canonicalStoryId)) {
+            throw new StoryMergeConflictError(`Cannot merge Story into itself: ${canonicalStoryId}`);
+        }
+        for (const obsoleteStoryId of obsoleteStoryIds) {
+            const resolvedObsolete = await this.resolveCanonicalStoryId(obsoleteStoryId);
+            if (!resolvedObsolete) {
+                throw new StoryNotFoundError(obsoleteStoryId);
+            }
+            if (resolvedObsolete !== obsoleteStoryId) {
+                throw new StoryMergeConflictError(`Story is already merged: ${obsoleteStoryId}`);
+            }
+        }
+        await this.prisma.$transaction(async (tx) => {
+            for (const obsoleteStoryId of obsoleteStoryIds) {
+                await tx.entry.updateMany({
+                    where: { storyId: obsoleteStoryId },
+                    data: { storyId: canonicalStoryId },
+                });
+                await tx.storyAlias.create({
+                    data: { id: obsoleteStoryId, canonicalStoryId },
+                });
+                await appendDomainEvent(tx, {
+                    type: "story.merged.v1",
+                    aggregateType: "Story",
+                    aggregateId: canonicalStoryId,
+                    payload: {
+                        obsoleteStoryId,
+                        canonicalStoryId,
+                        actor: input.actor ?? null,
+                        reason: input.reason ?? null,
+                    },
+                });
+            }
+        });
+        return this.story(canonicalStoryId);
+    }
+
+    async story(storyId: string): Promise<StoryDetail | null> {
+        const canonicalId = await this.resolveCanonicalStoryId(storyId);
+        if (!canonicalId) {
+            return null;
+        }
+        const story = await this.prisma.story.findUnique({
+            where: { id: canonicalId },
             include: {
                 currentRevision: true,
                 entries: {

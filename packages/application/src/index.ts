@@ -25,7 +25,7 @@ import {
     type StoryDetail,
     type UpdateSourceCommand,
 } from "@cosmos/contracts";
-import type { NormalizedIngestItem } from "@cosmos/domain";
+import type { NormalizedIngestItem, StoryKind } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
 import {
@@ -126,6 +126,33 @@ export class SourceRevisionConflictError extends Error {
     constructor(sourceId: string) {
         super(`Source revision conflict: ${sourceId}`);
         this.name = "SourceRevisionConflictError";
+    }
+}
+
+export class StoryNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(storyId: string) {
+        super(`Story not found: ${storyId}`);
+        this.name = "StoryNotFoundError";
+    }
+}
+
+export class StoryRevisionConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(storyId: string) {
+        super(`Story revision conflict: ${storyId}`);
+        this.name = "StoryRevisionConflictError";
+    }
+}
+
+export class StoryMergeConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "StoryMergeConflictError";
     }
 }
 
@@ -241,6 +268,28 @@ export interface CosmosRepository {
         limit: number;
     }): Promise<EntryPage>;
     story(storyId: string): Promise<StoryDetail | null>;
+    moveEntryToStory(input: {
+        entryId: string;
+        storyId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null>;
+    updateStoryRevision(input: {
+        storyId: string;
+        baseRevisionId: string;
+        title: string;
+        summary: string | null;
+        kind: StoryKind;
+        subtype: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null>;
+    mergeStories(input: {
+        canonicalStoryId: string;
+        obsoleteStoryIds: readonly string[];
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {

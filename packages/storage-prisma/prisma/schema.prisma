@@ -256,6 +256,7 @@ model Story {
     currentRevision   StoryRevision? @relation("StoryCurrentRevision", fields: [currentRevisionId], references: [id])
     revisions         StoryRevision[] @relation("StoryRevisions")
     entries           Entry[]
+    aliases           StoryAlias[]
 }
 
 model StoryRevision {
@@ -263,6 +264,8 @@ model StoryRevision {
     storyId         String
     revision        Int     @default(1)
     fingerprint     String?
+    actorJson       String?
+    reason          String?
     title           String
     summary         String?
     createdAt       DateTime @default(now())
@@ -270,6 +273,15 @@ model StoryRevision {
     currentForStory Story?  @relation("StoryCurrentRevision")
 
     @@unique([storyId, revision])
+}
+
+model StoryAlias {
+    id               String   @id
+    canonicalStoryId String
+    createdAt        DateTime @default(now())
+    canonicalStory   Story    @relation(fields: [canonicalStoryId], references: [id], onDelete: Cascade)
+
+    @@index([canonicalStoryId])
 }
 
 model WorkflowRun {
