@@ -313,6 +313,8 @@ flowchart LR
 | LIB-007 | 跨阶段 | 每个 Entry、Story、Topic、Artifact 和 Workspace 都有稳定内部地址。 | 无外部 URL 的内容也能从看板、搜索或 Artifact 中跳转。 |
 | LIB-008 | Phase 2 | 用户可以查看、导出和删除自己拥有的持久数据。 | 删除范围、被引用对象和无法恢复的内容在执行前明确展示。 |
 
+**Phase 2 第四切片注记（2026-09-08，[`label-annotation-collection-saved-view-v1` Proposal](../proposals/label-annotation-collection-saved-view-v1.md) accepted）**：LIB-003/004/005/008 的 v1 实施顺序按 Proposal 冻结——先交付用户组织四类（Label 分类标签 + Collection 命名收藏夹 + Story/Entry 轻量收藏标记、Annotation 批注、Saved View 持久查询视图），分三个子切片逐片合入（Label+Collection → Annotation → Saved View）；Annotation 目标 = Story/Entry/Topic，Artifact 与正文片段字符级锚点后置（片段暂用可选 quote 文本表达）；Saved View 只存查询条件不存快照，`search` 扩展 `labelIds`/`topicIds` 过滤。LIB-004 的 Artifact 目标、LIB-005 的「未读/状态」条件（依赖 Read State）与 Feed Block 绑定（BRD-006，依赖可配置看板）、LIB-008 的批量导出/删除后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.5 Story、Topic、Entity 与关系
 
 | ID | 阶段 | 需求 | 验收条件 |

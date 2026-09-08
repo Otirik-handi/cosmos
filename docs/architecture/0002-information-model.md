@@ -819,6 +819,8 @@ flowchart TD
 
 **v1 切片（[`entity-relation-v1` Proposal](../proposals/entity-relation-v1.md)，2026-09-08 accepted）**：Entity/关系 v1 落地 §2「知识关系」与 §9 的人工作业部分——Entity 本体（受管类型枚举 `person`/`organization`/`product`/`project`/`model`/`location` + 规范名走不可变 `EntityRevision` + `EntityAlias` 名称别名）；`(Story, Entity)` 关联与 `(fromEntity → relationType → toEntity)` 类型化关系用「当前关系 + provenance（producer/version/confidence/evidence/actor/reason）」而非 revision 链；关系类型受管枚举 `founded`/`works_at`/`located_in`/`produced`/`part_of`/`related_to` + 未知降级；全部手动优先。自动 Entity 识别（`Entry→Entity` 抽取、Knowledge Workflow）、Entity merge/dedup、`evidence_for`/`mentions` 后置。
 
+**v1 切片（[`label-annotation-collection-saved-view-v1` Proposal](../proposals/label-annotation-collection-saved-view-v1.md)，2026-09-08 accepted）**：用户组织 v1 落地 §2「用户组织」与 §9 的人工作业部分——Label 分类标签（全局命名注册表 + 多态 `LabelAssignment` 附加到 Story/Entry/Topic）、Collection 命名收藏夹（成员为 Story）+ Story/Entry 独立轻量收藏标记（`Favorite`）、Annotation 批注（绑定 Story/Entry/Topic，可编辑笔记 + 目标版本引用 `targetRevisionId` + 可选 `quote`，作者/时间/依据）、Saved View 持久查询视图（只存查询条件不存快照，`search` 扩展 `labelIds`/`topicIds`）。自动分类/Knowledge Workflow、Artifact 目标、正文片段字符级锚点、Read State（未读/状态过滤）、Feed Block 绑定（BRD-006）、批量导出/删除后置。
+
 ## 10. 端到端示例
 
 假设系统采集到：
