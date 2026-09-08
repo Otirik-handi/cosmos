@@ -1,6 +1,17 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-07。Phase 1（Task 02 RSS 录入与离线查询）已于 2026-09-04 close（`adec648`）；Bilibili/AI HOT 定时调度、媒体重复下载修复与浏览器断网验收确定性化等 5 个收尾提交已合入 `master`（本地 = 远端 = `48deeb5`）。2026-09-07 维护者决策：Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复验收明确划线为 Phase 2 后置债，不阻塞进入 Phase 2；Phase 2 首切片 Story 域模型已接受（[`docs/proposals/story-domain-v1.md`](docs/proposals/story-domain-v1.md)，accepted）并同步 PRD/信息模型/ADR-0006，Task 编号待维护者分配。
+> 更新于 2026-09-08。Phase 2 首切片 Story 域模型 v1（Task 10）已实现并合入 `master`（`6f6651d..b0bc432`，本地 = 远端前状态）。StoryRevision 版本化、Story 编排命令（move entry / update revision / merge alias）、Product API 三端点与 Web 多成员详情/操作均已落地并同步 `docs/spec`/`docs/api`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-08：Story 域模型 v1 实现合入（Phase 2 首切片，Task 10）
+
+Proposal [`story-domain-v1`](docs/proposals/story-domain-v1.md)（accepted）与 ADR-0006 的实现已合入 `master`，分四层落地：
+
+1. **StoryRevision 版本化**：schema + 迁移 `20260907120000_story_revision_versioning`（revision 序号 + 展示字段 fingerprint + `(storyId, revision)` 唯一，旧库 backfill 从 1 起）；ingest 仅在展示字段实质变化时追加 StoryRevision（no-op 语义）。
+2. **Story 编排仓储命令**：`moveEntryToStory`、`updateStoryRevision`（baseRevisionId CAS）、`mergeStories`（canonical + obsolete alias，保留历史壳）；迁移 `20260907130000_story_merge_alias` 新增 StoryAlias 表与 StoryRevision actor/reason；`story()` 读取支持 alias 重定向并返回全部成员（`entries`）。
+3. **公共合同与 Product API**：`StoryDetail` 增加多成员 `entries`（保留 `entry` 兼容位）与三个命令 schema；`POST /api/v1/stories/:storyId/entry-moves`、`/revisions`、`/stories/merges`；transport client 同步。
+4. **Web**：StoryPanel 展示来源成员并提供标题编辑与归并操作；首页接线真实 API；浏览器 E2E 覆盖更新标题、归并、旧 ID 重定向与成员计数。
+
+验证（2026-09-08，全部实际运行）：`bun run typecheck` 通过；`bun run db:validate` 通过；`bun run test` 全量 40 文件/331 用例通过（含 story-orchestration 2、story-revision-versioning 1）；`bun run build` 通过；Node 进程 E2E 4/4 通过；浏览器 ingest E2E（含 Story 编排）1/1 通过；`bun run lint:web` 通过（2 个既有 warning）；`bun run docs:check` 320 文件通过；`git diff --check` 干净。未运行：组件实验室浏览器全量、offline/theme 浏览器回归、Windows Node smoke、Docker/Compose、发布部署（均为后置/既有边界，Task 02 与 Task 09 已分别留下历史证据）。
 
 ## 2026-09-07：Phase 1 划线收口与 Phase 2 启动基线
 
@@ -162,8 +173,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 （2026-09-07 更新：最新基线、后置债划线、Phase 2 启动方向与门禁留底见顶部“2026-09-07：Phase 1 划线收口与 Phase 2 启动基线”。）
 
-- [`docs/proposals/story-domain-v1.md`](docs/proposals/story-domain-v1.md)（Phase 2 首切片：Story 域模型）已接受（2026-09-07），PRD/信息模型/ADR 已按 Proposal 预期改动同步。下一步：由维护者分配 Task 编号（预计 `10-story-domain`）并授权开 worktree 后开始实现切片；代码与测试落地后按仓库流程把当前事实收敛到 `docs/spec/`。
+- Story 域模型 v1（Task 10）已合入 `master`（`b0bc432`）；worktree `.worktree/story-domain` 与分支 `feat/t10-story-domain` 待清理（需授权）。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随 Story 域模型切片顺带执行。
+- 后续 Phase 2 切片候选（按 PRD 顺序）：Topic/Entity/关系、Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期与 `evidence_for`/`mentions` 跨 Story 引用后置。
 
 ## 已完成
 
