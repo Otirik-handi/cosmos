@@ -22,6 +22,7 @@ import {
     type SearchQuery,
     type SourceSnapshot,
     type StoryDetail,
+    type UpdateStoryRevisionCommand,
 } from "@cosmos/contracts";
 import {
     CosmosTransportError,
@@ -366,6 +367,25 @@ export default function Home() {
         }
     };
 
+    const updateStoryRevision = async (command: UpdateStoryRevisionCommand): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const updated = await client.updateStoryRevision(story.story.id, command);
+        setStory(updated);
+    };
+
+    const mergeStory = async (obsoleteStoryId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const updated = await client.mergeStories({
+            canonicalStoryId: story.story.id,
+            obsoleteStoryIds: [obsoleteStoryId],
+        });
+        setStory(updated);
+    };
+
     const loadMore = async (): Promise<void> => {
         if (!nextCursor || loadingMore) {
             return;
@@ -515,7 +535,14 @@ export default function Home() {
                 />
             </div>
 
-            {story && <StoryPanel onClose={() => setStory(null)} story={story} />}
+            {story && (
+                <StoryPanel
+                    onClose={() => setStory(null)}
+                    story={story}
+                    onUpdateStoryRevision={updateStoryRevision}
+                    onMergeStory={mergeStory}
+                />
+            )}
         </main>
     );
 }

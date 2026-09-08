@@ -76,6 +76,34 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await expect(dialog.getByRole("button", { name: "关闭" })).toBeFocused();
     await expect(dialog.getByRole("link", { name: "打开原文" })).toBeVisible();
 
+    // Story 编排：更新 Revision（标题实质变化）与归并第二个 Story 到当前 Story。
+    const feedItems = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/feed?limit=50");
+        return (await response.json()) as {
+            items: Array<{ storyId: string }>;
+        };
+    });
+    const currentStoryId = feedItems.items[0].storyId;
+    const obsoleteStoryId = feedItems.items
+        .map((item) => item.storyId)
+        .find((storyId) => storyId !== currentStoryId)!;
+    const mergedTitle = `合并后标题 ${Date.now()}`;
+    await dialog.getByLabel("标题").fill(mergedTitle);
+    await dialog.getByRole("button", { name: "更新标题" }).click();
+    await expect(dialog.getByRole("heading", { name: mergedTitle, exact: true })).toBeVisible();
+    await dialog.getByLabel("并入本 Story 的 Story ID").fill(obsoleteStoryId);
+    await dialog.getByRole("button", { name: "归并", exact: true }).click();
+    await expect(dialog.getByText(/来源成员（2）/)).toBeVisible();
+    const redirected = await page.evaluate(async (storyId) => {
+        const response = await fetch(`/api/v1/stories/${encodeURIComponent(storyId)}`);
+        return (await response.json()) as {
+            story: { id: string };
+            entries: unknown[];
+        };
+    }, obsoleteStoryId);
+    expect(redirected.story.id).toBe(currentStoryId);
+    expect(redirected.entries).toHaveLength(2);
+
     // Escape 关闭抽屉并把焦点还给触发按钮。
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);

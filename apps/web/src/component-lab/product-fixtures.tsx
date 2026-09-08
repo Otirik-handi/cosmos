@@ -300,7 +300,14 @@ export function renderStoryPanelLab(props: LabProps) {
         },
         entries: [],
     };
-    return <StoryPanel onClose={() => undefined} story={story} />;
+    return (
+        <StoryPanel
+            onClose={() => undefined}
+            story={story}
+            onUpdateStoryRevision={async () => undefined}
+            onMergeStory={async () => undefined}
+        />
+    );
 }
 
 export function renderThemeSwitcherLab(props: LabProps) {

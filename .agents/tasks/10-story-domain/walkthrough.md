@@ -90,3 +90,22 @@ bunx vitest run packages/storage-prisma/src/story-orchestration.test.ts
 未运行/待收口：Node E2E 真实 HTTP 验收（随 Web 切片浏览器 E2E 一并覆盖三个新端点）、`docs/api` Draft 与 `docs/spec` contracts/interfaces/domain 同步、`docs/testing` 说明；这些在切片 3 完成或合入 master 前统一补齐。
 
 下一步：切片 3——Web Story 详情多成员展示与操作入口（StoryPanel 消费 `entries`、move/update/merge 调用 transport client、组件实验室 + 浏览器 E2E）。
+
+## 2026-09-08：切片 3 完成——Web Story 详情多成员与编排操作
+
+- `StoryPanel` 增加"来源成员"区块（渲染 `story.entries` 全部成员，语义化 `data-story-member-id`）；新增"Story 操作"区：标题编辑（构造 `UpdateStoryRevisionCommand`，带当前 `baseRevisionId`）与归并表单（输入 obsolete Story id，回调 `mergeStories` canonical=当前 Story）；busy/错误状态走 `role=alert`。
+- 编排通过 props 回调上抛（不引入面板内网络依赖，组件实验室可 stub）；`page.tsx` 注入真实 transport client 调用并刷新详情。
+- 组件实验室 fixture 补 stub callbacks（组件实验室仍无 Product API 请求）；registry/unit 测试通过。
+- 浏览器 E2E（`e2e/browser/ingest.spec.ts`）新增真实流程：打开 Story → 更新标题（Revision 变化）→ 归并第二个 Story → 断言"来源成员（2）"→ 通过 `/api/v1/stories/:obsoleteId` 验证旧 ID 重定向到 canonical 且成员数为 2。
+
+验证（2026-09-08，全部实际运行）：
+
+```text
+bun run typecheck                                  -> 通过
+bun run lint:web                                   -> 通过（仅 2 个既有 warning）
+bunx vitest run apps/web/src/component-lab ...      -> 34/34 通过
+COSMOS_E2E_WEB_PORT=4183 bunx playwright test -g "creates an RSS source, runs ingest, and opens a Story"
+                                                    -> 1/1 通过（真实 API/Worker/Next + 编排）
+```
+
+未收口（合入 master 前完成）：`docs/api`（0002 endpoints、0003 DTO Draft）、`docs/spec`（contracts/0001、domain/0001、storage/0001、interfaces/0002、interfaces/0005）同步与 `docs/testing` 说明；PROJECT-STATUS 合入后更新。

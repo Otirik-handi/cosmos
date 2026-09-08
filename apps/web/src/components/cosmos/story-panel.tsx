@@ -1,17 +1,21 @@
 import { ExternalLink, Image as ImageIcon, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type FormEventHandler } from "react";
 
 import type {
     AssetSnapshot,
     StoryDetail,
+    UpdateStoryRevisionCommand,
 } from "@cosmos/contracts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type StoryPanelProps = {
     onClose: () => void;
     story: StoryDetail;
+    onUpdateStoryRevision: (command: UpdateStoryRevisionCommand) => Promise<void>;
+    onMergeStory: (obsoleteStoryId: string) => Promise<void>;
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -116,9 +120,18 @@ function RevisionAssets({ assets }: { assets: readonly AssetSnapshot[] }) {
  * 阅读抽屉：固定定位的响应式阅读层，不依赖 Dialog 原语。
  * 打开时焦点进入关闭按钮，Escape 关闭，卸载时把焦点还给触发按钮。
  */
-export function StoryPanel({ onClose, story }: StoryPanelProps) {
+export function StoryPanel({
+    onClose,
+    story,
+    onUpdateStoryRevision,
+    onMergeStory,
+}: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
+    const [title, setTitle] = useState(story.story.title);
+    const [mergeStoryId, setMergeStoryId] = useState("");
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
 
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -144,6 +157,45 @@ export function StoryPanel({ onClose, story }: StoryPanelProps) {
 
     const currentRevision = story.entry.revisions[0];
     const currentWebUrl = currentRevision?.webUrl ?? null;
+    const submitRevisionUpdate: FormEventHandler = async (event) => {
+        event.preventDefault();
+        const normalized = title.trim();
+        if (!normalized) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onUpdateStoryRevision({
+                baseRevisionId: story.story.revisionId,
+                title: normalized,
+                summary: story.story.summary,
+                kind: story.story.kind,
+                subtype: story.story.subtype,
+            });
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "Story 操作失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+    const submitMerge: FormEventHandler = async (event) => {
+        event.preventDefault();
+        const obsoleteStoryId = mergeStoryId.trim();
+        if (!obsoleteStoryId) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onMergeStory(obsoleteStoryId);
+            setMergeStoryId("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "Story 归并失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
 
     return (
         <div
@@ -181,6 +233,26 @@ export function StoryPanel({ onClose, story }: StoryPanelProps) {
                     </Button>
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+                    <section aria-label="来源成员" className="border-b pb-4">
+                        <h3 className="font-medium">
+                            来源成员（{story.entries.length}）
+                        </h3>
+                        {story.entries.length > 0 && (
+                            <ul className="mt-2 flex flex-col gap-1 text-sm text-muted-foreground">
+                                {story.entries.map((member) => (
+                                    <li
+                                        key={member.id}
+                                        data-story-member-id={member.id}
+                                        className="truncate"
+                                    >
+                                        {member.sourceName} ·{" "}
+                                        {member.revisions[0]?.title ?? "无标题"} ·{" "}
+                                        {member.id}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
                     {currentWebUrl && (
                         <a
                             href={currentWebUrl}
@@ -220,6 +292,63 @@ export function StoryPanel({ onClose, story }: StoryPanelProps) {
                             </Badge>
                         ))}
                     </div>
+                    <section
+                        aria-label="Story 操作"
+                        className="grid gap-4 border-t pt-4"
+                    >
+                        <form
+                            className="flex flex-wrap items-center gap-2"
+                            onSubmit={submitRevisionUpdate}
+                        >
+                            <label
+                                htmlFor="cosmos-story-title-edit"
+                                className="text-sm font-medium"
+                            >
+                                标题
+                            </label>
+                            <Input
+                                id="cosmos-story-title-edit"
+                                value={title}
+                                onChange={(event) => setTitle(event.target.value)}
+                                disabled={busy}
+                                className="max-w-xs"
+                            />
+                            <Button type="submit" disabled={busy} variant="outline">
+                                更新标题
+                            </Button>
+                        </form>
+                        <form
+                            className="flex flex-wrap items-center gap-2"
+                            onSubmit={submitMerge}
+                        >
+                            <label
+                                htmlFor="cosmos-story-merge-target"
+                                className="text-sm font-medium"
+                            >
+                                并入本 Story 的 Story ID
+                            </label>
+                            <Input
+                                id="cosmos-story-merge-target"
+                                value={mergeStoryId}
+                                onChange={(event) => setMergeStoryId(event.target.value)}
+                                disabled={busy}
+                                placeholder="story:..."
+                                className="max-w-xs"
+                            />
+                            <Button type="submit" disabled={busy} variant="outline">
+                                归并
+                            </Button>
+                        </form>
+                        {actionError && (
+                            <p
+                                role="alert"
+                                className="text-sm text-destructive"
+                                data-story-action-error="true"
+                            >
+                                {actionError}
+                            </p>
+                        )}
+                    </section>
                 </div>
             </div>
         </div>
