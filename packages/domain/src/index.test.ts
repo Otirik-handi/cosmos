@@ -5,12 +5,14 @@ import {
     deriveExternalKey,
     entityRelationTypes,
     entityTypes,
+    favoriteTargetTypes,
     fingerprintEntityRevision,
     fingerprintEntryRevision,
     fingerprintStoryRevision,
     fingerprintTopicRevision,
     normalizePublisher,
     projectEntryToStory,
+    targetTypes,
     topicMemberRoles,
 } from "./index.js";
 
@@ -71,6 +73,16 @@ describe("entity domain semantics", () => {
     });
 });
 
+
+describe("user organization domain semantics", () => {
+    it("keeps the managed attach-target enum stable and readonly", () => {
+        expect(targetTypes).toEqual(["story", "entry", "topic"]);
+        expect(favoriteTargetTypes).toEqual(["story", "entry"]);
+        expect((favoriteTargetTypes as readonly string[]).every((value) => {
+            return (targetTypes as readonly string[]).includes(value);
+        })).toBe(true);
+    });
+});
 
 describe("ingestion identity", () => {
     it("prefers a source stable id and falls back without requiring a URL", () => {

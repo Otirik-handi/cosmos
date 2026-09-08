@@ -370,6 +370,12 @@ export const storyEntitySummarySchema = z.object({
 });
 export type StoryEntitySummary = z.infer<typeof storyEntitySummarySchema>;
 
+export const labelRefSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+});
+export type LabelRef = z.infer<typeof labelRefSchema>;
+
 export const storyDetailSchema = z.object({
     story: z.object({
         id: z.string(),
@@ -382,6 +388,8 @@ export const storyDetailSchema = z.object({
     entry: entryDetailSchema,
     entries: entryDetailSchema.array(),
     entities: storyEntitySummarySchema.array(),
+    labels: labelRefSchema.array(),
+    favorited: z.boolean(),
 });
 export type StoryDetail = z.infer<typeof storyDetailSchema>;
 
@@ -677,6 +685,134 @@ export const removeEntityRelationCommandSchema = z.object({
     reason: z.string().trim().min(1).max(1000).nullish(),
 });
 export type RemoveEntityRelationCommand = z.infer<typeof removeEntityRelationCommandSchema>;
+
+// ---------------------------------------------------------------------------
+// User organization v1 (sub-slice A: Label + Collection + Favorite) — ADR-0009
+// ---------------------------------------------------------------------------
+
+export const targetTypeSchema = z.enum(["story", "entry", "topic"]);
+export type TargetType = z.infer<typeof targetTypeSchema>;
+
+export const favoriteTargetTypeSchema = z.enum(["story", "entry"]);
+export type FavoriteTargetType = z.infer<typeof favoriteTargetTypeSchema>;
+
+/**
+ * Result of a top-level user-organization write whose natural outcome is not a
+ * single aggregate read model (label delete/detach, collection delete or item
+ * toggles, favorite set/unset). `action` names the completed mutation so a
+ * client can refresh the right surface without string-parsing the URL.
+ */
+export const userOrganizationAckSchema = z.object({
+    ok: z.literal(true),
+    id: z.string(),
+    action: z.string(),
+});
+export type UserOrganizationAck = z.infer<typeof userOrganizationAckSchema>;
+
+export const labelItemSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    assignedCount: z.number().int().nonnegative(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+});
+export type LabelItem = z.infer<typeof labelItemSchema>;
+
+export const labelListSchema = z.object({
+    items: labelItemSchema.array(),
+});
+export type LabelList = z.infer<typeof labelListSchema>;
+
+export const labelDetailSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    // Assigned targets grouped by type with a resolved display title so a label
+    // drill-down can render without the client resolving each target id.
+    assignedStories: z.array(z.object({ id: z.string(), title: z.string() })),
+    assignedEntries: z.array(z.object({ id: z.string(), title: z.string() })),
+    assignedTopics: z.array(z.object({ id: z.string(), title: z.string() })),
+});
+export type LabelDetail = z.infer<typeof labelDetailSchema>;
+
+export const createLabelCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+});
+export type CreateLabelCommand = z.infer<typeof createLabelCommandSchema>;
+
+export const labelAssignmentCommandSchema = z.object({
+    labelId: z.string().trim().min(1).max(300),
+    targetType: targetTypeSchema,
+    targetId: z.string().trim().min(1).max(300),
+});
+export type LabelAssignmentCommand = z.infer<typeof labelAssignmentCommandSchema>;
+
+export const collectionSummarySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    itemCount: z.number().int().nonnegative(),
+    // Present only when listCollections is asked for one story's membership.
+    containsStory: z.boolean().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+});
+export type CollectionSummary = z.infer<typeof collectionSummarySchema>;
+
+export const collectionListSchema = z.object({
+    items: collectionSummarySchema.array(),
+});
+export type CollectionList = z.infer<typeof collectionListSchema>;
+
+export const collectionDetailSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    stories: z.array(z.object({
+        storyId: z.string(),
+        title: z.string(),
+        addedAt: z.string(),
+    })),
+});
+export type CollectionDetail = z.infer<typeof collectionDetailSchema>;
+
+export const createCollectionCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(1000).nullish(),
+});
+export type CreateCollectionCommand = z.infer<typeof createCollectionCommandSchema>;
+
+export const updateCollectionCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(1000).nullish(),
+});
+export type UpdateCollectionCommand = z.infer<typeof updateCollectionCommandSchema>;
+
+export const collectionItemCommandSchema = z.object({
+    storyId: z.string().trim().min(1).max(300),
+});
+export type CollectionItemCommand = z.infer<typeof collectionItemCommandSchema>;
+
+export const favoriteCommandSchema = z.object({
+    targetType: favoriteTargetTypeSchema,
+    targetId: z.string().trim().min(1).max(300),
+});
+export type FavoriteCommand = z.infer<typeof favoriteCommandSchema>;
+
+export const favoriteItemSchema = z.object({
+    targetType: favoriteTargetTypeSchema,
+    targetId: z.string(),
+    createdAt: z.string(),
+});
+export type FavoriteItem = z.infer<typeof favoriteItemSchema>;
+
+export const favoriteListSchema = z.object({
+    items: favoriteItemSchema.array(),
+});
+export type FavoriteList = z.infer<typeof favoriteListSchema>;
 
 export const revisionDetailSchema = entryRevisionSnapshotSchema.extend({
     entryId: z.string(),

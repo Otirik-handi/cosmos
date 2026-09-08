@@ -26,6 +26,19 @@ import {
     entityDetailSchema,
     linkStoryEntityCommandSchema,
     storyDetailSchema,
+    labelAssignmentCommandSchema,
+    labelDetailSchema,
+    labelItemSchema,
+    labelListSchema,
+    collectionDetailSchema,
+    collectionListSchema,
+    collectionSummarySchema,
+    createCollectionCommandSchema,
+    createLabelCommandSchema,
+    favoriteCommandSchema,
+    userOrganizationAckSchema,
+    targetTypeSchema,
+    favoriteTargetTypeSchema,
 } from "./index.js";
 
 describe("entity and relation contracts", () => {
@@ -116,8 +129,99 @@ describe("entity and relation contracts", () => {
                 actor: null,
                 reason: null,
             }],
+            labels: [],
+            favorited: false,
         });
         expect(story.entities[0].name).toBe("Jeff Dean");
+    });
+});
+
+describe("user organization contracts", () => {
+    it("pins the managed target-type enums for writes", () => {
+        expect(targetTypeSchema.options).toEqual(["story", "entry", "topic"]);
+        expect(favoriteTargetTypeSchema.options).toEqual(["story", "entry"]);
+        expect(() => labelAssignmentCommandSchema.parse({
+            labelId: "label-a",
+            targetType: "story",
+            targetId: "story-1",
+        })).not.toThrow();
+        expect(() => labelAssignmentCommandSchema.parse({
+            labelId: "label-a",
+            targetType: "workspace",
+            targetId: "story-1",
+        })).toThrow();
+        expect(() => favoriteCommandSchema.parse({
+            targetType: "topic",
+            targetId: "topic-1",
+        })).toThrow();
+    });
+
+    it("parses label list, detail and commands", () => {
+        const item = labelItemSchema.parse({
+            id: "label-a",
+            name: "AI",
+            assignedCount: 2,
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        });
+        expect(item.name).toBe("AI");
+        expect(labelListSchema.parse({ items: [item] }).items).toHaveLength(1);
+        expect(createLabelCommandSchema.parse({ name: " AI " }).name).toBe("AI");
+
+        const detail = labelDetailSchema.parse({
+            id: "label-a",
+            name: "AI",
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+            assignedStories: [{ id: "story-1", title: "Story one" }],
+            assignedEntries: [],
+            assignedTopics: [],
+        });
+        expect(detail.assignedStories[0].title).toBe("Story one");
+        expect(() => labelDetailSchema.parse({
+            ...detail,
+            assignedStories: [{ id: "story-1" }],
+        })).toThrow();
+    });
+
+    it("parses collection read models and the write ack", () => {
+        const summary = collectionSummarySchema.parse({
+            id: "collection-a",
+            name: "Reading",
+            description: null,
+            itemCount: 1,
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        });
+        expect(summary.itemCount).toBe(1);
+        expect(collectionListSchema.parse({
+            items: [{ ...summary, containsStory: true }],
+        }).items[0].containsStory).toBe(true);
+        expect(createCollectionCommandSchema.parse({
+            name: "Reading",
+            description: "Later",
+        }).description).toBe("Later");
+
+        const detail = collectionDetailSchema.parse({
+            id: "collection-a",
+            name: "Reading",
+            description: null,
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+            stories: [{ storyId: "story-1", title: "Story one", addedAt: "2026-09-08T00:00:00.000Z" }],
+        });
+        expect(detail.stories).toHaveLength(1);
+
+        expect(userOrganizationAckSchema.parse({
+            ok: true,
+            id: "label-a",
+            action: "label.deleted",
+        })).toMatchObject({ action: "label.deleted" });
+        expect(() => userOrganizationAckSchema.parse({
+            ok: false,
+            id: "label-a",
+            action: "label.deleted",
+        })).toThrow();
     });
 });
 

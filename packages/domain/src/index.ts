@@ -37,6 +37,31 @@ export const entityRelationTypes = [
 
 export type EntityRelationType = (typeof entityRelationTypes)[number];
 
+/**
+ * Targets that Label assignments and (later) Annotations can attach to
+ * (ADR-0009 decision 1). Unknown values degrade on read, so the list is
+ * additive only.
+ */
+export const targetTypes = [
+    "story",
+    "entry",
+    "topic",
+] as const;
+
+export type TargetType = (typeof targetTypes)[number];
+
+/**
+ * Favorite targets are a subset of all attach targets: a story or entry can be
+ * bookmarked, but a Topic already persists as its own long-lived container
+ * (ADR-0009 decision 3).
+ */
+export const favoriteTargetTypes = [
+    "story",
+    "entry",
+] as const;
+
+export type FavoriteTargetType = (typeof favoriteTargetTypes)[number];
+
 export const contentKinds = [
     "post",
     "article",

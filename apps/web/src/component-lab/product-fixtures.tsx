@@ -305,6 +305,8 @@ export function renderStoryPanelLab(props: LabProps) {
         },
         entries: [],
         entities: [],
+        labels: [],
+        favorited: false,
     };
     return (
         <StoryPanel

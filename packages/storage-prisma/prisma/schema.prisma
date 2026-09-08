@@ -259,6 +259,7 @@ model Story {
     aliases           StoryAlias[]
     topicMemberships  TopicMembership[]
     storyEntities     StoryEntity[]
+    collectionItems   CollectionItem[]
 }
 
 model StoryRevision {
@@ -428,6 +429,59 @@ model EntityRelation {
     toEntity        Entity   @relation("EntityRelationTo", fields: [toEntityId], references: [id], onDelete: Cascade)
 
     @@unique([fromEntityId, toEntityId, relationType])
+}
+
+model Label {
+    id          String            @id @default(cuid())
+    name        String            @unique
+    createdAt   DateTime          @default(now())
+    updatedAt   DateTime          @updatedAt
+    assignments LabelAssignment[]
+}
+
+// Polymorphic attach of one label to one story/entry/topic target. There is no
+// FK to the target rows because the target type is not fixed (ADR-0009).
+model LabelAssignment {
+    id         String   @id @default(cuid())
+    labelId    String
+    targetType String
+    targetId   String
+    createdAt  DateTime @default(now())
+    label      Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+    @@unique([labelId, targetType, targetId])
+    @@index([targetType, targetId])
+}
+
+model Collection {
+    id          String           @id @default(cuid())
+    name        String
+    description String?
+    createdAt   DateTime         @default(now())
+    updatedAt   DateTime         @updatedAt
+    items       CollectionItem[]
+}
+
+model CollectionItem {
+    id           String     @id @default(cuid())
+    collectionId String
+    storyId      String
+    createdAt    DateTime   @default(now())
+    collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+    story        Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+    @@unique([collectionId, storyId])
+    @@index([storyId])
+}
+
+model Favorite {
+    id         String   @id @default(cuid())
+    targetType String
+    targetId   String
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@unique([targetType, targetId])
 }
 
 model WorkflowRun {

@@ -35,6 +35,14 @@ import {
     type UpdateSourceCommand,
     type EntityDetail,
     type EntityPage,
+    type LabelDetail,
+    type LabelItem,
+    type LabelList,
+    type LabelRef,
+    type CollectionDetail,
+    type CollectionList,
+    type CollectionSummary,
+    type FavoriteList,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
@@ -48,7 +56,9 @@ import {
     temporalProjection,
     type EntityRelationType,
     type EntityType,
+    type FavoriteTargetType,
     type NormalizedIngestItem,
+    type TargetType,
     type TopicMemberRole,
 } from "@cosmos/domain";
 import {
@@ -56,6 +66,10 @@ import {
     EntityNotFoundError,
     EntityRelationConflictError,
     EntityRevisionConflictError,
+    EntryNotFoundError,
+    CollectionNotFoundError,
+    LabelConflictError,
+    LabelNotFoundError,
     SourceNotFoundError,
     SourceRevisionConflictError,
     StoryMergeConflictError,
@@ -2006,6 +2020,111 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         });
                     }
                 }
+                // User-organization state keyed by Story id follows the same
+                // merge: Collections keep at most one (collection, story) member,
+                // a Story favorite collapses to one row, and label assignments
+                // move to the canonical Story unless the label is already there
+                // (ADR-0009 decisions 3 and the merge symmetric to ADR-0007/0008).
+                const obsoleteCollectionItems = await tx.collectionItem.findMany({
+                    where: { storyId: obsoleteStoryId },
+                });
+                for (const item of obsoleteCollectionItems) {
+                    const existing = await tx.collectionItem.findUnique({
+                        where: {
+                            collectionId_storyId: {
+                                collectionId: item.collectionId,
+                                storyId: canonicalStoryId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.collectionItem.update({
+                            where: { id: item.id },
+                            data: { storyId: canonicalStoryId },
+                        });
+                    } else {
+                        await tx.collectionItem.delete({ where: { id: item.id } });
+                        await appendDomainEvent(tx, {
+                            type: "collection.item_merged.v1",
+                            aggregateType: "Collection",
+                            aggregateId: item.collectionId,
+                            payload: {
+                                collectionId: item.collectionId,
+                                obsoleteStoryId,
+                                canonicalStoryId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
+                const obsoleteFavorites = await tx.favorite.findMany({
+                    where: { targetType: "story", targetId: obsoleteStoryId },
+                });
+                for (const favorite of obsoleteFavorites) {
+                    const existing = await tx.favorite.findUnique({
+                        where: {
+                            targetType_targetId: {
+                                targetType: "story",
+                                targetId: canonicalStoryId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.favorite.update({
+                            where: { id: favorite.id },
+                            data: { targetId: canonicalStoryId },
+                        });
+                    } else {
+                        await tx.favorite.delete({ where: { id: favorite.id } });
+                        await appendDomainEvent(tx, {
+                            type: "favorite.merged.v1",
+                            aggregateType: "Story",
+                            aggregateId: canonicalStoryId,
+                            payload: {
+                                targetType: "story",
+                                obsoleteStoryId,
+                                canonicalStoryId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
+                const obsoleteStoryLabels = await tx.labelAssignment.findMany({
+                    where: { targetType: "story", targetId: obsoleteStoryId },
+                });
+                for (const assignment of obsoleteStoryLabels) {
+                    const existing = await tx.labelAssignment.findUnique({
+                        where: {
+                            labelId_targetType_targetId: {
+                                labelId: assignment.labelId,
+                                targetType: "story",
+                                targetId: canonicalStoryId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.labelAssignment.update({
+                            where: { id: assignment.id },
+                            data: { targetId: canonicalStoryId },
+                        });
+                    } else {
+                        await tx.labelAssignment.delete({ where: { id: assignment.id } });
+                        await appendDomainEvent(tx, {
+                            type: "label.assignment_merged.v1",
+                            aggregateType: "Label",
+                            aggregateId: assignment.labelId,
+                            payload: {
+                                labelId: assignment.labelId,
+                                obsoleteStoryId,
+                                canonicalStoryId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
                 await tx.storyAlias.create({
                     data: { id: obsoleteStoryId, canonicalStoryId },
                 });
@@ -2111,6 +2230,21 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 actor: link.actorJson == null ? null : parseJson<string>(link.actorJson),
                 reason: link.reason,
             }));
+        // User-organization state for this Story: attached labels and the
+        // lightweight favorite flag (ADR-0009). Queried separately because
+        // LabelAssignment/Favorite carry polymorphic targets, not Story FKs.
+        const [labelAssignments, favorite] = await Promise.all([
+            this.prisma.labelAssignment.findMany({
+                where: { targetType: "story", targetId: canonicalId },
+                include: { label: { select: { id: true, name: true } } },
+            }),
+            this.prisma.favorite.findUnique({
+                where: {
+                    targetType_targetId: { targetType: "story", targetId: canonicalId },
+                },
+                select: { id: true },
+            }),
+        ]);
         return {
             story: {
                 id: story.id,
@@ -2123,6 +2257,11 @@ export class PrismaCosmosRepository implements CosmosRepository {
             entry: entries[0],
             entries,
             entities,
+            labels: labelAssignments.map((assignment) => ({
+                id: assignment.label.id,
+                name: assignment.label.name,
+            })),
+            favorited: favorite !== null,
         };
     }
 
@@ -3230,6 +3369,577 @@ export class PrismaCosmosRepository implements CosmosRepository {
             })),
             relations,
         };
+    }
+
+    // ---------------------------------------------------------------------
+    // User organization v1 (ADR-0009): Label + Collection + Favorite
+    // ---------------------------------------------------------------------
+
+    async createLabel(input: { name: string }): Promise<LabelItem> {
+        const name = input.name.trim();
+        const label = await this.prisma.$transaction(async (tx) => {
+            try {
+                const created = await tx.label.create({ data: { name } });
+                await appendDomainEvent(tx, {
+                    type: "label.created.v1",
+                    aggregateType: "Label",
+                    aggregateId: created.id,
+                    payload: { labelId: created.id, name },
+                });
+                return created;
+            } catch (error) {
+                if (isUniqueConstraintError(error)) {
+                    throw new LabelConflictError(`Label already exists: ${name}`);
+                }
+                throw error;
+            }
+        });
+        return {
+            id: label.id,
+            name: label.name,
+            assignedCount: 0,
+            createdAt: label.createdAt.toISOString(),
+            updatedAt: label.updatedAt.toISOString(),
+        };
+    }
+
+    async listLabels(): Promise<LabelList> {
+        const rows = await this.prisma.label.findMany({
+            orderBy: { name: "asc" },
+            include: {
+                _count: { select: { assignments: true } },
+            },
+        });
+        return {
+            items: rows.map((label) => ({
+                id: label.id,
+                name: label.name,
+                assignedCount: label._count.assignments,
+                createdAt: label.createdAt.toISOString(),
+                updatedAt: label.updatedAt.toISOString(),
+            })),
+        };
+    }
+
+    async label(labelId: string): Promise<LabelDetail | null> {
+        const label = await this.prisma.label.findUnique({
+            where: { id: labelId },
+        });
+        if (!label) {
+            return null;
+        }
+        const assignments = await this.prisma.labelAssignment.findMany({
+            where: { labelId },
+            orderBy: { createdAt: "asc" },
+        });
+        const group = (type: string) => assignments
+            .filter((assignment) => assignment.targetType === type)
+            .map((assignment) => assignment.targetId);
+        const [storyIds, entryIds, topicIds] = [
+            group("story"),
+            group("entry"),
+            group("topic"),
+        ];
+        const [stories, entries, topics] = await Promise.all([
+            this.prisma.story.findMany({
+                where: { id: { in: storyIds } },
+                include: { currentRevision: { select: { title: true } } },
+            }),
+            this.prisma.entry.findMany({
+                where: { id: { in: entryIds } },
+                include: { currentRevision: { select: { title: true } } },
+            }),
+            this.prisma.topic.findMany({
+                where: { id: { in: topicIds } },
+                include: { currentRevision: { select: { title: true } } },
+            }),
+        ]);
+        const storyTitles = new Map(stories.map((story) => [story.id, story.currentRevision?.title ?? ""]));
+        const entryTitles = new Map(entries.map((entry) => [entry.id, entry.currentRevision?.title ?? ""]));
+        const topicTitles = new Map(topics.map((topic) => [topic.id, topic.currentRevision?.title ?? ""]));
+        return {
+            id: label.id,
+            name: label.name,
+            createdAt: label.createdAt.toISOString(),
+            updatedAt: label.updatedAt.toISOString(),
+            assignedStories: storyIds.map((id) => ({ id, title: storyTitles.get(id) ?? "" })),
+            assignedEntries: entryIds.map((id) => ({ id, title: entryTitles.get(id) ?? "" })),
+            assignedTopics: topicIds.map((id) => ({ id, title: topicTitles.get(id) ?? "" })),
+        };
+    }
+
+    async deleteLabel(labelId: string): Promise<void> {
+        const label = await this.prisma.label.findUnique({
+            where: { id: labelId },
+            select: { id: true },
+        });
+        if (!label) {
+            throw new LabelNotFoundError(labelId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            await tx.label.delete({ where: { id: labelId } });
+            await appendDomainEvent(tx, {
+                type: "label.deleted.v1",
+                aggregateType: "Label",
+                aggregateId: labelId,
+                payload: { labelId },
+            });
+        });
+    }
+
+    async attachLabel(input: {
+        labelId: string;
+        targetType: TargetType;
+        targetId: string;
+    }): Promise<void> {
+        const label = await this.prisma.label.findUnique({
+            where: { id: input.labelId },
+            select: { id: true },
+        });
+        if (!label) {
+            throw new LabelNotFoundError(input.labelId);
+        }
+        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.labelAssignment.findUnique({
+                where: {
+                    labelId_targetType_targetId: {
+                        labelId: input.labelId,
+                        targetType: input.targetType,
+                        targetId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (existing) {
+                return;
+            }
+            await tx.labelAssignment.create({
+                data: {
+                    labelId: input.labelId,
+                    targetType: input.targetType,
+                    targetId,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "label.assigned.v1",
+                aggregateType: "Label",
+                aggregateId: input.labelId,
+                payload: {
+                    labelId: input.labelId,
+                    targetType: input.targetType,
+                    targetId,
+                },
+            });
+        });
+    }
+
+    async detachLabel(input: {
+        labelId: string;
+        targetType: TargetType;
+        targetId: string;
+    }): Promise<void> {
+        const label = await this.prisma.label.findUnique({
+            where: { id: input.labelId },
+            select: { id: true },
+        });
+        if (!label) {
+            throw new LabelNotFoundError(input.labelId);
+        }
+        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.labelAssignment.findUnique({
+                where: {
+                    labelId_targetType_targetId: {
+                        labelId: input.labelId,
+                        targetType: input.targetType,
+                        targetId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.labelAssignment.delete({ where: { id: existing.id } });
+            await appendDomainEvent(tx, {
+                type: "label.unassigned.v1",
+                aggregateType: "Label",
+                aggregateId: input.labelId,
+                payload: {
+                    labelId: input.labelId,
+                    targetType: input.targetType,
+                    targetId,
+                },
+            });
+        });
+    }
+
+    async createCollection(input: {
+        name: string;
+        description?: string | null;
+    }): Promise<CollectionSummary> {
+        const name = input.name.trim();
+        const description = input.description?.trim() || null;
+        const collection = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.collection.create({
+                data: { name, description },
+            });
+            await appendDomainEvent(tx, {
+                type: "collection.created.v1",
+                aggregateType: "Collection",
+                aggregateId: created.id,
+                payload: { collectionId: created.id, name, description },
+            });
+            return created;
+        });
+        return {
+            id: collection.id,
+            name: collection.name,
+            description: collection.description,
+            itemCount: 0,
+            createdAt: collection.createdAt.toISOString(),
+            updatedAt: collection.updatedAt.toISOString(),
+        };
+    }
+
+    async updateCollection(input: {
+        collectionId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<CollectionSummary> {
+        const existing = await this.prisma.collection.findUnique({
+            where: { id: input.collectionId },
+            select: { id: true },
+        });
+        if (!existing) {
+            throw new CollectionNotFoundError(input.collectionId);
+        }
+        const name = input.name.trim();
+        const description = input.description?.trim() || null;
+        await this.prisma.$transaction(async (tx) => {
+            await tx.collection.update({
+                where: { id: input.collectionId },
+                data: { name, description },
+            });
+            await appendDomainEvent(tx, {
+                type: "collection.updated.v1",
+                aggregateType: "Collection",
+                aggregateId: input.collectionId,
+                payload: { collectionId: input.collectionId, name, description },
+            });
+        });
+        const summary = await this.loadCollectionSummary(input.collectionId);
+        if (!summary) {
+            throw new CollectionNotFoundError(input.collectionId);
+        }
+        return summary;
+    }
+
+    async deleteCollection(collectionId: string): Promise<void> {
+        const collection = await this.prisma.collection.findUnique({
+            where: { id: collectionId },
+            select: { id: true },
+        });
+        if (!collection) {
+            throw new CollectionNotFoundError(collectionId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            await tx.collection.delete({ where: { id: collectionId } });
+            await appendDomainEvent(tx, {
+                type: "collection.deleted.v1",
+                aggregateType: "Collection",
+                aggregateId: collectionId,
+                payload: { collectionId },
+            });
+        });
+    }
+
+    async listCollections(input: { storyId?: string } = {}): Promise<CollectionList> {
+        let memberCollectionIds: Set<string> | null = null;
+        if (input.storyId) {
+            const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+            if (!canonicalStoryId) {
+                throw new StoryNotFoundError(input.storyId);
+            }
+            const memberships = await this.prisma.collectionItem.findMany({
+                where: { storyId: canonicalStoryId },
+                select: { collectionId: true },
+            });
+            memberCollectionIds = new Set(memberships.map((membership) => membership.collectionId));
+        }
+        const rows = await this.prisma.collection.findMany({
+            orderBy: { createdAt: "asc" },
+            include: {
+                _count: { select: { items: true } },
+            },
+        });
+        return {
+            items: rows.map((collection) => ({
+                id: collection.id,
+                name: collection.name,
+                description: collection.description,
+                itemCount: collection._count.items,
+                ...(memberCollectionIds === null
+                    ? {}
+                    : { containsStory: memberCollectionIds.has(collection.id) }),
+                createdAt: collection.createdAt.toISOString(),
+                updatedAt: collection.updatedAt.toISOString(),
+            })),
+        };
+    }
+
+    async collection(collectionId: string): Promise<CollectionDetail | null> {
+        const collection = await this.prisma.collection.findUnique({
+            where: { id: collectionId },
+        });
+        if (!collection) {
+            return null;
+        }
+        const items = await this.prisma.collectionItem.findMany({
+            where: { collectionId },
+            orderBy: { createdAt: "asc" },
+            include: {
+                story: {
+                    include: { currentRevision: { select: { title: true } } },
+                },
+            },
+        });
+        return {
+            id: collection.id,
+            name: collection.name,
+            description: collection.description,
+            createdAt: collection.createdAt.toISOString(),
+            updatedAt: collection.updatedAt.toISOString(),
+            stories: items.map((item) => ({
+                storyId: item.storyId,
+                title: item.story.currentRevision?.title ?? "",
+                addedAt: item.createdAt.toISOString(),
+            })),
+        };
+    }
+
+    async addCollectionItem(input: {
+        collectionId: string;
+        storyId: string;
+    }): Promise<void> {
+        const collection = await this.prisma.collection.findUnique({
+            where: { id: input.collectionId },
+            select: { id: true },
+        });
+        if (!collection) {
+            throw new CollectionNotFoundError(input.collectionId);
+        }
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.collectionItem.findUnique({
+                where: {
+                    collectionId_storyId: {
+                        collectionId: input.collectionId,
+                        storyId: canonicalStoryId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (existing) {
+                return;
+            }
+            await tx.collectionItem.create({
+                data: {
+                    collectionId: input.collectionId,
+                    storyId: canonicalStoryId,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "collection.item_added.v1",
+                aggregateType: "Collection",
+                aggregateId: input.collectionId,
+                payload: {
+                    collectionId: input.collectionId,
+                    storyId: canonicalStoryId,
+                },
+            });
+        });
+    }
+
+    async removeCollectionItem(input: {
+        collectionId: string;
+        storyId: string;
+    }): Promise<void> {
+        const collection = await this.prisma.collection.findUnique({
+            where: { id: input.collectionId },
+            select: { id: true },
+        });
+        if (!collection) {
+            throw new CollectionNotFoundError(input.collectionId);
+        }
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.collectionItem.findUnique({
+                where: {
+                    collectionId_storyId: {
+                        collectionId: input.collectionId,
+                        storyId: canonicalStoryId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.collectionItem.delete({ where: { id: existing.id } });
+            await appendDomainEvent(tx, {
+                type: "collection.item_removed.v1",
+                aggregateType: "Collection",
+                aggregateId: input.collectionId,
+                payload: {
+                    collectionId: input.collectionId,
+                    storyId: canonicalStoryId,
+                },
+            });
+        });
+    }
+
+    async setFavorite(input: {
+        targetType: FavoriteTargetType;
+        targetId: string;
+    }): Promise<void> {
+        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.favorite.findUnique({
+                where: {
+                    targetType_targetId: {
+                        targetType: input.targetType,
+                        targetId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (existing) {
+                return;
+            }
+            await tx.favorite.create({
+                data: {
+                    targetType: input.targetType,
+                    targetId,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "favorite.set.v1",
+                aggregateType: input.targetType === "entry" ? "Entry" : "Story",
+                aggregateId: targetId,
+                payload: {
+                    targetType: input.targetType,
+                    targetId,
+                },
+            });
+        });
+    }
+
+    async unsetFavorite(input: {
+        targetType: FavoriteTargetType;
+        targetId: string;
+    }): Promise<void> {
+        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.favorite.findUnique({
+                where: {
+                    targetType_targetId: {
+                        targetType: input.targetType,
+                        targetId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.favorite.delete({ where: { id: existing.id } });
+            await appendDomainEvent(tx, {
+                type: "favorite.unset.v1",
+                aggregateType: input.targetType === "entry" ? "Entry" : "Story",
+                aggregateId: targetId,
+                payload: {
+                    targetType: input.targetType,
+                    targetId,
+                },
+            });
+        });
+    }
+
+    async listFavorites(): Promise<FavoriteList> {
+        const rows = await this.prisma.favorite.findMany({
+            orderBy: { createdAt: "desc" },
+        });
+        return {
+            items: rows.map((favorite) => ({
+                targetType: favorite.targetType as "story" | "entry",
+                targetId: favorite.targetId,
+                createdAt: favorite.createdAt.toISOString(),
+            })),
+        };
+    }
+
+    private async loadCollectionSummary(collectionId: string): Promise<CollectionSummary | null> {
+        const row = await this.prisma.collection.findUnique({
+            where: { id: collectionId },
+            include: {
+                _count: { select: { items: true } },
+            },
+        });
+        if (!row) {
+            return null;
+        }
+        return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            itemCount: row._count.items,
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+        };
+    }
+
+    private async resolveTargetTargetId(
+        targetType: TargetType | FavoriteTargetType,
+        targetId: string,
+    ): Promise<string> {
+        switch (targetType) {
+            case "story": {
+                const canonical = await this.resolveCanonicalStoryId(targetId);
+                if (!canonical) {
+                    throw new StoryNotFoundError(targetId);
+                }
+                return canonical;
+            }
+            case "entry": {
+                const entry = await this.prisma.entry.findUnique({
+                    where: { id: targetId },
+                    select: { id: true },
+                });
+                if (!entry) {
+                    throw new EntryNotFoundError(targetId);
+                }
+                return targetId;
+            }
+            case "topic": {
+                const topic = await this.prisma.topic.findUnique({
+                    where: { id: targetId },
+                    select: { id: true },
+                });
+                if (!topic) {
+                    throw new TopicNotFoundError(targetId);
+                }
+                return targetId;
+            }
+        }
+        throw new Error(`Unknown target type: ${String(targetType)}`);
     }
 
     async entry(entryId: string): Promise<EntryDetail | null> {

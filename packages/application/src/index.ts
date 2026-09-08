@@ -28,12 +28,21 @@ import {
     type UpdateSourceCommand,
     type EntityDetail,
     type EntityPage,
+    type LabelDetail,
+    type LabelItem,
+    type LabelList,
+    type CollectionDetail,
+    type CollectionList,
+    type CollectionSummary,
+    type FavoriteList,
 } from "@cosmos/contracts";
 import type {
     EntityRelationType,
     EntityType,
+    FavoriteTargetType,
     NormalizedIngestItem,
     StoryKind,
+    TargetType,
     TopicMemberRole,
 } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
@@ -235,6 +244,42 @@ export class EntityAliasConflictError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "EntityAliasConflictError";
+    }
+}
+
+export class LabelNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(labelId: string) {
+        super(`Label not found: ${labelId}`);
+        this.name = "LabelNotFoundError";
+    }
+}
+
+export class LabelConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "LabelConflictError";
+    }
+}
+
+export class CollectionNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(collectionId: string) {
+        super(`Collection not found: ${collectionId}`);
+        this.name = "CollectionNotFoundError";
+    }
+}
+
+export class EntryNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(entryId: string) {
+        super(`Entry not found: ${entryId}`);
+        this.name = "EntryNotFoundError";
     }
 }
 
@@ -500,6 +545,53 @@ export interface CosmosRepository {
         cursor?: string;
         limit: number;
     }): Promise<EntityPage>;
+    createLabel(input: {
+        name: string;
+    }): Promise<LabelItem>;
+    listLabels(): Promise<LabelList>;
+    label(labelId: string): Promise<LabelDetail | null>;
+    deleteLabel(labelId: string): Promise<void>;
+    attachLabel(input: {
+        labelId: string;
+        targetType: TargetType;
+        targetId: string;
+    }): Promise<void>;
+    detachLabel(input: {
+        labelId: string;
+        targetType: TargetType;
+        targetId: string;
+    }): Promise<void>;
+    createCollection(input: {
+        name: string;
+        description?: string | null;
+    }): Promise<CollectionSummary>;
+    updateCollection(input: {
+        collectionId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<CollectionSummary>;
+    deleteCollection(collectionId: string): Promise<void>;
+    listCollections(input?: {
+        storyId?: string;
+    }): Promise<CollectionList>;
+    collection(collectionId: string): Promise<CollectionDetail | null>;
+    addCollectionItem(input: {
+        collectionId: string;
+        storyId: string;
+    }): Promise<void>;
+    removeCollectionItem(input: {
+        collectionId: string;
+        storyId: string;
+    }): Promise<void>;
+    setFavorite(input: {
+        targetType: FavoriteTargetType;
+        targetId: string;
+    }): Promise<void>;
+    unsetFavorite(input: {
+        targetType: FavoriteTargetType;
+        targetId: string;
+    }): Promise<void>;
+    listFavorites(): Promise<FavoriteList>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {
