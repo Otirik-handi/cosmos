@@ -344,6 +344,8 @@ flowchart LR
 
 **Phase 2 第二切片注记（2026-09-08，[`topic-domain-v1` Proposal](../proposals/topic-domain-v1.md) accepted）**：ORG-002/006/008/009/012/015/016/020 的 v1 实施顺序按 Proposal 冻结——先交付 Topic 实体（title/purpose/scope 走不可变 `TopicRevision`）+ Topic Membership（受管枚举角色 `core`/`update`/`background`/`analysis`/`counterpoint`/`tutorial` + 纳入理由 + 单一当前角色 + 不可变 membership revision/tombstone）+ Topic merge（canonical/alias + 成员去重迁移），Web 成员添加入口从 Story 侧发起；Agent 自动创建与自动维护（ORG-007）、`TopicMaintenanceBinding`/`TopicRelation`/父子层级（ORG-015）、归档与 Spotlight/Board/Subscription 后置；`Story merge` 同步迁移 membership 到 canonical（ORG-020 merge 侧语义）。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第三切片注记（2026-09-08，[`entity-relation-v1` Proposal](../proposals/entity-relation-v1.md) accepted）**：ORG-003 的 v1 实施顺序按 Proposal 冻结——先交付 Entity 实体（受管类型枚举 `person`/`organization`/`product`/`project`/`model`/`location` + 规范名走不可变 `EntityRevision` + `EntityAlias` 名称别名）+ Story↔Entity 关联 + Entity↔Entity 类型化关系（受管关系类型枚举 + provenance：producer/version/confidence/evidence），全部手动优先；自动 Entity 识别/Knowledge Workflow（ORG-021）、Entity merge/dedup、`evidence_for`/`mentions` 跨 Story 引用（ORG-011）后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |

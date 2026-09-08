@@ -817,6 +817,8 @@ flowchart TD
 
 这里最重要的约束是：实线成员关系和虚线相关推荐不能混写成同一种“包含”；Subtype Registry 是 Story 身份合同，不是内容成员；Topic Relation 也不是 Topic 的父子层级。
 
+**v1 切片（[`entity-relation-v1` Proposal](../proposals/entity-relation-v1.md)，2026-09-08 accepted）**：Entity/关系 v1 落地 §2「知识关系」与 §9 的人工作业部分——Entity 本体（受管类型枚举 `person`/`organization`/`product`/`project`/`model`/`location` + 规范名走不可变 `EntityRevision` + `EntityAlias` 名称别名）；`(Story, Entity)` 关联与 `(fromEntity → relationType → toEntity)` 类型化关系用「当前关系 + provenance（producer/version/confidence/evidence/actor/reason）」而非 revision 链；关系类型受管枚举 `founded`/`works_at`/`located_in`/`produced`/`part_of`/`related_to` + 未知降级；全部手动优先。自动 Entity 识别（`Entry→Entity` 抽取、Knowledge Workflow）、Entity merge/dedup、`evidence_for`/`mentions` 后置。
+
 ## 10. 端到端示例
 
 假设系统采集到：

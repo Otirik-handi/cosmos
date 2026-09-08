@@ -24,3 +24,4 @@ ADR 只记录已经稳定、需要长期保留的决定。仍在探索或会随�
 - [0005 媒体边界 v1](0005-media-boundary-v1.md)：固定 RSS 媒体提取/受控下载与本地保存的 v1 边界——Connector 纯提取、Application 统一媒体获取、公开 `media-download` 能力门控、4 态 + 可空 `errorMessage` 降级原因、10MB/50MB 全局预算、下载安全边界与"不自愈"生命周期；per-source 策略与 `local` 作用域后置。
 - [0006 Story 域模型 v1](0006-story-domain-v1.md)：固定 Story 从最小投影升级为可编排内容单元——主归属由 `Entry.storyId` 单外键表达、Story Revision 版本化（展示字段实质变化才递增）、merge 提供 canonical/alias、split 与自动聚类/Knowledge Workflow/`evidence_for` 后置；Phase 2 首切片实施顺序与边界。
 - [0007 Topic 域模型 v1](0007-topic-domain-v1.md)：固定 Topic 自身走不可变 `TopicRevision`、Membership 用“当前关系表 + 不可变 revision 链”（受管枚举角色 + tombstone 可恢复）、Topic merge canonical/alias + 成员去重迁移、Story merge 同步迁移 membership、人工 command 路径而自动创建/维护后置；Phase 2 第二切片实施顺序与边界。
+- [0008 Entity/关系 v1](0008-entity-relation-v1.md)：固定 Entity 本体（受管类型枚举 + 名字走不可变 `EntityRevision` + 名称别名）、Story↔Entity 关联与 Entity↔Entity 类型化关系用“当前关系 + provenance”而非 revision 链、关系类型受管枚举 + 未知降级、手动优先而自动识别/merge/dedup 后置；Phase 2 第三切片实施顺序与边界。
