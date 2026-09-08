@@ -342,6 +342,8 @@ flowchart LR
 
 **Phase 2 首切片注记（2026-09-07，[`story-domain-v1` Proposal](../proposals/story-domain-v1.md) accepted）**：ORG-001/004/011/012/013/017/020/022 的 v1 实施顺序按 Proposal 冻结——先交付用户显式编排（Entry 主归属移动、Story Revision 更新、Story merge canonical/alias），保持 ingest 自动创建单 Entry Story 不回退；自动聚类与 Knowledge Workflow（ORG-021）、Story split 完整生命周期（ORG-014/020）与 `evidence_for`/`mentions` 跨 Story 引用（ORG-011）后置；`Entry.storyId` 保持主归属唯一真相，不新建并行 membership 表。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第二切片注记（2026-09-08，[`topic-domain-v1` Proposal](../proposals/topic-domain-v1.md) accepted）**：ORG-002/006/008/009/012/015/016/020 的 v1 实施顺序按 Proposal 冻结——先交付 Topic 实体（title/purpose/scope 走不可变 `TopicRevision`）+ Topic Membership（受管枚举角色 `core`/`update`/`background`/`analysis`/`counterpoint`/`tutorial` + 纳入理由 + 单一当前角色 + 不可变 membership revision/tombstone）+ Topic merge（canonical/alias + 成员去重迁移），Web 成员添加入口从 Story 侧发起；Agent 自动创建与自动维护（ORG-007）、`TopicMaintenanceBinding`/`TopicRelation`/父子层级（ORG-015）、归档与 Spotlight/Board/Subscription 后置；`Story merge` 同步迁移 membership 到 canonical（ORG-020 merge 侧语义）。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |

@@ -109,3 +109,20 @@ COSMOS_E2E_WEB_PORT=4183 bunx playwright test -g "creates an RSS source, runs in
 ```
 
 未收口（合入 master 前完成）：`docs/api`（0002 endpoints、0003 DTO Draft）、`docs/spec`（contracts/0001、domain/0001、storage/0001、interfaces/0002、interfaces/0005）同步与 `docs/testing` 说明；PROJECT-STATUS 合入后更新。
+
+## 2026-09-08：合入与收尾——人工浏览器验证推迟
+
+- Story domain v1 已合入 master（`82a90b8`…`452c8c2`），`docs/api`/`docs/spec`/`docs/testing`/PROJECT-STATUS 同步完成；master 与 origin 同步。
+- 用户决定：人工浏览器验收因操作成本推迟到后续开发后再执行。补充说明——归并表单要求输入 Story ID，但 UI 不展示 Story ID（E2E 通过 API 响应获取），人工验证存在可用性障碍；Story ID 展示方式与 move entry 是否需要 UI 入口留待后续决策。
+- 清理：worktree `.worktree/story-domain` 与分支 `feat/t10-story-domain`（尖端 `b0bc432`，已并入 master）已删除；Windows 长路径残留（node_modules 等忽略产物）经 robocopy 镜像清空法清理。
+
+证据：
+
+```text
+git worktree remove .worktree/story-domain    -> 完成
+git branch -d feat/t10-story-domain           -> Deleted (was b0bc432)
+robocopy <empty> .worktree/story-domain /MIR && rm -rf
+                                              -> .worktree 目录已完全移除
+```
+
+未运行：人工浏览器验收（推迟，非门禁失败）；自动化浏览器 E2E 切片 3 已在 worktree 通过 1/1。

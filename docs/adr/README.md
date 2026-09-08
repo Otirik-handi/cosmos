@@ -23,3 +23,4 @@ ADR 只记录已经稳定、需要长期保留的决定。仍在探索或会随�
 - [0004 SourceInstance 身份与 revision 并发边界](0004-source-instance-identity-and-revision.md)：固定版本化 `sourceDefinitionRef`、manifest 到 Connector 的显式映射、迁移预检、默认停用和 revision CAS；不覆盖 CollectionPlan、未保存 Probe 或媒体实现。
 - [0005 媒体边界 v1](0005-media-boundary-v1.md)：固定 RSS 媒体提取/受控下载与本地保存的 v1 边界——Connector 纯提取、Application 统一媒体获取、公开 `media-download` 能力门控、4 态 + 可空 `errorMessage` 降级原因、10MB/50MB 全局预算、下载安全边界与"不自愈"生命周期；per-source 策略与 `local` 作用域后置。
 - [0006 Story 域模型 v1](0006-story-domain-v1.md)：固定 Story 从最小投影升级为可编排内容单元——主归属由 `Entry.storyId` 单外键表达、Story Revision 版本化（展示字段实质变化才递增）、merge 提供 canonical/alias、split 与自动聚类/Knowledge Workflow/`evidence_for` 后置；Phase 2 首切片实施顺序与边界。
+- [0007 Topic 域模型 v1](0007-topic-domain-v1.md)：固定 Topic 自身走不可变 `TopicRevision`、Membership 用“当前关系表 + 不可变 revision 链”（受管枚举角色 + tombstone 可恢复）、Topic merge canonical/alias + 成员去重迁移、Story merge 同步迁移 membership、人工 command 路径而自动创建/维护后置；Phase 2 第二切片实施顺序与边界。

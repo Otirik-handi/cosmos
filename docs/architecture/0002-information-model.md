@@ -479,6 +479,8 @@ Topic 不自动过期。人工归档能力后置且当前优先级较低。
 
 第一版保持本地单用户和简单能力边界：保留 actor/revision/理由/Run 记录，细粒度权限、并发冲突 UI、ChangeRequest 和复杂撤销后置。
 
+**v1 切片（[`topic-domain-v1` Proposal](../proposals/topic-domain-v1.md)，2026-09-08 accepted）**：Topic 域模型 v1 落地 §5.2/§5.3 的人工作业部分——Topic 自身 title/purpose/scope 走不可变 `TopicRevision`（确定性 fingerprint、无实质变化 no-op、当前指针）；`(Topic, Story)` 单一当前角色 + 不可变 membership revision，移除为可恢复 tombstone；成员角色使用 §5.2 六个受管枚举、未知值降级读取；Topic merge 复用 §4.6 的 canonical/alias Canonicalization 并迁移成员；Agent 自动创建与维护（§5.3）、`TopicMaintenanceBinding`、`TopicRelation`/父子层级、归档与 Spotlight/Board/Subscription 后置。Story merge 在 Topic 存在后同步迁移指向 obsolete Story 的 membership 到 canonical（§4.6 merge 侧语义）。
+
 ## 6. 推荐系统入门：Cosmos 如何找到“相关内容”
 
 ### 6.1 推荐不是一个算法

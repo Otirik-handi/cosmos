@@ -55,9 +55,9 @@ Non-goals（见 Proposal / ADR-0006）：
 
 ## Current State
 
-- 生命周期阶段：实现完成，进入交付门禁；分支 `feat/t10-story-domain`（base `6f6651d`）。
-- 切片 1a（StoryRevision 版本化）、1b（编排仓储命令）、切片 2（公共合同/Product API/transport）、切片 3（Web 多成员详情与编排）已实现并通过各自 focused/typecheck/浏览器验收；walkthrough 记录见 [walkthrough.md](walkthrough.md)。
-- `docs/api`/`docs/spec`/`docs/testing` 已按行为同步到本分支；PROJECT-STATUS 更新在合入 master 后执行。
+- 生命周期阶段：已收口。切片 1a（StoryRevision 版本化）、1b（编排仓储命令）、切片 2（公共合同/Product API/transport）、切片 3（Web 多成员详情与编排）实现并合入 master（`82a90b8`…`452c8c2`）；分支与 worktree 已清理，过程记录见 [walkthrough.md](walkthrough.md)。
+- `docs/api`/`docs/spec`/`docs/testing` 已按行为同步；PROJECT-STATUS 已更新（`452c8c2`）。
+- 人工浏览器验收由用户决定推迟到后续开发（自动化浏览器 E2E 已通过；Story ID 不展示导致的归并表单可用性障碍见 walkthrough 2026-09-08 收尾记录）。
 
 ## Decisions and Deviations
 
@@ -69,10 +69,11 @@ Non-goals（见 Proposal / ADR-0006）：
 - 每切片按仓库验证层级：focused（domain/contracts/storage）→ API 集成 → 浏览器；全量门禁至少 typecheck、docs:check、test、build、git diff --check。
 - 迁移类改动必须在 `.agent/tmp/` 用含旧数据的隔离库验证 upgrade/backfill，不只跑 fresh DB。
 - `docs/spec/` 已在行为落地后同步（domain/0001、contracts/0001、storage/0001、interfaces/0002/0005）。
-- 合入 master 前的最终门禁：全量 `bun run test`、`bun run typecheck`、`bun run build`、`bun run docs:check`、浏览器与 Node E2E（如有变更面）、`git diff --check`。
+- 已通过（worktree 内，切片 3 收口时）：typecheck、lint:web、component-lab 34/34、浏览器 E2E 编排链路 1/1。
+- 未运行：人工浏览器验收（用户决定推迟）。
 
 ## Follow-ups
 
-- 切片验收后同步 `docs/spec/domain/0001`、`contracts/0001`、`storage/0001`、`interfaces/0002/0005` 与 testing README。
-- 更新 PROJECT-STATUS（合入 master 后）。
+- 已完成：`docs/spec/domain/0001`、`contracts/0001`、`storage/0001`、`interfaces/0002/0005` 与 testing README 同步；PROJECT-STATUS 更新（`452c8c2`）。
+- 后续开发时补：人工浏览器验收（含冲突 409 路径）；决定 Story ID 的展示方式与归并表单可用性；决定 move entry 是否需要 UI 入口。
 - 后续 Phase 2 切片：Topic、Entity/关系、标签/批注/集合/Saved View、可配置看板、自动聚类/Knowledge Workflow。
