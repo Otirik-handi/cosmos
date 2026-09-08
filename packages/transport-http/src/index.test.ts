@@ -406,4 +406,74 @@ describe("HttpCosmosClient", () => {
         const unset = await client.unsetFavorite({ targetType: "story", targetId: "story-a" });
         expect(unset.action).toBe("favorite.unset");
     });
+
+    it("calls the annotation endpoints (list/create/update/delete)", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const annotation = {
+            id: "annotation-a",
+            targetType: "story",
+            targetId: "story-a",
+            targetRevisionId: "rev-s-1",
+            quote: "原文",
+            body: "备注",
+            evidence: null,
+            actor: "user",
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        };
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                const url = String(input);
+                let body: unknown;
+                if (url.includes("/api/v1/annotations?")) {
+                    body = { items: [annotation] };
+                } else if (url.endsWith("/api/v1/annotations/annotation-a/removals")) {
+                    body = { ok: true, id: "annotation-a", action: "annotation.deleted" };
+                } else if (url.endsWith("/api/v1/annotations/annotation-a")) {
+                    body = { ...annotation, body: "改后" };
+                } else if (url.endsWith("/api/v1/annotations")) {
+                    body = annotation;
+                } else {
+                    throw new Error(`Unexpected request: ${url}`);
+                }
+                return new Response(JSON.stringify(body), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const list = await client.listAnnotations({
+            targetType: "story",
+            targetId: "story-a",
+        });
+        expect(list.items[0].targetRevisionId).toBe("rev-s-1");
+        expect(requests[0]?.url)
+            .toBe("http://localhost:4310/api/v1/annotations?targetType=story&targetId=story-a");
+
+        const created = await client.createAnnotation({
+            targetType: "story",
+            targetId: "story-a",
+            body: "备注",
+            quote: "原文",
+            actor: "user",
+        });
+        expect(created.body).toBe("备注");
+        expect(JSON.parse(String(requests[1]?.init?.body))).toMatchObject({
+            targetType: "story",
+            targetId: "story-a",
+            body: "备注",
+        });
+
+        const updated = await client.updateAnnotation("annotation-a", { body: "改后" });
+        expect(updated.body).toBe("改后");
+        expect(requests[2]?.init).toMatchObject({ method: "PATCH" });
+
+        const deleted = await client.deleteAnnotation("annotation-a");
+        expect(deleted.action).toBe("annotation.deleted");
+        expect(requests[3]?.url)
+            .toBe("http://localhost:4310/api/v1/annotations/annotation-a/removals");
+    });
 });

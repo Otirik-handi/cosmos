@@ -814,6 +814,53 @@ export const favoriteListSchema = z.object({
 });
 export type FavoriteList = z.infer<typeof favoriteListSchema>;
 
+export const annotationSchema = z.object({
+    id: z.string(),
+    // Read-side target type stays permissive so annotations written against a
+    // future target type do not break older clients.
+    targetType: z.string(),
+    targetId: z.string(),
+    // Immutable display revision the note was written against, when the target
+    // had one at write time (ADR-0009 decision 4).
+    targetRevisionId: z.string().nullable(),
+    quote: z.string().nullable(),
+    body: z.string(),
+    evidence: z.string().nullable(),
+    actor: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+});
+export type Annotation = z.infer<typeof annotationSchema>;
+
+export const annotationListSchema = z.object({
+    items: annotationSchema.array(),
+});
+export type AnnotationList = z.infer<typeof annotationListSchema>;
+
+export const createAnnotationCommandSchema = z.object({
+    targetType: targetTypeSchema,
+    targetId: z.string().trim().min(1).max(300),
+    body: z.string().trim().min(1).max(10000),
+    quote: z.string().trim().max(5000).nullish(),
+    evidence: z.string().trim().max(5000).nullish(),
+    actor: z.string().trim().min(1).max(100).nullish(),
+});
+export type CreateAnnotationCommand = z.infer<typeof createAnnotationCommandSchema>;
+
+export const updateAnnotationCommandSchema = z.object({
+    body: z.string().trim().min(1).max(10000),
+    quote: z.string().trim().max(5000).nullish(),
+    evidence: z.string().trim().max(5000).nullish(),
+    actor: z.string().trim().min(1).max(100).nullish(),
+});
+export type UpdateAnnotationCommand = z.infer<typeof updateAnnotationCommandSchema>;
+
+export const annotationTargetQuerySchema = z.object({
+    targetType: targetTypeSchema,
+    targetId: z.string().trim().min(1).max(300),
+});
+export type AnnotationTargetQuery = z.infer<typeof annotationTargetQuerySchema>;
+
 export const revisionDetailSchema = entryRevisionSnapshotSchema.extend({
     entryId: z.string(),
     sourceId: z.string(),

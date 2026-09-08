@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { PrismaClient } from "@prisma/client";
 import {
     CollectionNotFoundError,
+    AnnotationNotFoundError,
     EntryNotFoundError,
     LabelConflictError,
     LabelNotFoundError,
@@ -293,6 +294,115 @@ describe("user organization domain commands", () => {
             const events = await repository.events({ afterSequence: 0, limit: 100 });
             expect(events.some((event) => event.type === "collection.item_merged.v1")).toBe(true);
             expect(events.some((event) => event.type === "label.assignment_merged.v1")).toBe(true);
+        } finally {
+            await repository.close();
+            await prisma.$disconnect();
+        }
+    });
+    it("creates, edits and deletes annotations with target revision capture", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const created = await repository.createAnnotation({
+                targetType: "story",
+                targetId: "story-a",
+                body: "值得跟进",
+                quote: "原文片段",
+                evidence: "上下文",
+                actor: "user",
+            });
+            // Story targets capture the current StoryRevision at write time.
+            expect(created.targetType).toBe("story");
+            expect(created.targetId).toBe("story-a");
+            expect(created.targetRevisionId).toBe("rev-a-1");
+            expect(created.quote).toBe("原文片段");
+            expect(created.actor).toBe("user");
+
+            // Entry and topic targets carry no revision pointer.
+            const onEntry = await repository.createAnnotation({
+                targetType: "entry",
+                targetId: "entry-a",
+                body: "条目备注",
+            });
+            expect(onEntry.targetRevisionId).toBeNull();
+
+            const topic = await repository.createTopic({
+                title: "T",
+                purpose: "P",
+                scope: null,
+            });
+            await repository.createAnnotation({
+                targetType: "topic",
+                targetId: topic!.topic.id,
+                body: "话题备注",
+            });
+
+            expect((await repository.listAnnotations({
+                targetType: "story",
+                targetId: "story-a",
+            })).items).toHaveLength(1);
+            expect((await repository.listAnnotations({
+                targetType: "entry",
+                targetId: "entry-a",
+            })).items[0].body).toBe("条目备注");
+
+            const updated = await repository.updateAnnotation({
+                annotationId: created.id,
+                body: "改后",
+                quote: null,
+                actor: "user",
+            });
+            expect(updated?.body).toBe("改后");
+            expect(updated?.quote).toBeNull();
+
+            await repository.deleteAnnotation(created.id);
+            expect((await repository.listAnnotations({
+                targetType: "story",
+                targetId: "story-a",
+            })).items).toHaveLength(0);
+
+            await expect(repository.updateAnnotation({
+                annotationId: "annotation-missing",
+                body: "x",
+            })).rejects.toBeInstanceOf(AnnotationNotFoundError);
+            await expect(repository.deleteAnnotation("annotation-missing"))
+                .rejects.toBeInstanceOf(AnnotationNotFoundError);
+            await expect(repository.createAnnotation({
+                targetType: "story",
+                targetId: "story-missing",
+                body: "x",
+            })).rejects.toBeInstanceOf(StoryNotFoundError);
+
+            const events = await repository.events({ afterSequence: 0, limit: 100 });
+            expect(events.some((event) => event.type === "annotation.created.v1")).toBe(true);
+            expect(events.some((event) => event.type === "annotation.deleted.v1")).toBe(true);
+        } finally {
+            await repository.close();
+            await prisma.$disconnect();
+        }
+    });
+
+    it("re-points annotations to the canonical Story on merge", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const annotation = await repository.createAnnotation({
+                targetType: "story",
+                targetId: "story-b",
+                body: "归并前写的备注",
+            });
+            await repository.mergeStories({
+                canonicalStoryId: "story-a",
+                obsoleteStoryIds: ["story-b"],
+            });
+            const onCanonical = await repository.listAnnotations({
+                targetType: "story",
+                targetId: "story-a",
+            });
+            expect(onCanonical.items.map((item) => item.id)).toEqual([annotation.id]);
+            // The alias resolves to canonical on further reads too.
+            expect((await repository.listAnnotations({
+                targetType: "story",
+                targetId: "story-b",
+            })).items.map((item) => item.id)).toEqual([annotation.id]);
         } finally {
             await repository.close();
             await prisma.$disconnect();

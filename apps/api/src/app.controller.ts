@@ -65,6 +65,9 @@ import {
     updateCollectionCommandSchema,
     collectionItemCommandSchema,
     favoriteCommandSchema,
+    createAnnotationCommandSchema,
+    updateAnnotationCommandSchema,
+    annotationTargetQuerySchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
@@ -1137,6 +1140,66 @@ export class AppController {
                 targetId: parsed.targetId,
             });
             return { ok: true, id: parsed.targetId, action: "favorite.unset" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("annotations")
+    @Bind(Query())
+    async listAnnotations(query: Record<string, unknown>) {
+        try {
+            const parsed = annotationTargetQuerySchema.parse(query);
+            return await this.repository.listAnnotations({
+                targetType: parsed.targetType,
+                targetId: parsed.targetId,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("annotations")
+    @Bind(Body())
+    async createAnnotation(body: unknown) {
+        try {
+            const parsed = createAnnotationCommandSchema.parse(body);
+            return await this.repository.createAnnotation({
+                targetType: parsed.targetType,
+                targetId: parsed.targetId,
+                body: parsed.body,
+                quote: parsed.quote ?? null,
+                evidence: parsed.evidence ?? null,
+                actor: parsed.actor ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Patch("annotations/:annotationId")
+    @Bind(Param("annotationId"), Body())
+    async updateAnnotation(annotationId: string, body: unknown) {
+        try {
+            const parsed = updateAnnotationCommandSchema.parse(body);
+            return await this.repository.updateAnnotation({
+                annotationId,
+                body: parsed.body,
+                quote: parsed.quote ?? null,
+                evidence: parsed.evidence ?? null,
+                actor: parsed.actor ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("annotations/:annotationId/removals")
+    @Bind(Param("annotationId"))
+    async deleteAnnotation(annotationId: string) {
+        try {
+            await this.repository.deleteAnnotation(annotationId);
+            return { ok: true, id: annotationId, action: "annotation.deleted" };
         } catch (error) {
             sourceCommandError(error);
         }

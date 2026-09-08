@@ -77,6 +77,10 @@ import {
     collectionDetailSchema,
     collectionSummarySchema,
     favoriteListSchema,
+    annotationSchema,
+    annotationListSchema,
+    createAnnotationCommandSchema,
+    updateAnnotationCommandSchema,
     userOrganizationAckSchema,
     createLabelCommandSchema,
     labelAssignmentCommandSchema,
@@ -101,6 +105,10 @@ import {
     type CollectionDetail,
     type CollectionSummary,
     type FavoriteList,
+    type Annotation,
+    type AnnotationList,
+    type CreateAnnotationCommand,
+    type UpdateAnnotationCommand,
     type UserOrganizationAck,
     type CreateLabelCommand,
     type LabelAssignmentCommand,
@@ -674,6 +682,50 @@ export class HttpCosmosClient {
             body: payload,
             schema: userOrganizationAckSchema,
         });
+    }
+
+    async listAnnotations(input: {
+        targetType: string;
+        targetId: string;
+    }): Promise<AnnotationList> {
+        const params = new URLSearchParams({
+            targetType: input.targetType,
+            targetId: input.targetId,
+        });
+        return this.request(`/api/v1/annotations?${params.toString()}`, {
+            schema: annotationListSchema,
+        });
+    }
+
+    async createAnnotation(input: CreateAnnotationCommand): Promise<Annotation> {
+        const payload = createAnnotationCommandSchema.parse(input);
+        return this.request("/api/v1/annotations", {
+            method: "POST",
+            body: payload,
+            schema: annotationSchema,
+        });
+    }
+
+    async updateAnnotation(
+        annotationId: string,
+        input: UpdateAnnotationCommand,
+    ): Promise<Annotation> {
+        const payload = updateAnnotationCommandSchema.parse(input);
+        return this.request(`/api/v1/annotations/${encodeURIComponent(annotationId)}`, {
+            method: "PATCH",
+            body: payload,
+            schema: annotationSchema,
+        });
+    }
+
+    async deleteAnnotation(annotationId: string): Promise<UserOrganizationAck> {
+        return this.request(
+            `/api/v1/annotations/${encodeURIComponent(annotationId)}/removals`,
+            {
+                method: "POST",
+                schema: userOrganizationAckSchema,
+            },
+        );
     }
 
     async entries(query: EntryListQuery = {}): Promise<EntryPage> {

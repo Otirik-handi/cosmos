@@ -484,6 +484,23 @@ model Favorite {
     @@unique([targetType, targetId])
 }
 
+// Editable user note attached to a story/entry/topic. Not revisioned: the
+// note has no versioned display-field history (ADR-0009 decision 4).
+model Annotation {
+    id               String   @id @default(cuid())
+    targetType       String
+    targetId         String
+    targetRevisionId String?
+    quote            String?
+    body             String
+    evidence         String?
+    actorJson        String?
+    createdAt        DateTime @default(now())
+    updatedAt        DateTime @updatedAt
+
+    @@index([targetType, targetId])
+}
+
 model WorkflowRun {
     id                 String                @id
     stateJson          String

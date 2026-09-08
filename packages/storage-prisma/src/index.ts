@@ -43,6 +43,8 @@ import {
     type CollectionList,
     type CollectionSummary,
     type FavoriteList,
+    type Annotation,
+    type AnnotationList,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
@@ -67,6 +69,7 @@ import {
     EntityRelationConflictError,
     EntityRevisionConflictError,
     EntryNotFoundError,
+    AnnotationNotFoundError,
     CollectionNotFoundError,
     LabelConflictError,
     LabelNotFoundError,
@@ -2125,6 +2128,17 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         });
                     }
                 }
+                // Annotations have no per-target uniqueness, so they only need
+                // their targetId re-pointed to the canonical Story (ADR-0009).
+                const obsoleteStoryAnnotations = await tx.annotation.findMany({
+                    where: { targetType: "story", targetId: obsoleteStoryId },
+                });
+                for (const annotation of obsoleteStoryAnnotations) {
+                    await tx.annotation.update({
+                        where: { id: annotation.id },
+                        data: { targetId: canonicalStoryId },
+                    });
+                }
                 await tx.storyAlias.create({
                     data: { id: obsoleteStoryId, canonicalStoryId },
                 });
@@ -3886,8 +3900,152 @@ export class PrismaCosmosRepository implements CosmosRepository {
         };
     }
 
-    private async loadCollectionSummary(collectionId: string): Promise<CollectionSummary | null> {
-        const row = await this.prisma.collection.findUnique({
+    async createAnnotation(input: {
+        targetType: TargetType;
+        targetId: string;
+        body: string;
+        quote?: string | null;
+        evidence?: string | null;
+        actor?: string | null;
+    }): Promise<Annotation> {
+        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        // An annotation captures the target revision it was written against, so
+        // a later target update does not silently re-point the note (ADR-0009
+        // decision 4). Story targets use their current StoryRevision.
+        const targetRevisionId = input.targetType === "story"
+            ? (await this.prisma.story.findUnique({
+                where: { id: targetId },
+                select: { currentRevisionId: true },
+            }))?.currentRevisionId ?? null
+            : null;
+        const annotation = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.annotation.create({
+                data: {
+                    targetType: input.targetType,
+                    targetId,
+                    targetRevisionId,
+                    quote: input.quote?.trim() || null,
+                    body: input.body,
+                    evidence: input.evidence?.trim() || null,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "annotation.created.v1",
+                aggregateType: "Annotation",
+                aggregateId: created.id,
+                payload: {
+                    annotationId: created.id,
+                    targetType: input.targetType,
+                    targetId,
+                    targetRevisionId,
+                },
+            });
+            return created;
+        });
+        return this.toAnnotation(annotation);
+    }
+
+    async updateAnnotation(input: {
+        annotationId: string;
+        body: string;
+        quote?: string | null;
+        evidence?: string | null;
+        actor?: string | null;
+    }): Promise<Annotation | null> {
+        const existing = await this.prisma.annotation.findUnique({
+            where: { id: input.annotationId },
+        });
+        if (!existing) {
+            throw new AnnotationNotFoundError(input.annotationId);
+        }
+        const annotation = await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.annotation.update({
+                where: { id: input.annotationId },
+                data: {
+                    body: input.body,
+                    quote: input.quote?.trim() || null,
+                    evidence: input.evidence?.trim() || null,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "annotation.updated.v1",
+                aggregateType: "Annotation",
+                aggregateId: input.annotationId,
+                payload: {
+                    annotationId: input.annotationId,
+                    targetType: existing.targetType,
+                    targetId: existing.targetId,
+                },
+            });
+            return updated;
+        });
+        return this.toAnnotation(annotation);
+    }
+
+    async deleteAnnotation(annotationId: string): Promise<void> {
+        const existing = await this.prisma.annotation.findUnique({
+            where: { id: annotationId },
+            select: { id: true, targetType: true, targetId: true },
+        });
+        if (!existing) {
+            throw new AnnotationNotFoundError(annotationId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            await tx.annotation.delete({ where: { id: annotationId } });
+            await appendDomainEvent(tx, {
+                type: "annotation.deleted.v1",
+                aggregateType: "Annotation",
+                aggregateId: annotationId,
+                payload: {
+                    annotationId,
+                    targetType: existing.targetType,
+                    targetId: existing.targetId,
+                },
+            });
+        });
+    }
+
+    async listAnnotations(input: {
+        targetType: TargetType;
+        targetId: string;
+    }): Promise<AnnotationList> {
+        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        const rows = await this.prisma.annotation.findMany({
+            where: { targetType: input.targetType, targetId },
+            orderBy: { createdAt: "asc" },
+        });
+        return { items: rows.map((row) => this.toAnnotation(row)) };
+    }
+
+    private toAnnotation(row: {
+        id: string;
+        targetType: string;
+        targetId: string;
+        targetRevisionId: string | null;
+        quote: string | null;
+        body: string;
+        evidence: string | null;
+        actorJson: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }): Annotation {
+        return {
+            id: row.id,
+            targetType: row.targetType,
+            targetId: row.targetId,
+            targetRevisionId: row.targetRevisionId,
+            quote: row.quote,
+            body: row.body,
+            evidence: row.evidence,
+            actor: row.actorJson == null ? null : parseJson<string>(row.actorJson),
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+        };
+    }
+
+    private async loadCollectionSummary(collectionId: string): Promise<CollectionSummary | null> {        const row = await this.prisma.collection.findUnique({
             where: { id: collectionId },
             include: {
                 _count: { select: { items: true } },

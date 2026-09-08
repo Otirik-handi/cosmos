@@ -39,6 +39,10 @@ import {
     userOrganizationAckSchema,
     targetTypeSchema,
     favoriteTargetTypeSchema,
+    annotationListSchema,
+    annotationTargetQuerySchema,
+    createAnnotationCommandSchema,
+    updateAnnotationCommandSchema,
 } from "./index.js";
 
 describe("entity and relation contracts", () => {
@@ -222,6 +226,50 @@ describe("user organization contracts", () => {
             id: "label-a",
             action: "label.deleted",
         })).toThrow();
+    });
+
+    it("parses annotation commands, list and permissive read-side target type", () => {
+        const created = createAnnotationCommandSchema.parse({
+            targetType: "story",
+            targetId: "story-a",
+            body: "  值得跟进  ",
+            quote: "原文片段",
+        });
+        expect(created.body).toBe("值得跟进");
+        expect(created.quote).toBe("原文片段");
+        expect(() => createAnnotationCommandSchema.parse({
+            targetType: "workspace",
+            targetId: "story-a",
+            body: "x",
+        })).toThrow();
+        expect(() => createAnnotationCommandSchema.parse({
+            targetType: "story",
+            targetId: "story-a",
+            body: "   ",
+        })).toThrow();
+
+        expect(updateAnnotationCommandSchema.parse({ body: "改后" }).body).toBe("改后");
+        expect(annotationTargetQuerySchema.parse({
+            targetType: "topic",
+            targetId: "topic-a",
+        }).targetType).toBe("topic");
+
+        const list = annotationListSchema.parse({
+            items: [{
+                id: "annotation-a",
+                targetType: "future-target",
+                targetId: "story-a",
+                targetRevisionId: "rev-s-1",
+                quote: null,
+                body: "备注",
+                evidence: null,
+                actor: "user",
+                createdAt: "2026-09-08T00:00:00.000Z",
+                updatedAt: "2026-09-08T00:00:00.000Z",
+            }],
+        });
+        expect(list.items[0].targetType).toBe("future-target");
+        expect(list.items[0].targetRevisionId).toBe("rev-s-1");
     });
 });
 

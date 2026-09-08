@@ -15,6 +15,7 @@ import {
     WorkflowHostConflictError,
     LabelNotFoundError,
     CollectionNotFoundError,
+    AnnotationNotFoundError,
 } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
 describe("AppController workflow conflicts", () => {
@@ -893,6 +894,70 @@ describe("AppController user organization orchestration", () => {
             labelId: "label-a",
             targetType: "workspace",
             targetId: "story-a",
+        })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("creates, updates and deletes annotations through the funnel", async () => {
+        const annotation = {
+            id: "annotation-a",
+            targetType: "story",
+            targetId: "story-a",
+            targetRevisionId: "rev-s-1",
+            quote: null,
+            body: "备注",
+            evidence: null,
+            actor: "user",
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        };
+        const repository = {
+            createAnnotation: vi.fn().mockResolvedValue(annotation),
+            updateAnnotation: vi.fn().mockResolvedValue({ ...annotation, body: "改后" }),
+            deleteAnnotation: vi.fn().mockResolvedValue(undefined),
+            listAnnotations: vi.fn().mockResolvedValue({ items: [annotation] }),
+        };
+        const controller = createController(repository);
+
+        await expect(controller.listAnnotations({
+            targetType: "story",
+            targetId: "story-a",
+        })).resolves.toMatchObject({ items: [expect.objectContaining({ id: "annotation-a" })] });
+        expect(repository.listAnnotations).toHaveBeenCalledWith({
+            targetType: "story",
+            targetId: "story-a",
+        });
+
+        await expect(controller.createAnnotation({
+            targetType: "story",
+            targetId: "story-a",
+            body: "备注",
+            actor: "user",
+        })).resolves.toMatchObject({ id: "annotation-a" });
+        expect(repository.createAnnotation).toHaveBeenCalledWith({
+            targetType: "story",
+            targetId: "story-a",
+            body: "备注",
+            quote: null,
+            evidence: null,
+            actor: "user",
+        });
+
+        await expect(controller.updateAnnotation("annotation-a", { body: "改后" }))
+            .resolves.toMatchObject({ body: "改后" });
+        await expect(controller.deleteAnnotation("annotation-a"))
+            .resolves.toMatchObject({ ok: true, action: "annotation.deleted" });
+
+        await expect(createController({
+            updateAnnotation: vi.fn().mockRejectedValue(
+                new AnnotationNotFoundError("annotation-missing"),
+            ),
+        }).updateAnnotation("annotation-missing", { body: "x" }))
+            .rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({ createAnnotation: vi.fn() }).createAnnotation({
+            targetType: "workspace",
+            targetId: "story-a",
+            body: "x",
         })).rejects.toBeInstanceOf(BadRequestException);
     });
 });

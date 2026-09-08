@@ -35,6 +35,8 @@ import {
     type CollectionList,
     type CollectionSummary,
     type FavoriteList,
+    type Annotation,
+    type AnnotationList,
 } from "@cosmos/contracts";
 import type {
     EntityRelationType,
@@ -280,6 +282,15 @@ export class EntryNotFoundError extends Error {
     constructor(entryId: string) {
         super(`Entry not found: ${entryId}`);
         this.name = "EntryNotFoundError";
+    }
+}
+
+export class AnnotationNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(annotationId: string) {
+        super(`Annotation not found: ${annotationId}`);
+        this.name = "AnnotationNotFoundError";
     }
 }
 
@@ -592,6 +603,26 @@ export interface CosmosRepository {
         targetId: string;
     }): Promise<void>;
     listFavorites(): Promise<FavoriteList>;
+    createAnnotation(input: {
+        targetType: TargetType;
+        targetId: string;
+        body: string;
+        quote?: string | null;
+        evidence?: string | null;
+        actor?: string | null;
+    }): Promise<Annotation>;
+    updateAnnotation(input: {
+        annotationId: string;
+        body: string;
+        quote?: string | null;
+        evidence?: string | null;
+        actor?: string | null;
+    }): Promise<Annotation | null>;
+    deleteAnnotation(annotationId: string): Promise<void>;
+    listAnnotations(input: {
+        targetType: TargetType;
+        targetId: string;
+    }): Promise<AnnotationList>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {
