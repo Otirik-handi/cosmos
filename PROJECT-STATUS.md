@@ -1,6 +1,17 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-08。Phase 2 第三切片 Entity/关系 v1（Task 12）已实现并合入 `master`（`05f604f..5b3e327`）。Entity 不可变 Revision + 名称别名、Story↔Entity 关联、Entity↔Entity 类型化关系（provenance、手动优先）、Product API 十一个端点与 Web EntityPanel/从 Story 侧关联入口均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-08。Phase 2 第四切片用户组织 v1（Task 13）已实现并合入 `master`（`06ffe7b..77ca54f`）。Label 分类标签、Collection 命名收藏夹 + Story/Entry 轻量收藏、Annotation 批注、Saved View 持久查询视图（含 `search` 的 label/topic 过滤）均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-08：用户组织 v1 实现合入（Phase 2 第四切片，Task 13）
+
+Proposal [`label-annotation-collection-saved-view-v1`](docs/proposals/label-annotation-collection-saved-view-v1.md)（accepted）与 ADR-0009 的实现已按三个子切片合入 `master`（tip `77ca54f`）：
+
+1. **子切片 A — Label + Collection + 收藏标记**：schema + migration `20260908140000_user_organization_v1`（`Label`/`LabelAssignment`/`Collection`/`CollectionItem`/`Favorite`，forward-only、全新表无 backfill）；domain 新增 `targetTypes`（story/entry/topic）与 `favoriteTargetTypes`（story/entry）受管枚举；storage 实现 Label 唯一命名与多态附加、Collection 成员增删、Favorite 幂等开关，`story()` 投影 `labels`/`favorited`；contracts 新增 DTO + 6 个命令 schema；API 18 个端点；Web StoryPanel「用户组织」区（收藏开关、标签增删/新建、收藏夹勾选/新建）。
+2. **子切片 B — Annotation**：migration `20260908160000_annotation_v1`；批注绑定 Story/Entry/Topic，写入时对 Story 目标固定当时 `StoryRevision`（`targetRevisionId`），支持可空 `quote`/`evidence`，采用可编辑笔记而非不可变 revision 链；API 4 个端点；Web StoryPanel/TopicPanel 批注列表 + 新建/编辑/删除。
+3. **子切片 C — Saved View + search 扩展**：migration `20260908180000_saved_view_v1`；只持久化查询条件不存结果快照；`search` 新增 `labelIds`/`topicIds` 过滤（Story 级标签 + active Topic 成员，any-of 语义）；API 4 个端点；Web 搜索卡「已保存视图」区块支持保存/套用/删除。
+4. **Story merge 一致性**：`mergeStories` 同一事务内迁移 `CollectionItem`/`Favorite`/`LabelAssignment` 并重定向批注 `targetId` 到 canonical（与 ADR-0007/0008 对称，记为 Task 13 偏差）。
+
+验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；`bun run build`（含 Next standalone）通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run docs:check` 341 文件通过；`git diff --check` 干净。聚焦测试：domain 9、contracts 37、transport-http 10、api controller 31、component-lab 27、storage `user-organization-domain` 8 全部通过。全量 `bun run test` 43 文件/377 用例，370 通过；7 例失败全部是 storage-prisma 迁移测试的 `prisma migrate deploy` 5s 超时 + EBUSY unlink（既有 Windows SQLite 并行负载环境抖动），6 个失败文件串行重跑 39/39 通过。未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署。已知 UI 限制：搜索表单暂无标签/Topic 选择控件，Web 保存的 Saved View 只含关键词/来源/日期条件（API 已支持完整过滤）。
 
 ## 2026-09-08：Entity/关系 v1 实现合入（Phase 2 第三切片，Task 12）
 
@@ -194,11 +205,13 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-08 更新：最新基线、Entity 切片合入与门禁见顶部“2026-09-08：Entity/关系 v1 实现合入”。）
+（2026-09-08 更新：最新基线、用户组织切片合入与门禁见顶部“2026-09-08：用户组织 v1 实现合入”。）
 
-- Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）；worktree `.worktree/entity-relation` 与分支 `feat/t12-entity-relation` 已清理。
+- 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`），**尚未推送远端**（`origin/master` 仍为 `3c15f7d`）；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
+- Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
-- 后续 Phase 2 切片候选（按 PRD 顺序）：Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；Entity/关系流程浏览器 E2E 与人工验收留待后续。
+- 后续 Phase 2 切片候选（按 PRD 顺序）：可配置 Board/Section/Block 与 Spotlight（含 BRD-006 Feed Block 绑定 Saved View）；Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；用户组织与 Entity/关系流程的浏览器 E2E 与人工验收留待后续。
+- 已知待补：搜索表单的标签/Topic 选择控件（使 Web 能保存带 label/topic 条件的 Saved View）；批注 Artifact 目标与正文片段字符级锚点；Read State 驱动的「未读」过滤。
 
 ## 已完成
 
