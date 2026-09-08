@@ -1047,6 +1047,8 @@ type StoryMembershipSnapshot = {
     updatedAt: string;
 };
 
+> 实现对照：当前 contracts 的 `StoryDetail` 已实现为 `{ story, entry, entries }`（`entry` 是最近成员的兼容位，`entries` 是全部成员），并新增 `MoveEntryToStoryCommand`、`UpdateStoryRevisionCommand` 与 `MergeStoriesCommand`；下方草图为 Phase 2 完整目标，不替代当前实现形状（见 `docs/spec/contracts/0001-public-contracts.md`）。
+
 type StoryDetail = StorySummary & {
     currentRevision: StoryRevisionSnapshot;
     memberPreview: StoryMembershipSnapshot[];

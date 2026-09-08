@@ -34,7 +34,7 @@ API、`IngestionService` 和 legacy `IngestionWorker` 只调用 application port
 - **Legacy Run、Step、Job**：旧采集 lane 的 durable 账本。Run 属于 Source，Step 按 `(runId, position)` 唯一，Job 可关联 Run/Step，也可独立作为 probe；`kind = workflow-activity` 的 Job 不应被本仓储的 legacy worker claim。
 - **Observation（观察）**：一次来源捕获的不可变证据，带来源定位、内容、external key、raw payload Blob key 和 provenance；其领域字段/身份规则由 domain owner 定义。
 - **Entry、Entry Revision**：Entry 是由 Source 与稳定 canonical external key 归并的本地内容身份；修订按 `(entryId, revision)` 追加，Entry 的 `currentRevisionId` 指向当前修订。
-- **Asset、Story**：Asset 从属于 EntryRevision，保存媒体元数据和可选 Blob key；Story 是当前实现中的最小 Entry 上层投影，StoryRevision 追加标题/摘要并由 current revision 指针选中。
+- **Asset、Story**：Asset 从属于 EntryRevision，保存媒体元数据和可选 Blob key；Story 是稳定、可编排的规范内容单元（ADR-0006），一个 Story 承载多个 Entry 的主归属，StoryRevision 按 `(storyId, revision)` 版本化并保存展示字段 fingerprint（title/summary/kind/subtype）与可选 actor/理由，由 current revision 指针选中。`StoryAlias` 把已 merge（obsolete）的 Story id 指向 canonical Story id；obsolete Story 及其历史 Revision 保留。
 - **Domain Event**：`DomainEvent` 是 append-only 事件账本；SQLite 自增 `sequence` 是 replay 游标，`eventId` 唯一，payload 以 JSON 字符串保存。Workflow event 的 idempotency/lease 细节由 EventSink spec 拥有。
 - **FTS、Feed、Search、SSE replay**：仓储在初始化时创建 `entry_search` FTS5 表；Feed/Search 从当前 Entry/Revision/Story 关系读取，SSE 只消费按 DomainEvent sequence 查询出的事件，连接、keepalive 和 snapshot_required 由接口组件负责。
 
@@ -71,7 +71,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS entry_search USING fts5(
 1. Workflow 路径先校验 Run lease、Activity Job lease、attempt 和 kernel revision fence；`ingestCommandId` 已存在时返回已有 `ingestResultJson`，不重复领域写入。legacy Run 内若已有同 `(sourceInstanceId, runId, externalKey)` Observation，也返回 duplicate。
 2. 创建 Observation，记录 source/run/workflow provenance、`ingestCommandId`、external id/key/revision、eventKind、source locator/discovery JSON、正文、标题、URL、内容 fingerprint、content kind、Publisher/Metrics/Temporal JSON、exact sourcePublishedAt 和 raw payload Blob key。
 3. 找不到 Entry 时创建 Entry。若已有 current revision 的 fingerprint 相同，不追加 EntryRevision，只允许刷新 metrics 和发生变化的 published/updated 时间，并将此次 Observation/Run 结果标为 duplicate；fingerprint 改变时按 current revision 加一追加 EntryRevision。
-4. 新修订会 upsert `story:<entryId>` Story，追加 StoryRevision，更新 Entry/Story current revision，写入该修订的 Asset 行，并删除后重新插入该 Entry 的 FTS5 行。
+4. 新修订会 upsert Story（id 沿用既有 `Entry.storyId`，否则用 `story:<entryId>` projection），更新 kind；StoryRevision 以当前 revision 加 1 追加并携带展示字段 fingerprint。**若 title/summary/kind/subtype 无实质变化则不追加 StoryRevision**（no-op，ADR-0006 决策 3）；随后更新 Entry/Story current revision、写 Asset 行并重建该 Entry 的 FTS5 行。
 5. 写 `entry.created.v1` 或 `entry.revised.v1`，并写 `feed.updated.v1`。legacy Run 递增 item/created/revised/duplicate 计数；Workflow 路径不使用 legacy Run 计数。返回 `createdEntry`、`revisedEntry`、`duplicateObservation` 三个 boolean。
 
 Raw payload/Asset Blob 写入发生在数据库事务前；数据库事务失败时没有跨系统补偿删除这些已写入 Blob 的实现。FileBlobStore 对同一内容 key 使用不覆盖写入，但本仓储不会为已存在的 Blob 再次做完整性验证。
@@ -83,7 +83,10 @@ Raw payload/Asset Blob 写入发生在数据库事务前；数据库事务失败
 - `setWorkflowIngestCheckpoint` 在一个 transaction 中先校验 Workflow Action fence，再检查 Workflow domain event 的 `(workflowRunId, idempotencyKey)`。同 key 已存在时读取并返回其结果；当前 revision 不等于 expectedRevision 时保留当前 cursor/revision，写 `source.checkpoint.superseded.v1`，返回 `committed=false`；匹配时把 revision 加一、写 cursor/workflowRunId 和 `source.checkpoint.committed.v1`，返回 `committed=true`。
 - `feed` 按 Entry `updatedAt DESC` 使用非负 offset cursor，查询 `limit + 1` 行判断是否有 nextCursor；只投影有 current EntryRevision 与 Story current revision 的 Entry。`entries` 同样按 `updatedAt DESC`，可按 Source 过滤，并返回修订/观察计数与当前 Asset。
 - `search` 的文本条件使用 `entry_search MATCH ?` 和 `bm25(entry_search)`，按 rank 升序再按 Entry updatedAt 倒序；无文本时按 Entry updatedAt 倒序。可按 Source、publishedAfter、publishedBefore 过滤，日期必须能解析为合法 ISO 时间。Search/Feed/Entries 都返回 offset 形式 nextCursor。
-- `story`、`entry`、`revision` 返回 contracts 规定的白名单投影；不存在、或 Story/Entry 没有 current revision 时返回 `null`。修订与观察按实现中的时间/修订排序读取。
+- `story`、`entry`、`revision` 返回 contracts 规定的白名单投影；`story` 先按 `StoryAlias` 把旧 id 解析到 canonical Story，再返回 `entry`（最近成员，兼容位）与 `entries`（全部成员，updatedAt 倒序）。不存在、或 Story/Entry 没有 current revision 时返回 `null`。修订与观察按实现中的时间/修订排序读取。
+- `moveEntryToStory` 单事务内把 Entry 主归属改到目标 Story 并写 `story.entry_moved.v1`；Entry 已在目标 Story 时为幂等 no-op，Entry 缺失返回 `null`，目标缺失抛 `StoryNotFoundError`。
+- `updateStoryRevision` 以 `baseRevisionId` CAS：base 不是当前 Revision 时抛 `StoryRevisionConflictError`；展示字段 fingerprint 与当前相同则 no-op，否则按当前 revision 加 1 追加 Revision、移动 current 并写 `story.revision_created.v1`。
+- `mergeStories` 单事务内把每个 obsolete Story 的 Entry 主归属移到 canonical、为 obsolete id 创建 `StoryAlias` 并写 `story.merged.v1`；obsolete Story 行与其 Revision 历史保留。obsolete 已是别名或等于 canonical 自身时抛 `StoryMergeConflictError`，缺失 Story 抛 `StoryNotFoundError`。
 - `readAsset` 查 Asset 的 storageKey，再从 Blob Store 读取 bytes 并返回 mimeType；Asset 缺失或没有 storageKey 返回 `null`，Blob read 错误向上抛出。
 - `events({afterSequence, limit})` 读取 `sequence > afterSequence`、按 sequence 升序的 DomainEvent，事件 id 投影为 sequence 字符串；`latestEventSequence` 返回最大 sequence 或 0。这是 SSE replay 的持久查询，不负责 SSE 连接或 snapshot_required。
 - `touchWorkerHeartbeat` 按 instanceId upsert status/version/lastSeenAt，status=`stopped` 时写 stoppedAt。`health()` 先执行 `SELECT 1`，再读最新 heartbeat；没有 heartbeat 为 unknown，lastSeenAt 超过 90 秒为 stopped，存储查询失败为 storage/migration failed。
@@ -117,7 +120,7 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 | `Entry` | `(sourceInstanceId,canonicalExternalId)` 唯一、currentRevisionId 唯一、storyId、metricsJson | 拥有 revisions/observations；Source 删除级联，Story 删除 SET NULL |
 | `EntryRevision` | `(entryId,revision)` 唯一、title/summary/content/fingerprint/url/contentKind/Publisher/Temporal/createdAt | Entry 删除级联；Asset 从属于修订 |
 | `Asset` | revision、kind/status、sourceUrl/storageKey/mimeType/byteSize/errorMessage | EntryRevision 删除级联 |
-| `Story`/`StoryRevision` | Story id/kind/subtype/currentRevisionId；Revision title/summary | Story 拥有 revisions/entries；Revision 删除级联 |
+| `Story`/`StoryRevision`/`StoryAlias` | Story id/kind/subtype/currentRevisionId；Revision `(storyId, revision)` 唯一、fingerprint/actorJson/reason/title/summary；Alias id→canonicalStoryId | Story 拥有 revisions/entries；Revision 删除级联；Alias 级联到 canonical Story |
 | `WorkflowRun`/`WorkflowCompletion` | 同库存在，但 kernel state、Run lease、Activity Completion 字段由后续 Host specs 拥有 | 本组件不定义其状态机 |
 
 `entry_search` 不是 Prisma model，而是在 `initialize()` 中创建的 FTS5 virtual table，当前写入列为 `entry_id`、`title`、`content_text`。

@@ -102,8 +102,12 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 7. **加载更多**：有 `nextCursor` 时按当前搜索或 Feed query 追加下一页 items；没有 cursor
    不发请求。
 8. **Story 展开**：点击卡片的“打开 Story”调用 `client.story(storyId)`，在页面下方显示
-   Story title、来源、最新正文、Entry id、Revision badges 与 Observation badges；点击
-   关闭清除 story。
+   Story title、来源成员（`entries` 全部成员，含来源名/标题/Entry id）、最新正文、
+   Entry id、Revision badges 与 Observation badges。
+9. **Story 编排**：面板“Story 操作”区可编辑标题（`updateStoryRevision`，携带当前
+   `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
+   （`mergeStories`）；成功后页面用返回的 StoryDetail 刷新面板。面板不直接发 API
+   请求，全部经 props 回调上抛。
 9. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
@@ -225,7 +229,8 @@ macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚�
 10. `feed/search → paginating`：存在 nextCursor 时追加 page.items；失败保留已有 items
    并显示 error。
 11. `feed-card → story-open`：Story API 成功写 StoryDetail；失败不打开并显示 error；
-   close 清除 story。
+   close 清除 story。`story-revision-update`：提交新标题后以返回 StoryDetail 刷新面板；
+   `story-merge`：归并成功后来源成员数增加，旧 Story id 的后续打开重定向到 canonical。
 12. 页面卸载 → SSE closed：effect cleanup 调用 transport close。
 
 ## 副作用
@@ -309,8 +314,9 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
    收到 `run.failed.v1` 时观察失败 notice；收到
    `snapshot_required` 时只观察指定 notice、没有自动 refresh；触发 EventSource error 时观察
    “SSE 不可用”，且不发生自动重连。
-6. 点击 Story 后观察 Story title、最新正文、Entry、Revision、Observation 展开；Story
-   404/网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
+6. 点击 Story 后观察 Story title、来源成员列表、最新正文、Entry、Revision、Observation
+   展开；更新标题后标题与 Revision 变化、归并后来源成员数增加、旧 Story id 打开仍显示
+   canonical；Story 404/网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
 7. 点击检查服务，观察 health card 更新为 `service · workerStatus`，notice 包含
    `storageStatus`；让 health 请求非 2xx，观察 error 文本包含 HTTP status。
 8. 刷新浏览器或卸载页面，观察所有 React/SSE 状态重新初始化，且除主题偏好外没有
@@ -370,7 +376,9 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   展示空、configured（含定时）、untimed（启用无定时）和 disabled 状态及行内启停按钮，
   每行解释启用徽章、定时语义、上次运行与最近错误；
 - `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
-- `StoryPanel`：接收 `StoryDetail` 与关闭回调，展示 revision/observation 元数据。
+- `StoryPanel`：接收 `StoryDetail`、关闭回调与 `onUpdateStoryRevision`/`onMergeStory`
+  回调，展示 revision/observation 元数据与来源成员/操作区；回调由宿主注入（真实页
+  面调用 transport client，组件实验室用 stub，不发 Product API 请求）。
 
 实验室 URL 只保存 `component`、`scene`、`viewport`、`theme`、`colorway`；非法值归一化并以
 `replace` 修正，用户操作以 `push` 保留浏览器前进/后退。已登记 token 的临时输入在失焦时校验，

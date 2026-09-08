@@ -207,14 +207,17 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `GET /feed` | query `cursor?`、`limit?` | `FeedPage`。limit 缺省 20；非数字回退 20，随后 clamp 到 1–100；cursor 交给 repository。按更新倒序返回 Story Feed，nextCursor 是偏移字符串或 null。 |
 | `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；Zod 解析失败 400。无写副作用。 |
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
-| `GET /stories/:storyId` | path `storyId` | `StoryDetail`（当前 Story 和一个最近 Entry projection）；不存在/无可投影内容 404。 |
+| `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要、`entry`（最近成员，兼容位）与 `entries`（全部成员，updatedAt 倒序）。旧 merge id 先解析到 canonical Story；不存在/无可投影内容 404。 |
+| `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
+| `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期 409 conflict。 |
+| `POST /stories/merges` | body `MergeStoriesCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，归并自身/已 merge Story 409 conflict。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |
 
 Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 cursor 在存储层按
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
-日期时也拒绝。Story、Entry、Revision 只读，不在 API 层修改事实。
+日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），其余路径不在 API 层修改事实。
 
 ### SSE events
 

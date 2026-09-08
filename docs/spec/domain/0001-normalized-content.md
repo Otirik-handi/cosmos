@@ -60,13 +60,14 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **Entry** 是同一 Source instance 下由 canonical external key 归并的本地内容身份。
 - **Entry Revision** 是 Entry 的追加式内容快照；变化时 revision number 增加，当前指针移动到新快照。
 - **Asset** 是附着在修订上的媒体/附件持久投影；领域输入中的 bytes 在 application/storage 边界外置到 Blob 后才进入持久资产 metadata。
-- **Story** 是当前实现中的最小 Entry 上层投影，身份为 `story:${entryId}`，内容取当前修订的 title/summary。Story 事务由 storage 执行，domain 只产生纯 projection。
+- **Story** 是稳定、可编排的规范内容单元（ADR-0006）：一个 Story 承载多个 Entry 的主归属，Story 的展示内容通过版本化 StoryRevision 表达。domain 仍提供 `projectEntryToStory` 作为 ingest 自动创建默认单 Entry Story 的确定性门槛（id=`story:${entryId}`），跨来源归并/merge 由 storage 命令执行；domain 只产生纯函数与投影，不执行 Story 事务。
+- **StoryRevisionContent** 是 Story Revision 的展示字段集合（title、可空 summary、核心 kind、可空 subtype）；`fingerprintStoryRevision` 对这四个字段做确定性 SHA-256 指纹，用于判定“实质性变化”与 no-op。
 
 ## 外部行为
 
 所有导出的函数都是同步纯函数，除 `createTemporalValue` 在未提供 now 时读取当前时钟外，不访问外部资源。Connector 先把各来源字段转换为本模型，再由 storage 用 external key 和 fingerprint 判断是否新建、重复或追加修订。
 
-`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对修订内容字段做确定性摘要。`projectEntryToStory` 只生成八个字段的最小投影。
+`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
 
 ## 输入
 
@@ -100,7 +101,7 @@ exact 成功时返回 `{ exact: ISO, exactPrecision: "second", fallback: null }`
 
 `deriveExternalKey` 返回：`external:<trimmed externalId>`、`url:<trimmed webUrl>`，或 `fallback:<64位 sha256 hex>`。`fingerprintEntryRevision` 返回 64 位 SHA-256 十六进制字符串。
 
-`projectEntryToStory` 返回 `MinimalStoryProjection` 的八个字段：`id`、`kind`、`subtype`、`title`、`summary`、`entryId`、`revisionId`。id 固定为 `story:${entryId}`；显式 kind 优先；否则 video/audio/image 映射为 media、comment 映射为 thread、post/article/listing 映射为 document，缺省为 document；subtype 和 summary 默认 null，title 与 ID 原样保留。
+`projectEntryToStory` 返回 `MinimalStoryProjection` 的八个字段：`id`、`kind`、`subtype`、`title`、`summary`、`entryId`、`revisionId`。id 固定为 `story:${entryId}`；显式 kind 优先；否则 video/audio/image 映射为 media、comment 映射为 thread、post/article/listing 映射为 document，缺省为 document；subtype 和 summary 默认 null，title 与 ID 原样保留。`fingerprintStoryRevision` 接受 `StoryRevisionContent` 并返回 64 位 SHA-256 十六进制字符串；相同展示字段重复计算得到同一指纹。
 
 ## 状态与持久化
 
@@ -120,12 +121,12 @@ domain 函数本身没有可变状态机；storage 按这些语义转换 durable
 2. 同一 run 和 external key 再次出现时，返回 duplicate observation 结果，不追加同一次运行的重复观察。
 3. 已有 Entry 的当前修订 fingerprint 相同时，不追加内容 revision；实现可以更新新的 exact 发布时间、updatedAt JSON 或 metrics。
 4. fingerprint 改变时追加 revision number +1，并使新修订成为 current；Observation 的 eventKind 为 update。
-5. Story 事务以当前 title/summary 追加或更新 StoryRevision 并移动 current 指针；该写入由 storage transaction 完成，不是 domain 函数副作用。
+5. Story 事务只在展示字段 fingerprint 与当前 StoryRevision 不同时追加 revision（按当前 revision 加 1）并移动 current 指针；相同则 no-op。该写入由 storage transaction 完成，不是 domain 函数副作用（ADR-0006）。
 6. 公共 Observation DTO 虽然允许 `delete`/`snapshot`，但当前 item persist 路径只产生 `create`/`update`，不能把枚举值写成已实现的来源处理能力。
 
 ## 副作用
 
-`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`deriveExternalKey`、`fingerprintEntryRevision` 和 `projectEntryToStory` 不写数据库、不写 Blob、不发网络请求、不写日志、不发 Domain Event。唯一的时间外部输入是 createTemporalValue 在缺少 now 时读取本地进程时钟；hash 使用 `node:crypto`。
+`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`deriveExternalKey`、`fingerprintEntryRevision`、`fingerprintStoryRevision` 和 `projectEntryToStory` 不写数据库、不写 Blob、不发网络请求、不写日志、不发 Domain Event。唯一的时间外部输入是 createTemporalValue 在缺少 now 时读取本地进程时钟；hash 使用 `node:crypto`。
 
 Connector 读取外部来源的网络/进程副作用属于 Connector；storage 将 item 写入数据库、保存 raw payload/asset bytes、更新 run 计数、写事件属于 storage/application。不能把这些邻接副作用归入 domain。
 
@@ -166,7 +167,7 @@ Connector 读取外部来源的网络/进程副作用属于 Connector；storage 
 
 ## 实现与测试锚点
 
-- `packages/domain/src/index.ts`：`storyKinds`、`contentKinds`、`publisherKinds`、`temporalPrecisions`、`TemporalFallback`/`TemporalValue`/`Publisher`/`ContentMetrics`/`NormalizedAssetInput`/`NormalizedIngestItem` 类型；`deriveExternalKey`、`fingerprintEntryRevision`、`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`projectEntryToStory`。
+- `packages/domain/src/index.ts`：`storyKinds`、`contentKinds`、`publisherKinds`、`temporalPrecisions`、`TemporalFallback`/`TemporalValue`/`Publisher`/`ContentMetrics`/`NormalizedAssetInput`/`NormalizedIngestItem`/`StoryRevisionContent` 类型；`deriveExternalKey`、`fingerprintEntryRevision`、`fingerprintStoryRevision`、`normalizePublisher`、`createTemporalValue`、`temporalProjection`、`mapContentKindToStoryKind`、`projectEntryToStory`。
 - `packages/domain/src/index.ts`：`parseExactTimestamp`、`parseTemporalFallback`、`stableStringify` 是重建时间精度、UTC 和 external key 稳定性的内部锚点。
 - `packages/domain/src/index.test.ts`：ingestion identity 测试覆盖 external id、无 URL fallback key、内容变化 fingerprint、Publisher 缺 platform id、exact numeric timestamp、`3小时前`、`07-29湖南`、`2周前`、stable story id 和 video→media。
 - `plugins/rss/src/index.ts:243-322`：`parseRssXml` 的 RSS 字段到 NormalizedIngestItem 映射；`:366-380` 的 enclosure metadata asset。

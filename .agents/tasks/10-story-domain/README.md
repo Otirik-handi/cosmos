@@ -55,8 +55,9 @@ Non-goals（见 Proposal / ADR-0006）：
 
 ## Current State
 
-- 生命周期阶段：计划完成，进入切片 1；基线 = worktree `.worktree/story-domain` / 分支 `feat/t10-story-domain`，base `6f6651d`（master 最新）。
-- 尚无代码改动；文档基线（Proposal accepted、ADR-0006、PRD/架构同步）已在 master 提交 `6f6651d` 并推送 fork。
+- 生命周期阶段：实现完成，进入交付门禁；分支 `feat/t10-story-domain`（base `6f6651d`）。
+- 切片 1a（StoryRevision 版本化）、1b（编排仓储命令）、切片 2（公共合同/Product API/transport）、切片 3（Web 多成员详情与编排）已实现并通过各自 focused/typecheck/浏览器验收；walkthrough 记录见 [walkthrough.md](walkthrough.md)。
+- `docs/api`/`docs/spec`/`docs/testing` 已按行为同步到本分支；PROJECT-STATUS 更新在合入 master 后执行。
 
 ## Decisions and Deviations
 
@@ -67,7 +68,8 @@ Non-goals（见 Proposal / ADR-0006）：
 
 - 每切片按仓库验证层级：focused（domain/contracts/storage）→ API 集成 → 浏览器；全量门禁至少 typecheck、docs:check、test、build、git diff --check。
 - 迁移类改动必须在 `.agent/tmp/` 用含旧数据的隔离库验证 upgrade/backfill，不只跑 fresh DB。
-- `docs/spec/` 只在行为落地后同步（切片 1 落存储/domain 行为、切片 2 落 API/DTO、切片 3 落 Web client）。
+- `docs/spec/` 已在行为落地后同步（domain/0001、contracts/0001、storage/0001、interfaces/0002/0005）。
+- 合入 master 前的最终门禁：全量 `bun run test`、`bun run typecheck`、`bun run build`、`bun run docs:check`、浏览器与 Node E2E（如有变更面）、`git diff --check`。
 
 ## Follow-ups
 

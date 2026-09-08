@@ -75,7 +75,8 @@
 - **ObservationSnapshot**：`id`、可空 `externalId`、`externalKey`、`eventKind`（`create`/`update`/`delete`/`snapshot`）、可空 `webUrl`、`capturedAt` 和可空 `sourcePublishedAt`。这些字段的领域含义见[规范化内容](../domain/0001-normalized-content.md)。
 - **EntryDetail**：`id`、`sourceId`、`sourceName`、`sourceKind`、`currentRevisionId`、可空 `metrics`、修订数组和观察数组。
 - **EntryListItem**：`id`、`sourceId`、`sourceName`、`sourceKind`、可空 `storyId`、`currentRevisionId`、`title`、可空 `summary`/`webUrl`、`contentKind`、可空 `publisher`/`metrics`/`publishedAt`、`updatedAt`、非负整数 `revisionCount`/`observationCount` 和资产数组；`EntryPage` 为 items 与可空 nextCursor。
-- **StoryDetail**：`story`（`id`、`kind`、可空 `subtype`、`revisionId`、`title`、可空 `summary`）以及 `entry: EntryDetail`。**RevisionDetail** 是 EntryRevisionSnapshot 加上 `entryId`、`sourceId`、`sourceName`、`sourceKind`。
+- **StoryDetail**：`story`（`id`、`kind`、可空 `subtype`、`revisionId`、`title`、可空 `summary`）、`entry: EntryDetail`（最近更新成员，兼容位）以及 `entries: EntryDetail[]`（Story 全部成员，按 Entry `updatedAt` 倒序）。**RevisionDetail** 是 EntryRevisionSnapshot 加上 `entryId`、`sourceId`、`sourceName`、`sourceKind`。
+- **Story 编排命令**：`MoveEntryToStoryCommand`（`entryId` + 目标 `storyId`）、`UpdateStoryRevisionCommand`（`baseRevisionId`、`title`、可空 `summary`、核心 `kind` 枚举、可空 `subtype`）、`MergeStoriesCommand`（`canonicalStoryId` + 1–50 个 `obsoleteStoryIds`）。三个命令都接受可选 `actor`（1–100 字符）与可选 `reason`（1–1000 字符）；更新与归并的幂等/CAS 语义由 application/storage 拥有。
 - **IngestResult**：`run`、`createdEntryCount`、`revisedEntryCount`、`duplicateObservationCount`，以及可选可空 `errorCode` 和可选 `retryable`。
 - **EventEnvelope** 是 TypeScript 接口，字段为 `id`、`type`、`version`、`occurredAt` 和泛型 `payload`。`EventSnapshot` 和 `SseEvent` 使用同样的五个字段，但 `payload` 为 `unknown`。`SnapshotRequiredPayload` 是 `reason` 和 `latestEventId`。
 

@@ -24,6 +24,8 @@
 
 数据迁移类改动必须在 `.agent/tmp/<name>-<uuid>/` 构造包含旧数据的隔离数据库：从受影响历史 schema 或最小 legacy seed 建库，执行待交付 migration，再断言字段映射、约束、索引和应用读取。全新空库 migration 只证明安装路径，不能替代旧数据升级。destructive contract 还需单独验证备份恢复和旧字段无活跃引用；具体命令与 seed 由 Task 记录，在形成稳定公共入口前不伪造通用脚本。
 
+StoryRevision 版本化与 merge alias 的迁移升级以 `packages/storage-prisma/src/story-revision-versioning.test.ts` 为锚点（legacy 库 → backfill per-story revision → 唯一约束）；Story 编排命令行为（move/update/merge、alias 重定向与冲突）由 `story-orchestration.test.ts` 使用隔离库 seed 覆盖。浏览器产品流程中的归并/标题更新/旧 ID 重定向由 `e2e/browser/ingest.spec.ts` 覆盖。
+
 性能修复使用 Task 记录的确定性 seed 或本地生成器，数据位于 `.agent/tmp/`。修复前后必须使用同一数据形状、规模、环境、命令和测量口径并重复采样；墙钟阈值不进入默认 `bun run test`，优先用查询次数、查询计划/索引、复杂度或有界结果等确定性断言防回归。原始基准输出不入库，Task/PR 记录完整命令、数据规模、环境、样本统计、波动和结论。
 
 ## 文档治理

@@ -312,18 +312,21 @@ Entry interaction。
 
 | 成熟度 | Method | Path | 结果 |
 | --- | --- | --- | --- |
-| Current | `GET` | `/stories/{id}` | Phase 1 最小 StoryDetail |
+| Current | `GET` | `/stories/{id}` | StoryDetail：Story 摘要、`entry` 兼容位与 `entries` 全部成员；已 merge id 重定向 canonical |
 | Planned | `GET` | `/stories` | kind/subtype/topic/entity/time 分页 |
 | Planned | `GET` | `/stories/{id}/revisions` | Story Revision page |
 | Planned | `POST` | `/stories/{id}/revision-proposals` | 人类/Agent 候选表示 |
 | Planned | `GET` | `/stories/{id}/memberships` | Entry membership/current/history |
+| Current | `POST` | `/stories/{id}/entry-moves` | `MoveEntryToStoryCommand` → StoryDetail（幂等；缺失 404） |
+| Current | `POST` | `/stories/{id}/revisions` | `UpdateStoryRevisionCommand` → StoryDetail（CAS；过期 409） |
+| Current | `POST` | `/stories/merges` | `MergeStoriesCommand` → StoryDetail（已 merge/自身 409） |
 | Planned | `POST` | `/story-merge-commands` | canonical merge |
 | Planned | `POST` | `/story-split-commands` | 历史壳 + successors |
 | Planned | `POST` | `/story-membership-commands` | accept/reject/move/correct |
 | Planned | `POST` | `/story-state-migration-previews` | merge/split 后用户状态与 Topic membership 影响预览 |
 | Planned | `POST` | `/story-state-migration-commands` | 显式 apply/revert；保存 actor、依据和关联 Run |
 
-merge/split 和 membership 修改要求 base revision、actor、reason 和 evidence。
+当前实现的 Story 编排：`entry-moves`/`revisions`/`merges` 同步返回 StoryDetail，actor/reason 可选，revision 更新以 `baseRevisionId` 做 CAS；完整 Proposal/evidence、split 与状态迁移预览仍为上方 Planned 设计。
 
 ### 8.2 Topic
 
