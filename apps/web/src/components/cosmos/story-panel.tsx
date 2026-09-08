@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, type FormEventHandler } from "react";
 
 import type {
     AssetSnapshot,
+    CollectionSummary,
     EntitySummary,
+    LabelRef,
     StoryDetail,
     StoryEntitySummary,
     TopicMemberRole,
@@ -32,6 +34,14 @@ type StoryPanelProps = {
     onLinkEntity?: (entityId: string) => Promise<void>;
     onCreateEntityLinked?: (name: string, type: string) => Promise<void>;
     onUnlinkEntity?: (entityId: string) => Promise<void>;
+    labelOptions?: readonly LabelRef[];
+    collections?: readonly Pick<CollectionSummary, "id" | "name" | "containsStory">[];
+    onToggleFavorite?: (favorited: boolean) => Promise<void>;
+    onAttachLabel?: (labelId: string) => Promise<void>;
+    onDetachLabel?: (labelId: string) => Promise<void>;
+    onCreateLabel?: (name: string) => Promise<void>;
+    onToggleCollection?: (collectionId: string, member: boolean) => Promise<void>;
+    onCreateCollection?: (name: string) => Promise<void>;
 };
 
 function EntityRow({
@@ -180,6 +190,14 @@ export function StoryPanel({
     onLinkEntity,
     onCreateEntityLinked,
     onUnlinkEntity,
+    labelOptions,
+    collections,
+    onToggleFavorite,
+    onAttachLabel,
+    onDetachLabel,
+    onCreateLabel,
+    onToggleCollection,
+    onCreateCollection,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -194,6 +212,9 @@ export function StoryPanel({
     const [linkEntityId, setLinkEntityId] = useState("");
     const [newEntityName, setNewEntityName] = useState("");
     const [newEntityType, setNewEntityType] = useState("person");
+    const [attachLabelId, setAttachLabelId] = useState("");
+    const [newLabelName, setNewLabelName] = useState("");
+    const [newCollectionName, setNewCollectionName] = useState("");
 
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -349,6 +370,115 @@ export function StoryPanel({
         }
     };
 
+    const submitToggleFavorite = async (): Promise<void> => {
+        if (!onToggleFavorite) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onToggleFavorite(!story.favorited);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "更新收藏失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitAttachLabel = async (): Promise<void> => {
+        if (!onAttachLabel || !attachLabelId) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onAttachLabel(attachLabelId);
+            setAttachLabelId("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "添加标签失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitDetachLabel = async (labelId: string): Promise<void> => {
+        if (!onDetachLabel) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onDetachLabel(labelId);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "移除标签失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitCreateLabel = async (): Promise<void> => {
+        if (!onCreateLabel) {
+            return;
+        }
+        const normalizedName = newLabelName.trim();
+        if (!normalizedName) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onCreateLabel(normalizedName);
+            setNewLabelName("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "创建标签失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitToggleCollection = async (
+        collectionId: string,
+        member: boolean,
+    ): Promise<void> => {
+        if (!onToggleCollection) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onToggleCollection(collectionId, member);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "更新收藏夹失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitCreateCollection = async (): Promise<void> => {
+        if (!onCreateCollection) {
+            return;
+        }
+        const normalizedName = newCollectionName.trim();
+        if (!normalizedName) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onCreateCollection(normalizedName);
+            setNewCollectionName("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "创建收藏夹失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /** 下拉只列尚未打到本条 Story 的标签，避免重复添加。 */
+    const attachableLabels = (labelOptions ?? []).filter((option) => {
+        return !story.labels.some((label) => label.id === option.id);
+    });
+
     return (
         <div
             className="fixed inset-0 z-50 bg-background/70"
@@ -501,6 +631,173 @@ export function StoryPanel({
                             </p>
                         )}
                     </section>
+                    {(onToggleFavorite
+                        || onAttachLabel
+                        || onDetachLabel
+                        || onCreateLabel
+                        || onToggleCollection
+                        || onCreateCollection) && (
+                        <section
+                            aria-label="用户组织"
+                            className="grid gap-4 border-t pt-4"
+                        >
+                            <h3 className="font-medium">用户组织</h3>
+                            {onToggleFavorite && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={busy}
+                                        data-testid="story-favorite-toggle"
+                                        onClick={() => void submitToggleFavorite()}
+                                    >
+                                        {story.favorited ? "★ 取消收藏" : "☆ 收藏"}
+                                    </Button>
+                                    <span className="text-sm text-muted-foreground">
+                                        {story.favorited
+                                            ? "已收藏本条 Story，可在收藏列表快速找回。"
+                                            : "收藏后可在收藏列表快速找回本条 Story。"}
+                                    </span>
+                                </div>
+                            )}
+                            {(onAttachLabel || onDetachLabel || onCreateLabel) && (
+                                <div className="grid gap-3">
+                                    <h4 className="text-sm font-medium">标签</h4>
+                                    {story.labels.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            本条 Story 还没有标签；可从已有标签添加或新建一个。
+                                        </p>
+                                    ) : (
+                                        <ul className="flex flex-wrap gap-2">
+                                            {story.labels.map((label) => (
+                                                <li
+                                                    key={label.id}
+                                                    className="inline-flex items-center gap-1 rounded-[var(--radius-md)] border bg-muted/40 py-0.5 pl-2 pr-1 text-sm"
+                                                >
+                                                    {label.name}
+                                                    {onDetachLabel && (
+                                                        <button
+                                                            type="button"
+                                                            data-testid={`story-label-${label.id}`}
+                                                            aria-label={`移除标签 ${label.name}`}
+                                                            disabled={busy}
+                                                            onClick={() => void submitDetachLabel(label.id)}
+                                                            className="flex size-4 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-50"
+                                                        >
+                                                            <X aria-hidden={true} className="size-3" />
+                                                        </button>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    {onAttachLabel && attachableLabels.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <select
+                                                aria-label="选择要添加的标签"
+                                                value={attachLabelId}
+                                                disabled={busy}
+                                                className="rounded-sm border bg-card px-2 py-1 text-sm"
+                                                onChange={(event) => setAttachLabelId(event.target.value)}
+                                            >
+                                                <option value="">选择标签…</option>
+                                                {attachableLabels.map((option) => (
+                                                    <option key={option.id} value={option.id}>
+                                                        {option.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={busy || !attachLabelId}
+                                                onClick={() => void submitAttachLabel()}
+                                            >
+                                                添加
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {onCreateLabel && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Input
+                                                id="cosmos-story-new-label-name"
+                                                value={newLabelName}
+                                                onChange={(event) => setNewLabelName(event.target.value)}
+                                                disabled={busy}
+                                                placeholder="新标签名称"
+                                                className="max-w-52"
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={busy || !newLabelName.trim()}
+                                                onClick={() => void submitCreateLabel()}
+                                            >
+                                                创建并添加
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {(onToggleCollection || onCreateCollection) && (
+                                <div className="grid gap-3">
+                                    <h4 className="text-sm font-medium">收藏夹</h4>
+                                    {onToggleCollection && (
+                                        collections && collections.length > 0
+                                            ? (
+                                                <ul className="grid gap-2">
+                                                    {collections.map((collection) => {
+                                                        const member = collection.containsStory === true;
+                                                        return (
+                                                            <li key={collection.id}>
+                                                                <label className="flex items-center gap-2 text-sm">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={member}
+                                                                        disabled={busy}
+                                                                        data-testid={`story-collection-${collection.id}`}
+                                                                        onChange={() => void submitToggleCollection(collection.id, member)}
+                                                                        className="size-4 rounded-sm border"
+                                                                    />
+                                                                    <span className="min-w-0 flex-1 truncate">
+                                                                        {collection.name}
+                                                                    </span>
+                                                                </label>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            )
+                                            : (
+                                                <p className="text-sm text-muted-foreground">
+                                                    还没有收藏夹；可新建一个后把本条 Story 收纳进去。
+                                                </p>
+                                            )
+                                    )}
+                                    {onCreateCollection && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Input
+                                                id="cosmos-story-new-collection-name"
+                                                value={newCollectionName}
+                                                onChange={(event) => setNewCollectionName(event.target.value)}
+                                                disabled={busy}
+                                                placeholder="新收藏夹名称"
+                                                className="max-w-52"
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={busy || !newCollectionName.trim()}
+                                                onClick={() => void submitCreateCollection()}
+                                            >
+                                                新建收藏夹
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </section>
+                    )}
                     {story.entities.length > 0 && (
                         <section
                             aria-label="关联实体"

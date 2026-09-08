@@ -17,12 +17,14 @@ import { useForm } from "react-hook-form";
 
 import {
     createSourceCommandSchema,
+    type CollectionList,
     type EntityDetail,
     type EntityRelationType,
     type EntitySummary,
     type EntityType,
     type FeedItem,
     type HealthResponse,
+    type LabelList,
     type SearchQuery,
     type SourceSnapshot,
     type StoryDetail,
@@ -99,6 +101,8 @@ export default function Home() {
     const [entities, setEntities] = useState<readonly EntitySummary[]>([]);
     const [entity, setEntity] = useState<EntityDetail | null>(null);
     const [openingEntityId, setOpeningEntityId] = useState<string | null>(null);
+    const [labels, setLabels] = useState<LabelList>({ items: [] });
+    const [collections, setCollections] = useState<CollectionList>({ items: [] });
     const [health, setHealth] = useState<HealthResponse | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -139,21 +143,26 @@ export default function Home() {
         setError(null);
         setLoading(true);
         try {
-            const [nextFeed, nextSources] = await Promise.all([
+            const [nextFeed, nextSources, nextLabels, nextCollections] = await Promise.all([
                 activeSearch
                     ? client.search(activeSearch)
                     : client.feed(),
                 client.listSources(),
+                client.listLabels(),
+                // 打开 Story 时集合列表要带 containsStory 成员信息；关闭时只刷平铺列表。
+                client.listCollections(story ? { storyId: story.story.id } : {}),
             ]);
             setFeed(nextFeed.items);
             setNextCursor(nextFeed.nextCursor);
             setSources(nextSources);
+            setLabels(nextLabels);
+            setCollections(nextCollections);
         } catch (caught) {
             setError(readError(caught));
         } finally {
             setLoading(false);
         }
-    }, [activeSearch]);
+    }, [activeSearch, story]);
 
     /**
      * SSE 与首次加载只跑一次：refresh 经 latest-ref 读取，
@@ -376,7 +385,12 @@ export default function Home() {
         setOpeningStoryId(storyId);
         setError(null);
         try {
-            setStory(await client.story(storyId));
+            const [storyDetail, storyCollections] = await Promise.all([
+                client.story(storyId),
+                client.listCollections({ storyId }),
+            ]);
+            setStory(storyDetail);
+            setCollections(storyCollections);
         } catch (caught) {
             setError(readError(caught));
         } finally {
@@ -401,6 +415,109 @@ export default function Home() {
             obsoleteStoryIds: [obsoleteStoryId],
         });
         setStory(updated);
+    };
+
+    /** 标签/收藏变更后重读打开的 Story，并把标签列表刷到最新指派计数。 */
+    const refreshStoryWithLabels = async (): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const [nextStory, nextLabels] = await Promise.all([
+            client.story(story.story.id),
+            client.listLabels(),
+        ]);
+        setStory(nextStory);
+        setLabels(nextLabels);
+    };
+
+    /** 刷新当前 Story 的收藏夹成员视图（携带 containsStory 与 itemCount）。 */
+    const refreshStoryCollections = async (): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        setCollections(await client.listCollections({ storyId: story.story.id }));
+    };
+
+    const toggleStoryFavorite = async (favorited: boolean): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        if (favorited) {
+            await client.setFavorite({ targetType: "story", targetId: story.story.id });
+            setNotice("已收藏当前 Story。");
+        } else {
+            await client.unsetFavorite({ targetType: "story", targetId: story.story.id });
+            setNotice("已取消收藏当前 Story。");
+        }
+        setStory(await client.story(story.story.id));
+    };
+
+    const attachLabelToStory = async (labelId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.attachLabel({
+            labelId,
+            targetType: "story",
+            targetId: story.story.id,
+        });
+        await refreshStoryWithLabels();
+    };
+
+    const detachLabelFromStory = async (labelId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.detachLabel({
+            labelId,
+            targetType: "story",
+            targetId: story.story.id,
+        });
+        await refreshStoryWithLabels();
+    };
+
+    /**
+     * 面板“新建标签”控件只传名称、拿不到新标签 id，所以创建后直接打上当前
+     * Story：一次交互完成“建标签 + 添加”两件事。
+     */
+    const createLabelForStory = async (name: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const created = await client.createLabel({ name });
+        await client.attachLabel({
+            labelId: created.id,
+            targetType: "story",
+            targetId: story.story.id,
+        });
+        setNotice(`已创建标签「${name}」并添加到当前 Story。`);
+        await refreshStoryWithLabels();
+    };
+
+    const toggleStoryCollection = async (
+        collectionId: string,
+        member: boolean,
+    ): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        if (member) {
+            await client.removeCollectionItem(collectionId, { storyId: story.story.id });
+            setNotice("已把当前 Story 移出该收藏夹。");
+        } else {
+            await client.addCollectionItem(collectionId, { storyId: story.story.id });
+            setNotice("已把当前 Story 加入该收藏夹。");
+        }
+        await refreshStoryCollections();
+    };
+
+    const createCollectionFromPanel = async (name: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const created = await client.createCollection({ name });
+        setNotice(`已创建收藏夹「${created.name}」。`);
+        await refreshStoryCollections();
     };
 
     const loadTopics = useCallback(async (): Promise<void> => {
@@ -851,6 +968,14 @@ export default function Home() {
                     onLinkEntity={linkEntityToStory}
                     onCreateEntityLinked={createEntityLinkedToStory}
                     onUnlinkEntity={unlinkEntityFromStory}
+                    labelOptions={labels.items}
+                    collections={collections.items}
+                    onToggleFavorite={toggleStoryFavorite}
+                    onAttachLabel={attachLabelToStory}
+                    onDetachLabel={detachLabelFromStory}
+                    onCreateLabel={createLabelForStory}
+                    onToggleCollection={toggleStoryCollection}
+                    onCreateCollection={createCollectionFromPanel}
                 />
             )}
 
