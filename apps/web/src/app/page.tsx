@@ -26,6 +26,7 @@ import {
     type FeedItem,
     type HealthResponse,
     type LabelList,
+    type SavedView,
     type SearchQuery,
     type SourceSnapshot,
     type StoryDetail,
@@ -43,6 +44,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
@@ -104,6 +106,8 @@ export default function Home() {
     const [openingEntityId, setOpeningEntityId] = useState<string | null>(null);
     const [labels, setLabels] = useState<LabelList>({ items: [] });
     const [collections, setCollections] = useState<CollectionList>({ items: [] });
+    const [savedViews, setSavedViews] = useState<readonly SavedView[]>([]);
+    const [savedViewName, setSavedViewName] = useState("");
     const [storyAnnotations, setStoryAnnotations] = useState<readonly Annotation[]>([]);
     const [topicAnnotations, setTopicAnnotations] = useState<readonly Annotation[]>([]);
     const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -146,7 +150,7 @@ export default function Home() {
         setError(null);
         setLoading(true);
         try {
-            const [nextFeed, nextSources, nextLabels, nextCollections] = await Promise.all([
+            const [nextFeed, nextSources, nextLabels, nextCollections, nextSavedViews] = await Promise.all([
                 activeSearch
                     ? client.search(activeSearch)
                     : client.feed(),
@@ -154,12 +158,14 @@ export default function Home() {
                 client.listLabels(),
                 // 打开 Story 时集合列表要带 containsStory 成员信息；关闭时只刷平铺列表。
                 client.listCollections(story ? { storyId: story.story.id } : {}),
+                client.listSavedViews(),
             ]);
             setFeed(nextFeed.items);
             setNextCursor(nextFeed.nextCursor);
             setSources(nextSources);
             setLabels(nextLabels);
             setCollections(nextCollections);
+            setSavedViews(nextSavedViews.items);
         } catch (caught) {
             setError(readError(caught));
         } finally {
@@ -383,6 +389,77 @@ export default function Home() {
             setError(readError(caught));
         }
     }, [searchForm]);
+
+    /**
+     * 保存视图只记录当前搜索表单的条件；labelIds/topicIds 目前没有编辑入口，
+     * 保存为空数组，套用时仍按视图里已存的值传给 search。
+     */
+    const saveCurrentSearchAsView = async (name: string): Promise<void> => {
+        const trimmedName = name.trim();
+        if (trimmedName === "") {
+            return;
+        }
+        const values = searchForm.getValues();
+        setError(null);
+        try {
+            await client.createSavedView({
+                name: trimmedName,
+                conditions: {
+                    text: values.text?.trim() || null,
+                    sourceId: values.sourceId?.trim() || null,
+                    publishedAfter: toBoundaryIso(values.publishedAfter, false) ?? null,
+                    publishedBefore: toBoundaryIso(values.publishedBefore, true) ?? null,
+                    labelIds: [],
+                    topicIds: [],
+                },
+            });
+            setSavedViewName("");
+            setSavedViews((await client.listSavedViews()).items);
+            setNotice(`已保存视图「${trimmedName}」。`);
+        } catch (caught) {
+            setError(readError(caught));
+        }
+    };
+
+    /** 套用视图 = 用视图条件重跑 search，并写回 activeSearch 让分页/刷新沿用同一筛选。 */
+    const applySavedView = async (view: SavedView): Promise<void> => {
+        searchForm.reset({
+            text: view.text ?? "",
+            sourceId: view.sourceId ?? "",
+            publishedAfter: toDateInputValue(view.publishedAfter),
+            publishedBefore: toDateInputValue(view.publishedBefore),
+        });
+        setError(null);
+        try {
+            const query: SearchQuery = {
+                text: view.text ?? undefined,
+                sourceId: view.sourceId ?? undefined,
+                publishedAfter: view.publishedAfter ?? undefined,
+                publishedBefore: view.publishedBefore ?? undefined,
+                labelIds: view.labelIds.join(",") || undefined,
+                topicIds: view.topicIds.join(",") || undefined,
+                limit: 20,
+            };
+            const result = await client.search(query);
+            setActiveSearch(query);
+            setFeed(result.items);
+            setNextCursor(result.nextCursor);
+            setNotice(`已套用视图「${view.name}」，共 ${result.items.length} 条结果。`);
+        } catch (caught) {
+            setError(readError(caught));
+        }
+    };
+
+    const deleteSavedView = async (viewId: string): Promise<void> => {
+        setError(null);
+        try {
+            await client.deleteSavedView(viewId);
+            setSavedViews((await client.listSavedViews()).items);
+            setNotice("已删除保存的视图。");
+        } catch (caught) {
+            setError(readError(caught));
+        }
+    };
 
     const openStory = async (storyId: string): Promise<void> => {
         setOpeningStoryId(storyId);
@@ -932,6 +1009,61 @@ export default function Home() {
         }
     };
 
+    const savedViewsPanel = (
+        <section aria-label="已保存视图" className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <h3 className="text-xs font-medium text-muted-foreground">已保存视图</h3>
+                <span className="text-xs text-muted-foreground">
+                    {savedViews.length === 0 ? "尚未保存视图" : `${savedViews.length} 个视图`}
+                </span>
+            </div>
+            {savedViews.length > 0 && (
+                <ul className="flex flex-wrap gap-2">
+                    {savedViews.map((view) => (
+                        <li
+                            key={view.id}
+                            className="flex items-center gap-1 rounded-[var(--radius-control)] border bg-card pl-2"
+                        >
+                            <button
+                                type="button"
+                                onClick={() => void applySavedView(view)}
+                                className="rounded-sm py-1 text-sm hover:text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"
+                            >
+                                {view.name}
+                            </button>
+                            <Button
+                                size="xs"
+                                variant="ghost"
+                                aria-label={`删除视图 ${view.name}`}
+                                onClick={() => void deleteSavedView(view.id)}
+                            >
+                                <X data-icon="inline-start" />
+                                删除
+                            </Button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+                <Input
+                    aria-label="视图名称"
+                    placeholder="视图名称"
+                    className="max-w-xs"
+                    value={savedViewName}
+                    onChange={(event) => setSavedViewName(event.target.value)}
+                />
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={savedViewName.trim() === ""}
+                    onClick={() => void saveCurrentSearchAsView(savedViewName)}
+                >
+                    保存当前条件
+                </Button>
+            </div>
+        </section>
+    );
+
     return (
         <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-10">
             <header className="border-b pb-6">
@@ -1069,6 +1201,7 @@ export default function Home() {
                     onSubmit={onSearch}
                     openingStoryId={openingStoryId}
                     refreshing={loading && feed.length > 0}
+                    searchExtras={savedViewsPanel}
                     searchForm={searchForm}
                     sources={sources}
                 />
@@ -1150,4 +1283,13 @@ function toBoundaryIso(
     }
     const suffix = endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
     return new Date(`${value}${suffix}`).toISOString();
+}
+
+/** 视图条件存的是 canonical ISO 时间；日期输入框只接受 YYYY-MM-DD 前缀。 */
+function toDateInputValue(value: string | null): string {
+    if (!value) {
+        return "";
+    }
+    const match = /^(\d{4}-\d{2}-\d{2})/u.exec(value);
+    return match ? match[1] : "";
 }

@@ -1,5 +1,5 @@
 import { ExternalLink, Search, X } from "lucide-react";
-import type { FormEventHandler } from "react";
+import type { FormEventHandler, ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
@@ -102,6 +102,8 @@ type FeedBrowserProps = {
     onSubmit: FormEventHandler<HTMLFormElement>;
     openingStoryId?: string | null;
     refreshing?: boolean;
+    /** 页面私有的搜索扩展（如已保存视图）；组件不感知其内容。 */
+    searchExtras?: ReactNode;
     searchForm: UseFormReturn<SearchFormValues>;
     sources: readonly SourceSnapshot[];
 };
@@ -144,6 +146,7 @@ export function FeedBrowser({
     onSubmit,
     openingStoryId = null,
     refreshing = false,
+    searchExtras,
     searchForm,
     sources,
 }: FeedBrowserProps) {
@@ -213,6 +216,9 @@ export function FeedBrowser({
                             </Button>
                         )}
                     </div>
+                )}
+                {searchExtras && (
+                    <div className="border-t pt-3">{searchExtras}</div>
                 )}
             </div>
             {loading && feed.length === 0 ? (
