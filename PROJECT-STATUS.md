@@ -196,7 +196,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 （2026-09-08 更新：最新基线、Entity 切片合入与门禁见顶部“2026-09-08：Entity/关系 v1 实现合入”。）
 
-- Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）；worktree `.worktree/entity-relation` 与分支 `feat/t12-entity-relation` 已清理；推送记录见本文件顶部状态提交。
+- Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）；worktree `.worktree/entity-relation` 与分支 `feat/t12-entity-relation` 已清理。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
 - 后续 Phase 2 切片候选（按 PRD 顺序）：Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；Entity/关系流程浏览器 E2E 与人工验收留待后续。
 
