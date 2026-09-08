@@ -43,6 +43,10 @@ import {
     annotationTargetQuerySchema,
     createAnnotationCommandSchema,
     updateAnnotationCommandSchema,
+    createSavedViewCommandSchema,
+    savedViewListSchema,
+    savedViewSchema,
+    searchQuerySchema,
 } from "./index.js";
 
 describe("entity and relation contracts", () => {
@@ -270,6 +274,43 @@ describe("user organization contracts", () => {
         });
         expect(list.items[0].targetType).toBe("future-target");
         expect(list.items[0].targetRevisionId).toBe("rev-s-1");
+    });
+
+    it("parses saved view commands and extends search with label/topic filters", () => {
+        const command = createSavedViewCommandSchema.parse({
+            name: "AI 关注",
+            conditions: {
+                text: "qwen",
+                labelIds: ["label-a"],
+                topicIds: [],
+            },
+        });
+        expect(command.conditions.labelIds).toEqual(["label-a"]);
+        expect(() => createSavedViewCommandSchema.parse({
+            name: "x",
+            conditions: { labelIds: ["a".repeat(301)] },
+        })).toThrow();
+
+        const view = savedViewSchema.parse({
+            id: "saved-view-a",
+            name: "AI 关注",
+            text: "qwen",
+            sourceId: null,
+            publishedAfter: null,
+            publishedBefore: null,
+            labelIds: ["label-a"],
+            topicIds: [],
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        });
+        expect(savedViewListSchema.parse({ items: [view] }).items).toHaveLength(1);
+
+        const query = searchQuerySchema.parse({
+            labelIds: "label-a,label-b",
+            topicIds: "topic-a",
+        });
+        expect(query.labelIds).toBe("label-a,label-b");
+        expect(query.topicIds).toBe("topic-a");
     });
 });
 

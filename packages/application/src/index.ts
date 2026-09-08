@@ -37,6 +37,8 @@ import {
     type FavoriteList,
     type Annotation,
     type AnnotationList,
+    type SavedView,
+    type SavedViewList,
 } from "@cosmos/contracts";
 import type {
     EntityRelationType,
@@ -291,6 +293,15 @@ export class AnnotationNotFoundError extends Error {
     constructor(annotationId: string) {
         super(`Annotation not found: ${annotationId}`);
         this.name = "AnnotationNotFoundError";
+    }
+}
+
+export class SavedViewNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(savedViewId: string) {
+        super(`Saved view not found: ${savedViewId}`);
+        this.name = "SavedViewNotFoundError";
     }
 }
 
@@ -623,6 +634,31 @@ export interface CosmosRepository {
         targetType: TargetType;
         targetId: string;
     }): Promise<AnnotationList>;
+    createSavedView(input: {
+        name: string;
+        conditions: {
+            text?: string | null;
+            sourceId?: string | null;
+            publishedAfter?: string | null;
+            publishedBefore?: string | null;
+            labelIds?: readonly string[] | null;
+            topicIds?: readonly string[] | null;
+        };
+    }): Promise<SavedView>;
+    updateSavedView(input: {
+        savedViewId: string;
+        name: string;
+        conditions: {
+            text?: string | null;
+            sourceId?: string | null;
+            publishedAfter?: string | null;
+            publishedBefore?: string | null;
+            labelIds?: readonly string[] | null;
+            topicIds?: readonly string[] | null;
+        };
+    }): Promise<SavedView | null>;
+    deleteSavedView(savedViewId: string): Promise<void>;
+    listSavedViews(): Promise<SavedViewList>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {

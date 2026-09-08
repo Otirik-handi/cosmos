@@ -16,6 +16,7 @@ import {
     LabelNotFoundError,
     CollectionNotFoundError,
     AnnotationNotFoundError,
+    SavedViewNotFoundError,
 } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
 describe("AppController workflow conflicts", () => {
@@ -958,6 +959,55 @@ describe("AppController user organization orchestration", () => {
             targetType: "workspace",
             targetId: "story-a",
             body: "x",
+        })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("creates, updates and deletes saved views", async () => {
+        const view = {
+            id: "saved-view-a",
+            name: "AI 关注",
+            text: null,
+            sourceId: null,
+            publishedAfter: null,
+            publishedBefore: null,
+            labelIds: ["label-a"],
+            topicIds: [],
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        };
+        const repository = {
+            listSavedViews: vi.fn().mockResolvedValue({ items: [view] }),
+            createSavedView: vi.fn().mockResolvedValue(view),
+            updateSavedView: vi.fn().mockResolvedValue({ ...view, name: "改" }),
+            deleteSavedView: vi.fn().mockResolvedValue(undefined),
+        };
+        const controller = createController(repository);
+
+        await expect(controller.listSavedViews())
+            .resolves.toMatchObject({ items: [expect.objectContaining({ id: "saved-view-a" })] });
+        await expect(controller.createSavedView({
+            name: "AI 关注",
+            conditions: { labelIds: ["label-a"] },
+        })).resolves.toMatchObject({ id: "saved-view-a" });
+        expect(repository.createSavedView).toHaveBeenCalledWith({
+            name: "AI 关注",
+            conditions: { labelIds: ["label-a"] },
+        });
+        await expect(controller.updateSavedView("saved-view-a", { name: "改", conditions: {} }))
+            .resolves.toMatchObject({ name: "改" });
+        await expect(controller.deleteSavedView("saved-view-a"))
+            .resolves.toMatchObject({ ok: true, action: "saved_view.deleted" });
+
+        await expect(createController({
+            updateSavedView: vi.fn().mockRejectedValue(
+                new SavedViewNotFoundError("saved-view-missing"),
+            ),
+        }).updateSavedView("saved-view-missing", { name: "x", conditions: {} }))
+            .rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({ createSavedView: vi.fn() }).createSavedView({
+            name: "",
+            conditions: {},
         })).rejects.toBeInstanceOf(BadRequestException);
     });
 });

@@ -81,6 +81,10 @@ import {
     annotationListSchema,
     createAnnotationCommandSchema,
     updateAnnotationCommandSchema,
+    savedViewSchema,
+    savedViewListSchema,
+    createSavedViewCommandSchema,
+    updateSavedViewCommandSchema,
     userOrganizationAckSchema,
     createLabelCommandSchema,
     labelAssignmentCommandSchema,
@@ -109,6 +113,10 @@ import {
     type AnnotationList,
     type CreateAnnotationCommand,
     type UpdateAnnotationCommand,
+    type SavedView,
+    type SavedViewList,
+    type CreateSavedViewCommand,
+    type UpdateSavedViewCommand,
     type UserOrganizationAck,
     type CreateLabelCommand,
     type LabelAssignmentCommand,
@@ -312,6 +320,12 @@ export class HttpCosmosClient {
         }
         if (query.publishedBefore) {
             params.set("publishedBefore", query.publishedBefore);
+        }
+        if (query.labelIds) {
+            params.set("labelIds", query.labelIds);
+        }
+        if (query.topicIds) {
+            params.set("topicIds", query.topicIds);
         }
         if (query.cursor) {
             params.set("cursor", query.cursor);
@@ -721,6 +735,43 @@ export class HttpCosmosClient {
     async deleteAnnotation(annotationId: string): Promise<UserOrganizationAck> {
         return this.request(
             `/api/v1/annotations/${encodeURIComponent(annotationId)}/removals`,
+            {
+                method: "POST",
+                schema: userOrganizationAckSchema,
+            },
+        );
+    }
+
+    async listSavedViews(): Promise<SavedViewList> {
+        return this.request("/api/v1/saved-views", {
+            schema: savedViewListSchema,
+        });
+    }
+
+    async createSavedView(input: CreateSavedViewCommand): Promise<SavedView> {
+        const payload = createSavedViewCommandSchema.parse(input);
+        return this.request("/api/v1/saved-views", {
+            method: "POST",
+            body: payload,
+            schema: savedViewSchema,
+        });
+    }
+
+    async updateSavedView(
+        savedViewId: string,
+        input: UpdateSavedViewCommand,
+    ): Promise<SavedView> {
+        const payload = updateSavedViewCommandSchema.parse(input);
+        return this.request(`/api/v1/saved-views/${encodeURIComponent(savedViewId)}`, {
+            method: "PATCH",
+            body: payload,
+            schema: savedViewSchema,
+        });
+    }
+
+    async deleteSavedView(savedViewId: string): Promise<UserOrganizationAck> {
+        return this.request(
+            `/api/v1/saved-views/${encodeURIComponent(savedViewId)}/removals`,
             {
                 method: "POST",
                 schema: userOrganizationAckSchema,

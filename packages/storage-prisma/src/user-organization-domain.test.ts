@@ -7,6 +7,7 @@ import { PrismaClient } from "@prisma/client";
 import {
     CollectionNotFoundError,
     AnnotationNotFoundError,
+    SavedViewNotFoundError,
     EntryNotFoundError,
     LabelConflictError,
     LabelNotFoundError,
@@ -403,6 +404,86 @@ describe("user organization domain commands", () => {
                 targetType: "story",
                 targetId: "story-b",
             })).items.map((item) => item.id)).toEqual([annotation.id]);
+        } finally {
+            await repository.close();
+            await prisma.$disconnect();
+        }
+    });
+
+    it("manages saved views and applies label/topic filters in search", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const created = await repository.createSavedView({
+                name: "AI 关注",
+                conditions: {
+                    text: null,
+                    sourceId: null,
+                    publishedAfter: null,
+                    publishedBefore: null,
+                    labelIds: ["label-a"],
+                    topicIds: [],
+                },
+            });
+            expect(created.name).toBe("AI 关注");
+            expect(created.labelIds).toEqual(["label-a"]);
+            expect(created.topicIds).toEqual([]);
+
+            const renamed = await repository.updateSavedView({
+                savedViewId: created.id,
+                name: "AI 关注（改）",
+                conditions: { text: "qwen", labelIds: [], topicIds: [] },
+            });
+            expect(renamed?.name).toBe("AI 关注（改）");
+            expect(renamed?.text).toBe("qwen");
+            expect((await repository.listSavedViews()).items).toHaveLength(1);
+
+            // Search filters: a Story carrying the label matches, others do not.
+            const label = await repository.createLabel({ name: "关注" });
+            await repository.attachLabel({
+                labelId: label.id,
+                targetType: "story",
+                targetId: "story-a",
+            });
+            const byLabel = await repository.search({ labelIds: label.id, limit: 20 });
+            expect(byLabel.items.map((item) => item.storyId)).toEqual(["story-a"]);
+
+            const topic = await repository.createTopic({
+                title: "T",
+                purpose: "P",
+                scope: null,
+                seedStoryId: "story-b",
+            });
+            const byTopic = await repository.search({
+                topicIds: topic!.topic.id,
+                limit: 20,
+            });
+            expect(byTopic.items.map((item) => item.storyId)).toEqual(["story-b"]);
+
+            // A removed membership must not match the topic filter.
+            await repository.removeTopicMember({
+                topicId: topic!.topic.id,
+                storyId: "story-b",
+            });
+            expect((await repository.search({
+                topicIds: topic!.topic.id,
+                limit: 20,
+            })).items).toHaveLength(0);
+
+            // Multiple ids use any-of semantics.
+            expect((await repository.search({
+                labelIds: `${label.id},label-missing`,
+                limit: 20,
+            })).items.map((item) => item.storyId)).toEqual(["story-a"]);
+
+            await repository.deleteSavedView(created.id);
+            expect((await repository.listSavedViews()).items).toHaveLength(0);
+            await expect(repository.deleteSavedView(created.id))
+                .rejects.toBeInstanceOf(SavedViewNotFoundError);
+            await expect(repository.updateSavedView({
+                savedViewId: "saved-view-missing",
+                name: "x",
+                conditions: {},
+            })).rejects.toBeInstanceOf(SavedViewNotFoundError);
         } finally {
             await repository.close();
             await prisma.$disconnect();

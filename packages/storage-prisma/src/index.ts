@@ -45,6 +45,8 @@ import {
     type FavoriteList,
     type Annotation,
     type AnnotationList,
+    type SavedView,
+    type SavedViewList,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
@@ -70,6 +72,7 @@ import {
     EntityRevisionConflictError,
     EntryNotFoundError,
     AnnotationNotFoundError,
+    SavedViewNotFoundError,
     CollectionNotFoundError,
     LabelConflictError,
     LabelNotFoundError,
@@ -1644,6 +1647,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 : null,
             cursor: parseCursor(input.cursor),
             limit: Number(input.limit ?? 20),
+            labelIds: parseIdList(input.labelIds),
+            topicIds: parseIdList(input.topicIds),
         };
         if (
             (parsed.publishedAfter && Number.isNaN(parsed.publishedAfter.getTime()))
@@ -1669,6 +1674,20 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (parsed.publishedBefore) {
             conditions.push("r.sourcePublishedAt <= ?");
             parameters.push(parsed.publishedBefore.getTime());
+        }
+        // Saved View filters (ADR-0009 decision 5): any-of semantics on
+        // Story-level labels / active Topic membership.
+        if (parsed.labelIds.length > 0) {
+            conditions.push(
+                `EXISTS (SELECT 1 FROM LabelAssignment la WHERE la.targetType = 'story' AND la.targetId = e.storyId AND la.labelId IN (${parsed.labelIds.map(() => "?").join(", ")}))`,
+            );
+            parameters.push(...parsed.labelIds);
+        }
+        if (parsed.topicIds.length > 0) {
+            conditions.push(
+                `EXISTS (SELECT 1 FROM TopicMembership tm JOIN TopicMembershipRevision tmr ON tmr.id = tm.currentRevisionId WHERE tm.storyId = e.storyId AND tmr.tombstone = 0 AND tm.topicId IN (${parsed.topicIds.map(() => "?").join(", ")}))`,
+            );
+            parameters.push(...parsed.topicIds);
         }
         const fromClause = parsed.text
             ? "FROM entry_search JOIN Entry e ON e.id = entry_search.entry_id"
@@ -4045,6 +4064,93 @@ export class PrismaCosmosRepository implements CosmosRepository {
         };
     }
 
+    async createSavedView(input: {
+        name: string;
+        conditions: {
+            text?: string | null;
+            sourceId?: string | null;
+            publishedAfter?: string | null;
+            publishedBefore?: string | null;
+            labelIds?: readonly string[] | null;
+            topicIds?: readonly string[] | null;
+        };
+    }): Promise<SavedView> {
+        const data = savedViewData(input.name, input.conditions);
+        const created = await this.prisma.$transaction(async (tx) => {
+            const row = await tx.savedView.create({ data });
+            await appendDomainEvent(tx, {
+                type: "saved_view.created.v1",
+                aggregateType: "SavedView",
+                aggregateId: row.id,
+                payload: { savedViewId: row.id, name: row.name },
+            });
+            return row;
+        });
+        return toSavedView(created);
+    }
+
+    async updateSavedView(input: {
+        savedViewId: string;
+        name: string;
+        conditions: {
+            text?: string | null;
+            sourceId?: string | null;
+            publishedAfter?: string | null;
+            publishedBefore?: string | null;
+            labelIds?: readonly string[] | null;
+            topicIds?: readonly string[] | null;
+        };
+    }): Promise<SavedView | null> {
+        const existing = await this.prisma.savedView.findUnique({
+            where: { id: input.savedViewId },
+            select: { id: true },
+        });
+        if (!existing) {
+            throw new SavedViewNotFoundError(input.savedViewId);
+        }
+        const data = savedViewData(input.name, input.conditions);
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const row = await tx.savedView.update({
+                where: { id: input.savedViewId },
+                data,
+            });
+            await appendDomainEvent(tx, {
+                type: "saved_view.updated.v1",
+                aggregateType: "SavedView",
+                aggregateId: input.savedViewId,
+                payload: { savedViewId: input.savedViewId, name: row.name },
+            });
+            return row;
+        });
+        return toSavedView(updated);
+    }
+
+    async deleteSavedView(savedViewId: string): Promise<void> {
+        const existing = await this.prisma.savedView.findUnique({
+            where: { id: savedViewId },
+            select: { id: true },
+        });
+        if (!existing) {
+            throw new SavedViewNotFoundError(savedViewId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            await tx.savedView.delete({ where: { id: savedViewId } });
+            await appendDomainEvent(tx, {
+                type: "saved_view.deleted.v1",
+                aggregateType: "SavedView",
+                aggregateId: savedViewId,
+                payload: { savedViewId },
+            });
+        });
+    }
+
+    async listSavedViews(): Promise<SavedViewList> {
+        const rows = await this.prisma.savedView.findMany({
+            orderBy: { createdAt: "asc" },
+        });
+        return { items: rows.map((row) => toSavedView(row)) };
+    }
+
     private async loadCollectionSummary(collectionId: string): Promise<CollectionSummary | null> {        const row = await this.prisma.collection.findUnique({
             where: { id: collectionId },
             include: {
@@ -4772,6 +4878,73 @@ function exactTemporalValue(date: Date | null): TemporalValue | null {
 function parseCursor(cursor: string | undefined): number {
     const value = Number.parseInt(cursor ?? "0", 10);
     return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+/** Comma-separated id list from a query string; blanks are dropped. */
+function parseIdList(value: string | undefined): string[] {
+    if (!value) {
+        return [];
+    }
+    return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+}
+
+function savedViewData(
+    name: string,
+    conditions: {
+        text?: string | null;
+        sourceId?: string | null;
+        publishedAfter?: string | null;
+        publishedBefore?: string | null;
+        labelIds?: readonly string[] | null;
+        topicIds?: readonly string[] | null;
+    },
+): {
+    name: string;
+    text: string | null;
+    sourceId: string | null;
+    publishedAfter: string | null;
+    publishedBefore: string | null;
+    labelIdsJson: string;
+    topicIdsJson: string;
+} {
+    return {
+        name: name.trim(),
+        text: conditions.text?.trim() || null,
+        sourceId: conditions.sourceId?.trim() || null,
+        publishedAfter: conditions.publishedAfter ?? null,
+        publishedBefore: conditions.publishedBefore ?? null,
+        labelIdsJson: JSON.stringify(conditions.labelIds ?? []),
+        topicIdsJson: JSON.stringify(conditions.topicIds ?? []),
+    };
+}
+
+function toSavedView(row: {
+    id: string;
+    name: string;
+    text: string | null;
+    sourceId: string | null;
+    publishedAfter: string | null;
+    publishedBefore: string | null;
+    labelIdsJson: string;
+    topicIdsJson: string;
+    createdAt: Date;
+    updatedAt: Date;
+}): SavedView {
+    return {
+        id: row.id,
+        name: row.name,
+        text: row.text,
+        sourceId: row.sourceId,
+        publishedAfter: row.publishedAfter,
+        publishedBefore: row.publishedBefore,
+        labelIds: parseJson<string[]>(row.labelIdsJson) ?? [],
+        topicIds: parseJson<string[]>(row.topicIdsJson) ?? [],
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+    };
 }
 
 function readPayloadSourceId(payloadJson: string | null): string | null {

@@ -244,6 +244,9 @@ export const searchQuerySchema = z.object({
     sourceId: z.string().optional(),
     publishedAfter: z.string().datetime({ offset: true }).optional(),
     publishedBefore: z.string().datetime({ offset: true }).optional(),
+    // User-organization filters (ADR-0009 decision 5): comma-separated ids.
+    labelIds: z.string().optional(),
+    topicIds: z.string().optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -860,6 +863,51 @@ export const annotationTargetQuerySchema = z.object({
     targetId: z.string().trim().min(1).max(300),
 });
 export type AnnotationTargetQuery = z.infer<typeof annotationTargetQuerySchema>;
+
+/**
+ * Persisted query conditions for reuse (ADR-0009 decision 5). It stores no
+ * result snapshot: applying a view re-runs `search` with these conditions.
+ */
+export const savedViewSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    text: z.string().nullable(),
+    sourceId: z.string().nullable(),
+    publishedAfter: z.string().nullable(),
+    publishedBefore: z.string().nullable(),
+    labelIds: z.array(z.string()),
+    topicIds: z.array(z.string()),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+});
+export type SavedView = z.infer<typeof savedViewSchema>;
+
+export const savedViewListSchema = z.object({
+    items: savedViewSchema.array(),
+});
+export type SavedViewList = z.infer<typeof savedViewListSchema>;
+
+export const savedViewConditionsSchema = z.object({
+    text: z.string().trim().max(500).nullish(),
+    sourceId: z.string().trim().max(300).nullish(),
+    publishedAfter: z.string().datetime({ offset: true }).nullish(),
+    publishedBefore: z.string().datetime({ offset: true }).nullish(),
+    labelIds: z.array(z.string().trim().min(1).max(300)).max(50).nullish(),
+    topicIds: z.array(z.string().trim().min(1).max(300)).max(50).nullish(),
+});
+export type SavedViewConditions = z.infer<typeof savedViewConditionsSchema>;
+
+export const createSavedViewCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    conditions: savedViewConditionsSchema,
+});
+export type CreateSavedViewCommand = z.infer<typeof createSavedViewCommandSchema>;
+
+export const updateSavedViewCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    conditions: savedViewConditionsSchema,
+});
+export type UpdateSavedViewCommand = z.infer<typeof updateSavedViewCommandSchema>;
 
 export const revisionDetailSchema = entryRevisionSnapshotSchema.extend({
     entryId: z.string(),

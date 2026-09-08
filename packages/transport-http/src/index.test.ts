@@ -476,4 +476,73 @@ describe("HttpCosmosClient", () => {
         expect(requests[3]?.url)
             .toBe("http://localhost:4310/api/v1/annotations/annotation-a/removals");
     });
+
+    it("calls saved view endpoints and forwards label/topic search filters", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const view = {
+            id: "saved-view-a",
+            name: "AI 关注",
+            text: "qwen",
+            sourceId: null,
+            publishedAfter: null,
+            publishedBefore: null,
+            labelIds: ["label-a"],
+            topicIds: [],
+            createdAt: "2026-09-08T00:00:00.000Z",
+            updatedAt: "2026-09-08T00:00:00.000Z",
+        };
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                const url = String(input);
+                let body: unknown;
+                if (url.includes("/api/v1/search?")) {
+                    body = { items: [], nextCursor: null };
+                } else if (url.endsWith("/api/v1/saved-views/saved-view-a/removals")) {
+                    body = { ok: true, id: "saved-view-a", action: "saved_view.deleted" };
+                } else if (url.endsWith("/api/v1/saved-views/saved-view-a")) {
+                    body = { ...view, name: "改" };
+                } else if (url.endsWith("/api/v1/saved-views")) {
+                    body = Array.isArray(body) ? body : view;
+                } else {
+                    throw new Error(`Unexpected request: ${url}`);
+                }
+                return new Response(JSON.stringify(body), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const created = await client.createSavedView({
+            name: "AI 关注",
+            conditions: { text: "qwen", labelIds: ["label-a"] },
+        });
+        expect(created.labelIds).toEqual(["label-a"]);
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/saved-views");
+        expect(JSON.parse(String(requests[0]?.init?.body))).toMatchObject({
+            name: "AI 关注",
+            conditions: { text: "qwen", labelIds: ["label-a"] },
+        });
+
+        const updated = await client.updateSavedView("saved-view-a", {
+            name: "改",
+            conditions: {},
+        });
+        expect(updated.name).toBe("改");
+        expect(requests[1]?.init).toMatchObject({ method: "PATCH" });
+
+        const deleted = await client.deleteSavedView("saved-view-a");
+        expect(deleted.action).toBe("saved_view.deleted");
+
+        await client.search({
+            text: "qwen",
+            labelIds: "label-a,label-b",
+            topicIds: "topic-a",
+        });
+        const searchUrl = requests[3]?.url ?? "";
+        expect(searchUrl).toContain("labelIds=label-a%2Clabel-b");
+        expect(searchUrl).toContain("topicIds=topic-a");
+    });
 });

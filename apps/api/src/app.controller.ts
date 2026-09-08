@@ -68,6 +68,8 @@ import {
     createAnnotationCommandSchema,
     updateAnnotationCommandSchema,
     annotationTargetQuerySchema,
+    createSavedViewCommandSchema,
+    updateSavedViewCommandSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
@@ -1200,6 +1202,51 @@ export class AppController {
         try {
             await this.repository.deleteAnnotation(annotationId);
             return { ok: true, id: annotationId, action: "annotation.deleted" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("saved-views")
+    async listSavedViews() {
+        return this.repository.listSavedViews();
+    }
+
+    @Post("saved-views")
+    @Bind(Body())
+    async createSavedView(body: unknown) {
+        try {
+            const parsed = createSavedViewCommandSchema.parse(body);
+            return await this.repository.createSavedView({
+                name: parsed.name,
+                conditions: parsed.conditions,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Patch("saved-views/:savedViewId")
+    @Bind(Param("savedViewId"), Body())
+    async updateSavedView(savedViewId: string, body: unknown) {
+        try {
+            const parsed = updateSavedViewCommandSchema.parse(body);
+            return await this.repository.updateSavedView({
+                savedViewId,
+                name: parsed.name,
+                conditions: parsed.conditions,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("saved-views/:savedViewId/removals")
+    @Bind(Param("savedViewId"))
+    async deleteSavedView(savedViewId: string) {
+        try {
+            await this.repository.deleteSavedView(savedViewId);
+            return { ok: true, id: savedViewId, action: "saved_view.deleted" };
         } catch (error) {
             sourceCommandError(error);
         }
