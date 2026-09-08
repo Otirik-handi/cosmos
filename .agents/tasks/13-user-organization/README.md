@@ -115,6 +115,13 @@ Non-goals（见 Proposal / ADR-0009）：
 
 验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；聚焦 `bunx vitest run packages/contracts packages/transport-http apps/api/src/app.controller.test.ts packages/storage-prisma/src/user-organization-domain.test.ts` 全部通过（contracts 37、transport 10、api controller 31、storage 8）；`bun run lint:web` 0 error（2 个既有 warning）；component-lab 27 通过；`git diff --check` 干净。
 
+## 三个子切片收尾门禁（2026-09-08，实际运行）
+
+- `bun run typecheck` 全仓通过；`bun run build` 通过（含 Next standalone）；`bun run lint:web` 0 error（2 个既有 warning）；`bun run docs:check` 341 文件 failures=[]；`git diff --check` 干净。
+- 聚焦测试：domain 9、contracts 37、transport-http 10、api controller 31、component-lab 27、storage `user-organization-domain` 8 全部通过。
+- 全量 `bun run test`：43 文件 / 377 用例，370 通过；7 例失败全部是已知 Windows SQLite 并行负载抖动（5 个 storage-prisma 迁移测试文件的 setup `migrate deploy` 5s 超时 + EBUSY unlink），串行重跑这 6 个文件 39/39 通过（`entity-relation-domain` 5、`index` 18、`story-orchestration` 2、`story-revision-versioning` 1、`topic-domain` 5、`user-organization-domain` 8），与 `PROJECT-STATUS.md` 已记录的既有环境问题一致，非功能回归。
+- 未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署。
+
 ## Follow-ups
 
 - 浏览器产品 E2E（用户组织流程）与人工浏览器验收留待后续。
