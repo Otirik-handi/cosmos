@@ -59,6 +59,12 @@ import {
     unlinkStoryEntityCommandSchema,
     createEntityRelationCommandSchema,
     removeEntityRelationCommandSchema,
+    createLabelCommandSchema,
+    labelAssignmentCommandSchema,
+    createCollectionCommandSchema,
+    updateCollectionCommandSchema,
+    collectionItemCommandSchema,
+    favoriteCommandSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
@@ -931,6 +937,206 @@ export class AppController {
                 actor: parsed.actor ?? null,
                 reason: parsed.reason ?? null,
             });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    // ---- User organization v1 (ADR-0009): Label / Collection / Favorite ----
+
+    @Get("labels")
+    async listLabels() {
+        return this.repository.listLabels();
+    }
+
+    @Get("labels/:labelId")
+    @Bind(Param("labelId"))
+    async label(labelId: string) {
+        const result = await this.repository.label(labelId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Label not found: ${labelId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Post("labels")
+    @Bind(Body())
+    async createLabel(body: unknown) {
+        try {
+            const parsed = createLabelCommandSchema.parse(body);
+            return await this.repository.createLabel({ name: parsed.name });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("labels/:labelId/removals")
+    @Bind(Param("labelId"))
+    async deleteLabel(labelId: string) {
+        try {
+            await this.repository.deleteLabel(labelId);
+            return { ok: true, id: labelId, action: "label.deleted" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("label-assignments")
+    @Bind(Body())
+    async attachLabel(body: unknown) {
+        try {
+            const parsed = labelAssignmentCommandSchema.parse(body);
+            await this.repository.attachLabel({
+                labelId: parsed.labelId,
+                targetType: parsed.targetType,
+                targetId: parsed.targetId,
+            });
+            return { ok: true, id: parsed.labelId, action: "label.assigned" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("label-assignments/removals")
+    @Bind(Body())
+    async detachLabel(body: unknown) {
+        try {
+            const parsed = labelAssignmentCommandSchema.parse(body);
+            await this.repository.detachLabel({
+                labelId: parsed.labelId,
+                targetType: parsed.targetType,
+                targetId: parsed.targetId,
+            });
+            return { ok: true, id: parsed.labelId, action: "label.unassigned" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("collections")
+    @Bind(Query("storyId"))
+    async listCollections(storyId?: string) {
+        return this.repository.listCollections(storyId ? { storyId } : {});
+    }
+
+    @Get("collections/:collectionId")
+    @Bind(Param("collectionId"))
+    async collection(collectionId: string) {
+        const result = await this.repository.collection(collectionId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Collection not found: ${collectionId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Post("collections")
+    @Bind(Body())
+    async createCollection(body: unknown) {
+        try {
+            const parsed = createCollectionCommandSchema.parse(body);
+            return await this.repository.createCollection({
+                name: parsed.name,
+                description: parsed.description ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Patch("collections/:collectionId")
+    @Bind(Param("collectionId"), Body())
+    async updateCollection(collectionId: string, body: unknown) {
+        try {
+            const parsed = updateCollectionCommandSchema.parse(body);
+            return await this.repository.updateCollection({
+                collectionId,
+                name: parsed.name,
+                description: parsed.description ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("collections/:collectionId/removals")
+    @Bind(Param("collectionId"))
+    async deleteCollection(collectionId: string) {
+        try {
+            await this.repository.deleteCollection(collectionId);
+            return { ok: true, id: collectionId, action: "collection.deleted" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("collections/:collectionId/items")
+    @Bind(Param("collectionId"), Body())
+    async addCollectionItem(collectionId: string, body: unknown) {
+        try {
+            const parsed = collectionItemCommandSchema.parse(body);
+            await this.repository.addCollectionItem({
+                collectionId,
+                storyId: parsed.storyId,
+            });
+            return { ok: true, id: collectionId, action: "collection.item_added" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("collections/:collectionId/items/removals")
+    @Bind(Param("collectionId"), Body())
+    async removeCollectionItem(collectionId: string, body: unknown) {
+        try {
+            const parsed = collectionItemCommandSchema.parse(body);
+            await this.repository.removeCollectionItem({
+                collectionId,
+                storyId: parsed.storyId,
+            });
+            return { ok: true, id: collectionId, action: "collection.item_removed" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Get("favorites")
+    async listFavorites() {
+        return this.repository.listFavorites();
+    }
+
+    @Post("favorites")
+    @Bind(Body())
+    async setFavorite(body: unknown) {
+        try {
+            const parsed = favoriteCommandSchema.parse(body);
+            await this.repository.setFavorite({
+                targetType: parsed.targetType,
+                targetId: parsed.targetId,
+            });
+            return { ok: true, id: parsed.targetId, action: "favorite.set" };
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("favorites/removals")
+    @Bind(Body())
+    async unsetFavorite(body: unknown) {
+        try {
+            const parsed = favoriteCommandSchema.parse(body);
+            await this.repository.unsetFavorite({
+                targetType: parsed.targetType,
+                targetId: parsed.targetId,
+            });
+            return { ok: true, id: parsed.targetId, action: "favorite.unset" };
         } catch (error) {
             sourceCommandError(error);
         }

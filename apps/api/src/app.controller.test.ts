@@ -13,6 +13,8 @@ import {
     TopicNotFoundError,
     TopicRevisionConflictError,
     WorkflowHostConflictError,
+    LabelNotFoundError,
+    CollectionNotFoundError,
 } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
 describe("AppController workflow conflicts", () => {
@@ -796,6 +798,101 @@ describe("AppController entity orchestration", () => {
         await expect(createController(repository).createEntity({
             name: "Jeff Dean",
             type: "superhero",
+        })).rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe("AppController user organization orchestration", () => {
+    function createController(repository: Record<string, unknown>) {
+        return new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+    }
+
+    it("creates a label and returns the label item", async () => {
+        const repository = {
+            createLabel: vi.fn().mockResolvedValue({
+                id: "label-a",
+                name: "AI",
+                assignedCount: 0,
+                createdAt: "2026-09-08T00:00:00.000Z",
+                updatedAt: "2026-09-08T00:00:00.000Z",
+            }),
+        };
+        const controller = createController(repository);
+        const result = await controller.createLabel({ name: "AI" });
+        expect(result).toMatchObject({ id: "label-a", name: "AI" });
+        expect(repository.createLabel).toHaveBeenCalledWith({ name: "AI" });
+    });
+
+    it("maps missing label/collection targets to 404 and conflicts through the funnel", async () => {
+        await expect(createController({
+            deleteLabel: vi.fn().mockRejectedValue(new LabelNotFoundError("label-missing")),
+        }).deleteLabel("label-missing")).rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({
+            deleteCollection: vi.fn().mockRejectedValue(
+                new CollectionNotFoundError("collection-missing"),
+            ),
+        }).deleteCollection("collection-missing")).rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({
+            attachLabel: vi.fn().mockRejectedValue(new StoryNotFoundError("story-missing")),
+        }).attachLabel({
+            labelId: "label-a",
+            targetType: "story",
+            targetId: "story-missing",
+        })).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("attaches/detaches labels, toggles collection membership and favorites, returning acks", async () => {
+        const repository = {
+            attachLabel: vi.fn().mockResolvedValue(undefined),
+            detachLabel: vi.fn().mockResolvedValue(undefined),
+            addCollectionItem: vi.fn().mockResolvedValue(undefined),
+            removeCollectionItem: vi.fn().mockResolvedValue(undefined),
+            setFavorite: vi.fn().mockResolvedValue(undefined),
+            unsetFavorite: vi.fn().mockResolvedValue(undefined),
+            deleteLabel: vi.fn().mockResolvedValue(undefined),
+            listCollections: vi.fn().mockResolvedValue({ items: [] }),
+        };
+        const controller = createController(repository);
+
+        await expect(controller.attachLabel({
+            labelId: "label-a",
+            targetType: "story",
+            targetId: "story-a",
+        })).resolves.toMatchObject({ ok: true, action: "label.assigned" });
+        await expect(controller.detachLabel({
+            labelId: "label-a",
+            targetType: "story",
+            targetId: "story-a",
+        })).resolves.toMatchObject({ action: "label.unassigned" });
+        await expect(controller.addCollectionItem("collection-a", { storyId: "story-a" }))
+            .resolves.toMatchObject({ action: "collection.item_added" });
+        await expect(controller.removeCollectionItem("collection-a", { storyId: "story-a" }))
+            .resolves.toMatchObject({ action: "collection.item_removed" });
+        await expect(controller.setFavorite({ targetType: "story", targetId: "story-a" }))
+            .resolves.toMatchObject({ action: "favorite.set" });
+        await expect(controller.unsetFavorite({ targetType: "story", targetId: "story-a" }))
+            .resolves.toMatchObject({ action: "favorite.unset" });
+        await expect(controller.deleteLabel("label-a"))
+            .resolves.toMatchObject({ ok: true, action: "label.deleted" });
+    });
+
+    it("rejects malformed user organization commands with 400", async () => {
+        const repository = { createLabel: vi.fn(), setFavorite: vi.fn() };
+        const controller = createController(repository);
+        await expect(controller.createLabel({})).rejects.toBeInstanceOf(BadRequestException);
+        await expect(controller.setFavorite({ targetType: "story", targetId: 42 }))
+            .rejects.toBeInstanceOf(BadRequestException);
+        await expect(controller.attachLabel({
+            labelId: "label-a",
+            targetType: "workspace",
+            targetId: "story-a",
         })).rejects.toBeInstanceOf(BadRequestException);
     });
 });

@@ -300,4 +300,110 @@ describe("HttpCosmosClient", () => {
         expect(linked.stories[0].storyId).toBe("story-a");
         expect(requests[1]?.url).toBe("http://localhost:4310/api/v1/story-entity-links");
     });
+
+    it("calls the user organization endpoints (labels/collections/favorites)", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const ack = (id: string, action: string) => JSON.stringify({
+            ok: true,
+            id,
+            action,
+        });
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                const url = String(input);
+                let body: unknown = null;
+                if (url.endsWith("/api/v1/labels")) {
+                    body = {
+                        id: "label-a",
+                        name: "AI",
+                        assignedCount: 0,
+                        createdAt: "2026-09-08T00:00:00.000Z",
+                        updatedAt: "2026-09-08T00:00:00.000Z",
+                    };
+                } else if (url.endsWith("/api/v1/labels/label-a")) {
+                    body = {
+                        id: "label-a",
+                        name: "AI",
+                        createdAt: "2026-09-08T00:00:00.000Z",
+                        updatedAt: "2026-09-08T00:00:00.000Z",
+                        assignedStories: [{ id: "story-a", title: "Story a" }],
+                        assignedEntries: [],
+                        assignedTopics: [],
+                    };
+                } else if (url.includes("/api/v1/labels/label-a/removals")) {
+                    body = JSON.parse(ack("label-a", "label.deleted"));
+                } else if (url.endsWith("/api/v1/label-assignments")) {
+                    body = JSON.parse(ack("label-a", "label.assigned"));
+                } else if (url.endsWith("/api/v1/label-assignments/removals")) {
+                    body = JSON.parse(ack("label-a", "label.unassigned"));
+                } else if (url.endsWith("/api/v1/collections?storyId=story-a")) {
+                    body = {
+                        items: [{
+                            id: "collection-a",
+                            name: "Reading",
+                            description: null,
+                            itemCount: 1,
+                            containsStory: true,
+                            createdAt: "2026-09-08T00:00:00.000Z",
+                            updatedAt: "2026-09-08T00:00:00.000Z",
+                        }],
+                    };
+                } else if (url.endsWith("/api/v1/collections/collection-a/items")) {
+                    body = JSON.parse(ack("collection-a", "collection.item_added"));
+                } else if (url.endsWith("/api/v1/favorites")) {
+                    body = JSON.parse(ack("story-a", "favorite.set"));
+                } else if (url.endsWith("/api/v1/favorites/removals")) {
+                    body = JSON.parse(ack("story-a", "favorite.unset"));
+                } else {
+                    throw new Error(`Unexpected request: ${url}`);
+                }
+                return new Response(JSON.stringify(body), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const created = await client.createLabel({ name: "AI" });
+        expect(created).toMatchObject({ name: "AI" });
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/labels");
+        expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({ name: "AI" });
+
+        const detail = await client.label("label-a");
+        expect(detail.assignedStories).toEqual([{ id: "story-a", title: "Story a" }]);
+
+        const assigned = await client.attachLabel({
+            labelId: "label-a",
+            targetType: "story",
+            targetId: "story-a",
+        });
+        expect(assigned.action).toBe("label.assigned");
+        expect(JSON.parse(String(requests[2]?.init?.body))).toEqual({
+            labelId: "label-a",
+            targetType: "story",
+            targetId: "story-a",
+        });
+
+        await client.deleteLabel("label-a");
+        expect(requests[3]?.url).toBe("http://localhost:4310/api/v1/labels/label-a/removals");
+
+        const collections = await client.listCollections({ storyId: "story-a" });
+        expect(collections.items[0].containsStory).toBe(true);
+        expect(requests[4]?.url).toBe("http://localhost:4310/api/v1/collections?storyId=story-a");
+
+        const added = await client.addCollectionItem("collection-a", { storyId: "story-a" });
+        expect(added.action).toBe("collection.item_added");
+
+        const set = await client.setFavorite({ targetType: "story", targetId: "story-a" });
+        expect(set.action).toBe("favorite.set");
+        expect(JSON.parse(String(requests[6]?.init?.body))).toEqual({
+            targetType: "story",
+            targetId: "story-a",
+        });
+
+        const unset = await client.unsetFavorite({ targetType: "story", targetId: "story-a" });
+        expect(unset.action).toBe("favorite.unset");
+    });
 });
