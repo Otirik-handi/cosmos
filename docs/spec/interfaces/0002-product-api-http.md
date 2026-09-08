@@ -205,7 +205,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | Method/path | 输入 | 成功输出与分页 |
 | --- | --- | --- |
 | `GET /feed` | query `cursor?`、`limit?` | `FeedPage`。limit 缺省 20；非数字回退 20，随后 clamp 到 1–100；cursor 交给 repository。按更新倒序返回 Story Feed，nextCursor 是偏移字符串或 null。 |
-| `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；Zod 解析失败 400。无写副作用。 |
+| `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`labelIds?`、`topicIds?`（逗号分隔 id）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；label/topic 过滤为 any-of 语义（Story 级标签、active Topic 成员）；Zod 解析失败 400。无写副作用。 |
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
 | `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要、`entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）与 `entities`（关联 Entity 快照列表）。旧 merge id 先解析到 canonical Story；不存在/无可投影内容 404。 |
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
@@ -250,6 +250,10 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /annotations` | body `CreateAnnotationCommand` | `Annotation`；Schema 失败 400（未知 `targetType`、空 body），目标缺失 404。 |
 | `PATCH /annotations/:annotationId` | body `UpdateAnnotationCommand` | `Annotation`；Schema 失败 400，批注缺失 404。 |
 | `POST /annotations/:annotationId/removals` | path `annotationId` | `UserOrganizationAck`（`action: "annotation.deleted"`）；不存在 404。 |
+| `GET /saved-views` | 无 | `SavedViewList`；按 `createdAt` 升序。 |
+| `POST /saved-views` | body `CreateSavedViewCommand` | `SavedView`；Schema 失败 400（空名称、非法条件）。 |
+| `PATCH /saved-views/:savedViewId` | body `UpdateSavedViewCommand` | `SavedView`；Schema 失败 400，不存在 404。 |
+| `POST /saved-views/:savedViewId/removals` | path `savedViewId` | `UserOrganizationAck`（`action: "saved_view.deleted"`）；不存在 404。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |
@@ -258,7 +262,7 @@ Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
 日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），Entity/关系写操作仅限上方
 entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，用户组织写操作仅限
-labels/label-assignments/collections/items/favorites/annotations 端点，其余路径不在 API 层修改事实。
+labels/label-assignments/collections/items/favorites/annotations/saved-views 端点，其余路径不在 API 层修改事实。
 
 ### SSE events
 

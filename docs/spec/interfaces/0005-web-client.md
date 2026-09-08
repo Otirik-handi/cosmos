@@ -138,7 +138,11 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     加载（目标分别为当前 Story/Topic，Story 目标用 canonical id），展示正文、可选引用文本、
     作者与时间，支持新建（`createAnnotation`）、编辑（`updateAnnotation`）与删除
     （`deleteAnnotation`）；写命令成功后重读该目标的批注列表。
-16. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+16. **Saved View**：搜索卡内的“已保存视图”区块由 `client.listSavedViews` 加载；点击视图名
+    把其条件回填搜索表单并以 `client.search` 套用（label/topic id 以逗号串传参，
+    `activeSearch` 同步更新，因此分页与刷新沿用同一筛选），输入名称 + “保存当前条件”调用
+    `client.createSavedView`，删除调用 `client.deleteSavedView`。保存的是查询条件而非结果快照。
+17. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 
 ## 输入

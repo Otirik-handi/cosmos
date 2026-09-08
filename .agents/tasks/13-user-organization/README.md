@@ -59,10 +59,10 @@ Non-goals（见 Proposal / ADR-0009）：
 
 ## Current State
 
-- 生命周期阶段：子切片 A（Label/Collection/收藏标记）与子切片 B（Annotation）已实现并通过门禁；子切片 C（Saved View）未开始。分支 `feat/t13-user-organization`，待维护者授权合入 master。
-- 提交：A 层 `244461c`（domain/storage）、`1401022`（API/transport）、`1a9735d`（Web）、`d3d183f`（spec）、`7072fc2`（walkthrough）；B 后端、B Web 层见下方 walkthrough。
-- 迁移：`20260908140000_user_organization_v1`（5 张表）、`20260908160000_annotation_v1`（1 张表），均 forward-only、无 backfill。
+- 生命周期阶段：三个子切片（A Label/Collection/收藏、B Annotation、C Saved View + search 扩展）均已实现并通过门禁；分支 `feat/t13-user-organization`，待维护者授权合入 master。
+- 迁移：`20260908140000_user_organization_v1`（5 张表）、`20260908160000_annotation_v1`、`20260908180000_saved_view_v1`，均 forward-only、无 backfill。
 - 未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署（均为既有后置边界）。
+- 已知 UI 限制：搜索表单目前没有标签/Topic 选择控件，因此 Web 保存的 Saved View 只含 text/source/date 条件；API 已支持 label/topic 过滤，带这两类 id 的视图套用时会正确传参（记为子切片 C 偏差）。
 
 ## Decisions and Deviations
 
@@ -72,6 +72,8 @@ Non-goals（见 Proposal / ADR-0009）：
 - 子切片 A 偏差 1：`StoryDetail` 向后兼容新增 `labels: LabelRef[]` 与 `favorited: boolean`，使 Story 侧用户组织区不必二次查询。
 - 子切片 A 偏差 2：用户组织写命令（Label/Collection/Favorite）不带 `actor`/`reason`——它们是单用户本地用户真相，区别于 Story/Topic/Entity 的协作者审计命令；如需协作者审计留待多用户切片。
 - 子切片 A 偏差 3：`LabelAssignment`/`Favorite` 不建到目标行的外键（多态 target 无法固定引用），因此删除 Story/Entry/Topic 不会自动清理这些行；Story merge 的显式迁移覆盖了当前唯一会改变 Story id 的路径。
+- 子切片 B 偏差：批注删除采用物理删除 + `annotation.deleted.v1` 审计事件（ADR-0009 允许 tombstone 或物理删除）；`StoryDetail` 未追加批注数组，Web 通过 `GET /annotations` 单独读取，避免再改 StoryDetail DTO。
+- 子切片 C 偏差：搜索表单暂无标签/Topic 选择控件，Web 保存的视图只含 text/source/date；API 与 storage 已完整支持 label/topic 过滤。
 
 ## Verification / Gate
 
@@ -104,6 +106,14 @@ Non-goals（见 Proposal / ADR-0009）：
 3. 文档同步：`docs/spec` 四文件 + `docs/testing/README.md` + 本 Task。
 
 验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；聚焦 `bunx vitest run packages/contracts packages/transport-http apps/api/src/app.controller.test.ts packages/storage-prisma/src/user-organization-domain.test.ts` 全部通过（contracts 36、transport 9、api controller 30、storage 7）；`bun run lint:web` 0 error（2 个既有 warning）；component-lab 27 通过；`git diff --check` 干净。子切片 B 收尾前会再跑一次全量 `bun run test`、`bun run build`、`bun run docs:check`。
+
+## Implementation Walkthrough（子切片 C：Saved View + search 扩展，2026-09-08）
+
+1. 后端层：Prisma `SavedView` 表 + migration `20260908180000_saved_view_v1`；contracts 新增 `SavedView`/`SavedViewList`/`SavedViewConditions` 与 create/update 命令，并给 `SearchQuery` 增加 `labelIds`/`topicIds`（逗号分隔 id）；application 新增 `SavedViewNotFoundError` 与 4 个 repository 方法；storage 实现 CRUD 与 `search` 的 EXISTS 子查询过滤（Story 级标签 + active Topic 成员，any-of 语义）；transport client 4 个方法并把 label/topic 参数加入 search 查询串；API 4 个端点（search 参数透传无需改动）。
+2. Web 层：`page.tsx` 新增 savedViews 状态与保存/套用/删除处理器；`feed-browser.tsx` 增加可选 `searchExtras` 插槽，搜索卡内渲染“已保存视图”区块。
+3. 文档同步：`docs/spec` 四文件 + `docs/testing/README.md` + 本 Task。
+
+验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；聚焦 `bunx vitest run packages/contracts packages/transport-http apps/api/src/app.controller.test.ts packages/storage-prisma/src/user-organization-domain.test.ts` 全部通过（contracts 37、transport 10、api controller 31、storage 8）；`bun run lint:web` 0 error（2 个既有 warning）；component-lab 27 通过；`git diff --check` 干净。
 
 ## Follow-ups
 
