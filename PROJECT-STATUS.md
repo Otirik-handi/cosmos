@@ -1,8 +1,20 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-08。Phase 2 首切片 Story 域模型 v1（Task 10）已实现并合入 `master`（`6f6651d..b0bc432`，本地 = 远端前状态）。StoryRevision 版本化、Story 编排命令（move entry / update revision / merge alias）、Product API 三端点与 Web 多成员详情/操作均已落地并同步 `docs/spec`/`docs/api`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-08。Phase 2 第二切片 Topic 域模型 v1（Task 11）已实现并合入 `master`（`ff7cc00..addcefc`，本地 = 远端前状态）。Topic 不可变 Revision、Topic Membership（受管角色 + revision/tombstone 可恢复）、Topic merge canonical/alias、Story merge 同步迁移 membership、Product API 九个端点与 Web TopicPanel/从 Story 侧加入创建入口均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-08：Topic 域模型 v1 实现合入（Phase 2 第二切片，Task 11）
+
+Proposal [`topic-domain-v1`](docs/proposals/topic-domain-v1.md)（accepted）与 ADR-0007 的实现已合入 `master`，分三层落地：
+
+1. **Topic 不可变 Revision + Membership**：schema + 迁移 `20260908000000_topic_domain_v1`（`Topic`/`TopicRevision`/`TopicMembership`/`TopicMembershipRevision`/`TopicAlias` 五张表，forward-only、全新表无 backfill）；domain 新增 `topicMemberRoles` 受管枚举与 `fingerprintTopicRevision`；storage 实现 create/update Topic（`baseRevisionId` CAS + 指纹 no-op）、成员 add/update-role/remove/restore（`TopicMembershipRevision` 追加 + tombstone 可恢复）、mergeTopics（成员去重迁移 + alias）。
+2. **Story merge 扩展（ORG-020 merge 侧）**：`mergeStories` 同一事务内把指向 obsolete Story 的 membership 迁到 canonical，保持 `(topicId, storyId)` 唯一约束在 canonical 上成立（ADR-0007 决策 4）。
+3. **公共合同与 Product API**：Topic DTO（角色写入侧受管枚举、读取侧放宽降级）+ 七个命令 schema；transport client 同步；API 九个端点（`GET/POST /topics`、详情、revisions、merges、members 与 member-role-updates/removals/restorations）。
+4. **Web**：`TopicPanel`（成员角色/移除/恢复 + 标题目的编辑）、StoryPanel「加入 Topic/创建 Topic」入口（seed 恒 core）、侧栏 Topics 列表；组件实验室登记 `topic-panel`。
+
+验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；`bun run build`（含 Next standalone）通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run docs:check` 327 文件通过；`git diff --check` 干净。聚焦测试：domain 7、storage-prisma 72（含 topic-domain 5）、contracts 19、transport-http 6、api controller 21、component-lab 24 全部通过。全量 `bun run test` 41 文件/341 用例，340 通过；唯一失败是既有 `story-revision-versioning` 迁移测试在 Windows SQLite 并行负载下的 5s 超时（单独重跑通过，与 PROJECT-STATUS 已记录的既有环境抖动一致）。未运行：浏览器产品 E2E 的 Topic 流程、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署（浏览器/Node/Windows/Docker 为既有后置边界，Topic 流程浏览器验收留待后续）。
 
 ## 2026-09-08：Story 域模型 v1 实现合入（Phase 2 首切片，Task 10）
+
 
 Proposal [`story-domain-v1`](docs/proposals/story-domain-v1.md)（accepted）与 ADR-0006 的实现已合入 `master`，分四层落地：
 
@@ -171,11 +183,11 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-07 更新：最新基线、后置债划线、Phase 2 启动方向与门禁留底见顶部“2026-09-07：Phase 1 划线收口与 Phase 2 启动基线”。）
+（2026-09-08 更新：最新基线、Topic 切片合入与门禁见顶部“2026-09-08：Topic 域模型 v1 实现合入”。）
 
-- Story 域模型 v1（Task 10）已合入 `master`（`b0bc432`）；worktree `.worktree/story-domain` 与分支 `feat/t10-story-domain` 待清理（需授权）。
-- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随 Story 域模型切片顺带执行。
-- 后续 Phase 2 切片候选（按 PRD 顺序）：Topic/Entity/关系、Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期与 `evidence_for`/`mentions` 跨 Story 引用后置。
+- Topic 域模型 v1（Task 11）已合入 `master`（`addcefc`）；worktree `.worktree/topic-domain` 与分支 `feat/t11-topic-domain` 待清理（需授权）。
+- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随 Topic 切片顺带执行。
+- 后续 Phase 2 切片候选（按 PRD 顺序）：Entity/关系、Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期与 `evidence_for`/`mentions` 跨 Story 引用后置；Topic 流程浏览器 E2E 与人工验收留待后续。
 
 ## 已完成
 
