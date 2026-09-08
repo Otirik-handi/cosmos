@@ -59,7 +59,7 @@ Non-goals（见 Proposal / ADR-0009）：
 
 ## Current State
 
-- 生命周期阶段：三个子切片（A Label/Collection/收藏、B Annotation、C Saved View + search 扩展）均已实现并通过门禁；分支 `feat/t13-user-organization`，待维护者授权合入 master。
+- 生命周期阶段：三个子切片（A Label/Collection/收藏、B Annotation、C Saved View + search 扩展）均已实现、通过门禁并合入 `master`（fast-forward，实现 tip `77ca54f`；状态记录提交 `1409662` 已推送 `origin/master`）。分支 `feat/t13-user-organization` 与 worktree `.worktree/user-organization` 已清理。本 Task 的实现阶段结束。
 - 迁移：`20260908140000_user_organization_v1`（5 张表）、`20260908160000_annotation_v1`、`20260908180000_saved_view_v1`，均 forward-only、无 backfill。
 - 未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署（均为既有后置边界）。
 - 已知 UI 限制：搜索表单目前没有标签/Topic 选择控件，因此 Web 保存的 Saved View 只含 text/source/date 条件；API 已支持 label/topic 过滤，带这两类 id 的视图套用时会正确传参（记为子切片 C 偏差）。
