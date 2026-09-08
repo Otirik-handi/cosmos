@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 
-import { WorkflowHostConflictError } from "@cosmos/application";
+import {
+    StoryMergeConflictError,
+    StoryNotFoundError,
+    StoryRevisionConflictError,
+    WorkflowHostConflictError,
+} from "@cosmos/application";
 import { AppController } from "./app.controller.js";
 describe("AppController workflow conflicts", () => {
     it("maps an idempotency identity conflict to HTTP 409", async () => {
@@ -449,5 +454,121 @@ describe("AppController source config probes", () => {
         await expect(controller.sourceConfigProbe("probe-job-1")).resolves.toBe(probeJob);
         await expect(controller.sourceConfigProbe("other-job")).rejects.toThrow(NotFoundException);
         await expect(controller.sourceConfigProbe("missing-job")).rejects.toThrow(NotFoundException);
+    });
+});
+
+describe("AppController story orchestration", () => {
+    function storyDetailFixture() {
+        return {
+            story: {
+                id: "story-a",
+                kind: "document",
+                subtype: null,
+                revisionId: "rev-a-1",
+                title: "Story A",
+                summary: null,
+            },
+            entry: entryDetailFixture("entry-a"),
+            entries: [entryDetailFixture("entry-a")],
+        };
+    }
+
+    function entryDetailFixture(entryId: string) {
+        return {
+            id: entryId,
+            sourceId: "source-a",
+            sourceName: "Source A",
+            sourceKind: "rss",
+            currentRevisionId: "er-a-1",
+            metrics: null,
+            revisions: [{
+                id: "er-a-1",
+                revision: 1,
+                title: "Entry A",
+                summary: null,
+                contentText: "body",
+                webUrl: null,
+                contentKind: "article",
+                publisher: null,
+                publishedAt: null,
+                updatedAt: null,
+                sourcePublishedAt: null,
+                createdAt: "2026-08-08T00:00:00.000Z",
+                assets: [],
+            }],
+            observations: [],
+        };
+    }
+
+    function createController(repository: Record<string, unknown>) {
+        return new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+    }
+
+    it("moves an entry and returns the Story detail", async () => {
+        const repository = {
+            moveEntryToStory: vi.fn().mockResolvedValue(storyDetailFixture()),
+        };
+        const controller = createController(repository);
+        const result = await controller.moveEntryToStory("story-a", {
+            entryId: "entry-b",
+            actor: "user",
+        });
+        expect(result).toMatchObject({ story: { id: "story-a" } });
+        expect(repository.moveEntryToStory).toHaveBeenCalledWith({
+            entryId: "entry-b",
+            storyId: "story-a",
+            actor: "user",
+            reason: null,
+        });
+    });
+
+    it("maps a missing Story to 404 and stale revision edits to 409", async () => {
+        const moveRepository = {
+            moveEntryToStory: vi.fn().mockRejectedValue(
+                new StoryNotFoundError("story-missing"),
+            ),
+        };
+        await expect(createController(moveRepository)
+            .moveEntryToStory("story-missing", { entryId: "entry-b" }))
+            .rejects.toBeInstanceOf(NotFoundException);
+
+        const revisionRepository = {
+            updateStoryRevision: vi.fn().mockRejectedValue(
+                new StoryRevisionConflictError("story-a"),
+            ),
+        };
+        await expect(createController(revisionRepository)
+            .updateStoryRevision("story-a", {
+                baseRevisionId: "rev-a-1",
+                title: "Stale",
+                summary: null,
+                kind: "event",
+                subtype: null,
+            }))
+            .rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("rejects duplicate merges with 409 and malformed commands with 400", async () => {
+        const mergeRepository = {
+            mergeStories: vi.fn().mockRejectedValue(
+                new StoryMergeConflictError("Story is already merged: story-c"),
+            ),
+        };
+        await expect(createController(mergeRepository).mergeStories({
+            canonicalStoryId: "story-a",
+            obsoleteStoryIds: ["story-c"],
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        const validationRepository = {
+            moveEntryToStory: vi.fn(),
+        };
+        await expect(createController(validationRepository)
+            .moveEntryToStory("story-a", { entryId: "" }))
+            .rejects.toBeInstanceOf(BadRequestException);
     });
 });

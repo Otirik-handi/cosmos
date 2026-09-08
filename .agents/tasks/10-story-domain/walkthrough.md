@@ -67,3 +67,26 @@ bun run typecheck:application                                                  -
 未运行：全量 `bun run test`、浏览器、Node E2E、build（在切片 2/3 或合入前统一跑）。
 
 下一步：切片 2——公共合同与 Product API（Story 命令 schema、详情多 Entry、HTTP 端点）。
+
+## 2026-09-08：切片 2 主体完成——公共合同与 Product API
+
+- `@cosmos/contracts`：`storyDetailSchema` additive 增加 `entries: entryDetailSchema.array()`（`entry` 保留为 `entries[0]` 兼容位）；新增 `moveEntryToStoryCommandSchema`、`updateStoryRevisionCommandSchema`（带 baseRevisionId CAS、kind 枚举、可选 actor/reason）、`mergeStoriesCommandSchema` 与对应类型。
+- `PrismaCosmosRepository.story()`：详情返回完整成员列表（`entries` 按 updatedAt desc），保留 entry 兼容字段；无成员或无 currentRevision 的 Story 仍返回 null（空 canonical 读取边界记录，后续切片再决定）。
+- Product API：`POST /api/v1/stories/:storyId/entry-moves`、`POST /api/v1/stories/:storyId/revisions`、`POST /api/v1/stories/merges`；错误经既有 command 漏斗映射 Story*Error → 404/409，Zod → 400；missing entry → 404。
+- `@cosmos/transport-http`：新增 `moveEntryToStory`/`updateStoryRevision`/`mergeStories` client 方法与 schema 校验。
+- Web 组件 fixture 补 `entries` 兼容（切片 3 才消费多成员 UI）。
+
+验证（2026-09-08，全部实际运行）：
+
+```text
+bun run typecheck        -> 全仓通过
+bunx vitest run packages/contracts/src/index.test.ts        -> 18/18
+bunx vitest run apps/api/src/app.controller.test.ts         -> 18/18（新增 3 个 Story 端点场景）
+bunx vitest run packages/transport-http/src/index.test.ts   -> 6/6
+bunx vitest run packages/storage-prisma/src/story-orchestration.test.ts
+                         + story-revision-versioning.test.ts -> 3/3（首次并行出现既有 EBUSY 抖动，重跑全绿）
+```
+
+未运行/待收口：Node E2E 真实 HTTP 验收（随 Web 切片浏览器 E2E 一并覆盖三个新端点）、`docs/api` Draft 与 `docs/spec` contracts/interfaces/domain 同步、`docs/testing` 说明；这些在切片 3 完成或合入 master 前统一补齐。
+
+下一步：切片 3——Web Story 详情多成员展示与操作入口（StoryPanel 消费 `entries`、move/update/merge 调用 transport client、组件实验室 + 浏览器 E2E）。

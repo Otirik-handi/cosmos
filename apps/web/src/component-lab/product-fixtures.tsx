@@ -298,6 +298,7 @@ export function renderStoryPanelLab(props: LabProps) {
                 sourcePublishedAt: null,
             }],
         },
+        entries: [],
     };
     return <StoryPanel onClose={() => undefined} story={story} />;
 }

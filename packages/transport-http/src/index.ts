@@ -4,6 +4,8 @@ import {
     feedPageSchema,
     healthResponseSchema,
     jobSnapshotSchema,
+    mergeStoriesCommandSchema,
+    moveEntryToStoryCommandSchema,
     runSnapshotSchema,
     searchPageSchema,
     sourceActivationCommandSchema,
@@ -12,6 +14,7 @@ import {
     sourceDefinitionPageSchema,
     sourceSnapshotSchema,
     storyDetailSchema,
+    updateStoryRevisionCommandSchema,
     entryDetailSchema,
     entryPageSchema,
     revisionDetailSchema,
@@ -34,7 +37,10 @@ import {
     type EntryDetail,
     type EntryListQuery,
     type EntryPage,
+    type MergeStoriesCommand,
+    type MoveEntryToStoryCommand,
     type RevisionDetail,
+    type UpdateStoryRevisionCommand,
     type UpdateSourceCommand,
 } from "@cosmos/contracts";
 
@@ -246,6 +252,39 @@ export class HttpCosmosClient {
 
     async story(storyId: string): Promise<StoryDetail> {
         return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}`, {
+            schema: storyDetailSchema,
+        });
+    }
+
+    async moveEntryToStory(
+        storyId: string,
+        input: MoveEntryToStoryCommand,
+    ): Promise<StoryDetail> {
+        const payload = moveEntryToStoryCommandSchema.parse(input);
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/entry-moves`, {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async updateStoryRevision(
+        storyId: string,
+        input: UpdateStoryRevisionCommand,
+    ): Promise<StoryDetail> {
+        const payload = updateStoryRevisionCommandSchema.parse(input);
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/revisions`, {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async mergeStories(input: MergeStoriesCommand): Promise<StoryDetail> {
+        const payload = mergeStoriesCommandSchema.parse(input);
+        return this.request("/api/v1/stories/merges", {
+            method: "POST",
+            body: payload,
             schema: storyDetailSchema,
         });
     }

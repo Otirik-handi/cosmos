@@ -1940,7 +1940,6 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 currentRevision: true,
                 entries: {
                     orderBy: { updatedAt: "desc" },
-                    take: 1,
                     include: {
                         sourceInstance: true,
                         currentRevision: {
@@ -1957,11 +1956,45 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 },
             },
         });
-        const entry = story?.entries[0];
-        if (!story || !story.currentRevision || !entry || !entry.currentRevision) {
+        if (!story || !story.currentRevision || story.entries.length === 0 || !story.entries[0].currentRevision) {
             return null;
         }
-
+        const toEntryDetail = (entry: (typeof story.entries)[number]): EntryDetail => ({
+            id: entry.id,
+            sourceId: entry.sourceInstance.id,
+            sourceName: entry.sourceInstance.name,
+            sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
+            currentRevisionId: entry.currentRevision!.id,
+            metrics: parseJson<ContentMetrics>(entry.metricsJson),
+            revisions: entry.revisions.map((revision) => ({
+                id: revision.id,
+                revision: revision.revision,
+                title: revision.title,
+                summary: revision.summary,
+                contentText: revision.contentText,
+                webUrl: revision.webUrl,
+                contentKind: contentKindSchema.parse(revision.contentKind),
+                publisher: parseJson<Publisher>(revision.publisherJson),
+                publishedAt: parseJson<TemporalValue>(revision.publishedAtJson)
+                    ?? exactTemporalValue(revision.sourcePublishedAt),
+                updatedAt: parseJson<TemporalValue>(revision.updatedAtJson),
+                sourcePublishedAt: revision.sourcePublishedAt?.toISOString() ?? null,
+                createdAt: revision.createdAt.toISOString(),
+                assets: revision.assets.map((asset) => this.toAssetSnapshot(asset)),
+            })),
+            observations: entry.observations.map((observation) => ({
+                id: observation.id,
+                externalId: observation.externalId,
+                externalKey: observation.externalKey,
+                eventKind: observation.eventKind as "create" | "update" | "delete" | "snapshot",
+                webUrl: observation.webUrl,
+                capturedAt: observation.capturedAt.toISOString(),
+                sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
+            })),
+        });
+        const entries = story.entries
+            .filter((entry) => entry.currentRevision !== null)
+            .map(toEntryDetail);
         return {
             story: {
                 id: story.id,
@@ -1971,39 +2004,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 title: story.currentRevision.title,
                 summary: story.currentRevision.summary,
             },
-            entry: {
-                id: entry.id,
-                sourceId: entry.sourceInstance.id,
-                sourceName: entry.sourceInstance.name,
-                sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
-                currentRevisionId: entry.currentRevision.id,
-                metrics: parseJson<ContentMetrics>(entry.metricsJson),
-                revisions: entry.revisions.map((revision) => ({
-                    id: revision.id,
-                    revision: revision.revision,
-                    title: revision.title,
-                    summary: revision.summary,
-                    contentText: revision.contentText,
-                    webUrl: revision.webUrl,
-                    contentKind: contentKindSchema.parse(revision.contentKind),
-                    publisher: parseJson<Publisher>(revision.publisherJson),
-                    publishedAt: parseJson<TemporalValue>(revision.publishedAtJson)
-                        ?? exactTemporalValue(revision.sourcePublishedAt),
-                    updatedAt: parseJson<TemporalValue>(revision.updatedAtJson),
-                    sourcePublishedAt: revision.sourcePublishedAt?.toISOString() ?? null,
-                    createdAt: revision.createdAt.toISOString(),
-                    assets: revision.assets.map((asset) => this.toAssetSnapshot(asset)),
-                })),
-                observations: entry.observations.map((observation) => ({
-                    id: observation.id,
-                    externalId: observation.externalId,
-                    externalKey: observation.externalKey,
-                    eventKind: observation.eventKind as "create" | "update" | "delete" | "snapshot",
-                    webUrl: observation.webUrl,
-                    capturedAt: observation.capturedAt.toISOString(),
-                    sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
-                })),
-            },
+            entry: entries[0],
+            entries,
         };
     }
 

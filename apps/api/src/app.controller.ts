@@ -28,6 +28,9 @@ import { z, ZodError } from "zod";
 import {
     createHealthSnapshot,
     WorkflowHostConflictError,
+    StoryMergeConflictError,
+    StoryNotFoundError,
+    StoryRevisionConflictError,
     type CosmosRepository,
     type WorkflowEnvelope,
     type WorkflowHostStore,
@@ -39,8 +42,11 @@ import {
     entryListQuerySchema,
     searchQuerySchema,
     idempotencyKeySchema,
+    mergeStoriesCommandSchema,
+    moveEntryToStoryCommandSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
+    updateStoryRevisionCommandSchema,
     updateSourceCommandSchema,
     type CreateSourceCommand,
     type HealthResponse,
@@ -544,6 +550,68 @@ export class AppController {
             });
         }
         return result;
+    }
+
+    @Post("stories/:storyId/entry-moves")
+    @Bind(Param("storyId"), Body())
+    async moveEntryToStory(storyId: string, body: unknown) {
+        try {
+            const parsed = moveEntryToStoryCommandSchema.parse(body);
+            const result = await this.repository.moveEntryToStory({
+                entryId: parsed.entryId,
+                storyId,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+            if (!result) {
+                throw new NotFoundException({
+                    code: "not_found",
+                    message: `Entry not found: ${parsed.entryId}`,
+                    retryable: false,
+                });
+            }
+            return result;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("stories/:storyId/revisions")
+    @Bind(Param("storyId"), Body())
+    async updateStoryRevision(storyId: string, body: unknown) {
+        try {
+            const parsed = updateStoryRevisionCommandSchema.parse(body);
+            const result = await this.repository.updateStoryRevision({
+                storyId,
+                baseRevisionId: parsed.baseRevisionId,
+                title: parsed.title,
+                summary: parsed.summary ?? null,
+                kind: parsed.kind,
+                subtype: parsed.subtype ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+            return result;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("stories/merges")
+    @Bind(Body())
+    async mergeStories(body: unknown) {
+        try {
+            const parsed = mergeStoriesCommandSchema.parse(body);
+            const result = await this.repository.mergeStories({
+                canonicalStoryId: parsed.canonicalStoryId,
+                obsoleteStoryIds: parsed.obsoleteStoryIds,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+            return result;
+        } catch (error) {
+            sourceCommandError(error);
+        }
     }
 
     @Get("entries/:entryId")

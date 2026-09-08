@@ -365,8 +365,35 @@ export const storyDetailSchema = z.object({
         summary: z.string().nullable(),
     }),
     entry: entryDetailSchema,
+    entries: entryDetailSchema.array(),
 });
 export type StoryDetail = z.infer<typeof storyDetailSchema>;
+
+export const moveEntryToStoryCommandSchema = z.object({
+    entryId: z.string().trim().min(1).max(300),
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+});
+export type MoveEntryToStoryCommand = z.infer<typeof moveEntryToStoryCommandSchema>;
+
+export const updateStoryRevisionCommandSchema = z.object({
+    baseRevisionId: z.string().trim().min(1).max(300),
+    title: z.string().trim().min(1).max(500),
+    summary: z.string().trim().max(5000).nullish(),
+    kind: z.enum(["event", "document", "media", "thread"]),
+    subtype: z.string().trim().max(200).nullish(),
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+});
+export type UpdateStoryRevisionCommand = z.infer<typeof updateStoryRevisionCommandSchema>;
+
+export const mergeStoriesCommandSchema = z.object({
+    canonicalStoryId: z.string().trim().min(1).max(300),
+    obsoleteStoryIds: z.array(z.string().trim().min(1).max(300)).min(1).max(50),
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+});
+export type MergeStoriesCommand = z.infer<typeof mergeStoriesCommandSchema>;
 
 export const revisionDetailSchema = entryRevisionSnapshotSchema.extend({
     entryId: z.string(),
