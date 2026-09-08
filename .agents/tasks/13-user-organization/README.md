@@ -78,6 +78,24 @@ Non-goals（见 Proposal / ADR-0009）：
 - 迁移类改动必须在 `.agent/tmp/` 用含旧数据的隔离库验证 upgrade（全新表，仍跑 fresh + upgrade 两态）。
 - `docs/spec/` 在行为落地后同步（domain/0001 扩展、contracts/0001、storage/0001、interfaces/0002/0005）与 `docs/testing/README.md`。
 
+## Implementation Walkthrough（子切片 A，2026-09-08）
+
+实现顺序与提交：
+
+1. `244461c` 领域/存储层：domain 新增 `targetTypes`/`favoriteTargetTypes`；contracts 新增 Label/Collection/Favorite DTO 与 6 个命令 schema，并给 `StoryDetail` 追加 `labels`/`favorited`；application 新增 4 个错误类与 16 个 repository 端口方法；Prisma 新增 5 张表 + migration `20260908140000_user_organization_v1`；storage 实现 label/collection/favorite 事务命令与 `mergeStories` 的 `CollectionItem`/`Favorite`/`LabelAssignment` 迁移，`story()` 投影 labels/favorited。
+2. `1401022` API/transport 层：transport client 新增 14 个方法；`apps/api` 新增 18 个端点（labels、label-assignments、collections、items、favorites），全部经 `sourceCommandError` 漏斗映射 400/404/409/500。
+3. `1a9735d` Web 层：`page.tsx` 加载 labels/collections 并新增 7 个处理器；`story-panel.tsx` 新增“用户组织”区（收藏开关、标签增删/新建、收藏夹成员勾选/新建），全部 props 可选。
+4. `d3d183f` 文档同步：`docs/spec` 五个文件 + `docs/testing/README.md` + 本 Task。
+
+验证（2026-09-08，实际运行）：
+
+- `bun run typecheck` 全仓通过（packages + apps，含 web `tsc --noEmit`）。
+- `bun run test` 全量 43 文件 / 368 用例全部通过（本轮无 Windows SQLite 抖动）；其中 `user-organization-domain.test.ts` 5 用例、domain 9、contracts 24、transport-http 8、api controller 29、component-lab 27。
+- `bun run build` 通过（含 Next standalone）；`bun run lint:web` 0 error（2 个既有 warning）；`bun run docs:check` 339 文件 failures=[]；`git diff --check` 干净。
+- 迁移：`bun run db:validate` 通过；隔离库 `prisma migrate deploy` 应用 `20260908140000_user_organization_v1` 成功（storage 行为测试的 setup 即该路径）。
+
+未运行：浏览器产品 E2E（用户组织流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署。
+
 ## Follow-ups
 
 - 浏览器产品 E2E（用户组织流程）与人工浏览器验收留待后续。
