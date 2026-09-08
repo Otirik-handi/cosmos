@@ -1,6 +1,17 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-08。Phase 2 第二切片 Topic 域模型 v1（Task 11）已实现并合入 `master`（`ff7cc00..addcefc`），随后已推送至远端（`origin/master` = `1f6c58c`）。Topic 不可变 Revision、Topic Membership（受管角色 + revision/tombstone 可恢复）、Topic merge canonical/alias、Story merge 同步迁移 membership、Product API 九个端点与 Web TopicPanel/从 Story 侧加入创建入口均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-08。Phase 2 第三切片 Entity/关系 v1（Task 12）已实现并合入 `master`（`05f604f..5b3e327`）。Entity 不可变 Revision + 名称别名、Story↔Entity 关联、Entity↔Entity 类型化关系（provenance、手动优先）、Product API 十一个端点与 Web EntityPanel/从 Story 侧关联入口均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-08：Entity/关系 v1 实现合入（Phase 2 第三切片，Task 12）
+
+Proposal [`entity-relation-v1`](docs/proposals/entity-relation-v1.md)（accepted）与 ADR-0008 的实现已合入 `master`（`5b3e327`），分三层落地：
+
+1. **Entity 域 + 五张表**：schema + migration `20260908120000_entity_relation_v1`（`Entity`/`EntityRevision`/`EntityAlias`/`StoryEntity`/`EntityRelation`，forward-only、全新表无 backfill）；domain 新增 `entityTypes`（person/organization/product/project/model/location）与 `entityRelationTypes`（founded/works_at/located_in/produced/part_of/related_to）受管枚举 + `fingerprintEntityRevision`；storage 实现 create/update Entity（`baseRevisionId` CAS + fingerprint no-op）、名称别名增删、Story↔Entity link/unlink（幂等 + provenance 缺省 human/1）、Entity↔Entity 类型化关系增删（方向唯一、未知类型/自环 conflict）、详情/列表读取。
+2. **Story merge 扩展（一致性）**：`mergeStories` 同一事务内把指向 obsolete Story 的 `StoryEntity` 迁到 canonical，保持 `(storyId, entityId)` 唯一在 canonical 上成立（与 ADR-0007 的 TopicMembership 迁移对称，记为 Task 12 偏差）。
+3. **公共合同与 Product API**：Entity DTO（写入侧受管枚举、读取侧放宽降级）+ 八个命令 schema；`StoryDetail` 向后兼容新增 `entities` 数组；transport client 同步；API 十一个端点（列表/详情、revisions、aliases/alias-removals、story-entity-links 与 removals、entity-relations 与 removals）。
+4. **Web**：`EntityPanel`（规范名/类型/别名/关联 Story/关系维护）、StoryPanel「关联 Entity / 创建 Entity 并关联本 Story / 解除关联」、侧栏 Entities 列表；组件实验室登记 `entity-panel`。
+
+验证（2026-09-08，实际运行）：`bun run typecheck` 全仓通过；`bun run build`（含 Next standalone）通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run docs:check` 333 文件通过；`git diff --check` 干净。聚焦测试：domain 8、contracts 21、transport-http 7、api controller 25、storage-prisma entity-relation-domain 5、component-lab registry 12 全部通过。全量 `bun run test` 并行两轮各有 11/12 例失败，全部集中在 storage-prisma 的 `prisma migrate deploy` 迁移测试（EBUSY unlink + 5s 超时，与既有 Windows SQLite 并行负载环境抖动一致）；8 个失败文件单独串行重跑 78/78 通过。未运行：浏览器产品 E2E（Entity/关系流程）、`test:browser:component-lab`、Node 进程 E2E、Windows smoke、Docker/Compose、发布部署。
 
 ## 2026-09-08：Topic 域模型 v1 实现合入（Phase 2 第二切片，Task 11）
 
@@ -183,11 +194,11 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-08 更新：最新基线、Topic 切片合入与门禁见顶部“2026-09-08：Topic 域模型 v1 实现合入”。）
+（2026-09-08 更新：最新基线、Entity 切片合入与门禁见顶部“2026-09-08：Entity/关系 v1 实现合入”。）
 
-- Topic 域模型 v1（Task 11）已合入 `master`（`addcefc`）并推送至远端（`1f6c58c`）；worktree `.worktree/topic-domain` 与分支 `feat/t11-topic-domain` 已清理（`git worktree remove` + PowerShell 清残留 node_modules + `git branch -d`）。
-- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随 Topic 切片顺带执行。
-- 后续 Phase 2 切片候选（按 PRD 顺序）：Entity/关系、Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期与 `evidence_for`/`mentions` 跨 Story 引用后置；Topic 流程浏览器 E2E 与人工验收留待后续。
+- Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）；worktree `.worktree/entity-relation` 与分支 `feat/t12-entity-relation` 已清理；推送记录见本文件顶部状态提交。
+- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
+- 后续 Phase 2 切片候选（按 PRD 顺序）：Label/Annotation/Collection/Saved View、可配置 Board/Spotlight；Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；Entity/关系流程浏览器 E2E 与人工验收留待后续。
 
 ## 已完成
 
