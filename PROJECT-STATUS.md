@@ -207,7 +207,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 （2026-09-08 更新：最新基线、用户组织切片合入与门禁见顶部“2026-09-08：用户组织 v1 实现合入”。）
 
-- 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`），**尚未推送远端**（`origin/master` 仍为 `3c15f7d`）；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
+- 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端（`origin/master` = `31cfdbd`）；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
 - 后续 Phase 2 切片候选（按 PRD 顺序）：可配置 Board/Section/Block 与 Spotlight（含 BRD-006 Feed Block 绑定 Saved View）；Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；用户组织与 Entity/关系流程的浏览器 E2E 与人工验收留待后续。
