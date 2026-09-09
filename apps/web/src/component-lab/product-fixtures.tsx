@@ -213,7 +213,7 @@ export function renderStatusSummaryLab(props: LabProps) {
 }
 
 export function renderSourceActionsLab(props: LabProps) {
-    const state = optionProp(props, "state", "configured", ["configured", "untimed", "empty", "disabled"] as const);
+    const state = optionProp(props, "state", "configured", ["configured", "untimed", "empty", "disabled", "media-policy"] as const);
     const sources: readonly SourceSnapshot[] = state === "empty"
         ? []
         : [{
@@ -223,7 +223,11 @@ export function renderSourceActionsLab(props: LabProps) {
             operationId: "fetch",
             connectorId: "fixture-rss",
             kind: "fixture-rss",
-            config: state === "untimed" ? {} : {scheduleIntervalMs: 1_800_000},
+            config: state === "untimed"
+                ? {}
+                : state === "media-policy"
+                    ? { scheduleIntervalMs: 1_800_000, media: { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } }
+                    : { scheduleIntervalMs: 1_800_000 },
             enabled: state !== "disabled" && booleanProp(props, "enabled", true),
             revisionId: "source-fixture:1",
             createdAt: fixtureTimestamp,
@@ -235,6 +239,7 @@ export function renderSourceActionsLab(props: LabProps) {
         <SourceActions
             onRun={async () => undefined}
             onToggleActivation={async () => undefined}
+            onSaveMediaPolicy={async () => undefined}
             sources={sources}
         />
     );

@@ -354,6 +354,8 @@ flowchart LR
 
 **Phase 2 第八切片注记（2026-09-09，[`story-subtype-registry-v1` Proposal](../proposals/story-subtype-registry-v1.md) accepted）**：ORG-013 的 v1 实施顺序按 Proposal 冻结——subtype 从任意字符串变为受管理注册项（id 按核心 kind 命名空间化、所属 kind、注册项版本、用户可读名称/描述、状态 `active`/`deprecated`/`retired`、声明式身份规则标识、owner），v1 注册表是**代码内静态清单**（不建表、不改 Prisma schema、不写 migration）；写入侧（改 Story Revision、拆分后继）只接受该 kind 下 `active` 的注册项，既有未知 subtype 数据不改写、仍按核心 kind 降级展示；新增只读 `GET /api/v1/story-subtypes` 目录接口，Web 编辑与拆分改用下拉选择。首批只注册 `media.comic`/`media.anime`/`media.video`；身份规则的判定执行（ORG-021）、插件运行时注册、subtype 重命名/合并/迁移工具后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第九切片注记（2026-09-09，[`per-source-media-policy-v1` Proposal](../proposals/per-source-media-policy-v1.md) accepted）**：ING-009 的 v1 实施顺序按 Proposal 冻结——先交付「按来源的图片下载开关 + 单文件/单次预算」，策略写在 `Source.config.media`（`images`/`maxFileBytes`/`maxRunBytes`，全部可选，缺省跟随全局默认 10MB/50MB），v1 只对声明 `media-download` 的 `source.rss@1` 开放；来源只能收紧全局默认、不能放宽（schema 上界即全局默认）；有效策略在 fetch 时从 Run 的 `SourceExecutionSnapshot` 解析，因此改动只影响之后入队的采集，已存 Asset 不改写、不删除；Web 在来源行提供媒体策略编辑（`PATCH /sources/:id` + `baseRevisionId` CAS）。保留期与清理任务、失败重试与历史回填、音频/视频下载实体、单条目媒体数量上限、全局默认值的 env 化后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |

@@ -265,7 +265,7 @@ const statusSummaryControls = [
 
 const sourceActionsControls = [
     control("sourceName", "Source name", "text", "Cosmos fixture"),
-    control("state", "State", "select", "configured", ["configured", "untimed", "empty", "disabled"]),
+    control("state", "State", "select", "configured", ["configured", "untimed", "empty", "disabled", "media-policy"]),
     control("enabled", "Enabled", "boolean", true),
 ] as const satisfies readonly LabControlDefinition[];
 
@@ -437,6 +437,7 @@ export const labComponentDefinitions = [
             {id: "untimed", label: "Untimed", props: {sourceName: "Cosmos fixture", state: "untimed", enabled: true}},
             {id: "empty", label: "Empty", props: {sourceName: "Cosmos fixture", state: "empty", enabled: true}},
             {id: "disabled", label: "Disabled", props: {sourceName: "Cosmos fixture", state: "disabled", enabled: false}},
+            {id: "media-policy", label: "Media policy tightened", props: {sourceName: "Cosmos fixture", state: "media-policy", enabled: true}},
         ],
         tokens: sharedTokens,
         render: renderSourceActionsLab,

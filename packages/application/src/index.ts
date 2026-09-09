@@ -62,6 +62,7 @@ import type { CatalogPort } from "./catalog.js";
 import {
     acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
+    resolveMediaPolicy,
     type MediaAcquirer,
 } from "./media-acquisition.js";
 
@@ -1374,6 +1375,7 @@ export class IngestionService {
                     this.mediaAcquirer,
                     page.items,
                     unchanged,
+                    { policy: resolveMediaPolicy(source.config.media) },
                 );
             }
 

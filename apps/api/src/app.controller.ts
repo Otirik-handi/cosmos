@@ -1729,6 +1729,10 @@ function toPublicSource(source: SourceSnapshot) {
     if (typeof source.config.scheduleIntervalMs === "number") {
         config.scheduleIntervalMs = source.config.scheduleIntervalMs;
     }
+    // Per-source media policy (ADR-0014); absent means "follow the default".
+    if (source.config.media !== undefined) {
+        config.media = source.config.media;
+    }
     if (source.kind === "bilibili") {
         for (const key of ["mode", "limit", "profile", "schemaVersion"] as const) {
             const value = source.config[key];

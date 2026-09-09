@@ -5,6 +5,7 @@ import {
     createMediaAcquirer,
     isPublicAddress,
     parseAllowedHosts,
+    resolveMediaPolicy,
     type HostResolver,
 } from "./media-acquisition.js";
 
@@ -309,6 +310,104 @@ describe("media acquisition (ADR-0005)", () => {
             ]);
         expect(out.assets[0].status).toBe("failed");
         expect(out.assets[0].errorMessage).toMatch(/解析/);
+    });
+});
+
+describe("per-source media policy (ADR-0014)", () => {
+    it("resolves missing fields to the global defaults", () => {
+        expect(resolveMediaPolicy(undefined)).toEqual({
+            images: "download",
+            maxFileBytes: 10 * 1024 * 1024,
+            maxRunBytes: 50 * 1024 * 1024,
+        });
+        expect(resolveMediaPolicy({ images: "metadata_only" })).toEqual({
+            images: "metadata_only",
+            maxFileBytes: 10 * 1024 * 1024,
+            maxRunBytes: 50 * 1024 * 1024,
+        });
+    });
+
+    it("caps stored values at the effective limits", () => {
+        expect(resolveMediaPolicy(
+            { maxFileBytes: 2 * 1024 * 1024, maxRunBytes: 4 * 1024 * 1024 },
+            { maxFileBytes: 1024 * 1024, maxRunBytes: 2 * 1024 * 1024, perMediaTimeoutMs: 1_000 },
+        )).toEqual({
+            images: "download",
+            maxFileBytes: 1024 * 1024,
+            maxRunBytes: 2 * 1024 * 1024,
+        });
+    });
+
+    it("keeps connector output untouched when images are disabled", async () => {
+        const { fetchImpl, calls } = fakeFetch({
+            "https://media.example.test/a.png": () => okImage(pngSignature, "image/png"),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const [out] = await acquirer.acquireItems(
+            [item([asset({})])],
+            { policy: resolveMediaPolicy({ images: "metadata_only" }) },
+        );
+        expect(out.assets[0]).toMatchObject({ status: "metadata_only", content: null });
+        expect(calls).toEqual([]);
+    });
+
+    it("applies the source file budget to a candidate", async () => {
+        const { fetchImpl } = fakeFetch({
+            "https://media.example.test/a.png": () => new Response("", {
+                status: 200,
+                headers: { "content-length": String(2 * 1024 * 1024) },
+            }),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const [out] = await acquirer.acquireItems(
+            [item([asset({})])],
+            { policy: resolveMediaPolicy({ maxFileBytes: 1024 * 1024 }) },
+        );
+        expect(out.assets[0].status).toBe("skipped");
+        expect(out.assets[0].errorMessage).toMatch(/大小上限/);
+    });
+
+    it("never raises the acquirer's own configured limits", async () => {
+        const { fetchImpl } = fakeFetch({
+            "https://media.example.test/a.png": () => new Response("", {
+                status: 200,
+                headers: { "content-length": String(2_048) },
+            }),
+        });
+        const acquirer = createMediaAcquirer({
+            fetch: fetchImpl,
+            resolveHost: publicResolver,
+            limits: { maxFileBytes: 1_024 },
+        });
+        const [out] = await acquirer.acquireItems(
+            [item([asset({})])],
+            {
+                policy: {
+                    images: "download",
+                    maxFileBytes: 10 * 1024 * 1024,
+                    maxRunBytes: 50 * 1024 * 1024,
+                },
+            },
+        );
+        expect(out.assets[0].status).toBe("skipped");
+        expect(out.assets[0].errorMessage).toMatch(/大小上限/);
+    });
+
+    it("applies the source run budget across candidates", async () => {        const { fetchImpl } = fakeFetch({
+            "https://media.example.test/a.png": () => okImage(new Uint8Array([1, 2, 3]), "image/png"),
+            "https://media.example.test/b.png": () => okImage(new Uint8Array([4, 5, 6]), "image/png"),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const [out] = await acquirer.acquireItems(
+            [item([
+                asset({ sourceUrl: "https://media.example.test/a.png" }),
+                asset({ sourceUrl: "https://media.example.test/b.png" }),
+            ])],
+            { policy: { images: "download", maxFileBytes: 10 * 1024 * 1024, maxRunBytes: 3 } },
+        );
+        expect(out.assets[0].status).toBe("saved");
+        expect(out.assets[1].status).toBe("skipped");
+        expect(out.assets[1].errorMessage).toMatch(/预算/);
     });
 });
 

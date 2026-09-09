@@ -62,8 +62,11 @@ Asset download 中未被 client 封装的部分不由它承担。
   `HttpCosmosClient` 的 source error 只会把它置为 unavailable。
 - **来源健康**：`source-health` Block 把 Source 快照解释为一行行可读状态——启用徽章、定时语义
   （启用+定时显示“每 N 自动抓取”；启用无定时显示“未配置定时，仅手动录入”；停用显示
-  “已停用，定时抓取暂停”或“已停用”）、上次运行时间与最近错误。它不新增合同，全部
-  投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/lastRunAt/lastError`。
+  “已停用，定时抓取暂停”或“已停用”）、媒体策略摘要、上次运行时间与最近错误。它不新增
+  读合同，投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/config.media/lastRunAt/lastError`。
+  行内“媒体策略”入口打开一个表单（图片下载开关 + 单文件/单次上限，留空表示跟随默认），
+  保存走 `PATCH /api/v1/sources/:id`（带 `baseRevisionId`），超默认值在本地就被拒绝，
+  409 提示版本冲突并刷新（ADR-0014）。
 - **分类（Label）与 Topic 筛选**：搜索表单把已加载的 Label 与 Topic 渲染成可多选的筛选
   chip；选中项以 id 数组存在表单状态里，提交时拼成 `search` 的 `labelIds`/`topicIds`
   逗号串。它不新增合同，只是把既有 search 过滤条件接出编辑入口。

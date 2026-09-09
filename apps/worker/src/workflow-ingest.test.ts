@@ -553,6 +553,120 @@ describe("Worker Ingest Workflow composition", () => {
             await repository.close();
         }
     }, 15_000);
+
+    it("honours the source's media policy frozen into the run snapshot", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-policy-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const created = await repository.createSource({
+                name: "Media policy workflow",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: { media: { images: "metadata_only" } },
+            });
+            const source = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: `test-activation:${created.id}`,
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+            const item: NormalizedIngestItem = {
+                externalId: "media-policy-1",
+                title: "Media policy item",
+                summary: null,
+                contentText: "Body with one image candidate",
+                webUrl: "https://example.test/media-policy",
+                kind: "article",
+                publisher: null,
+                metrics: null,
+                publishedAt: null,
+                updatedAt: null,
+                sourceLocator: { provider: "fixture", item: "media-policy-1" },
+                rawPayload: "<item>media-policy</item>",
+                assets: [{
+                    kind: "image",
+                    sourceUrl: "https://media.example.test/a.png",
+                    status: "metadata_only",
+                    mimeType: null,
+                    byteSize: null,
+                    content: null,
+                }],
+            };
+            const fetched: string[] = [];
+            const connector: IngestConnector = {
+                id: "rss",
+                description: "Media policy workflow connector",
+                configVersion: "v1",
+                capabilities: [mediaDownloadCapability],
+                validate: () => undefined,
+                fetchItems: async () => ({
+                    items: [item],
+                    nextCursor: null,
+                }),
+            };
+            const mediaAcquirer = createMediaAcquirer({
+                fetch: async (input) => {
+                    fetched.push(String(input));
+                    return new Response(
+                        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+                        { status: 200, headers: { "content-type": "image/png" } },
+                    );
+                },
+                resolveHost: async () => ["93.184.216.34"],
+            });
+            const composition = createWorkflowHost({
+                prisma: repository.prisma,
+                blobs: repository.blobs,
+                definitions: [createIngestWorkflowDefinition()],
+                actions: createIngestActions({
+                    resolveConnector: () => connector,
+                    blobs: repository.blobs,
+                    domain: repository,
+                    unchangedItems: repository,
+                    mediaAcquirer,
+                }),
+                owner: "media-policy-worker",
+                leaseMs: 60_000,
+            });
+            const control = new IngestWorkflowControlService({
+                store: composition.store,
+                getSourceExecutionSnapshot: async (sourceId) => (
+                    await repository.getSource(sourceId) ?? null
+                ),
+                getCheckpointSnapshot: (sourceId) => repository.getCheckpointSnapshot(sourceId),
+            });
+
+            const run = await control.enqueue({
+                sourceId: source.id,
+                triggerKind: "manual",
+                idempotencyKey: "media-policy-run-1",
+            });
+            await expect(drainWorkflow(composition, run.runId)).resolves.toMatchObject({
+                status: "completed",
+            });
+
+            // images: metadata_only leaves the connector output untouched.
+            expect(fetched).toEqual([]);
+            const fetchJob = await repository.prisma.job.findFirst({
+                where: { workflowRunId: run.runId, kind: "workflow-activity" },
+                orderBy: { createdAt: "asc" },
+            });
+            expect(fetchJob?.resultJson).toBeTruthy();
+            const fetchResult = JSON.parse(fetchJob!.resultJson!) as {
+                items?: Array<{ assets?: Array<{ status?: string; blobRef?: unknown }> }>;
+            };
+            expect(fetchResult.items?.[0]?.assets?.[0]).toMatchObject({
+                status: "metadata_only",
+                blobRef: null,
+            });
+        } finally {
+            await repository.close();
+        }
+    }, 15_000);
 });
 
 async function drainWorkflow(

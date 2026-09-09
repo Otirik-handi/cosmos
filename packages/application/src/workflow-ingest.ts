@@ -33,6 +33,7 @@ import { ConnectorExecutionError } from "./index.js";
 import {
     acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
+    resolveMediaPolicy,
     type MediaAcquirer,
 } from "./media-acquisition.js";
 import type {
@@ -311,7 +312,13 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                         options.mediaAcquirer,
                         page.items,
                         unchanged,
-                        { signal: context.signal },
+                        {
+                            signal: context.signal,
+                            // Policy comes from this Run's frozen source snapshot,
+                            // so editing a source never affects a queued Run
+                            // (ADR-0014 decision 4).
+                            policy: resolveMediaPolicy(source.config.media),
+                        },
                     );
                 }
                 try {

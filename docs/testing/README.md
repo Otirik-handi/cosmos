@@ -64,6 +64,8 @@ Node E2E 通过 `scripts/e2e/helpers.ts` 为每个场景创建 `.agent/tmp/<name
 
 媒体获取测试使用 `fixtures/rss/basic.xml`（含不可达 enclosure 触发 `skipped`）和 `fixtures/rss/media-av.xml`（音视频 `metadata_only`）覆盖降级分支。Worker 通过 `COSMOS_MEDIA_ALLOWED_HOSTS` 环境变量放行测试媒体源，默认为空即拦截私网；该变量仅用于测试环境，不进入产品 Source 配置（ADR-0005）。
 
+按来源的媒体策略 v1（ADR-0014）无 Prisma schema/migration 变更，策略写在 `Source.config.media`。上界与「只能收紧」由 `packages/contracts/src/index.test.ts` 覆盖（`sourceMediaPolicySchema` 拒绝超默认值/未知键/非法枚举，`rssSourceConfigSchema` 接受可选 `media`）；`resolveMediaPolicy` 的缺省与封顶、`images: metadata_only` 不触发下载、来源级文件/单次预算生效由 `packages/application/src/media-acquisition.test.ts` 覆盖（先红后绿：移除策略生效逻辑后 4 例失败）；「策略从 Run 的来源快照解析」由 `apps/worker/src/workflow-ingest.test.ts` 端到端覆盖（来源配置 `media.images=metadata_only` → 不发起媒体请求、asset 保持 `metadata_only`）；Web 表单的 MB 换算、收紧校验与摘要文案由 `apps/web/src/lib/media-policy.test.ts` 覆盖，组件实验室新增 Media policy tightened 场景，浏览器侧由 `e2e/browser/media-policy.spec.ts` 覆盖（超默认值本地拒绝、保存后刷新仍生效、关闭图片下载后新采集的图片保持元数据终态）。
+
 浏览器 Stack 由 `scripts/e2e/web-stack.ts` 管理隔离 API/Worker/Next 进程。动态 API 端口在 Next production build 前注入，Web 使用 same-origin `/api` rewrite；需要先安装 Chromium：
 
 ```text

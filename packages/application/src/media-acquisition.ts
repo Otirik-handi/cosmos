@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
+import { mediaPolicyCeilings, type SourceMediaPolicy } from "@cosmos/contracts";
 import type {
     NormalizedAssetInput,
     NormalizedIngestItem,
@@ -17,8 +18,8 @@ import type { LoggerPort } from "./index.js";
 export const mediaDownloadCapability = "media-download";
 
 export const mediaAcquisitionDefaults = {
-    maxFileBytes: 10 * 1024 * 1024,
-    maxRunBytes: 50 * 1024 * 1024,
+    maxFileBytes: mediaPolicyCeilings.maxFileBytes,
+    maxRunBytes: mediaPolicyCeilings.maxRunBytes,
     perMediaTimeoutMs: 60_000,
 } as const;
 
@@ -26,6 +27,30 @@ export interface MediaAcquisitionLimits {
     maxFileBytes: number;
     maxRunBytes: number;
     perMediaTimeoutMs: number;
+}
+
+/** Effective per-run policy: source values already tightened to the ceilings. */
+export interface MediaPolicy {
+    images: "download" | "metadata_only";
+    maxFileBytes: number;
+    maxRunBytes: number;
+}
+
+/**
+ * Resolve a source's optional `config.media` into effective values. Missing
+ * fields follow the global defaults, and both byte limits are capped by them
+ * so a stored value that bypassed the contract cannot raise the budget
+ * (ADR-0014 decision 2).
+ */
+export function resolveMediaPolicy(
+    policy: SourceMediaPolicy | null | undefined,
+    limits: MediaAcquisitionLimits = mediaAcquisitionDefaults,
+): MediaPolicy {
+    return {
+        images: policy?.images ?? "download",
+        maxFileBytes: Math.min(policy?.maxFileBytes ?? limits.maxFileBytes, limits.maxFileBytes),
+        maxRunBytes: Math.min(policy?.maxRunBytes ?? limits.maxRunBytes, limits.maxRunBytes),
+    };
 }
 
 export type HostResolver = (host: string) => Promise<readonly string[]>;
@@ -41,10 +66,16 @@ export interface MediaAcquirerOptions {
     logger?: LoggerPort;
 }
 
+export interface MediaAcquisitionContext {
+    signal?: AbortSignal;
+    /** Per-run policy from the Run's source snapshot; omitted = global defaults. */
+    policy?: MediaPolicy;
+}
+
 export interface MediaAcquirer {
     acquireItems(
         items: readonly NormalizedIngestItem[],
-        context?: { signal?: AbortSignal },
+        context?: MediaAcquisitionContext,
     ): Promise<readonly NormalizedIngestItem[]>;
 }
 
@@ -58,7 +89,7 @@ export async function acquireItemsSkippingUnchanged(
     acquirer: MediaAcquirer,
     items: readonly NormalizedIngestItem[],
     unchanged: readonly boolean[],
-    context?: { signal?: AbortSignal },
+    context?: MediaAcquisitionContext,
 ): Promise<readonly NormalizedIngestItem[]> {
     if (items.length !== unchanged.length) {
         throw new Error("Media preflight length must match the fetched item list.");
@@ -120,6 +151,21 @@ export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAc
 
     return {
         async acquireItems(items, context) {
+            const policy = context?.policy;
+            if (policy?.images === "metadata_only") {
+                // Policy off: keep the connector's metadata_only output as-is
+                // instead of rewriting status (ADR-0014 decision 3).
+                return items;
+            }
+            const effectiveLimits: MediaAcquisitionLimits = policy
+                ? {
+                    ...limits,
+                    // Clamp against this acquirer's own limits too, so a
+                    // configured (or test) ceiling is never raised by a source.
+                    maxFileBytes: Math.min(policy.maxFileBytes, limits.maxFileBytes),
+                    maxRunBytes: Math.min(policy.maxRunBytes, limits.maxRunBytes),
+                }
+                : limits;
             const startedAt = Date.now();
             const state = {
                 runBytes: 0,
@@ -134,7 +180,7 @@ export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAc
             for (const item of items) {
                 rewritten.push(await rewriteAssets(item, {
                     fetch: fetchImpl,
-                    limits,
+                    limits: effectiveLimits,
                     resolveHost,
                     allowed,
                     maxRedirects,
@@ -147,6 +193,9 @@ export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAc
 
             options.logger?.info("media.acquire.completed", {
                 durationMs: Date.now() - startedAt,
+                images: policy?.images ?? "download",
+                maxFileBytes: effectiveLimits.maxFileBytes,
+                maxRunBytes: effectiveLimits.maxRunBytes,
                 runBytes: state.runBytes,
                 savedCount: state.savedCount,
                 skippedCount: state.skippedCount,

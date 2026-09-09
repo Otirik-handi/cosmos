@@ -130,15 +130,45 @@ const scheduleConfigShape = {
     scheduleIntervalMs: z.coerce.number().int().min(1_000).max(31 * 24 * 60 * 60 * 1_000).optional(),
 };
 
+/**
+ * Ceilings for the per-source media policy (ADR-0014 decision 2). They equal
+ * the global defaults: a source may tighten its own budget but never raise it
+ * above the resource line frozen by ADR-0005. The acquirer reads the same
+ * values as its runtime defaults.
+ */
+export const mediaPolicyCeilings = {
+    maxFileBytes: 10 * 1024 * 1024,
+    maxRunBytes: 50 * 1024 * 1024,
+} as const;
+
+export const mediaPolicyImagesSchema = z.enum(["download", "metadata_only"]);
+export type MediaPolicyImages = z.infer<typeof mediaPolicyImagesSchema>;
+
+/** Per-source media policy; every field is optional and falls back to the global default. */
+export const sourceMediaPolicySchema = z.object({
+    images: mediaPolicyImagesSchema.optional(),
+    maxFileBytes: z.coerce.number().int()
+        .min(64 * 1024)
+        .max(mediaPolicyCeilings.maxFileBytes)
+        .optional(),
+    maxRunBytes: z.coerce.number().int()
+        .min(1024 * 1024)
+        .max(mediaPolicyCeilings.maxRunBytes)
+        .optional(),
+}).strict();
+export type SourceMediaPolicy = z.infer<typeof sourceMediaPolicySchema>;
+
 export const sourceConfigSchema = z.object({
     feedUrl: z.string().url().optional(),
     fixturePath: z.string().min(1).optional(),
+    media: sourceMediaPolicySchema.optional(),
     ...scheduleConfigShape,
 }).passthrough();
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
 
 export const rssSourceConfigSchema = z.object({
     feedUrl: httpFeedUrlSchema,
+    media: sourceMediaPolicySchema.optional(),
     ...scheduleConfigShape,
 }).strict();
 export type RssSourceConfig = z.infer<typeof rssSourceConfigSchema>;

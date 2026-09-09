@@ -936,6 +936,8 @@ Blob 使用内容寻址去重。原始媒体与缩略图、转码和 OCR 结果�
 
 **v1 媒体边界（2026-09-03 冻结，见 [`media-boundary-v1 Proposal`](../proposals/media-boundary-v1.md) 与 [`ADR-0005`](../adr/0005-media-boundary-v1.md)）**：Connector 只负责纯提取与分类，不直接接触 Data Root；Application 拥有统一的媒体获取步骤，在 Worker 的 fetch 边界对图片候选做受控下载与预算执行。媒体发现范围固定为 RSS 条目自身的 enclosure、`media:content`/`media:thumbnail` 与正文媒体标签，不抓取 `webUrl` 外部全文。v1 只把图片保存为本地实体（全局默认单文件 10MB、单次 Run 50MB），音频/视频与其它类型只保存元数据与原文外链；媒体获取按 Connector 能力（公开 `media-download`）门控，未保存配置探测与 fixture 不触发下载。
 
+**按来源的媒体策略 v1（2026-09-09，见 [`per-source-media-policy-v1 Proposal`](../proposals/per-source-media-policy-v1.md) 与 [`ADR-0014`](../adr/0014-per-source-media-policy-v1.md)）**：上面那份「每个 SourceInstance 的媒体策略」清单在 v1 只落地前三项中的两项——`Source.config.media` 提供图片下载开关（`images`）与单文件/单次 Run 预算（`maxFileBytes`/`maxRunBytes`），全部可选，缺省跟随全局默认。来源只能收紧、不能放宽（公共 schema 的上界就是全局默认）；有效策略在 fetch 时从本次 Run 的 `SourceExecutionSnapshot` 解析，所以改策略只影响之后入队的采集，已存 Asset 不改写、不删除。外链图片抓取、视频本体、保留期限与失败重试次数仍后置。
+
 数据分层按既定方向冻结：domain `NormalizedAssetInput.content: Uint8Array` → Application 在 Workflow 边界映射 BlobRef → Storage 保存 Asset metadata 与 storageKey → Product API 提供受控下载。公共 4 态枚举与 Prisma 表结构不变（无 migration）；降级原因以可空可选 `errorMessage` 字段经 domain → ingest wire → Storage（`Asset.errorMessage` 列已存在）→ Asset 快照透传。非 saved 状态一律保留原文外链；媒体失败不阻止条目入库，也不在条目修订不变时重试（不自愈），界面展示真实降级而非伪造离线成功。下载安全边界为仅 http/https、DNS 解析结果全公网、逐跳重定向不超过 3、Content-Type/文件魔数校验、单媒体超时；私网/环回默认拦截，测试用 `COSMOS_MEDIA_ALLOWED_HOSTS` allowlist 放开受控源。per-source 媒体类型/预算/保留期/失败重试与历史回填仍后置 ING-009。`local` 作用域键仍未冻结，是未来认证的候选替换点。
 
 ## 7. 信息库领域模型

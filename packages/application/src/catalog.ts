@@ -157,7 +157,21 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor"],
             configurationSchema: builtinSchema("source.rss.config@1", {
                 type: "object",
-                properties: { feedUrl: { type: "string", format: "uri" }, scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
+                properties: {
+                    feedUrl: { type: "string", format: "uri" },
+                    scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 },
+                    // Descriptive only; the canonical Zod schema owns the
+                    // tightening bounds (ADR-0014 decision 2).
+                    media: {
+                        type: "object",
+                        properties: {
+                            images: { enum: ["download", "metadata_only"] },
+                            maxFileBytes: { type: "integer", minimum: 65536, maximum: 10485760 },
+                            maxRunBytes: { type: "integer", minimum: 1048576, maximum: 52428800 },
+                        },
+                        additionalProperties: false,
+                    },
+                },
                 required: ["feedUrl"],
                 additionalProperties: false,
             }),

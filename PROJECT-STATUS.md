@@ -1,6 +1,20 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第九切片按来源的媒体策略 v1（Task 19）实现完成，位于任务分支 `feat/t19-per-source-media-policy`（worktree `.worktree/per-source-media-policy`），**尚未 commit、push 或合入 `master`**；提案的三项裁决为 Agent 推荐默认（维护者评审问题未获回复），可随时否决。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：按来源的媒体策略 v1 实现完成（Phase 2 第九切片，Task 19，未合入）
+
+Proposal [`per-source-media-policy-v1`](docs/proposals/per-source-media-policy-v1.md)（accepted，2026-09-09；三项裁决为 Agent 推荐默认，**非用户裁决**）与 ADR-0014 的实现已完成（切片 1–2），落在 `feat/t19-per-source-media-policy`：
+
+1. **策略合同**：`Source.config.media`（可选 `images`/`maxFileBytes`/`maxRunBytes`）；上界即全局默认 10MB/50MB，来源只能收紧；v1 只对声明 `media-download` 的 `source.rss@1` 开放，manifest JSON Schema 同步声明（描述用）。无 Prisma schema、migration、回填。
+2. **生效边界**：`resolveMediaPolicy` 在 fetch 时从本次 Run 的 `SourceExecutionSnapshot.config.media` 解析；`images=metadata_only` 时媒体获取组件原样返回 connector 输出（不下载、不改状态），否则用来源预算覆盖本次 Run 限额。durable 与 legacy 两条泳道行为一致，已存 Asset 不受影响。
+3. **Web**：来源健康行新增「媒体策略」入口（图片开关 + 两个上限，留空跟随默认），保存走 `PATCH /sources/:id` + `baseRevisionId`，超默认值在本地拒绝、409 提示冲突并刷新。
+4. **修复既有投影缺口**：API 的 `toPublicSource` 白名单会把 `config.media` 丢掉（保存成功但列表仍显示跟随默认），已补白名单与 API 测试。
+5. **测试隔离修复**：断网用例原先只等「任意 Story 出现 fixture 标题」，会被共用同一 feed 的新用例提前满足；改为按来源名限定本来源卡片。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 374 文件 failures=[]；`git diff --check` 干净。聚焦测试：contracts 36、application media-acquisition 24、worker workflow-ingest 3、api controller 38、web media-policy 6、component-lab registry 12 全部通过；先红后绿证据（临时移除策略生效逻辑后 4 例失败，恢复后全绿）。全量 `bun run test` 50 文件/446 用例，389 通过；57 例失败全部是既有 Windows SQLite 并行负载抖动（`migrate deploy` 5s 超时 + EBUSY），串行 `bunx vitest run --no-file-parallelism packages/storage-prisma` 13 文件/108 用例全部通过。浏览器产品 E2E 16/16；组件实验室浏览器 13/13；Node 进程 E2E 4/4。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
+
+过程、偏差与完整命令见 Task 19 walkthrough [`.agents/tasks/19-per-source-media-policy/README.md`](.agents/tasks/19-per-source-media-policy/README.md)。
 
 ## 2026-09-09：Story subtype 受管注册表 v1 实现合入（Phase 2 第八切片，Task 18）
 
@@ -267,8 +281,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：Phase 2 第八切片实现已合入，见顶部记录。）
+（2026-09-09 更新：Phase 2 第九切片实现完成，见顶部记录。）
 
+- Phase 2 第九切片按来源的媒体策略 v1（Task 19）实现完成，位于 `feat/t19-per-source-media-policy`，**待维护者评审与合并授权**；未 commit/push/合并，提案裁决为 Agent 默认。
 - Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0013/spec/testing）已同步。
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。

@@ -32,6 +32,7 @@ import {
     type LabelList,
     type SavedView,
     type SearchQuery,
+    type SourceMediaPolicy,
     type SourceSnapshot,
     type SplitStoryCommand,
     type StoryDetail,
@@ -484,6 +485,28 @@ export default function Home() {
             setError(readError(caught));
         }
     });
+
+    const saveMediaPolicy = async (
+        source: SourceSnapshot,
+        policy: SourceMediaPolicy,
+    ): Promise<void> => {
+        setError(null);
+        try {
+            const nextConfig = { ...source.config, media: policy };
+            await client.updateSource(source.id, {
+                baseRevisionId: source.revisionId,
+                config: nextConfig,
+            });
+            setNotice(`已保存 ${source.name} 的媒体策略；只影响之后的采集。`);
+            await refresh();
+        } catch (caught) {
+            if (caught instanceof CosmosTransportError && caught.status === 409) {
+                setError("来源配置已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                await refresh();
+            }
+            throw caught;
+        }
+    };
 
     const toggleActivation = async (source: SourceSnapshot, enabled: boolean): Promise<void> => {
         setActivatingSourceId(source.id);
@@ -1341,6 +1364,7 @@ export default function Home() {
         <SourceActions
             onRun={runSource}
             onToggleActivation={toggleActivation}
+            onSaveMediaPolicy={saveMediaPolicy}
             activatingSourceId={activatingSourceId}
             runningSourceId={runningSourceId}
             sources={sources}

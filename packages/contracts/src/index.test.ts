@@ -6,6 +6,9 @@ import {
     getSourceConfigurationSchema,
     publisherSchema,
     rssSourceConfigSchema,
+    mediaPolicyCeilings,
+    sourceConfigSchema,
+    sourceMediaPolicySchema,
     createSourceCommandSchema,
     jobSnapshotSchema,
     sourceConfigProbeCommandSchema,
@@ -528,6 +531,43 @@ describe("source and job contracts", () => {
         expect(getSourceConfigurationSchema("source.rss@1")).toBe(rssSourceConfigSchema);
         expect(getSourceConfigurationSchema("source.bilibili@1")).toBe(bilibiliSourceConfigSchema);
         expect(getSourceConfigurationSchema("source.unknown@1")).toBeNull();
+    });
+
+    it("accepts an optional tightened per-source media policy", () => {
+        expect(rssSourceConfigSchema.parse({
+            feedUrl: "https://example.test/feed.xml",
+        }).media).toBeUndefined();
+        expect(rssSourceConfigSchema.parse({
+            feedUrl: "https://example.test/feed.xml",
+            media: {
+                images: "metadata_only",
+                maxFileBytes: 2 * 1024 * 1024,
+                maxRunBytes: 8 * 1024 * 1024,
+            },
+        }).media).toEqual({
+            images: "metadata_only",
+            maxFileBytes: 2 * 1024 * 1024,
+            maxRunBytes: 8 * 1024 * 1024,
+        });
+        expect(sourceConfigSchema.parse({
+            media: { maxFileBytes: 1024 * 1024 },
+        }).media).toEqual({ maxFileBytes: 1024 * 1024 });
+    });
+
+    it("rejects media policy values above the global ceilings or outside the enum", () => {
+        expect(() => sourceMediaPolicySchema.parse({
+            maxFileBytes: mediaPolicyCeilings.maxFileBytes + 1,
+        })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({
+            maxRunBytes: mediaPolicyCeilings.maxRunBytes + 1,
+        })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ maxFileBytes: 1024 })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ images: "keep" })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ downloadAudio: true })).toThrow();
+        expect(mediaPolicyCeilings).toEqual({
+            maxFileBytes: 10 * 1024 * 1024,
+            maxRunBytes: 50 * 1024 * 1024,
+        });
     });
 
     it("validates the public AI HOT configuration", () => {

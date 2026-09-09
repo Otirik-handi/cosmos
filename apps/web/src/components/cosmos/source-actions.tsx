@@ -1,13 +1,23 @@
-import { Play, Power, PowerOff } from "lucide-react";
+import { Play, Power, PowerOff, SlidersHorizontal } from "lucide-react";
+import { useState } from "react";
 
-import type { SourceSnapshot } from "@cosmos/contracts";
+import type { SourceMediaPolicy, SourceSnapshot } from "@cosmos/contracts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    describeMediaPolicy,
+    mediaPolicyFormValues,
+    parseMediaPolicyForm,
+    type MediaPolicyFormValues,
+} from "@/lib/media-policy";
 
 type SourceActionsProps = {
     onRun: (source: SourceSnapshot) => Promise<void>;
     onToggleActivation: (source: SourceSnapshot, enabled: boolean) => Promise<void>;
+    /** 保存来源级媒体策略（ADR-0014）：只影响之后入队的采集。 */
+    onSaveMediaPolicy: (source: SourceSnapshot, policy: SourceMediaPolicy) => Promise<void>;
     activatingSourceId?: string | null;
     runningSourceId?: string | null;
     sources: readonly SourceSnapshot[];
@@ -55,14 +65,44 @@ function formatInterval(intervalMs: number): string {
     return `${Math.round(intervalMs / 1000)} 秒`;
 }
 
-/** 来源健康看板：每行解释启用状态、定时计划、最近运行与错误；启停与手动录入都在行内完成。 */
+/** 来源健康看板：每行解释启用状态、定时计划、最近运行与错误；启停、手动录入与媒体策略都在行内完成。 */
 export function SourceActions({
     onRun,
     onToggleActivation,
+    onSaveMediaPolicy,
     activatingSourceId = null,
     runningSourceId = null,
     sources,
 }: SourceActionsProps) {
+    const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+    const [policyForm, setPolicyForm] = useState<MediaPolicyFormValues>({
+        images: "download",
+        maxFileMb: "",
+        maxRunMb: "",
+    });
+    const [policyError, setPolicyError] = useState<string | null>(null);
+
+    const startEditingPolicy = (source: SourceSnapshot): void => {
+        setEditingPolicyId(source.id);
+        setPolicyForm(mediaPolicyFormValues(source.config.media));
+        setPolicyError(null);
+    };
+
+    const submitPolicy = async (source: SourceSnapshot): Promise<void> => {
+        const parsed = parseMediaPolicyForm(policyForm);
+        if (!parsed.ok) {
+            setPolicyError(parsed.message);
+            return;
+        }
+        setPolicyError(null);
+        try {
+            await onSaveMediaPolicy(source, parsed.policy);
+            setEditingPolicyId(null);
+        } catch (error) {
+            setPolicyError(error instanceof Error ? error.message : "保存媒体策略失败。");
+        }
+    };
+
     return (
         <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
@@ -80,62 +120,177 @@ export function SourceActions({
                     {sources.map((source) => {
                         const running = runningSourceId === source.id;
                         const activating = activatingSourceId === source.id;
+                        const editingPolicy = editingPolicyId === source.id;
                         return (
                             <li
                                 key={source.id}
-                                className="flex items-start justify-between gap-3 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
+                                className="flex flex-col gap-2 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
                             >
-                                <div className="flex min-w-0 flex-col gap-0.5">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                        <Badge
-                                            variant={source.enabled ? "secondary" : "outline"}
-                                            className="shrink-0"
-                                        >
-                                            {source.enabled ? "已启用" : "已停用"}
-                                        </Badge>
-                                        <span className="truncate text-sm font-medium">{source.name}</span>
-                                    </div>
-                                    <span
-                                        title={`${source.kind} · ${source.sourceDefinitionRef}`}
-                                        className="min-w-0 truncate text-xs text-muted-foreground"
-                                    >
-                                        {source.kind} · {source.sourceDefinitionRef}
-                                    </span>
-                                    <span className="text-xs">{scheduleLine(source)}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                        {formatLastRun(source.lastRunAt)}
-                                    </span>
-                                    {source.lastError && (
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex min-w-0 flex-col gap-0.5">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <Badge
+                                                variant={source.enabled ? "secondary" : "outline"}
+                                                className="shrink-0"
+                                            >
+                                                {source.enabled ? "已启用" : "已停用"}
+                                            </Badge>
+                                            <span className="truncate text-sm font-medium">{source.name}</span>
+                                        </div>
                                         <span
-                                            title={source.lastError}
-                                            className="truncate text-xs text-destructive"
+                                            title={`${source.kind} · ${source.sourceDefinitionRef}`}
+                                            className="min-w-0 truncate text-xs text-muted-foreground"
                                         >
-                                            {source.lastError}
+                                            {source.kind} · {source.sourceDefinitionRef}
                                         </span>
-                                    )}
-                                </div>
-                                <div className="flex shrink-0 items-center gap-1">
-                                    <Button
-                                        size="icon-sm"
-                                        variant="outline"
-                                        disabled={activating || running}
-                                        onClick={() => void onToggleActivation(source, !source.enabled)}
-                                    >
-                                        {source.enabled ? <PowerOff aria-hidden={true} /> : <Power aria-hidden={true} />}
-                                        <span className="sr-only">
-                                            {source.enabled ? `停用 ${source.name}` : `启用 ${source.name}`}
+                                        <span className="text-xs">{scheduleLine(source)}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            媒体策略：{describeMediaPolicy(source.config.media)}
                                         </span>
-                                    </Button>
-                                    <Button
-                                        size="icon-sm"
-                                        variant="outline"
-                                        disabled={!source.enabled || running || activating}
-                                        onClick={() => void onRun(source)}
-                                    >
-                                        <Play aria-hidden={true} />
-                                        <span className="sr-only">{source.name}</span>
-                                    </Button>
+                                        <span className="text-xs text-muted-foreground">
+                                            {formatLastRun(source.lastRunAt)}
+                                        </span>
+                                        {source.lastError && (
+                                            <span
+                                                title={source.lastError}
+                                                className="truncate text-xs text-destructive"
+                                            >
+                                                {source.lastError}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        <Button
+                                            size="icon-sm"
+                                            variant="outline"
+                                            disabled={activating || running}
+                                            onClick={() => void onToggleActivation(source, !source.enabled)}
+                                        >
+                                            {source.enabled ? <PowerOff aria-hidden={true} /> : <Power aria-hidden={true} />}
+                                            <span className="sr-only">
+                                                {source.enabled ? `停用 ${source.name}` : `启用 ${source.name}`}
+                                            </span>
+                                        </Button>
+                                        <Button
+                                            size="icon-sm"
+                                            variant="outline"
+                                            disabled={!source.enabled || running || activating}
+                                            onClick={() => void onRun(source)}
+                                        >
+                                            <Play aria-hidden={true} />
+                                            <span className="sr-only">{source.name}</span>
+                                        </Button>
+                                        <Button
+                                            size="icon-sm"
+                                            variant="outline"
+                                            aria-expanded={editingPolicy}
+                                            onClick={() => {
+                                                if (editingPolicy) {
+                                                    setEditingPolicyId(null);
+                                                    return;
+                                                }
+                                                startEditingPolicy(source);
+                                            }}
+                                        >
+                                            <SlidersHorizontal aria-hidden={true} />
+                                            <span className="sr-only">媒体策略 {source.name}</span>
+                                        </Button>
+                                    </div>
                                 </div>
+                                {editingPolicy && (
+                                    <form
+                                        aria-label={`媒体策略 ${source.name}`}
+                                        className="flex flex-col gap-2 rounded-[var(--radius-control)] border bg-muted/30 p-3"
+                                        onSubmit={(event) => {
+                                            event.preventDefault();
+                                            void submitPolicy(source);
+                                        }}
+                                    >
+                                        <p className="text-xs text-muted-foreground">
+                                            只影响之后的采集；已保存的媒体不会被改写或删除。上限只能比全局默认更小。
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <label
+                                                htmlFor={`media-policy-images-${source.id}`}
+                                                className="text-sm"
+                                            >
+                                                图片
+                                            </label>
+                                            <select
+                                                id={`media-policy-images-${source.id}`}
+                                                value={policyForm.images}
+                                                className="rounded-sm border bg-card px-2 py-1 text-sm"
+                                                onChange={(event) => {
+                                                    setPolicyForm((current) => ({
+                                                        ...current,
+                                                        images: event.target.value as MediaPolicyFormValues["images"],
+                                                    }));
+                                                }}
+                                            >
+                                                <option value="download">下载并保存</option>
+                                                <option value="metadata_only">仅记录元数据</option>
+                                            </select>
+                                            <label
+                                                htmlFor={`media-policy-max-file-${source.id}`}
+                                                className="text-sm"
+                                            >
+                                                单文件上限（MB）
+                                            </label>
+                                            <Input
+                                                id={`media-policy-max-file-${source.id}`}
+                                                value={policyForm.maxFileMb}
+                                                placeholder="10"
+                                                className="w-24"
+                                                onChange={(event) => {
+                                                    setPolicyForm((current) => ({
+                                                        ...current,
+                                                        maxFileMb: event.target.value,
+                                                    }));
+                                                }}
+                                            />
+                                            <label
+                                                htmlFor={`media-policy-max-run-${source.id}`}
+                                                className="text-sm"
+                                            >
+                                                单次上限（MB）
+                                            </label>
+                                            <Input
+                                                id={`media-policy-max-run-${source.id}`}
+                                                value={policyForm.maxRunMb}
+                                                placeholder="50"
+                                                className="w-24"
+                                                onChange={(event) => {
+                                                    setPolicyForm((current) => ({
+                                                        ...current,
+                                                        maxRunMb: event.target.value,
+                                                    }));
+                                                }}
+                                            />
+                                        </div>
+                                        {policyError && (
+                                            <p
+                                                role="alert"
+                                                data-media-policy-error="true"
+                                                className="text-xs text-destructive"
+                                            >
+                                                {policyError}
+                                            </p>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                            <Button type="submit" size="sm" variant="outline">
+                                                保存媒体策略
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => setEditingPolicyId(null)}
+                                            >
+                                                取消
+                                            </Button>
+                                        </div>
+                                    </form>
+                                )}
                             </li>
                         );
                     })}

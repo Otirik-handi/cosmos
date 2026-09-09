@@ -174,6 +174,49 @@ describe("AppController SSE", () => {
     });
 });
 
+describe("AppController source media policy projection", () => {
+    it("keeps the per-source media policy in the public config", async () => {
+        const media = { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } as const;
+        const base = {
+            id: "source-1",
+            name: "Fixture",
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            connectorId: "rss",
+            kind: "rss",
+            config: { feedUrl: "https://example.test/feed.xml" },
+            enabled: true,
+            revisionId: "source-1:1",
+            createdAt: "2026-08-08T00:00:00.000Z",
+            updatedAt: "2026-08-08T00:00:00.000Z",
+            lastRunAt: null,
+            lastError: null,
+        };
+        const repository = {
+            getSource: vi.fn().mockResolvedValue(base),
+            updateSource: vi.fn().mockResolvedValue({
+                ...base,
+                config: { ...base.config, media },
+                revisionId: "source-1:2",
+            }),
+        };
+        const controller = new AppController(
+            repository as never,
+            { validate: vi.fn() } as never,
+        );
+
+        const updated = await controller.updateSource("source-1", {
+            baseRevisionId: "source-1:1",
+            config: { feedUrl: "https://example.test/feed.xml", media },
+        });
+
+        expect(updated.config).toEqual({
+            feedUrl: "https://example.test/feed.xml",
+            media,
+        });
+    });
+});
+
 describe("AppController source probe", () => {
     it("queues a probe job without invoking a connector in the API process", async () => {
         const repository = {

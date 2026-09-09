@@ -35,7 +35,14 @@ test("offline: locally saved images render from the API after the network is blo
     // Wait until this test's own feed items appear; earlier specs may already
     // have produced stories, so "any Story trigger" is not a completion signal.
     await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
-    await expect(page.getByText("Offline saved media").first()).toBeVisible({ timeout: 180_000 });
+    // 同一栈内其它 spec 也可能录入同一份 fixture 标题，按来源名限定本来源的卡片。
+    await expect(
+        page
+            .locator("article")
+            .filter({ hasText: sourceName })
+            .filter({ hasText: "Offline saved media" })
+            .first(),
+    ).toBeVisible({ timeout: 180_000 });
     const storyTriggers = page.getByRole("button", { name: "打开 Story" });
     await expect(storyTriggers.first()).toBeVisible({ timeout: 180_000 });
 

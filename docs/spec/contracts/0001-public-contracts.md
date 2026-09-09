@@ -45,8 +45,9 @@
 ### Source 与采集命令
 
 - **sourceDefinitionRef**（trim 后的版本化 ref，如 `source.rss@1`）是 SourceInstance 的唯一业务身份；**operationId** 必须出现在该定义 manifest 的 operationIds 中。旧 **SourceKind** 只作为迁移期运行时投影保留，新 Product API 命令不接受 `kind`。
-- **SourceConfig** 的通用字段是可选 `feedUrl`、`fixturePath` 与 `scheduleIntervalMs`（coerce 整数，范围 1,000 至 31 天毫秒）；该 passthrough schema 仅作历史投影。
-- 各 Source definition 的 canonical 配置校验由 `getSourceConfigurationSchema(ref)` 返回的 strict Zod schema 负责：RSS 要求 http(s) 的 `feedUrl`；fixture RSS 仅接受调度字段；Bilibili 要求 `mode` 且 `mode=feed` 时必须提供 profile；AI HOT 接受调度字段。manifest 的 JSON Schema 只是发布投影。
+- **SourceConfig** 的通用字段是可选 `feedUrl`、`fixturePath`、`media`（来源级媒体策略）与 `scheduleIntervalMs`（coerce 整数，范围 1,000 至 31 天毫秒）；该 passthrough schema 仅作历史投影。
+- **SourceMediaPolicy**（ADR-0014）是来源级媒体策略：可选 `images`（`download`/`metadata_only`，缺省 `download`）、可选 `maxFileBytes`（64KiB–10MB）与 `maxRunBytes`（1MiB–50MB）。上界即全局默认，来源只能收紧；`mediaPolicyCeilings` 是同一组数字的单一来源，媒体获取组件的运行时默认值取自它。
+- 各 Source definition 的 canonical 配置校验由 `getSourceConfigurationSchema(ref)` 返回的 strict Zod schema 负责：RSS 要求 http(s) 的 `feedUrl` 并接受可选 `media`；fixture RSS 仅接受调度字段；Bilibili 要求 `mode` 且 `mode=feed` 时必须提供 profile；AI HOT 接受调度字段。manifest 的 JSON Schema 只是发布投影（`source.rss@1` 的描述里同步声明了 `media`）。
 - **revisionId** 形如 `<sourceId>:<revision>`；创建默认停用并从 revision 1 开始。**SourceActivationCommand** 为 `{ enabled, baseRevisionId }`，配合唯一 `Idempotency-Key` 使用：同 key 同请求重放返回首次记录的结果快照，同 key 不同请求或过期 baseRevision 返回冲突，无状态变化的 no-op 记录命令但不递增 revision。
 - **CreateSourceCommand**：strict 的 `name`（trim 后 1–200 字符）、`sourceDefinitionRef`、`operationId` 和 `config`，不接受 `enabled`。**UpdateSourceCommand**：必填 `baseRevisionId` 加可选 `name` 与完整替换的 `config`。
 - **SourceExecutionSnapshot** 冻结 `id`、`name`、`sourceDefinitionRef`、`operationId`、`connectorId`、迁移投影 `kind`、`config`、`enabled`、`revisionId`、`createdAt`、`updatedAt`。**SourceSnapshot** 在同一字段上增加可变诊断 `lastRunAt` 和 `lastError`，二者可空。
