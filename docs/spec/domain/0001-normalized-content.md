@@ -67,6 +67,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **TopicRevisionContent** 是 Topic Revision 的展示字段集合（title、purpose、可空 scope）；`fingerprintTopicRevision` 对这三个字段做确定性 SHA-256 指纹，用于判定 Topic 展示内容的“实质性变化”与 no-op（ADR-0007 决策 1）。Topic 成员角色、membership revision 与 merge 去重语义由 storage 命令执行，domain 只提供角色枚举与指纹纯函数。
 - **EntityRevisionContent** 是 Entity Revision 的展示字段集合（`name`、受管 `type`）；`fingerprintEntityRevision` 对这两个字段做确定性 SHA-256 指纹，用于判定 Entity 身份表示的“实质性变化”与 no-op（ADR-0008 决策 2）。Entity 名称别名、Story↔Entity/Entity↔Entity 的 provenance 语义由 storage 命令执行，domain 只提供类型枚举与指纹纯函数。
 - **targetTypes** 是用户组织对象的附加目标受管枚举（`story`/`entry`/`topic`），供 Label 附加与后续 Annotation 目标共用；读取侧未知值降级（ADR-0009 决策 1）。**favoriteTargetTypes** 是收藏标记的目标子集（`story`/`entry`）——Topic 本身已是长期容器，不作为收藏目标（ADR-0009 决策 3）。Label/Collection/Favorite 的注册、附加与成员关系由 storage 命令执行，domain 只提供枚举常量，不产生指纹。
+- **blockTypes** 是看板区块类型的受管枚举（`feed`/`spotlight`/`source-health`/`topic-list`/`collection`）；写入侧由公共合同校验，读取侧未知值降级为占位（ADR-0010 决策 2）。区块的 config 白名单、持久化与排序由 contracts/storage 执行，domain 只提供枚举常量。**spotlightTargetTypes** 是人工 Spotlight 固定的目标受管枚举（`story`/`topic`）；Workspace/Artifact 留待 Phase 3（ADR-0010 决策 3）。
 
 ## 外部行为
 
@@ -173,6 +174,7 @@ Connector 读取外部来源的网络/进程副作用属于 Connector；storage 
 11. **修订持久语义**：在 storage 测试中给定同 source/run/external key 的重复观察，观察 duplicateObservation=true 且不追加 revision；给定 fingerprint 改变，观察 revision number 增加 1 且 current 指向新修订；给定 fingerprint 不变但 exact 时间变化，观察只更新允许的时间/metrics字段，不产生内容 revision。
 12. **纯函数边界**：调用所有 domain 导出函数并比较调用前后的数据库、Blob Root、网络请求和日志计数，观察均无 domain 直接副作用；进程重启后不应从 domain 模块恢复任何 durable state。
 13. **用户组织枚举**：给定 `targetTypes`，观察其为 `story`/`entry`/`topic`；给定 `favoriteTargetTypes`，观察其为 `story`/`entry` 且是 `targetTypes` 的子集；domain 不导出 Label/Collection/Favorite 的事务或指纹函数。
+14. **看板区块枚举**：给定 `blockTypes`，观察其为 `feed`/`spotlight`/`source-health`/`topic-list`/`collection`；给定 `spotlightTargetTypes`，观察其为 `story`/`topic`；domain 不导出 Board/Section/Block 的写入事务或 config 校验。
 
 ## 实现与测试锚点
 

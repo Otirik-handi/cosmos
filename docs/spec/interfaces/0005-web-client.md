@@ -59,7 +59,7 @@ Asset download 中未被 client 封装的部分不由它承担。
   合并现有列表；匹配的 feed/run/job SSE 事件使用同一刷新路径，`snapshot_required` 只写 notice。
 - **SSE state**：`connecting`、`connected`、`unavailable` 三态 UI 指示；底层
   `HttpCosmosClient` 的 source error 只会把它置为 unavailable。
-- **来源健康**：侧栏看板把 Source 快照解释为一行行可读状态——启用徽章、定时语义
+- **来源健康**：`source-health` Block 把 Source 快照解释为一行行可读状态——启用徽章、定时语义
   （启用+定时显示“每 N 自动抓取”；启用无定时显示“未配置定时，仅手动录入”；停用显示
   “已停用，定时抓取暂停”或“已停用”）、上次运行时间与最近错误。它不新增合同，全部
   投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/lastRunAt/lastError`。
@@ -108,7 +108,7 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
    （`mergeStories`）；成功后页面用返回的 StoryDetail 刷新面板。面板不直接发 API
    请求，全部经 props 回调上抛。
-10. **Topic 入口与详情**：侧栏“Topics”列表由 `client.listTopics` 加载，每行显示标题与
+10. **Topic 入口与详情**：`topic-list` Block 由 `client.listTopics` 加载（按 Block `limit` 截断），每行显示标题与
     active 成员数，点击“打开”调用 `client.topic(topicId)` 打开 TopicPanel。TopicPanel 展示
     title/purpose/scope 与成员列表（role 徽章、story id、reason、actor、removed），支持
     修改角色（`updateTopicMemberRole`）、移除（`removeTopicMember`）、恢复（`restoreTopicMember`）
@@ -144,6 +144,18 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     `client.createSavedView`，删除调用 `client.deleteSavedView`。保存的是查询条件而非结果快照。
 17. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
+18. **看板渲染（Board）**：首次挂载先 `client.ensureDefaultBoard()` 再 `client.listBoards()`（串行，避免 seed 前的空列表），把 `BoardDetail` 交给
+   `BoardView` 按 Section 顺序渲染可见 Block；`feed` Block 复用页面的完整阅读流（搜索卡 +
+   Feed 列表 + 已保存视图），`source-health` Block 复用页面持有的 SourceActions，`topic-list`
+   Block 渲染 Topic 列表，`collection` Block 由组件用 `client.collection(collectionId)` 自取
+   收藏夹详情（按 collectionId 重挂载，无同步 setState），`spotlight` Block 用
+   `client.listSpotlightPlacements({ boardId })` 自取固定列表并支持逐项解除。未知 Block type
+   与悬空引用显示占位文案，不影响其它 Block。看板请求失败时主区直接渲染完整阅读流，不写 error。
+19. **看板编辑与人工 Spotlight**：看板工具条提供 Board 切换下拉、编辑模式开关与新建看板；
+   编辑模式下分区支持改名/上移/下移/删除，区块支持上移/下移/隐藏/复制/删除/跨分区移动，
+   添加区块时 `feed` 可选绑定 Saved View、`collection` 可选绑定收藏夹（都可先建为未绑定态），
+   区块配置可改绑定与条数（写命令统一用返回的 `BoardDetail` 刷新当前树）。Story/Topic 面板提供“固定到看板热点区”
+   （`client.pinSpotlight` 到当前 Board），成功后递增 `refreshToken` 触发 Spotlight 区块重新拉取。
 
 ## 输入
 
@@ -410,9 +422,12 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   展示空、configured（含定时）、untimed（启用无定时）和 disabled 状态及行内启停按钮，
   每行解释启用徽章、定时语义、上次运行与最近错误；
 - `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
+- `BoardView`：接收 `BoardDetail`、transport client、页面持有的 `feedSlot`/`sourceActionsSlot`（ReactNode 插槽）与 Topic 列表/打开回调，按 Section 顺序渲染可见 Block；首个可见 `feed` Block 渲染页面传入的完整阅读流，其余 Block 按 type 分发（`spotlight` 自取本 Board 的固定列表、`source-health` 渲染来源健康插槽、`topic-list` 渲染 Topic 列表、`collection` 自取收藏夹详情并渲染成员 Story）；未知 type 与悬空 `savedViewId`/`collectionId` 降级为占位，不阻断其它 Block（ADR-0010）。`editable` 打开编辑控件：分区标题/上移/下移/删除、区块上移/下移/隐藏/复制/删除/跨分区移动/条数与绑定配置、添加区块与添加分区；非编辑模式下隐藏的 Block 完全不渲染（编辑模式保留“已隐藏”占位以便恢复）；
 - `StoryPanel`：接收 `StoryDetail`、关闭回调与 `onUpdateStoryRevision`/`onMergeStory`
   回调，展示 revision/observation 元数据与来源成员/操作区；回调由宿主注入（真实页
   面调用 transport client，组件实验室用 stub，不发 Product API 请求）。
+
+首页首载调用 `ensureDefaultBoard` 幂等 seed 默认看板并按 Board 树渲染；看板加载失败时主区回退为完整阅读流，不阻断阅读。侧栏保留服务状态、Entities 列表与新建来源表单；来源健康与 Topic 列表迁入对应 Block。
 
 实验室 URL 只保存 `component`、`scene`、`viewport`、`theme`、`colorway`；非法值归一化并以
 `replace` 修正，用户操作以 `push` 保留浏览器前进/后退。已登记 token 的临时输入在失焦时校验，

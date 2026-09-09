@@ -254,6 +254,24 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /saved-views` | body `CreateSavedViewCommand` | `SavedView`；Schema 失败 400（空名称、非法条件）。 |
 | `PATCH /saved-views/:savedViewId` | body `UpdateSavedViewCommand` | `SavedView`；Schema 失败 400，不存在 404。 |
 | `POST /saved-views/:savedViewId/removals` | path `savedViewId` | `UserOrganizationAck`（`action: "saved_view.deleted"`）；不存在 404。 |
+| `GET /boards` | 无 | `BoardList`；按 `createdAt` 升序，含 `sectionCount`。 |
+| `POST /boards/ensure-default` | 无 | `BoardDetail`；幂等 seed 默认看板（无任何 Board 时创建热点/精华/信息流三 Section）。 |
+| `GET /boards/:boardId` | path `boardId` | `BoardDetail`（sections 与 blocks 各按 position 升序）；不存在 404。 |
+| `POST /boards` | body `CreateBoardCommand` | `BoardDetail`；Schema 失败 400（空名称），name 冲突 409。 |
+| `PATCH /boards/:boardId` | body `UpdateBoardCommand` | `BoardDetail`；Schema 失败 400，不存在 404，name 冲突 409。 |
+| `POST /boards/:boardId/removals` | path `boardId` | `BoardCommandAck`（`action: "board.deleted"`）；级联删除配置树，不触碰内容对象；不存在 404。 |
+| `POST /board-sections` | body `CreateSectionCommand` | `BoardDetail`；Schema 失败 400，Board 缺失 404。 |
+| `PATCH /board-sections/:sectionId` | body `UpdateSectionCommand` | `BoardDetail`；Schema 失败 400，Section 缺失 404；`position` 提供时重排该 Board 的分区顺序。 |
+| `POST /board-sections/:sectionId/removals` | path `sectionId` | `BoardCommandAck`（`action: "board_section.deleted"`）；连带其下 Block；不存在 404。 |
+| `POST /board-blocks` | body `CreateBlockCommand` | `BoardDetail`；Schema 失败 400（未知 type、非法 config 白名单），Section 缺失 404。 |
+| `PATCH /board-blocks/:blockId` | body `UpdateBlockConfigCommand` | `BoardDetail`；config 按已存 type 重新校验（失败 400），Block 缺失 404。 |
+| `POST /board-blocks/:blockId/moves` | body `MoveBlockCommand` | `BoardDetail`；跨 Section 重排并紧凑化原 Section；目标 Section 缺失 404。 |
+| `POST /board-blocks/:blockId/visibility` | body `SetBlockVisibilityCommand` | `BoardDetail`；隐藏只改 `visible`，不删除行。 |
+| `POST /board-blocks/:blockId/duplications` | path `blockId` | `BoardDetail`；副本插在原块之后，复用同 type/config。 |
+| `POST /board-blocks/:blockId/removals` | path `blockId` | `BoardCommandAck`（`action: "board_block.deleted"`）；不删除被引用的内容对象；不存在 404。 |
+| `GET /spotlight-placements` | query 可选 `boardId` | `SpotlightPlacementList`（含解析后的 `targetTitle`）；按 `createdAt` 升序。 |
+| `POST /spotlight-placements` | body `PinSpotlightCommand` | `SpotlightPlacement`；Schema 失败 400（未知 targetType、缺 boardId），目标或 Board 缺失 404，重复固定为幂等 no-op。 |
+| `POST /spotlight-placements/:placementId/removals` | path `placementId` | `BoardCommandAck`（`action: "spotlight_placement.deleted"`）；物理解除；不存在 404。 |
 | `GET /entries/:entryId` | path `entryId` | `EntryDetail`（当前 revision、revision 列表、observations）；不存在或无 current revision 404。 |
 | `GET /revisions/:revisionId` | path `revisionId` | `RevisionDetail`；不存在 404。 |
 | `GET /assets/:assetId` | path `assetId` | HTTP 200 二进制 `StreamableFile`，Content-Type 为保存的 mime type；没有可读取内容 404。响应不是 JSON DTO。 |
@@ -262,7 +280,8 @@ Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
 日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），Entity/关系写操作仅限上方
 entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，用户组织写操作仅限
-labels/label-assignments/collections/items/favorites/annotations/saved-views 端点，其余路径不在 API 层修改事实。
+labels/label-assignments/collections/items/favorites/annotations/saved-views 端点，看板写操作仅限
+boards/board-sections/board-blocks/spotlight-placements 端点，其余路径不在 API 层修改事实。
 
 ### SSE events
 

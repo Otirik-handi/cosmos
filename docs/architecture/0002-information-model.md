@@ -658,6 +658,8 @@ Spotlight 可以指向 Story、Topic、Workspace 或 Artifact。它不复制目�
 
 自动 SpotlightPlacement 使用可续期 TTL；用户手动固定的 placement 可以不设 TTL。过期只移除展示位置，不改变 Story、Topic、Workspace 或 Artifact。每次 placement 修改保留 actor、policy/version 与审计记录。
 
+**v1 切片（[`board-section-block-v1` Proposal](../proposals/board-section-block-v1.md)，2026-09-09 accepted）**：可配置看板 v1 落地 §5.2 的 BoardPlacement 拆分与 §7 的人工作业部分——Board/Section/Block 三层配置实体（Block 是纯展示配置，type 受管枚举 `feed`/`spotlight`/`source-health`/`topic-list`/`collection` + 按 type 判别的白名单 config，未知 type 降级；删除/隐藏/复制/移动 Block 不触碰内容对象），多 Board 实体 + 应用侧幂等 seed 一个默认 Board（热点/精华/信息流三 Section，区域差异由 Block 类型承载，Section 不设 kind）；`SpotlightPlacement` v1 只有 `source=manual`、`expiresAt=null` 的固定记录（targetType 受管枚举 story/topic、绑定具体 Board、`(boardId, targetType, targetId)` 唯一、物理解除），自动 policy/Trend Signal/评分迟滞（§6.8、REC-014）后置；Feed Block 绑定 Saved View（BRD-006）在本片落地，Workspace/Artifact Block（Phase 3 对象）后置；`mergeStories`/`mergeTopics` 同一事务内重定向指向 obsolete 对象的 placement。
+
 ## 8. Workspace：替代混乱的 Feature
 
 ### 8.1 为什么改名

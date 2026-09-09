@@ -34,6 +34,7 @@ Task 导航：
 - [`11-topic-domain/`](11-topic-domain/)：Phase 2 第二切片 Topic 域模型 v1——Topic 不可变 Revision、Membership 角色 + revision/tombstone、Topic merge canonical/alias 与从 Story 侧发起的成员编排。
 - [`12-entity-relation/`](12-entity-relation/)：Phase 2 第三切片 Entity/关系 v1——Entity 不可变 Revision + 名称别名、Story↔Entity 关联、Entity↔Entity 类型化关系（手动优先 + provenance）。
 - [`13-user-organization/`](13-user-organization/)：Phase 2 第四切片用户组织 v1——Label 分类标签、Collection 命名收藏夹 + 轻量收藏、Annotation 批注、Saved View 持久查询视图。
+- [`14-board-section-block/`](14-board-section-block/)：Phase 2 第五切片可配置看板 v1——Board/Section/Block 三层展示配置、四类 Block（Feed 绑定 SavedView/Spotlight/来源健康/Topic 与 Collection 列表）、多 Board 实体 + 默认 Board seed、Spotlight 人工固定。
 
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 

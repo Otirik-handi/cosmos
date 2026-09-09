@@ -416,6 +416,8 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 | BRD-009 | Phase 3 | 未来可以支持多个 Board，例如工作、AI 研究、娱乐和晨间摘要。 | Board 配置彼此独立，底层信息和用户真相仍共享。 |
 | BRD-010 | Phase 1 | Web 默认使用 NeuroBook 视觉主题，并提供 macOS Light / macOS Night 两种配色；无已保存偏好时跟随系统 `prefers-color-scheme`，手动选择后持久化，可随时回到“跟随系统”。 | 用户在首页与组件实验室能切换三种偏好并立即生效；刷新后手动选择保持；清空偏好后恢复跟随系统；两种配色下页面无错误配色闪烁与 hydration 告警。 |
 
+**Phase 2 第五切片注记（2026-09-09，[`board-section-block-v1` Proposal](../proposals/board-section-block-v1.md) accepted）**：BRD-002/003/004/006 的 v1 实施顺序按 Proposal 冻结——Board/Section/Block 三层配置实体（Block 是纯展示配置，删除/隐藏/复制/移动不触碰底层内容），v1 Block 类型 = Feed（绑定 Saved View，BRD-006 落地）/ Spotlight / 来源健康 / Topic 与 Collection 列表；默认看板按热点、精华、普通信息流三 Section 预置（热点 = Spotlight Block、精华 = Topic 列表 Block、信息流 = Feed Block + 来源健康 Block；区域差异由 Block 类型承载，Section 不设 kind）；Spotlight v1 只做人工固定（pin Story/Topic 绑定具体 Board，不设 TTL），自动 policy 推荐后置 Phase 4（REC-014）。拖拽排序、Workspace/Artifact Block（BRD-005，Phase 3）、Board/Query snapshot（PUB 系列）后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.9 Publication、摘要与推送
 
 | ID | 阶段 | 需求 | 验收条件 |
@@ -752,7 +754,7 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 
 1. 文本、图片、视频、私信和历史修订的默认保留预算及清理策略。
 2. BiliBili、X、Telegram、公众号、QQ群和 AIHOT 的合法、稳定接入方式。
-3. Board 是否在 Phase 2 就支持多个实例，还是先只提供一个默认 Board。
+3. Board 是否在 Phase 2 就支持多个实例，还是先只提供一个默认 Board。（2026-09-09 注记：按 [`board-section-block-v1` Proposal](../proposals/board-section-block-v1.md) 决策为多 Board 实体 + 产品预置一个默认 Board，见 ADR-0010。）
 4. 摘要链接只在本机/局域网访问，还是提供受鉴权的公网发布。
 5. 首批推送渠道的优先级，以及 QQ 采用的具体适配方式。
 6. 远端 Git 托管、发布方式和跨平台目标。
