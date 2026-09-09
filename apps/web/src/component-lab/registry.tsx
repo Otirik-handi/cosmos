@@ -277,7 +277,7 @@ const feedBrowserControls = [
 const storyPanelControls = [
     control("title", "Story title", "text", "Cosmos fixture story"),
     control("contentText", "Content", "text", "A synthetic Story body for component inspection."),
-    control("state", "State", "select", "revision", ["revision", "empty"]),
+    control("state", "State", "select", "revision", ["revision", "empty", "splittable", "split"]),
 ] as const satisfies readonly LabControlDefinition[];
 
 const topicPanelControls = [
@@ -483,6 +483,8 @@ export const labComponentDefinitions = [
             {id: "default", label: "Default", props: {title: "Cosmos fixture story", contentText: "A synthetic Story body for component inspection.", state: "revision"}},
             {id: "empty", label: "Empty revision", props: {title: "Story without revision", contentText: "", state: "empty"}},
             {id: "long-text", label: "Long text", props: {title: "A long Story title that tests wrapping", contentText: "A long synthetic body lets the laboratory verify readable wrapping and metadata spacing.", state: "revision"}},
+            {id: "splittable", label: "Splittable (two members)", props: {title: "Cosmos fixture story", contentText: "Two members let the laboratory exercise the split form.", state: "splittable"}},
+            {id: "split-shell", label: "Historical shell", props: {title: "Cosmos fixture story", contentText: "", state: "split"}},
         ],
         tokens: sharedTokens,
         render: renderStoryPanelLab,

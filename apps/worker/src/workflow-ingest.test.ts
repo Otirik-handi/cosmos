@@ -362,9 +362,9 @@ describe("Worker Ingest Workflow composition", () => {
                 id: revisedEntry.storyId,
                 title: "Workflow item revised",
             });
-            expect(story.entry.id).toBe(revisedEntry.id);
-            expect(story.entry.revisions).toHaveLength(2);
-            expect(story.entry.observations).toHaveLength(2);
+            expect(story.entry?.id).toBe(revisedEntry.id);
+            expect(story.entry?.revisions).toHaveLength(2);
+            expect(story.entry?.observations).toHaveLength(2);
 
             const originalRevisionDetail = await repository.revision(originalRevision.id);
             const currentRevisionDetail = await repository.revision(currentRevision.id);

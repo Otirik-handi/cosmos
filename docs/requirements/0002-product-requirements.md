@@ -350,6 +350,8 @@ flowchart LR
 
 **Phase 2 第六切片注记（2026-09-09，[`evidence-for-mentions-v1` Proposal](../proposals/evidence-for-mentions-v1.md) accepted）**：ORG-011 的 v1 实施顺序按 Proposal 冻结——先交付 Entry↔Story 证据关系（`(entryId, storyId)` 唯一当前关系 + 受管关系类型 `evidence_for`/`mentions` + provenance），`Entry.storyId` 保持主归属唯一真相且禁止指向自己的主 Story；`StoryDetail` 返回证据来源列表、`EntryDetail` 返回关联 Story 列表；`mergeStories` 同事务重定向、`moveEntryToStory` 删除指向新主 Story 的冗余关系；全部手动优先。正文片段字符级锚点、自动抽取/提议（ORG-021）、Story↔Story 类型化关系（§4.5 的 `followed_by`/`background_for`，服务 REC-008 完整形态）与 Story split 的关系迁移后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第七切片注记（2026-09-09，[`story-split-v1` Proposal](../proposals/story-split-v1.md) accepted）**：ORG-004/014/020/022 的 split 侧 v1 实施顺序按 Proposal 冻结——先交付「历史壳 + 全部后继」的 Story split（`StoryReplacement` 关系表、状态派生、旧 ID 不写 alias、不静默重定向；`StoryDetail` 新增 `status`/`replacedBy[]`，`entry` 放宽为可空）与单命令显式映射（每个后继至少 1 个主成员，可显式迁移主成员/证据链接/Story↔Entity/Topic 成员，未列出的关系留在历史壳）；用户状态（收藏/标签/收藏夹/批注/Spotlight）留在历史壳、v1 不迁移；历史壳拒绝 merge、改 Revision 与再次 split。用户状态的显式迁移与撤销（待决定事项 10）、Read State 上线后 `updated_since_last_seen` 的 split 投影（待决定事项 9）、自动拆分建议（ORG-021）与 Story↔Story 类型化关系后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |

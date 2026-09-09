@@ -33,6 +33,7 @@ import {
     type SavedView,
     type SearchQuery,
     type SourceSnapshot,
+    type SplitStoryCommand,
     type StoryDetail,
     type TopicDetail,
     type TopicMemberRole,
@@ -728,6 +729,16 @@ export default function Home() {
             obsoleteStoryIds: [obsoleteStoryId],
         });
         setStory(updated);
+    };
+
+    const splitStory = async (command: SplitStoryCommand): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        // 拆分命令返回历史壳，面板随即切换到壳视图（后继列表可继续打开）。
+        const updated = await client.splitStory(story.story.id, command);
+        setStory(updated);
+        await refreshRelatedStories(updated);
     };
 
     /** 标签/收藏变更后重读打开的 Story，并把标签列表刷到最新指派计数。 */
@@ -1493,6 +1504,7 @@ export default function Home() {
                     story={story}
                     onUpdateStoryRevision={updateStoryRevision}
                     onMergeStory={mergeStory}
+                    onSplitStory={splitStory}
                     topics={topics}
                     onJoinTopic={joinTopic}
                     onCreateTopic={createTopicFromStory}

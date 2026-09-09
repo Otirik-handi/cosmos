@@ -44,6 +44,7 @@ import {
     idempotencyKeySchema,
     mergeStoriesCommandSchema,
     moveEntryToStoryCommandSchema,
+    splitStoryCommandSchema,
     addTopicMemberCommandSchema,
     createTopicCommandSchema,
     mergeTopicsCommandSchema,
@@ -642,6 +643,32 @@ export class AppController {
             const result = await this.repository.mergeStories({
                 canonicalStoryId: parsed.canonicalStoryId,
                 obsoleteStoryIds: parsed.obsoleteStoryIds,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+            return result;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("stories/:storyId/splits")
+    @Bind(Param("storyId"), Body())
+    async splitStory(storyId: string, body: unknown) {
+        try {
+            const parsed = splitStoryCommandSchema.parse(body);
+            const result = await this.repository.splitStory({
+                storyId,
+                successors: parsed.successors.map((successor) => ({
+                    title: successor.title,
+                    summary: successor.summary ?? null,
+                    kind: successor.kind,
+                    subtype: successor.subtype ?? null,
+                    entryIds: successor.entryIds,
+                    evidenceEntryIds: successor.evidenceEntryIds,
+                    entityIds: successor.entityIds,
+                    topicIds: successor.topicIds,
+                })),
                 actor: parsed.actor ?? null,
                 reason: parsed.reason ?? null,
             });

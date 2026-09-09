@@ -1,10 +1,24 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已实现并通过门禁，尚未 commit。此前的 Phase 2 验收补完（分类/Topic 浏览、Story 时间线、相关内容）已随 Task 15 合入 `master` 并推送；可配置看板 v1（Task 14）已合入 `master`（tip `2ea8939`）。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第七切片 Story split v1（Task 17）已实现并通过门禁，尚未 commit。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：Story split v1 实现（Phase 2 第七切片，Task 17）
+
+Proposal [`story-split-v1`](docs/proposals/story-split-v1.md)（accepted，2026-09-09）与 ADR-0012 的实现已完成（切片 1–3），尚未 commit：
+
+1. **持久化与读取**：schema + migration `20260909160000_story_split_v1`（`StoryReplacement`：`(storyId, successorStoryId)` 唯一、级联到 Story，forward-only、全新表无 backfill）。历史壳不写 `StoryAlias`，旧 ID 仍解析到它自己；`StoryDetail.story` 新增 `status`（`active`/`split`）与 `replacedBy[]`，`entry` 放宽为可空、`entries` 可为空，并新增 `topics` 投影。
+2. **公共合同与 API**：contracts 新增 `SplitStoryCommand`（2–20 个后继、每个后继 ≥1 个主成员 + 三组可选迁移清单）；transport client 与 API 新增 `POST /api/v1/stories/:storyId/splits`（返回历史壳的 `StoryDetail`）。
+3. **存储语义**：`splitStory` 单事务创建后继 Story + 初始 Revision，并按显式清单迁移主成员、Entry↔Story 证据链接、Story↔Entity 与 Topic 成员；未列出的关系留在壳，用户状态（收藏/标签/收藏夹/批注/Spotlight）一律不迁移；映射不属于当前关系、跨后继重复、自关联、已是历史壳都返回 409；写 `story.split.v1` 与每个后继的 `story.revision_created.v1`（`cause: split`）。
+4. **写边界**：历史壳拒绝 `mergeStories`、`updateStoryRevision` 与再次 `splitStory`（409）；`moveEntryToStory` 仍允许指向壳，作为补偿手段。
+5. **Web**：Story 面板新增「拆分 Story」表单（后继标题/kind + 成员/证据/实体/Topic 的「留在历史壳 / 后继 N」下拉，提交前要求每个后继至少一个成员）与「历史壳」区块（后继按钮可继续打开；无成员时不渲染 Entry/Revision 详情与写操作区）；组件实验室新增 Splittable 与 Historical shell 场景。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 364 文件 failures=[]；`git diff --check` 干净。聚焦测试：contracts 32、transport-http 14、api controller 35、storage `story-split` 4、component-lab registry 12 全部通过。全量 `bun run test` 48 文件/417 用例，362 通过；55 例失败全部是既有 Windows SQLite 并行负载抖动（`migrate deploy` 5s 超时 + EBUSY），串行 `bunx vitest run --no-file-parallelism packages/storage-prisma` 12 文件/103 用例全部通过。浏览器产品 E2E 13/13（新增归并后拆分、壳视图与后继打开用例）；组件实验室浏览器 13/13；Node 进程 E2E 4/4。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
+
+过程与偏差记录见 Task 17 walkthrough [`.agents/tasks/17-story-split/README.md`](.agents/tasks/17-story-split/README.md)（编号为临时值，待维护者确认）。
 
 ## 2026-09-09：Entry↔Story 证据关系 v1 实现（Phase 2 第六切片，Task 16）
 
-Proposal [`evidence-for-mentions-v1`](docs/proposals/evidence-for-mentions-v1.md)（accepted，2026-09-09）与 ADR-0011 的实现已完成（切片 1–3），尚未 commit：
+Proposal [`evidence-for-mentions-v1`](docs/proposals/evidence-for-mentions-v1.md)（accepted，2026-09-09）与 ADR-0011 的实现已完成（切片 1–3），并已随 `961e942` 合入并推送 `master`：
 
 1. **持久化与域**：schema + migration `20260909140000_entry_story_evidence_v1`（`EntryStoryLink`：`(entryId, storyId)` 唯一 + `relationType` + provenance，forward-only、全新表无 backfill）；domain 新增 `entryStoryRelationTypes` 受管枚举（`evidence_for`/`mentions`，读取侧未知值降级）。
 2. **公共合同与 API**：contracts 新增关系枚举、命令 schema 与 `StoryDetail.evidence`、`EntryDetail.relatedStories` 两个向后兼容字段；transport client 与 API 新增 `POST /api/v1/entry-story-links` 与 `/entry-story-links/removals`（返回 canonical `StoryDetail`）。

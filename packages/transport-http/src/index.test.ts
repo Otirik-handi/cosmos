@@ -315,6 +315,8 @@ describe("HttpCosmosClient", () => {
                         revisionId: "rev-b-1",
                         title: "Event",
                         summary: null,
+                        status: "active",
+                        replacedBy: [],
                     },
                     entry: {
                         id: "entry-a",
@@ -334,6 +336,7 @@ describe("HttpCosmosClient", () => {
                     },
                     entries: [],
                     entities: [],
+                    topics: [],
                     labels: [],
                     favorited: false,
                     evidence: [{
@@ -375,6 +378,89 @@ describe("HttpCosmosClient", () => {
         });
         expect(unlinked.story.id).toBe("story-b");
         expect(requests[1]?.url).toBe("http://localhost:4310/api/v1/entry-story-links/removals");
+    });
+
+    it("posts a Story split and parses the historical shell", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                return new Response(JSON.stringify({
+                    story: {
+                        id: "story-shell",
+                        kind: "event",
+                        subtype: null,
+                        revisionId: "rev-shell-1",
+                        title: "Was one Story",
+                        summary: null,
+                        status: "split",
+                        replacedBy: [
+                            { storyId: "story-a", title: "Event A", kind: "event" },
+                            { storyId: "story-b", title: "Event B", kind: "document" },
+                        ],
+                    },
+                    entry: null,
+                    entries: [],
+                    entities: [],
+                    topics: [],
+                    labels: [],
+                    favorited: false,
+                    evidence: [],
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const shell = await client.splitStory("story-shell", {
+            successors: [
+                {
+                    title: "Event A",
+                    kind: "event",
+                    entryIds: ["entry-a"],
+                    evidenceEntryIds: [],
+                    entityIds: [],
+                    topicIds: [],
+                },
+                {
+                    title: "Event B",
+                    kind: "document",
+                    entryIds: ["entry-b"],
+                    evidenceEntryIds: [],
+                    entityIds: [],
+                    topicIds: [],
+                },
+            ],
+            reason: "两个事件被错误合并",
+        });
+        expect(shell.story.status).toBe("split");
+        expect(shell.entry).toBeNull();
+        expect(shell.story.replacedBy.map((successor) => successor.storyId))
+            .toEqual(["story-a", "story-b"]);
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/stories/story-shell/splits");
+        expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+            successors: [
+                {
+                    title: "Event A",
+                    kind: "event",
+                    entryIds: ["entry-a"],
+                    evidenceEntryIds: [],
+                    entityIds: [],
+                    topicIds: [],
+                },
+                {
+                    title: "Event B",
+                    kind: "document",
+                    entryIds: ["entry-b"],
+                    evidenceEntryIds: [],
+                    entityIds: [],
+                    topicIds: [],
+                },
+            ],
+            reason: "两个事件被错误合并",
+        });
     });
 
     it("calls the user organization endpoints (labels/collections/favorites)", async () => {

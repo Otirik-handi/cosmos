@@ -6,6 +6,7 @@ import {
     jobSnapshotSchema,
     mergeStoriesCommandSchema,
     moveEntryToStoryCommandSchema,
+    splitStoryCommandSchema,
     runSnapshotSchema,
     searchPageSchema,
     sourceActivationCommandSchema,
@@ -56,6 +57,7 @@ import {
     type EntryListQuery,
     type EntryPage,
     type MergeStoriesCommand,
+    type SplitStoryCommand,
     type MoveEntryToStoryCommand,
     type RevisionDetail,
     type UpdateStoryRevisionCommand,
@@ -403,6 +405,15 @@ export class HttpCosmosClient {
     async mergeStories(input: MergeStoriesCommand): Promise<StoryDetail> {
         const payload = mergeStoriesCommandSchema.parse(input);
         return this.request("/api/v1/stories/merges", {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async splitStory(storyId: string, input: SplitStoryCommand): Promise<StoryDetail> {
+        const payload = splitStoryCommandSchema.parse(input);
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/splits`, {
             method: "POST",
             body: payload,
             schema: storyDetailSchema,

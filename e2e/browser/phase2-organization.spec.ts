@@ -19,7 +19,11 @@ async function ingestFeed(page: import("@playwright/test").Page, prefix: string)
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
     await healthSection.getByRole("button", { name: sourceName, exact: true }).click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Cosmos scaffold is ready").first()).toBeVisible({ timeout: 180_000 });
+    // 同一栈内其它 spec 也用同一份 fixture，未限定来源的标题断言可能在其它来源
+    // 录入完成时就通过；这里再等本来源自己的卡片出现。
+    await expect(
+        page.locator("article").filter({ hasText: sourceName }).first(),
+    ).toBeVisible({ timeout: 180_000 });
     return sourceName;
 }
 
@@ -175,6 +179,90 @@ test("links an entry from another Story as evidence and shows the reverse view",
         .getByRole("button", { name: "解除" })
         .click();
     await expect(targetEvidence.getByText(/还没有其它 Story 引用/)).toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+});
+
+test("splits a Story into successors and keeps a historical shell", async ({ page }) => {
+    test.setTimeout(300_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    const sourceName = await ingestFeed(page, "拆分验收来源");
+
+    // 归并两条单成员 Story，制造一条双成员 Story 作为拆分素材。
+    const readPair = async (name: string) => page.evaluate(async (sourceName) => {
+        const sourceResponse = await fetch("/api/v1/sources");
+        const sources = await sourceResponse.json() as Array<{ id: string; name: string }>;
+        const sourceId = sources.find((source) => source.name === sourceName)?.id;
+        if (!sourceId) {
+            return null;
+        }
+        const entriesResponse = await fetch(`/api/v1/entries?sourceId=${encodeURIComponent(sourceId)}&limit=20`);
+        const entries = await entriesResponse.json() as { items: Array<{ storyId: string | null }> };
+        const storyIds = [...new Set(entries.items.map((item) => item.storyId).filter((id): id is string => id !== null))];
+        if (storyIds.length < 2) {
+            return null;
+        }
+        const details = await Promise.all(storyIds.slice(0, 2).map(async (storyId) => {
+            const response = await fetch(`/api/v1/stories/${encodeURIComponent(storyId)}`);
+            const body = await response.json() as { story: { id: string; title: string } };
+            return body.story;
+        }));
+        return details;
+    }, name);
+    let pair: Array<{ id: string; title: string }> | null = null;
+    await expect.poll(async () => {
+        pair = await readPair(sourceName);
+        return pair?.length ?? 0;
+    }, { timeout: 120_000 }).toBeGreaterThanOrEqual(2);
+    const [canonical, obsolete] = pair!;
+
+    await page
+        .locator("article")
+        .filter({ hasText: sourceName })
+        .filter({ hasText: canonical.title })
+        .getByRole("button", { name: "打开 Story" })
+        .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("并入本 Story 的 Story ID").fill(obsolete.id);
+    await dialog.getByRole("button", { name: "归并" }).click();
+    await expect(dialog.getByText("来源成员（2）")).toBeVisible();
+
+    // 显式把两个成员各分给一个后继；未列出的关系留在历史壳。
+    const splitForm = dialog.locator('form[aria-label="拆分 Story"]');
+    await expect(splitForm).toBeVisible();
+    const targets = splitForm.locator('select[aria-label$="的拆分去向"]');
+    await expect(targets).toHaveCount(2);
+    await targets.nth(0).selectOption("0");
+    await targets.nth(1).selectOption("1");
+    await dialog.getByTestId("story-split-submit").click();
+
+    // 命令返回历史壳：成员清空、后继可打开、写操作入口消失。
+    const shell = dialog.locator('[data-story-shell="true"]');
+    await expect(shell).toBeVisible();
+    await expect(shell.locator("[data-story-successor-id]")).toHaveCount(2);
+    await expect(dialog.getByText("来源成员（0）")).toBeVisible();
+    await expect(dialog.locator('section[aria-label="Story 操作"]')).toHaveCount(0);
+    await expect(dialog.locator("[data-story-action-error]")).toHaveCount(0);
+
+    const shellStatus = await page.evaluate(async (storyId) => {
+        const response = await fetch(`/api/v1/stories/${encodeURIComponent(storyId)}`);
+        const body = await response.json() as {
+            story: { status: string; replacedBy: Array<{ storyId: string }> };
+            entry: unknown;
+        };
+        return { status: body.story.status, successors: body.story.replacedBy.length, entry: body.entry };
+    }, canonical.id);
+    expect(shellStatus).toEqual({ status: "split", successors: 2, entry: null });
+
+    // 后继是普通 Story：单成员、可继续打开，且不再显示历史壳。
+    await shell.locator("[data-story-successor-id]").first().click();
+    await expect(dialog.getByText("来源成员（1）")).toBeVisible();
+    await expect(dialog.locator('[data-story-shell="true"]')).toHaveCount(0);
 
     expect(consoleErrors).toEqual([]);
 });

@@ -98,6 +98,7 @@ import {
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
+    StorySplitConflictError,
     TopicMergeConflictError,
     TopicMembershipNotFoundError,
     TopicNotFoundError,
@@ -1842,6 +1843,17 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return story?.id ?? null;
     }
 
+    // A Story with any replacement row is a historical shell: it keeps its id
+    // and history but must not be merged, re-split or re-versioned
+    // (ADR-0012 decision 6).
+    private async isStoryShell(storyId: string): Promise<boolean> {
+        const replacement = await this.prisma.storyReplacement.findFirst({
+            where: { storyId },
+            select: { id: true },
+        });
+        return replacement !== null;
+    }
+
     async moveEntryToStory(input: {
         entryId: string;
         storyId: string;
@@ -1917,6 +1929,9 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (!canonicalStoryId) {
             throw new StoryNotFoundError(input.storyId);
         }
+        if (await this.isStoryShell(canonicalStoryId)) {
+            throw new StoryRevisionConflictError(canonicalStoryId);
+        }
         const story = await this.prisma.story.findUnique({
             where: { id: canonicalStoryId },
             include: { currentRevision: true },
@@ -1987,6 +2002,9 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (obsoleteStoryIds.includes(canonicalStoryId)) {
             throw new StoryMergeConflictError(`Cannot merge Story into itself: ${canonicalStoryId}`);
         }
+        if (await this.isStoryShell(canonicalStoryId)) {
+            throw new StoryMergeConflictError(`Cannot merge into a split Story shell: ${canonicalStoryId}`);
+        }
         for (const obsoleteStoryId of obsoleteStoryIds) {
             const resolvedObsolete = await this.resolveCanonicalStoryId(obsoleteStoryId);
             if (!resolvedObsolete) {
@@ -1994,6 +2012,9 @@ export class PrismaCosmosRepository implements CosmosRepository {
             }
             if (resolvedObsolete !== obsoleteStoryId) {
                 throw new StoryMergeConflictError(`Story is already merged: ${obsoleteStoryId}`);
+            }
+            if (await this.isStoryShell(obsoleteStoryId)) {
+                throw new StoryMergeConflictError(`Cannot merge a split Story shell: ${obsoleteStoryId}`);
             }
         }
         await this.prisma.$transaction(async (tx) => {
@@ -2298,6 +2319,236 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return this.story(canonicalStoryId);
     }
 
+    async splitStory(input: {
+        storyId: string;
+        successors: readonly {
+            title: string;
+            summary: string | null;
+            kind: "event" | "document" | "media" | "thread";
+            subtype: string | null;
+            entryIds: readonly string[];
+            evidenceEntryIds: readonly string[];
+            entityIds: readonly string[];
+            topicIds: readonly string[];
+        }[];
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null> {
+        const shellStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!shellStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        if (input.successors.length < 2) {
+            throw new StorySplitConflictError("A Story split needs at least two successors.");
+        }
+        const shell = await this.prisma.story.findUnique({
+            where: { id: shellStoryId },
+            include: {
+                currentRevision: { select: { id: true } },
+                entries: { select: { id: true } },
+                entryLinks: { select: { entryId: true } },
+                storyEntities: { select: { entityId: true } },
+                topicMemberships: {
+                    select: {
+                        topicId: true,
+                        currentRevision: { select: { tombstone: true } },
+                    },
+                },
+                successors: { select: { id: true } },
+            },
+        });
+        if (!shell || !shell.currentRevision) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        if (shell.successors.length > 0) {
+            throw new StorySplitConflictError(`Story is already split: ${shellStoryId}`);
+        }
+        const memberEntryIds = new Set(shell.entries.map((entry) => entry.id));
+        if (memberEntryIds.size === 0) {
+            throw new StorySplitConflictError(`Story has no current members to split: ${shellStoryId}`);
+        }
+        const linkedEntryIds = new Set(shell.entryLinks.map((link) => link.entryId));
+        const linkedEntityIds = new Set(shell.storyEntities.map((link) => link.entityId));
+        const memberTopicIds = new Set(
+            shell.topicMemberships
+                .filter((membership) => membership.currentRevision?.tombstone === false)
+                .map((membership) => membership.topicId),
+        );
+        const claimedEntryIds = new Set<string>();
+        const claimedEvidenceEntryIds = new Set<string>();
+        const claimedEntityIds = new Set<string>();
+        const claimedTopicIds = new Set<string>();
+        for (const successor of input.successors) {
+            const successorEntryIds = new Set(successor.entryIds);
+            for (const entryId of successorEntryIds) {
+                if (!memberEntryIds.has(entryId)) {
+                    throw new StorySplitConflictError(
+                        `Entry is not a current member of the Story being split: ${entryId}`,
+                    );
+                }
+                if (claimedEntryIds.has(entryId)) {
+                    throw new StorySplitConflictError(
+                        `Entry is assigned to more than one successor: ${entryId}`,
+                    );
+                }
+                claimedEntryIds.add(entryId);
+            }
+            for (const entryId of new Set(successor.evidenceEntryIds)) {
+                if (!linkedEntryIds.has(entryId)) {
+                    throw new StorySplitConflictError(
+                        `Entry is not linked to the Story being split: ${entryId}`,
+                    );
+                }
+                if (claimedEvidenceEntryIds.has(entryId)) {
+                    throw new StorySplitConflictError(
+                        `Evidence link is assigned to more than one successor: ${entryId}`,
+                    );
+                }
+                // A moved link must not point at its own primary Story
+                // (ADR-0011 decision 3).
+                if (successorEntryIds.has(entryId)) {
+                    throw new StorySplitConflictError(
+                        `An Entry cannot be evidence for its own primary successor Story: ${entryId}`,
+                    );
+                }
+                claimedEvidenceEntryIds.add(entryId);
+            }
+            for (const entityId of new Set(successor.entityIds)) {
+                if (!linkedEntityIds.has(entityId)) {
+                    throw new StorySplitConflictError(
+                        `Entity is not linked to the Story being split: ${entityId}`,
+                    );
+                }
+                if (claimedEntityIds.has(entityId)) {
+                    throw new StorySplitConflictError(
+                        `Story↔Entity link is assigned to more than one successor: ${entityId}`,
+                    );
+                }
+                claimedEntityIds.add(entityId);
+            }
+            for (const topicId of new Set(successor.topicIds)) {
+                if (!memberTopicIds.has(topicId)) {
+                    throw new StorySplitConflictError(
+                        `Topic is not a current membership of the Story being split: ${topicId}`,
+                    );
+                }
+                if (claimedTopicIds.has(topicId)) {
+                    throw new StorySplitConflictError(
+                        `Topic membership is assigned to more than one successor: ${topicId}`,
+                    );
+                }
+                claimedTopicIds.add(topicId);
+            }
+        }
+        const actorJson = input.actor == null ? null : JSON.stringify(input.actor);
+        await this.prisma.$transaction(async (tx) => {
+            const successorStoryIds: string[] = [];
+            for (const successor of input.successors) {
+                const successorStoryId = `story:${randomUUID()}`;
+                successorStoryIds.push(successorStoryId);
+                await tx.story.create({
+                    data: {
+                        id: successorStoryId,
+                        kind: successor.kind,
+                        subtype: successor.subtype,
+                    },
+                });
+                const revision = await tx.storyRevision.create({
+                    data: {
+                        story: { connect: { id: successorStoryId } },
+                        revision: 1,
+                        fingerprint: fingerprintStoryRevision({
+                            title: successor.title,
+                            summary: successor.summary,
+                            kind: successor.kind,
+                            subtype: successor.subtype,
+                        }),
+                        actorJson,
+                        reason: input.reason ?? null,
+                        title: successor.title,
+                        summary: successor.summary,
+                    },
+                });
+                await tx.story.update({
+                    where: { id: successorStoryId },
+                    data: { currentRevisionId: revision.id },
+                });
+                if (successor.entryIds.length > 0) {
+                    await tx.entry.updateMany({
+                        where: { id: { in: [...successor.entryIds] } },
+                        data: { storyId: successorStoryId },
+                    });
+                }
+                if (successor.evidenceEntryIds.length > 0) {
+                    await tx.entryStoryLink.updateMany({
+                        where: {
+                            storyId: shellStoryId,
+                            entryId: { in: [...successor.evidenceEntryIds] },
+                        },
+                        data: { storyId: successorStoryId },
+                    });
+                }
+                if (successor.entityIds.length > 0) {
+                    await tx.storyEntity.updateMany({
+                        where: {
+                            storyId: shellStoryId,
+                            entityId: { in: [...successor.entityIds] },
+                        },
+                        data: { storyId: successorStoryId },
+                    });
+                }
+                if (successor.topicIds.length > 0) {
+                    await tx.topicMembership.updateMany({
+                        where: {
+                            storyId: shellStoryId,
+                            topicId: { in: [...successor.topicIds] },
+                        },
+                        data: { storyId: successorStoryId },
+                    });
+                }
+                await tx.storyReplacement.create({
+                    data: {
+                        storyId: shellStoryId,
+                        successorStoryId,
+                        actorJson,
+                        reason: input.reason ?? null,
+                    },
+                });
+                await appendDomainEvent(tx, {
+                    type: "story.revision_created.v1",
+                    aggregateType: "Story",
+                    aggregateId: successorStoryId,
+                    payload: {
+                        storyId: successorStoryId,
+                        baseRevisionId: null,
+                        revision: 1,
+                        cause: "split",
+                        actor: input.actor ?? null,
+                        reason: input.reason ?? null,
+                    },
+                });
+            }
+            await appendDomainEvent(tx, {
+                type: "story.split.v1",
+                aggregateType: "Story",
+                aggregateId: shellStoryId,
+                payload: {
+                    storyId: shellStoryId,
+                    successors: input.successors.map((successor, index) => ({
+                        storyId: successorStoryIds[index],
+                        entryIds: [...successor.entryIds],
+                        evidenceEntryIds: [...successor.evidenceEntryIds],
+                        entityIds: [...successor.entityIds],
+                        topicIds: [...successor.topicIds],
+                    })),
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.story(shellStoryId);
+    }
+
     async story(storyId: string): Promise<StoryDetail | null> {
         const canonicalId = await this.resolveCanonicalStoryId(storyId);
         if (!canonicalId) {
@@ -2332,9 +2583,17 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 },
             },
         });
-        if (!story || !story.currentRevision || story.entries.length === 0 || !story.entries[0].currentRevision) {
+        if (!story || !story.currentRevision) {
             return null;
         }
+        // A historical shell may have no primary member left; it is still
+        // readable through its current Revision and replacedBy list
+        // (ADR-0012 decision 2).
+        const shellReplacements = await this.prisma.storyReplacement.findMany({
+            where: { storyId: canonicalId },
+            include: { successor: { include: { currentRevision: { select: { title: true } } } } },
+            orderBy: { createdAt: "asc" },
+        });
         // Reverse view of the auxiliary relations: one query for every member
         // entry, then group in memory (ADR-0011 decision 6).
         const memberLinks = await this.prisma.entryStoryLink.findMany({
@@ -2405,7 +2664,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
         // User-organization state for this Story: attached labels and the
         // lightweight favorite flag (ADR-0009). Queried separately because
         // LabelAssignment/Favorite carry polymorphic targets, not Story FKs.
-        const [labelAssignments, favorite, evidenceLinks] = await Promise.all([
+        const [labelAssignments, favorite, evidenceLinks, topicMemberships] = await Promise.all([
             this.prisma.labelAssignment.findMany({
                 where: { targetType: "story", targetId: canonicalId },
                 include: { label: { select: { id: true, name: true } } },
@@ -2431,6 +2690,15 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     },
                 },
             }),
+            // Active Topic memberships, so a client can decide which Topics a
+            // split moves to which successor (ADR-0012 decision 3).
+            this.prisma.topicMembership.findMany({
+                where: { storyId: canonicalId, currentRevision: { tombstone: false } },
+                include: {
+                    currentRevision: { select: { role: true } },
+                    topic: { include: { currentRevision: { select: { title: true } } } },
+                },
+            }),
         ]);
         return {
             story: {
@@ -2440,9 +2708,21 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 revisionId: story.currentRevision.id,
                 title: story.currentRevision.title,
                 summary: story.currentRevision.summary,
+                status: shellReplacements.length > 0 ? "split" : "active",
+                replacedBy: shellReplacements.map((replacement) => ({
+                    storyId: replacement.successorStoryId,
+                    title: replacement.successor.currentRevision?.title
+                        ?? replacement.successorStoryId,
+                    kind: replacement.successor.kind as "event" | "document" | "media" | "thread",
+                })),
             },
-            entry: entries[0],
+            entry: entries[0] ?? null,
             entries,
+            topics: topicMemberships.map((membership) => ({
+                topicId: membership.topicId,
+                title: membership.topic.currentRevision?.title ?? membership.topicId,
+                role: membership.currentRevision?.role ?? "core",
+            })),
             entities,
             labels: labelAssignments.map((assignment) => ({
                 id: assignment.label.id,

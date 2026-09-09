@@ -262,6 +262,8 @@ model Story {
     storyEntities     StoryEntity[]
     collectionItems   CollectionItem[]
     entryLinks        EntryStoryLink[]
+    successors        StoryReplacement[] @relation("StoryReplacementShell")
+    splitFrom         StoryReplacement[] @relation("StoryReplacementSuccessor")
 }
 
 model StoryRevision {
@@ -287,6 +289,24 @@ model StoryAlias {
     canonicalStory   Story    @relation(fields: [canonicalStoryId], references: [id], onDelete: Cascade)
 
     @@index([canonicalStoryId])
+}
+
+// Historical shell -> successor edge created by Story split. A Story that has
+// any row here is a historical shell: it keeps its id, revisions and history
+// but is never an alias target, so its id never redirects to a single
+// successor (ADR-0012 decision 1).
+model StoryReplacement {
+    id               String   @id @default(cuid())
+    storyId          String
+    successorStoryId String
+    actorJson        String?
+    reason           String?
+    createdAt        DateTime @default(now())
+    story            Story    @relation("StoryReplacementShell", fields: [storyId], references: [id], onDelete: Cascade)
+    successor        Story    @relation("StoryReplacementSuccessor", fields: [successorStoryId], references: [id], onDelete: Cascade)
+
+    @@unique([storyId, successorStoryId])
+    @@index([successorStoryId])
 }
 
 model Topic {

@@ -12,6 +12,8 @@ const baseStory: StoryDetail = {
         revisionId: "sr:1",
         title: "Jeff Dean 离开 Google",
         summary: null,
+        status: "active",
+        replacedBy: [],
     },
     entry: {
         id: "entry:1",
@@ -26,6 +28,7 @@ const baseStory: StoryDetail = {
     },
     entries: [],
     entities: [],
+    topics: [],
     labels: [],
     favorited: false,
     evidence: [],

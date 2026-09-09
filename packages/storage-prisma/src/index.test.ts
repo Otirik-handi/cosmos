@@ -214,11 +214,11 @@ describe("PrismaCosmosRepository", () => {
             const stories = await Promise.all(
                 feed.items.map((item) => repository.story(item.storyId)),
             );
-            const revisedStory = stories.find((item) => item?.entry.revisions.length === 2);
-            expect(revisedStory?.entry.observations.length).toBe(2);
+            const revisedStory = stories.find((item) => item?.entry?.revisions.length === 2);
+            expect(revisedStory?.entry?.observations.length).toBe(2);
 
             const savedAsset = stories
-                .flatMap((story) => story?.entry.revisions ?? [])
+                .flatMap((story) => story?.entry?.revisions ?? [])
                 .flatMap((revision) => revision.assets)
                 .find((asset) => asset.status === "saved");
             expect(savedAsset).toBeDefined();
@@ -226,7 +226,7 @@ describe("PrismaCosmosRepository", () => {
             expect(new TextDecoder().decode(asset!.content)).toBe("image");
 
             const failedAsset = stories
-                .flatMap((story) => story?.entry.revisions ?? [])
+                .flatMap((story) => story?.entry?.revisions ?? [])
                 .flatMap((revision) => revision.assets)
                 .find((entry) => entry.status === "failed");
             expect(failedAsset).toMatchObject({

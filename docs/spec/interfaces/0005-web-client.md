@@ -125,52 +125,58 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 9. **Story 编排**：面板“Story 操作”区可编辑标题（`updateStoryRevision`，携带当前
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
    （`mergeStories`）；成功后页面用返回的 StoryDetail 刷新面板。面板不直接发 API
-   请求，全部经 props 回调上抛。
-10. **Topic 入口与详情**：`topic-list` Block 由 `client.listTopics` 加载（按 Block `limit` 截断），每行显示标题与
+   请求，全部经 props 回调上抛。历史壳（`story.status === "split"`）不渲染这一区。
+10. **Story 拆分**：成员数 ≥2 的普通 Story 显示“拆分 Story”表单——2–5 个后继（标题 +
+   kind，默认继承当前 Story 的标题与 kind），每个当前成员、证据条目、关联 Entity 与
+   Topic 成员各有一个“留在历史壳 / 后继 N”下拉；提交前要求每个后继至少分到一个成员，
+   然后调用 `splitStory`（ADR-0012）。成功后面板切到返回的历史壳：标题旁显示“历史壳”
+   说明、`来源成员（0）`、后继列表（`data-story-shell` 内的 `data-story-successor-id`
+   按钮可继续打开后继），Entry/Revision/Observation 详情与写操作区不再渲染。
+11. **Topic 入口与详情**：`topic-list` Block 由 `client.listTopics` 加载（按 Block `limit` 截断），每行显示标题与
     active 成员数，点击“打开”调用 `client.topic(topicId)` 打开 TopicPanel。TopicPanel 展示
     title/purpose/scope 与成员列表（role 徽章、story id、reason、actor、removed），支持
     修改角色（`updateTopicMemberRole`）、移除（`removeTopicMember`）、恢复（`restoreTopicMember`）
     以及编辑标题/目的（`updateTopic`）。
-11. **从 Story 侧加入/创建 Topic**：StoryPanel 提供“加入 Topic”（选择已有 Topic + 角色，
+12. **从 Story 侧加入/创建 Topic**：StoryPanel 提供“加入 Topic”（选择已有 Topic + 角色，
     `addTopicMember`）与“创建 Topic 并加入本 Story”（标题 + 目的，`createTopic` 以当前
     Story 为 seed，seed 恒为 `core` 角色）；成员添加入口从 Story 侧发起，不在 Topic 面板
     里做 Story 搜索选择器（ADR-0007 决策 4）。
-12. **Entity 入口与详情**：侧栏“Entities”列表由 `client.listEntities` 加载，每行显示名称与
+13. **Entity 入口与详情**：侧栏“Entities”列表由 `client.listEntities` 加载，每行显示名称与
     关联 Story 数，点击“打开”调用 `client.entity(entityId)` 打开 EntityPanel。EntityPanel
     展示规范名/类型/别名与关联 Story、双向类型化关系，支持改名/改类型（`updateEntity`，
     携带 `baseRevisionId`）、别名增删（`addEntityAlias`/`removeEntityAlias`）、解除 Story
     关联（`unlinkStoryEntity`）、添加/移除 Entity↔Entity 关系（`createEntityRelation`/
     `removeEntityRelation`，关系目标从已有 Entity 列表选择）。
-13. **从 Story 侧关联/创建 Entity**：StoryPanel 显示当前 Story 已关联的 Entity（来自
+14. **从 Story 侧关联/创建 Entity**：StoryPanel 显示当前 Story 已关联的 Entity（来自
     StoryDetail `entities`，可解除 `unlinkStoryEntity`），并提供“关联已有 Entity”（下拉
     已有 Entity + `linkStoryEntity`）与“创建 Entity 并关联本 Story”（名称 + 类型，
     `createEntity` 后 `linkStoryEntity`）；关联入口从 Story 侧发起（ADR-0008 决策 3）。
-14. **用户组织（标签/收藏/收藏夹）**：StoryPanel“用户组织”区显示收藏开关（`setFavorite`/
+15. **用户组织（标签/收藏/收藏夹）**：StoryPanel“用户组织”区显示收藏开关（`setFavorite`/
     `unsetFavorite`，目标为当前 Story）、已附加标签（`story.labels`，可 `detachLabel`）、
     未附加标签下拉（`attachLabel`）与新建标签（`createLabel` 后立即 `attachLabel` 到当前
     Story），以及收藏夹成员勾选（`addCollectionItem`/`removeCollectionItem`）与新建收藏夹
     （`createCollection`）。页面在初次加载时 `listLabels`/`listCollections`，打开 Story 时用
     `listCollections({ storyId })` 取回 `containsStory` 成员标记；所有写命令成功后重读
     Story 与相应列表。面板不直接发 API 请求，全部经 props 回调上抛。
-15. **批注（Annotation）**：StoryPanel 与 TopicPanel 的“批注”区由 `client.listAnnotations`
+16. **批注（Annotation）**：StoryPanel 与 TopicPanel 的“批注”区由 `client.listAnnotations`
     加载（目标分别为当前 Story/Topic，Story 目标用 canonical id），展示正文、可选引用文本、
     作者与时间，支持新建（`createAnnotation`）、编辑（`updateAnnotation`）与删除
     （`deleteAnnotation`）；写命令成功后重读该目标的批注列表。
-16. **Saved View**：搜索卡内的“已保存视图”区块由 `client.listSavedViews` 加载；点击视图名
+17. **Saved View**：搜索卡内的“已保存视图”区块由 `client.listSavedViews` 加载；点击视图名
     把其条件回填搜索表单（含分类与 Topic 多选）并以 `client.search` 套用（label/topic id
     以逗号串传参，`activeSearch` 同步更新，因此分页与刷新沿用同一筛选），输入名称 +
     “保存当前条件”调用 `client.createSavedView`（保存表单里的全部条件，包括分类与 Topic），
     删除调用 `client.deleteSavedView`。保存的是查询条件而非结果快照。
-17. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
+18. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
-18. **看板渲染（Board）**：首次挂载先 `client.ensureDefaultBoard()` 再 `client.listBoards()`（串行，避免 seed 前的空列表），把 `BoardDetail` 交给
+19. **看板渲染（Board）**：首次挂载先 `client.ensureDefaultBoard()` 再 `client.listBoards()`（串行，避免 seed 前的空列表），把 `BoardDetail` 交给
    `BoardView` 按 Section 顺序渲染可见 Block；`feed` Block 复用页面的完整阅读流（搜索卡 +
    Feed 列表 + 已保存视图），`source-health` Block 复用页面持有的 SourceActions，`topic-list`
    Block 渲染 Topic 列表，`collection` Block 由组件用 `client.collection(collectionId)` 自取
    收藏夹详情（按 collectionId 重挂载，无同步 setState），`spotlight` Block 用
    `client.listSpotlightPlacements({ boardId })` 自取固定列表并支持逐项解除。未知 Block type
    与悬空引用显示占位文案，不影响其它 Block。看板请求失败时主区直接渲染完整阅读流，不写 error。
-19. **看板编辑与人工 Spotlight**：看板工具条提供 Board 切换下拉、编辑模式开关与新建看板；
+20. **看板编辑与人工 Spotlight**：看板工具条提供 Board 切换下拉、编辑模式开关与新建看板；
    编辑模式下分区支持改名/上移/下移/删除，区块支持上移/下移/隐藏/复制/删除/跨分区移动，
    添加区块时 `feed` 可选绑定 Saved View、`collection` 可选绑定收藏夹（都可先建为未绑定态），
    区块配置可改绑定与条数（写命令统一用返回的 `BoardDetail` 刷新当前树）。Story/Topic 面板提供“固定到看板热点区”
@@ -299,6 +305,8 @@ macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚�
 11. `feed-card → story-open`：Story API 成功写 StoryDetail；失败不打开并显示 error；
    close 清除 story。`story-revision-update`：提交新标题后以返回 StoryDetail 刷新面板；
    `story-merge`：归并成功后来源成员数增加，旧 Story id 的后续打开重定向到 canonical。
+   `story-split`：提交后以返回的历史壳刷新面板（成员清空、后继列表可见、写操作区消失），
+   点击后继按钮打开该后继的普通 Story 视图。
 12. 页面卸载 → SSE closed：effect cleanup 调用 transport close。
 
 ## 副作用

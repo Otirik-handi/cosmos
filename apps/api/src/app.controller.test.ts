@@ -10,6 +10,7 @@ import {
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
+    StorySplitConflictError,
     TopicMembershipNotFoundError,
     TopicMergeConflictError,
     TopicNotFoundError,
@@ -568,6 +569,82 @@ describe("AppController story orchestration", () => {
                 subtype: null,
             }))
             .rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("splits a Story and maps shell conflicts to 409", async () => {
+        const repository = {
+            splitStory: vi.fn().mockResolvedValue({
+                ...storyDetailFixture(),
+                story: {
+                    ...storyDetailFixture().story,
+                    status: "split",
+                    replacedBy: [],
+                },
+                entry: null,
+                entries: [],
+            }),
+        };
+        const controller = createController(repository);
+        const result = await controller.splitStory("story-a", {
+            successors: [
+                { title: "Event A", kind: "event", entryIds: ["entry-a"] },
+                {
+                    title: "Event B",
+                    kind: "event",
+                    entryIds: ["entry-b"],
+                    entityIds: ["entity-a"],
+                },
+            ],
+            actor: "user",
+            reason: "错误合并",
+        });
+        expect(result).toMatchObject({ story: { status: "split" }, entry: null });
+        expect(repository.splitStory).toHaveBeenCalledWith({
+            storyId: "story-a",
+            successors: [
+                {
+                    title: "Event A",
+                    summary: null,
+                    kind: "event",
+                    subtype: null,
+                    entryIds: ["entry-a"],
+                    evidenceEntryIds: [],
+                    entityIds: [],
+                    topicIds: [],
+                },
+                {
+                    title: "Event B",
+                    summary: null,
+                    kind: "event",
+                    subtype: null,
+                    entryIds: ["entry-b"],
+                    evidenceEntryIds: [],
+                    entityIds: ["entity-a"],
+                    topicIds: [],
+                },
+            ],
+            actor: "user",
+            reason: "错误合并",
+        });
+
+        const conflictRepository = {
+            splitStory: vi.fn().mockRejectedValue(
+                new StorySplitConflictError("Story is already split: story-a"),
+            ),
+        };
+        await expect(createController(conflictRepository).splitStory("story-a", {
+            successors: [
+                { title: "A", kind: "event", entryIds: ["entry-a"] },
+                { title: "B", kind: "event", entryIds: ["entry-b"] },
+            ],
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        const validationRepository = {
+            splitStory: vi.fn(),
+        };
+        await expect(createController(validationRepository).splitStory("story-a", {
+            successors: [{ title: "A", kind: "event", entryIds: ["entry-a"] }],
+        })).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it("rejects duplicate merges with 409 and malformed commands with 400", async () => {

@@ -7,6 +7,7 @@ import type {
     BoardDetail,
     EntityDetail,
     EntitySummary,
+    EntryDetail,
     FeedItem,
     HealthResponse,
     SourceConfigProbeResult,
@@ -275,10 +276,15 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
 }
 
 export function renderStoryPanelLab(props: LabProps) {
-    const state = optionProp(props, "state", "revision", ["revision", "empty"] as const);
+    const state = optionProp(
+        props,
+        "state",
+        "revision",
+        ["revision", "empty", "split", "splittable"] as const,
+    );
     const title = textProp(props, "title", "Cosmos fixture story");
     const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
-    const memberEntry: StoryDetail["entry"] = {
+    const memberEntry: EntryDetail = {
         id: "entry-fixture",
         sourceId: "source-fixture",
         sourceName: "Cosmos fixture",
@@ -316,6 +322,20 @@ export function renderStoryPanelLab(props: LabProps) {
             reason: "同一事件",
         }],
     };
+    const secondEntry: EntryDetail = {
+        ...memberEntry,
+        id: "entry-fixture-2",
+        sourceId: "source-fixture-2",
+        sourceName: "Cosmos fixture source 2",
+        currentRevisionId: "revision-fixture-2",
+        revisions: memberEntry.revisions.map((revision) => ({
+            ...revision,
+            id: "revision-fixture-2",
+            title: "A second fixture member",
+        })),
+        observations: [],
+        relatedStories: [],
+    };
     const story: StoryDetail = {
         story: {
             id: "story-fixture",
@@ -324,10 +344,22 @@ export function renderStoryPanelLab(props: LabProps) {
             revisionId: "revision-fixture",
             title,
             summary: "A synthetic Story summary.",
+            status: state === "split" ? "split" : "active",
+            replacedBy: state === "split"
+                ? [
+                    { storyId: "story-successor-a", title: "Fixture successor A", kind: "event" },
+                    { storyId: "story-successor-b", title: "Fixture successor B", kind: "document" },
+                ]
+                : [],
         },
-        entry: memberEntry,
-        entries: [memberEntry],
+        entry: state === "split" ? null : memberEntry,
+        entries: state === "split"
+            ? []
+            : state === "splittable"
+                ? [memberEntry, secondEntry]
+                : [memberEntry],
         entities: [],
+        topics: [],
         labels: [],
         favorited: false,
         evidence: [{
@@ -350,6 +382,7 @@ export function renderStoryPanelLab(props: LabProps) {
             story={story}
             onUpdateStoryRevision={async () => undefined}
             onMergeStory={async () => undefined}
+            onSplitStory={async () => undefined}
             relatedStories={[{
                 storyId: "story-related-fixture",
                 title: "A related but different fixture Story",

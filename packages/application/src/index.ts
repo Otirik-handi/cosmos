@@ -186,6 +186,15 @@ export class StoryMergeConflictError extends Error {
     }
 }
 
+export class StorySplitConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "StorySplitConflictError";
+    }
+}
+
 export class TopicNotFoundError extends Error {
     readonly code = "not_found" as const;
 
@@ -509,6 +518,21 @@ export interface CosmosRepository {
     mergeStories(input: {
         canonicalStoryId: string;
         obsoleteStoryIds: readonly string[];
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null>;
+    splitStory(input: {
+        storyId: string;
+        successors: readonly {
+            title: string;
+            summary: string | null;
+            kind: StoryKind;
+            subtype: string | null;
+            entryIds: readonly string[];
+            evidenceEntryIds: readonly string[];
+            entityIds: readonly string[];
+            topicIds: readonly string[];
+        }[];
         actor?: string | null;
         reason?: string | null;
     }): Promise<StoryDetail | null>;

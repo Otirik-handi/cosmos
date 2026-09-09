@@ -9,6 +9,7 @@ import type {
     EntryListItem,
     EntryStoryRelationType,
     LabelRef,
+    SplitStoryCommand,
     StoryDetail,
     StoryEntitySummary,
     TopicMemberRole,
@@ -33,6 +34,8 @@ type StoryPanelProps = {
     story: StoryDetail;
     onUpdateStoryRevision: (command: UpdateStoryRevisionCommand) => Promise<void>;
     onMergeStory: (obsoleteStoryId: string) => Promise<void>;
+    /** 拆分 Story（ADR-0012）：一次提交全部后继与显式关系映射。 */
+    onSplitStory?: (command: SplitStoryCommand) => Promise<void>;
     topics?: readonly TopicSummary[];
     onJoinTopic?: (topicId: string, role: TopicMemberRole) => Promise<void>;
     onCreateTopic?: (title: string, purpose: string) => Promise<void>;
@@ -111,6 +114,40 @@ function TimelineSection({ events }: { events: readonly StoryTimelineEvent[] }) 
                 </ol>
             )}
         </section>
+    );
+}
+
+function SplitTargetSelect({
+    label,
+    value,
+    successors,
+    disabled,
+    onChange,
+}: {
+    label: string;
+    value: number;
+    successors: readonly { title: string }[];
+    disabled: boolean;
+    onChange: (next: number) => void;
+}) {
+    return (
+        <label className="flex flex-col gap-1 text-sm">
+            <span className="truncate text-muted-foreground">{label}</span>
+            <select
+                aria-label={`${label} 的拆分去向`}
+                value={value}
+                disabled={disabled}
+                className="rounded-sm border bg-card px-2 py-1 text-sm"
+                onChange={(event) => onChange(Number(event.target.value))}
+            >
+                <option value={-1}>留在历史壳</option>
+                {successors.map((successor, index) => (
+                    <option key={index} value={index}>
+                        {successor.title.trim() || `后继 ${index + 1}`}
+                    </option>
+                ))}
+            </select>
+        </label>
     );
 }
 
@@ -253,6 +290,7 @@ export function StoryPanel({
     story,
     onUpdateStoryRevision,
     onMergeStory,
+    onSplitStory,
     topics,
     onJoinTopic,
     onCreateTopic,
@@ -302,6 +340,17 @@ export function StoryPanel({
     const [editingAnnotationQuote, setEditingAnnotationQuote] = useState("");
     const [linkEntryId, setLinkEntryId] = useState("");
     const [linkRelationType, setLinkRelationType] = useState<EntryStoryRelationType>("evidence_for");
+    const [splitSuccessors, setSplitSuccessors] = useState<Array<{
+        title: string;
+        kind: StoryDetail["story"]["kind"];
+    }>>([
+        { title: `${story.story.title}（1）`, kind: story.story.kind },
+        { title: `${story.story.title}（2）`, kind: story.story.kind },
+    ]);
+    const [splitEntryTargets, setSplitEntryTargets] = useState<Record<string, number>>({});
+    const [splitEvidenceTargets, setSplitEvidenceTargets] = useState<Record<string, number>>({});
+    const [splitEntityTargets, setSplitEntityTargets] = useState<Record<string, number>>({});
+    const [splitTopicTargets, setSplitTopicTargets] = useState<Record<string, number>>({});
 
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -325,9 +374,10 @@ export function StoryPanel({
         };
     }, []);
 
-    const currentRevision = story.entry.revisions[0];
+    const currentRevision = story.entry?.revisions[0];
     const currentWebUrl = currentRevision?.webUrl ?? null;
     const timeline = buildStoryTimeline(story);
+    const isShell = story.story.status === "split";
     const submitRevisionUpdate: FormEventHandler = async (event) => {
         event.preventDefault();
         const normalized = title.trim();
@@ -363,6 +413,67 @@ export function StoryPanel({
             setMergeStoryId("");
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "Story 归并失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const updateSplitSuccessor = (
+        index: number,
+        patch: Partial<{ title: string; kind: StoryDetail["story"]["kind"] }>,
+    ): void => {
+        setSplitSuccessors((current) => current.map((successor, position) => (
+            position === index ? { ...successor, ...patch } : successor
+        )));
+    };
+    const addSplitSuccessor = (): void => {
+        setSplitSuccessors((current) => (current.length >= 5 ? current : [
+            ...current,
+            { title: `${story.story.title}（${current.length + 1}）`, kind: story.story.kind },
+        ]));
+    };
+    const submitSplit: FormEventHandler = async (event) => {
+        event.preventDefault();
+        if (!onSplitStory) {
+            return;
+        }
+        const titles = splitSuccessors.map((successor) => successor.title.trim());
+        if (titles.some((value) => value.length === 0)) {
+            setActionError("每个后继都需要标题。");
+            return;
+        }
+        const successors = splitSuccessors.map((successor, index) => ({
+            title: successor.title.trim(),
+            summary: null,
+            kind: successor.kind,
+            // 后继默认继承原 Story 的 subtype；表单暂不提供逐后继编辑。
+            subtype: story.story.subtype,
+            entryIds: story.entries
+                .filter((member) => (splitEntryTargets[member.id] ?? -1) === index)
+                .map((member) => member.id),
+            evidenceEntryIds: story.evidence
+                .filter((item) => (splitEvidenceTargets[item.entryId] ?? -1) === index)
+                .map((item) => item.entryId),
+            entityIds: story.entities
+                .filter((item) => (splitEntityTargets[item.entityId] ?? -1) === index)
+                .map((item) => item.entityId),
+            topicIds: story.topics
+                .filter((item) => (splitTopicTargets[item.topicId] ?? -1) === index)
+                .map((item) => item.topicId),
+        }));
+        const emptyIndex = successors.findIndex((successor) => successor.entryIds.length === 0);
+        if (emptyIndex >= 0) {
+            setActionError(
+                `后继「${titles[emptyIndex]}」还没有分配到任何成员；请给它至少一个成员，或减少后继数量。`,
+            );
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onSplitStory({ successors });
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "拆分 Story 失败。");
         } finally {
             setBusy(false);
         }
@@ -711,7 +822,9 @@ export function StoryPanel({
                             {story.story.title}
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                            {story.entry.sourceName} · {story.entry.revisions.length} 个 Revision
+                            {story.entry
+                                ? `${story.entry.sourceName} · ${story.entry.revisions.length} 个 Revision`
+                                : "历史壳：成员已全部拆分到后继 Story"}
                         </p>
                     </div>
                     <Button
@@ -761,6 +874,45 @@ export function StoryPanel({
                             </ul>
                         )}
                     </section>
+                    {isShell && (
+                        <section
+                            aria-label="历史壳"
+                            className="border-b pb-4"
+                            data-story-shell="true"
+                        >
+                            <h3 className="font-medium">
+                                历史壳（后继 {story.story.replacedBy.length}）
+                            </h3>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                本条 Story 已被拆分；它的成员历史、批注与审计仍然保留在这里，但不再接受归并、改标题或再次拆分。
+                            </p>
+                            <ul className="mt-2 grid gap-2">
+                                {story.story.replacedBy.map((successor) => (
+                                    <li
+                                        key={successor.storyId}
+                                        className="flex flex-col gap-0.5 rounded-sm border bg-muted/40 px-3 py-2"
+                                    >
+                                        <button
+                                            type="button"
+                                            disabled={!onOpenRelatedStory || busy}
+                                            onClick={() => {
+                                                if (onOpenRelatedStory) {
+                                                    void onOpenRelatedStory(successor.storyId);
+                                                }
+                                            }}
+                                            className="rounded-sm text-left text-sm hover:text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
+                                            data-story-successor-id={successor.storyId}
+                                        >
+                                            {successor.title}
+                                        </button>
+                                        <span className="text-xs text-muted-foreground">
+                                            {successor.kind} · {successor.storyId}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    )}
                     <section aria-label="证据来源" className="border-b pb-4">
                         <h3 className="font-medium">证据来源（{story.evidence.length}）</h3>
                         {story.evidence.length === 0 ? (
@@ -891,87 +1043,216 @@ export function StoryPanel({
                         {currentRevision?.contentText ?? "暂无正文"}
                     </div>
                     <RevisionAssets assets={currentRevision?.assets ?? []} />
-                    <dl className="grid gap-4 border-t pt-4 text-sm md:grid-cols-2">
-                        <div className="min-w-0">
-                            <dt className="font-medium">Entry</dt>
-                            <dd className="truncate text-muted-foreground">{story.entry.id}</dd>
-                        </div>
-                        <div className="min-w-0">
-                            <dt className="font-medium">Source</dt>
-                            <dd className="truncate text-muted-foreground">
-                                {story.entry.sourceName} · {story.entry.sourceKind}
-                            </dd>
-                        </div>
-                    </dl>
-                    <div className="flex flex-wrap gap-2 pb-2">
-                        {story.entry.revisions.map((revision) => (
-                            <Badge key={revision.id} variant="secondary">
-                                Revision {revision.revision} · {revision.id}
-                            </Badge>
-                        ))}
-                        {story.entry.observations.map((observation) => (
-                            <Badge key={observation.id} variant="outline">
-                                Observation · {observation.webUrl ?? "无网页 URL"}
-                            </Badge>
-                        ))}
-                    </div>
-                    <section
-                        aria-label="Story 操作"
-                        className="grid gap-4 border-t pt-4"
-                    >
-                        <form
-                            className="flex flex-wrap items-center gap-2"
-                            onSubmit={submitRevisionUpdate}
+                    {story.entry && (
+                        <>
+                            <dl className="grid gap-4 border-t pt-4 text-sm md:grid-cols-2">
+                                <div className="min-w-0">
+                                    <dt className="font-medium">Entry</dt>
+                                    <dd className="truncate text-muted-foreground">{story.entry.id}</dd>
+                                </div>
+                                <div className="min-w-0">
+                                    <dt className="font-medium">Source</dt>
+                                    <dd className="truncate text-muted-foreground">
+                                        {story.entry.sourceName} · {story.entry.sourceKind}
+                                    </dd>
+                                </div>
+                            </dl>
+                            <div className="flex flex-wrap gap-2 pb-2">
+                                {story.entry.revisions.map((revision) => (
+                                    <Badge key={revision.id} variant="secondary">
+                                        Revision {revision.revision} · {revision.id}
+                                    </Badge>
+                                ))}
+                                {story.entry.observations.map((observation) => (
+                                    <Badge key={observation.id} variant="outline">
+                                        Observation · {observation.webUrl ?? "无网页 URL"}
+                                    </Badge>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                    {!isShell && (
+                        <section
+                            aria-label="Story 操作"
+                            className="grid gap-4 border-t pt-4"
                         >
-                            <label
-                                htmlFor="cosmos-story-title-edit"
-                                className="text-sm font-medium"
+                            <form
+                                className="flex flex-wrap items-center gap-2"
+                                onSubmit={submitRevisionUpdate}
                             >
-                                标题
-                            </label>
-                            <Input
-                                id="cosmos-story-title-edit"
-                                value={title}
-                                onChange={(event) => setTitle(event.target.value)}
-                                disabled={busy}
-                                className="max-w-xs"
-                            />
-                            <Button type="submit" disabled={busy} variant="outline">
-                                更新标题
-                            </Button>
-                        </form>
+                                <label
+                                    htmlFor="cosmos-story-title-edit"
+                                    className="text-sm font-medium"
+                                >
+                                    标题
+                                </label>
+                                <Input
+                                    id="cosmos-story-title-edit"
+                                    value={title}
+                                    onChange={(event) => setTitle(event.target.value)}
+                                    disabled={busy}
+                                    className="max-w-xs"
+                                />
+                                <Button type="submit" disabled={busy} variant="outline">
+                                    更新标题
+                                </Button>
+                            </form>
+                            <form
+                                className="flex flex-wrap items-center gap-2"
+                                onSubmit={submitMerge}
+                            >
+                                <label
+                                    htmlFor="cosmos-story-merge-target"
+                                    className="text-sm font-medium"
+                                >
+                                    并入本 Story 的 Story ID
+                                </label>
+                                <Input
+                                    id="cosmos-story-merge-target"
+                                    value={mergeStoryId}
+                                    onChange={(event) => setMergeStoryId(event.target.value)}
+                                    disabled={busy}
+                                    placeholder="story:..."
+                                    className="max-w-xs"
+                                />
+                                <Button type="submit" disabled={busy} variant="outline">
+                                    归并
+                                </Button>
+                            </form>
+                        </section>
+                    )}
+                    {!isShell && onSplitStory && story.entries.length >= 2 && (
                         <form
-                            className="flex flex-wrap items-center gap-2"
-                            onSubmit={submitMerge}
+                            aria-label="拆分 Story"
+                            className="grid gap-3 border-t pt-4"
+                            onSubmit={submitSplit}
                         >
-                            <label
-                                htmlFor="cosmos-story-merge-target"
-                                className="text-sm font-medium"
-                            >
-                                并入本 Story 的 Story ID
-                            </label>
-                            <Input
-                                id="cosmos-story-merge-target"
-                                value={mergeStoryId}
-                                onChange={(event) => setMergeStoryId(event.target.value)}
-                                disabled={busy}
-                                placeholder="story:..."
-                                className="max-w-xs"
-                            />
-                            <Button type="submit" disabled={busy} variant="outline">
-                                归并
-                            </Button>
-                        </form>
-                        {actionError && (
-                            <p
-                                role="alert"
-                                className="text-sm text-destructive"
-                                data-story-action-error="true"
-                            >
-                                {actionError}
+                            <h3 className="font-medium">拆分 Story</h3>
+                            <p className="text-sm text-muted-foreground">
+                                把本条 Story 拆成多个后继；没有指定去向的成员、证据、实体与 Topic 会留在本条历史壳上。
                             </p>
-                        )}
-                    </section>
+                            <div className="grid gap-2">
+                                {splitSuccessors.map((successor, index) => (
+                                    <div
+                                        key={index}
+                                        className="flex flex-wrap items-center gap-2"
+                                    >
+                                        <label
+                                            htmlFor={`cosmos-split-title-${index}`}
+                                            className="text-sm font-medium"
+                                        >
+                                            后继 {index + 1}
+                                        </label>
+                                        <Input
+                                            id={`cosmos-split-title-${index}`}
+                                            value={successor.title}
+                                            onChange={(event) => {
+                                                updateSplitSuccessor(index, { title: event.target.value });
+                                            }}
+                                            disabled={busy}
+                                            className="max-w-xs"
+                                        />
+                                        <select
+                                            aria-label={`后继 ${index + 1} 类型`}
+                                            value={successor.kind}
+                                            disabled={busy}
+                                            className="rounded-sm border bg-card px-2 py-1 text-sm"
+                                            onChange={(event) => {
+                                                updateSplitSuccessor(index, {
+                                                    kind: event.target.value as StoryDetail["story"]["kind"],
+                                                });
+                                            }}
+                                        >
+                                            <option value="event">event</option>
+                                            <option value="document">document</option>
+                                            <option value="media">media</option>
+                                            <option value="thread">thread</option>
+                                        </select>
+                                    </div>
+                                ))}
+                                {splitSuccessors.length < 5 && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-fit"
+                                        disabled={busy}
+                                        onClick={addSplitSuccessor}
+                                    >
+                                        增加后继
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                {story.entries.map((member) => (
+                                    <SplitTargetSelect
+                                        key={member.id}
+                                        label={`成员 ${member.sourceName} · ${member.revisions[0]?.title ?? member.id}`}
+                                        value={splitEntryTargets[member.id] ?? -1}
+                                        successors={splitSuccessors}
+                                        disabled={busy}
+                                        onChange={(next) => {
+                                            setSplitEntryTargets((current) => ({ ...current, [member.id]: next }));
+                                        }}
+                                    />
+                                ))}
+                                {story.evidence.map((item) => (
+                                    <SplitTargetSelect
+                                        key={item.entryId}
+                                        label={`证据 ${item.title ?? item.entryId}`}
+                                        value={splitEvidenceTargets[item.entryId] ?? -1}
+                                        successors={splitSuccessors}
+                                        disabled={busy}
+                                        onChange={(next) => {
+                                            setSplitEvidenceTargets((current) => ({ ...current, [item.entryId]: next }));
+                                        }}
+                                    />
+                                ))}
+                                {story.entities.map((item) => (
+                                    <SplitTargetSelect
+                                        key={item.entityId}
+                                        label={`实体 ${item.name}`}
+                                        value={splitEntityTargets[item.entityId] ?? -1}
+                                        successors={splitSuccessors}
+                                        disabled={busy}
+                                        onChange={(next) => {
+                                            setSplitEntityTargets((current) => ({ ...current, [item.entityId]: next }));
+                                        }}
+                                    />
+                                ))}
+                                {story.topics.map((item) => (
+                                    <SplitTargetSelect
+                                        key={item.topicId}
+                                        label={`Topic ${item.title}`}
+                                        value={splitTopicTargets[item.topicId] ?? -1}
+                                        successors={splitSuccessors}
+                                        disabled={busy}
+                                        onChange={(next) => {
+                                            setSplitTopicTargets((current) => ({ ...current, [item.topicId]: next }));
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            <Button
+                                type="submit"
+                                disabled={busy}
+                                variant="outline"
+                                className="w-fit"
+                                data-testid="story-split-submit"
+                            >
+                                拆分
+                            </Button>
+                        </form>
+                    )}
+                    {actionError && (
+                        <p
+                            role="alert"
+                            className="text-sm text-destructive"
+                            data-story-action-error="true"
+                        >
+                            {actionError}
+                        </p>
+                    )}
                     {(onToggleFavorite
                         || onAttachLabel
                         || onDetachLabel

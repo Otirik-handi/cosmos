@@ -20,6 +20,7 @@ import {
     updateSourceCommandSchema,
     addTopicMemberCommandSchema,
     createTopicCommandSchema,
+    splitStoryCommandSchema,
     topicDetailSchema,
     createEntityCommandSchema,
     createEntityRelationCommandSchema,
@@ -123,6 +124,8 @@ describe("entity and relation contracts", () => {
                 revisionId: "rev-s-1",
                 title: "T",
                 summary: null,
+                status: "active",
+                replacedBy: [],
             },
             entry: {
                 id: "entry-a",
@@ -147,6 +150,7 @@ describe("entity and relation contracts", () => {
                 actor: null,
                 reason: null,
             }],
+            topics: [],
             labels: [],
             favorited: false,
             evidence: [],
@@ -178,6 +182,8 @@ describe("entity and relation contracts", () => {
                 revisionId: "rev-sb-1",
                 title: "Event",
                 summary: null,
+                status: "active",
+                replacedBy: [],
             },
             entry: {
                 id: "entry-b",
@@ -197,6 +203,7 @@ describe("entity and relation contracts", () => {
             },
             entries: [],
             entities: [],
+            topics: [],
             labels: [],
             favorited: false,
             evidence: [{
@@ -215,7 +222,67 @@ describe("entity and relation contracts", () => {
             }],
         });
         expect(story.evidence[0]?.relationType).toBe("future-kind");
-        expect(story.entry.relatedStories[0]?.storyId).toBe("story-c");
+        expect(story.entry?.relatedStories[0]?.storyId).toBe("story-c");
+    });
+
+    it("pins the split command and the historical-shell projection", () => {
+        const parsed = splitStoryCommandSchema.parse({
+            successors: [
+                {
+                    title: "Event A",
+                    kind: "event",
+                    entryIds: ["entry-a"],
+                },
+                {
+                    title: "Event B",
+                    kind: "event",
+                    entryIds: ["entry-b"],
+                    evidenceEntryIds: ["entry-c"],
+                    entityIds: ["entity-a"],
+                    topicIds: ["topic-a"],
+                },
+            ],
+            actor: "alice",
+            reason: "两个事件被错误合并",
+        });
+        expect(parsed.successors[0]?.evidenceEntryIds).toEqual([]);
+        expect(parsed.successors[1]?.topicIds).toEqual(["topic-a"]);
+        expect(() => splitStoryCommandSchema.parse({
+            successors: [{ title: "Only one", kind: "event", entryIds: ["entry-a"] }],
+        })).toThrow();
+        expect(() => splitStoryCommandSchema.parse({
+            successors: [
+                { title: "A", kind: "event", entryIds: [] },
+                { title: "B", kind: "event", entryIds: ["entry-b"] },
+            ],
+        })).toThrow();
+
+        // A shell may project no primary member at all; `entry` is nullable.
+        const shell = storyDetailSchema.parse({
+            story: {
+                id: "story-shell",
+                kind: "event",
+                subtype: null,
+                revisionId: "rev-shell-1",
+                title: "Was one Story",
+                summary: null,
+                status: "split",
+                replacedBy: [
+                    { storyId: "story-a", title: "Event A", kind: "event" },
+                    { storyId: "story-b", title: "Event B", kind: "document" },
+                ],
+            },
+            entry: null,
+            entries: [],
+            entities: [],
+            topics: [],
+            labels: [],
+            favorited: false,
+            evidence: [],
+        });
+        expect(shell.story.replacedBy.map((successor) => successor.storyId))
+            .toEqual(["story-a", "story-b"]);
+        expect(shell.entry).toBeNull();
     });
 });
 

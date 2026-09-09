@@ -370,6 +370,8 @@ Story split 是与 merge 不同的补偿操作：
 
 用户状态采用同样的保守迁移策略：merge 后当前收藏、隐藏、不感兴趣和反馈查询解析到 canonical Story，同时保留旧对象的历史来源；split 后这些状态以及 Topic membership 留在历史壳，不自动复制到全部后继。用户或 Agent 必须通过显式 migration command 选择要继承的后继，并记录 actor、理由和依据。
 
+**v1 切片（[`story-split-v1` Proposal](../proposals/story-split-v1.md)，2026-09-09 accepted）**：Story split v1 落地本节的历史壳与显式迁移语义——历史壳由 `StoryReplacement` 关系表表达（旧 ID 不写 alias、状态派生、`StoryDetail` 投影 `status` 与 `replacedBy[]`），历史壳允许没有当前成员（`StoryDetail.entry` 可空）；split 是一条命令一次事务，每个后继至少 1 个主成员，并可为每个后继显式迁移主成员、Entry↔Story 证据链接、Story↔Entity 与 Topic 成员，未列出的关系留在历史壳；用户状态（收藏/标签/收藏夹/批注/Spotlight）留在历史壳、v1 不迁移，显式迁移与撤销属待决定事项 10；历史壳拒绝 merge、改 Revision 与再次 split。`updated_since_last_seen` 的 split 投影（待决定事项 9）随 Read State 一起后置。
+
 ### 4.7 Story Revision：稳定身份与当前表示分离
 
 Story 的身份、成员关系和历史事实不能因为摘要刷新而改变。Story 本体保留稳定 ID；标题、摘要、关键事实、时间范围和可选的结构化概览通过不可变 `StoryRevision` 表达，并由 `current_revision_id` 指向当前被接受的表示。
