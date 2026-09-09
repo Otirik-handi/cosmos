@@ -5,6 +5,8 @@ import {
     EntityNotFoundError,
     EntityRelationConflictError,
     EntityRevisionConflictError,
+    EntryNotFoundError,
+    EntryStoryLinkConflictError,
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
@@ -805,6 +807,87 @@ describe("AppController entity orchestration", () => {
             name: "Jeff Dean",
             type: "superhero",
         })).rejects.toBeInstanceOf(BadRequestException);
+    });
+});
+
+describe("AppController entry↔story evidence orchestration", () => {
+    function createController(repository: Record<string, unknown>) {
+        return new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+    }
+
+    it("links an entry and returns the canonical Story detail", async () => {
+        const repository = {
+            linkEntryStory: vi.fn().mockResolvedValue({
+                story: { id: "story-b" },
+                evidence: [],
+            }),
+        };
+        const result = await createController(repository).linkEntryStory({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "evidence_for",
+            evidence: "官方公告",
+        });
+        expect(result).toMatchObject({ story: { id: "story-b" } });
+        expect(repository.linkEntryStory).toHaveBeenCalledWith({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "evidence_for",
+            producer: null,
+            producerVersion: null,
+            confidence: null,
+            evidence: "官方公告",
+            actor: null,
+            reason: null,
+        });
+    });
+
+    it("maps self-links to 409, missing targets to 404 and malformed commands to 400", async () => {
+        await expect(createController({
+            linkEntryStory: vi.fn().mockRejectedValue(
+                new EntryStoryLinkConflictError("entry-a", "story-a"),
+            ),
+        }).linkEntryStory({
+            entryId: "entry-a",
+            storyId: "story-a",
+            relationType: "evidence_for",
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        await expect(createController({
+            linkEntryStory: vi.fn().mockRejectedValue(new EntryNotFoundError("entry-missing")),
+        }).linkEntryStory({
+            entryId: "entry-missing",
+            storyId: "story-b",
+            relationType: "evidence_for",
+        })).rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({}).linkEntryStory({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "supports",
+        })).rejects.toBeInstanceOf(BadRequestException);
+
+        const repository = {
+            unlinkEntryStory: vi.fn().mockResolvedValue({
+                story: { id: "story-b" },
+                evidence: [],
+            }),
+        };
+        await expect(createController(repository).unlinkEntryStory({
+            entryId: "entry-a",
+            storyId: "story-b",
+        })).resolves.toMatchObject({ story: { id: "story-b" } });
+        expect(repository.unlinkEntryStory).toHaveBeenCalledWith({
+            entryId: "entry-a",
+            storyId: "story-b",
+            actor: null,
+            reason: null,
+        });
     });
 });
 

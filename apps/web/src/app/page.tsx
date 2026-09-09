@@ -25,6 +25,8 @@ import {
     type EntityRelationType,
     type EntitySummary,
     type EntityType,
+    type EntryListItem,
+    type EntryStoryRelationType,
     type FeedItem,
     type HealthResponse,
     type LabelList,
@@ -124,6 +126,9 @@ export default function Home() {
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [story, setStory] = useState<StoryDetail | null>(null);
     const [relatedStories, setRelatedStories] = useState<readonly RelatedStory[]>([]);
+    const [entryOptions, setEntryOptions] = useState<
+        readonly Pick<EntryListItem, "id" | "title" | "sourceName">[]
+    >([]);
     const [topics, setTopics] = useState<readonly TopicSummary[]>([]);
     const [topic, setTopic] = useState<TopicDetail | null>(null);
     const [openingTopicId, setOpeningTopicId] = useState<string | null>(null);
@@ -640,18 +645,27 @@ export default function Home() {
         setOpeningStoryId(storyId);
         setError(null);
         try {
-            const [storyDetail, storyCollections] = await Promise.all([
-                client.story(storyId),
-                client.listCollections({ storyId }),
-            ]);
-            // 批注按 canonical Story id 归属：Feed 传入的 id 可能指向已归并的旧 Story。
-            const annotationList = await client.listAnnotations({
-                targetType: "story",
-                targetId: storyDetail.story.id,
-            });
-            setStory(storyDetail);
-            setCollections(storyCollections);
-            setStoryAnnotations(annotationList.items);
+        const [storyDetail, storyCollections, entryPage] = await Promise.all([
+            client.story(storyId),
+            client.listCollections({ storyId }),
+            // 证据关系候选：最近条目里排除本 Story 自己的成员。
+            client.entries({ limit: 50 }),
+        ]);
+        // 批注按 canonical Story id 归属：Feed 传入的 id 可能指向已归并的旧 Story。
+        const annotationList = await client.listAnnotations({
+            targetType: "story",
+            targetId: storyDetail.story.id,
+        });
+        setStory(storyDetail);
+        setCollections(storyCollections);
+        setStoryAnnotations(annotationList.items);
+        setEntryOptions(entryPage.items
+            .filter((item) => item.storyId !== storyDetail.story.id)
+            .map((item) => ({
+                id: item.id,
+                title: item.title,
+                sourceName: item.sourceName,
+            })));
             // 相关内容是附加区块：先渲染 Story，再后台补齐，读取失败不阻塞阅读。
             openStoryIdRef.current = storyDetail.story.id;
             setRelatedStories([]);
@@ -667,7 +681,35 @@ export default function Home() {
         openStoryIdRef.current = null;
         setStory(null);
         setRelatedStories([]);
+        setEntryOptions([]);
     }, []);
+
+    /** 证据关系写命令返回 canonical StoryDetail，直接刷新面板即可。 */
+    const linkEntryStory = async (input: {
+        entryId: string;
+        relationType: EntryStoryRelationType;
+    }): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const updated = await client.linkEntryStory({
+            entryId: input.entryId,
+            storyId: story.story.id,
+            relationType: input.relationType,
+        });
+        setStory(updated);
+    };
+
+    const unlinkEntryStory = async (entryId: string): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        const updated = await client.unlinkEntryStory({
+            entryId,
+            storyId: story.story.id,
+        });
+        setStory(updated);
+    };
 
     const updateStoryRevision = async (command: UpdateStoryRevisionCommand): Promise<void> => {
         if (!story) {
@@ -1473,6 +1515,11 @@ export default function Home() {
                     onPinToBoard={() => pinToBoard("story", story.story.id)}
                     relatedStories={relatedStories}
                     onOpenRelatedStory={openStory}
+                    entryOptions={entryOptions.filter((option) => {
+                        return !story.evidence.some((item) => item.entryId === option.id);
+                    })}
+                    onLinkEntry={linkEntryStory}
+                    onUnlinkEntry={unlinkEntryStory}
                 />
             )}
 

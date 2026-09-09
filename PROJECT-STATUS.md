@@ -1,6 +1,17 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。PRD Phase 2 的四条验收标准已全部满足：本轮补齐 Web 分类（Label）/Topic 浏览、Story 时间线与相关内容（REC-008 v1），未新增 Prisma 模型、migration、公共合同或 API 端点（Task 15，已按维护者授权提交并推送）。Phase 2 第五切片可配置看板 v1（Task 14）此前已合入 `master`（tip `2ea8939`）。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已实现并通过门禁，尚未 commit。此前的 Phase 2 验收补完（分类/Topic 浏览、Story 时间线、相关内容）已随 Task 15 合入 `master` 并推送；可配置看板 v1（Task 14）已合入 `master`（tip `2ea8939`）。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：Entry↔Story 证据关系 v1 实现（Phase 2 第六切片，Task 16）
+
+Proposal [`evidence-for-mentions-v1`](docs/proposals/evidence-for-mentions-v1.md)（accepted，2026-09-09）与 ADR-0011 的实现已完成（切片 1–3），尚未 commit：
+
+1. **持久化与域**：schema + migration `20260909140000_entry_story_evidence_v1`（`EntryStoryLink`：`(entryId, storyId)` 唯一 + `relationType` + provenance，forward-only、全新表无 backfill）；domain 新增 `entryStoryRelationTypes` 受管枚举（`evidence_for`/`mentions`，读取侧未知值降级）。
+2. **公共合同与 API**：contracts 新增关系枚举、命令 schema 与 `StoryDetail.evidence`、`EntryDetail.relatedStories` 两个向后兼容字段；transport client 与 API 新增 `POST /api/v1/entry-story-links` 与 `/entry-story-links/removals`（返回 canonical `StoryDetail`）。
+3. **存储与一致性**：link/unlink 幂等（同一对改类型是覆盖写、完全一致为 no-op）、指向自己主 Story 返回 conflict、Story/Entry 双向投影；`mergeStories` 同事务把关系重定向到 canonical（冲突丢弃 obsolete 侧）并清理 self-link；`moveEntryToStory` 删除指向新主 Story 的冗余关系。
+4. **Web**：Story 面板新增「证据来源」区块（列出/解除/从最近条目下拉添加 + 关系类型选择），来源成员列表显示每条成员作为证据关联到的其它 Story（反向视图，复用已加载数据）。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 359 文件 failures=[]；`git diff --check` 干净。聚焦测试：domain 11、contracts 31、transport-http 13、api controller 34、storage `entry-story-evidence` 6、component-lab registry 12 全部通过。全量 `bun run test` 47 文件/410 用例，364 通过；46 例失败全部是既有 Windows SQLite 并行负载抖动（`migrate deploy` 5s 超时 + EBUSY），串行 `bunx vitest run --no-file-parallelism packages/storage-prisma` 11 文件/99 用例全部通过。浏览器产品 E2E 12/12（新增证据关系用例）；组件实验室浏览器 13/13；Node 进程 E2E 4/4。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
 
 ## 2026-09-09：Phase 2 验收补完（分类/Topic 浏览、Story 时间线、相关内容）
 
@@ -231,6 +242,8 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 （2026-09-09 更新：最新基线、Phase 2 验收补完与可配置看板切片合入见顶部两条记录。）
 
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
+- Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已实现并通过门禁（见顶部记录），尚未 commit；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
+- Phase 2 下一切片候选：Story split（ORG-014/020，split 的关系迁移按 ADR-0011 Revisit Gate 评估）、subtype 受管注册表（ORG-013）、自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（ING-009 per-source 媒体策略、RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。

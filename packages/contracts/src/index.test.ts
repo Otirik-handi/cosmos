@@ -25,6 +25,8 @@ import {
     createEntityRelationCommandSchema,
     entityDetailSchema,
     linkStoryEntityCommandSchema,
+    linkEntryStoryCommandSchema,
+    entryStoryRelationTypeSchema,
     storyDetailSchema,
     labelAssignmentCommandSchema,
     labelDetailSchema,
@@ -131,6 +133,7 @@ describe("entity and relation contracts", () => {
                 metrics: null,
                 revisions: [],
                 observations: [],
+                relatedStories: [],
             },
             entries: [],
             entities: [{
@@ -146,8 +149,73 @@ describe("entity and relation contracts", () => {
             }],
             labels: [],
             favorited: false,
+            evidence: [],
         });
         expect(story.entities[0].name).toBe("Jeff Dean");
+    });
+
+    it("pins the managed auxiliary relation enum and projects both directions", () => {
+        expect(entryStoryRelationTypeSchema.options).toEqual(["evidence_for", "mentions"]);
+
+        const parsed = linkEntryStoryCommandSchema.parse({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "evidence_for",
+        });
+        expect(parsed.producer).toBeUndefined();
+        expect(parsed.confidence).toBeUndefined();
+        expect(() => linkEntryStoryCommandSchema.parse({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "supports",
+        })).toThrow();
+
+        const story = storyDetailSchema.parse({
+            story: {
+                id: "story-b",
+                kind: "event",
+                subtype: null,
+                revisionId: "rev-sb-1",
+                title: "Event",
+                summary: null,
+            },
+            entry: {
+                id: "entry-b",
+                sourceId: "source-b",
+                sourceName: "S",
+                sourceKind: "rss",
+                currentRevisionId: "er-b-1",
+                metrics: null,
+                revisions: [],
+                observations: [],
+                relatedStories: [{
+                    storyId: "story-c",
+                    relationType: "mentions",
+                    title: "Other Story",
+                    reason: null,
+                }],
+            },
+            entries: [],
+            entities: [],
+            labels: [],
+            favorited: false,
+            evidence: [{
+                entryId: "entry-a",
+                sourceId: "source-a",
+                sourceName: "S",
+                // Read side stays permissive: unknown future kinds degrade.
+                relationType: "future-kind",
+                title: "Long article",
+                producer: "human",
+                producerVersion: null,
+                confidence: 1,
+                evidence: "官方公告",
+                actor: null,
+                reason: "同一事件",
+            }],
+        });
+        expect(story.evidence[0]?.relationType).toBe("future-kind");
+        expect(story.entry.relatedStories[0]?.storyId).toBe("story-c");
     });
 });
 

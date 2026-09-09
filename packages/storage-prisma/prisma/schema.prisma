@@ -205,6 +205,7 @@ model Entry {
     revisions           EntryRevision[] @relation("EntryRevisions")
     observations        Observation[]
     story               Story?         @relation(fields: [storyId], references: [id], onDelete: SetNull)
+    storyLinks          EntryStoryLink[]
 
     @@unique([sourceInstanceId, canonicalExternalId])
 }
@@ -260,6 +261,7 @@ model Story {
     topicMemberships  TopicMembership[]
     storyEntities     StoryEntity[]
     collectionItems   CollectionItem[]
+    entryLinks        EntryStoryLink[]
 }
 
 model StoryRevision {
@@ -410,6 +412,25 @@ model StoryEntity {
     entity          Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
     @@unique([storyId, entityId])
+}
+
+model EntryStoryLink {
+    id              String   @id @default(cuid())
+    entryId         String
+    storyId         String
+    relationType    String
+    producer        String   @default("human")
+    producerVersion String?
+    confidence      Float    @default(1)
+    evidence        String?
+    actorJson       String?
+    reason          String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    entry           Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+    story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+    @@unique([entryId, storyId])
 }
 
 model EntityRelation {

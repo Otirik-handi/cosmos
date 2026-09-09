@@ -309,6 +309,12 @@ export function renderStoryPanelLab(props: LabProps) {
             capturedAt: fixtureTimestamp,
             sourcePublishedAt: null,
         }],
+        relatedStories: [{
+            storyId: "story-evidenced-fixture",
+            relationType: "evidence_for",
+            title: "A fixture event Story this entry is evidence for",
+            reason: "同一事件",
+        }],
     };
     const story: StoryDetail = {
         story: {
@@ -324,6 +330,19 @@ export function renderStoryPanelLab(props: LabProps) {
         entities: [],
         labels: [],
         favorited: false,
+        evidence: [{
+            entryId: "entry-evidence-fixture",
+            sourceId: "source-fixture",
+            sourceName: "Cosmos fixture source",
+            relationType: "evidence_for",
+            title: "A fixture entry that supports this Story",
+            producer: "human",
+            producerVersion: null,
+            confidence: 1,
+            evidence: "官方公告",
+            actor: null,
+            reason: "同一事件",
+        }],
     };
     return (
         <StoryPanel

@@ -47,6 +47,7 @@ import {
 import type {
     EntityRelationType,
     EntityType,
+    EntryStoryRelationType,
     FavoriteTargetType,
     NormalizedIngestItem,
     StoryKind,
@@ -290,6 +291,20 @@ export class EntryNotFoundError extends Error {
     constructor(entryId: string) {
         super(`Entry not found: ${entryId}`);
         this.name = "EntryNotFoundError";
+    }
+}
+
+/**
+ * An Entry cannot be linked to its own primary Story: `Entry.storyId` already
+ * expresses that membership, and allowing both would blur "member" and
+ * "evidence" (ADR-0011 decision 3).
+ */
+export class EntryStoryLinkConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(entryId: string, storyId: string) {
+        super(`Entry ${entryId} already belongs to Story ${storyId}`);
+        this.name = "EntryStoryLinkConflictError";
     }
 }
 
@@ -595,6 +610,27 @@ export interface CosmosRepository {
         actor?: string | null;
         reason?: string | null;
     }): Promise<EntityDetail | null>;
+    /**
+     * Links an Entry to another Story as evidence/mention. Returns the target
+     * Story detail so callers can refresh the evidence list in one round trip.
+     */
+    linkEntryStory(input: {
+        entryId: string;
+        storyId: string;
+        relationType: EntryStoryRelationType;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null>;
+    unlinkEntryStory(input: {
+        entryId: string;
+        storyId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null>;
     createEntityRelation(input: {
         fromEntityId: string;
         toEntityId: string;

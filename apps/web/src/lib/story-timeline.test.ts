@@ -14,6 +14,7 @@ function entry(overrides: Partial<EntryDetail>): EntryDetail {
         metrics: null,
         revisions: [],
         observations: [],
+        relatedStories: [],
         ...overrides,
     };
 }
@@ -33,6 +34,7 @@ function story(entries: EntryDetail[]): StoryDetail {
         entities: [],
         labels: [],
         favorited: false,
+        evidence: [],
     };
 }
 

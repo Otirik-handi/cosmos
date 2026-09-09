@@ -312,6 +312,50 @@ export const observationSnapshotSchema = z.object({
 });
 export type ObservationSnapshot = z.infer<typeof observationSnapshotSchema>;
 
+/**
+ * Auxiliary Entry↔Story relation kinds (ADR-0011 decision 1). The write-side
+ * enum is managed and additive; read-side `relationType` stays a plain string
+ * so links written against a future kind degrade instead of failing the payload.
+ */
+export const entryStoryRelationTypeSchema = z.enum([
+    "evidence_for",
+    "mentions",
+]);
+export type EntryStoryRelationType = z.infer<typeof entryStoryRelationTypeSchema>;
+
+export const entryStoryLinkProvenanceSchema = z.object({
+    // Same optional-on-write policy as Story↔Entity: storage defaults to
+    // producer "human" and confidence 1 unless the caller claims a source.
+    producer: z.string().trim().min(1).max(200).nullish(),
+    producerVersion: z.string().trim().max(100).nullish(),
+    confidence: z.number().min(0).max(1).nullish(),
+    evidence: z.string().trim().max(5000).nullish(),
+});
+export type EntryStoryLinkProvenance = z.infer<typeof entryStoryLinkProvenanceSchema>;
+
+export const storyEvidenceSchema = z.object({
+    entryId: z.string(),
+    sourceId: z.string(),
+    sourceName: z.string(),
+    relationType: z.string(),
+    title: z.string().nullable(),
+    producer: z.string(),
+    producerVersion: z.string().nullable(),
+    confidence: z.number().min(0).max(1),
+    evidence: z.string().nullable(),
+    actor: z.string().nullable(),
+    reason: z.string().nullable(),
+});
+export type StoryEvidence = z.infer<typeof storyEvidenceSchema>;
+
+export const entryRelatedStorySchema = z.object({
+    storyId: z.string(),
+    relationType: z.string(),
+    title: z.string(),
+    reason: z.string().nullable(),
+});
+export type EntryRelatedStory = z.infer<typeof entryRelatedStorySchema>;
+
 export const entryDetailSchema = z.object({
     id: z.string(),
     sourceId: z.string(),
@@ -321,6 +365,8 @@ export const entryDetailSchema = z.object({
     metrics: contentMetricsSchema.nullable(),
     revisions: entryRevisionSnapshotSchema.array(),
     observations: observationSnapshotSchema.array(),
+    // Auxiliary relations from this Entry to other Stories (ADR-0011 decision 6).
+    relatedStories: entryRelatedStorySchema.array(),
 });
 export type EntryDetail = z.infer<typeof entryDetailSchema>;
 
@@ -393,6 +439,9 @@ export const storyDetailSchema = z.object({
     entities: storyEntitySummarySchema.array(),
     labels: labelRefSchema.array(),
     favorited: z.boolean(),
+    // Entries linked to this Story as evidence/mention, not primary members
+    // (ADR-0011 decision 6).
+    evidence: storyEvidenceSchema.array(),
 });
 export type StoryDetail = z.infer<typeof storyDetailSchema>;
 
@@ -421,6 +470,23 @@ export const mergeStoriesCommandSchema = z.object({
     reason: z.string().trim().min(1).max(1000).nullish(),
 });
 export type MergeStoriesCommand = z.infer<typeof mergeStoriesCommandSchema>;
+
+export const linkEntryStoryCommandSchema = z.object({
+    entryId: z.string().trim().min(1).max(300),
+    storyId: z.string().trim().min(1).max(300),
+    relationType: entryStoryRelationTypeSchema,
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+}).merge(entryStoryLinkProvenanceSchema);
+export type LinkEntryStoryCommand = z.infer<typeof linkEntryStoryCommandSchema>;
+
+export const unlinkEntryStoryCommandSchema = z.object({
+    entryId: z.string().trim().min(1).max(300),
+    storyId: z.string().trim().min(1).max(300),
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+});
+export type UnlinkEntryStoryCommand = z.infer<typeof unlinkEntryStoryCommandSchema>;
 
 export const topicMemberRoleSchema = z.enum([
     "core",

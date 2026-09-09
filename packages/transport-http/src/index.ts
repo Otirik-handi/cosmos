@@ -68,6 +68,8 @@ import {
     removeEntityAliasCommandSchema,
     linkStoryEntityCommandSchema,
     unlinkStoryEntityCommandSchema,
+    linkEntryStoryCommandSchema,
+    unlinkEntryStoryCommandSchema,
     createEntityRelationCommandSchema,
     removeEntityRelationCommandSchema,
     labelListSchema,
@@ -114,6 +116,8 @@ import {
     type RemoveEntityAliasCommand,
     type LinkStoryEntityCommand,
     type UnlinkStoryEntityCommand,
+    type LinkEntryStoryCommand,
+    type UnlinkEntryStoryCommand,
     type CreateEntityRelationCommand,
     type RemoveEntityRelationCommand,
     type LabelList,
@@ -563,6 +567,24 @@ export class HttpCosmosClient {
             method: "POST",
             body: payload,
             schema: entityDetailSchema,
+        });
+    }
+
+    async linkEntryStory(input: LinkEntryStoryCommand): Promise<StoryDetail> {
+        const payload = linkEntryStoryCommandSchema.parse(input);
+        return this.request("/api/v1/entry-story-links", {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async unlinkEntryStory(input: UnlinkEntryStoryCommand): Promise<StoryDetail> {
+        const payload = unlinkEntryStoryCommandSchema.parse(input);
+        return this.request("/api/v1/entry-story-links/removals", {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
         });
     }
 

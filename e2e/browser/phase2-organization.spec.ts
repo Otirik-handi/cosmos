@@ -66,7 +66,10 @@ test("browses by label, saves the condition as a view, and shows the Story timel
     await expect(secondDialog).toBeVisible();
     await expect(secondDialog.getByRole("heading", { name: "Cosmos scaffold is ready" })).toBeVisible();
     await secondDialog.getByLabel("选择要添加的标签").selectOption({ label: labelName });
-    await secondDialog.getByRole("button", { name: "添加", exact: true }).click();
+    await secondDialog
+        .locator('section[aria-label="用户组织"]')
+        .getByRole("button", { name: "添加", exact: true })
+        .click();
     await expect(secondDialog.getByText(labelName, { exact: true })).toBeVisible();
 
     // 相关内容：共享分类的其它 Story 出现，并说明相关原因。
@@ -89,6 +92,89 @@ test("browses by label, saves the condition as a view, and shows the Story timel
     await expect(page.getByText(`分类：${labelName}`)).toHaveCount(0);
     await page.getByRole("button", { name: viewName, exact: true }).click();
     await expect(page.getByText(`分类：${labelName}`)).toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+});
+
+test("links an entry from another Story as evidence and shows the reverse view", async ({ page }) => {
+    test.setTimeout(300_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    const sourceName = await ingestFeed(page, "证据关系验收来源");
+
+    // 打开一条 Story 作为证据目标。
+    await page
+        .locator("article")
+        .filter({ hasText: sourceName })
+        .first()
+        .getByRole("button", { name: "打开 Story" })
+        .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const targetTitle = await dialog.getByRole("heading", { level: 2 }).textContent();
+    const evidenceSection = dialog.locator('section[aria-label="证据来源"]');
+    await expect(evidenceSection.getByText(/还没有其它 Story 引用/)).toBeVisible();
+
+    // 从另一条 Story 的条目里选一条作为证据。
+    const option = evidenceSection.getByLabel("选择证据条目");
+    await option.selectOption({ index: 1 });
+    const entryId = await option.inputValue();
+    await evidenceSection.getByLabel("证据关系类型").selectOption("evidence_for");
+    await evidenceSection.getByRole("button", { name: "添加" }).click();
+    const evidenceItem = evidenceSection.locator(
+        `[data-story-evidence-entry-id="${entryId}"]`,
+    );
+    await expect(evidenceItem).toBeVisible();
+    await expect(evidenceItem.getByText("证据", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // 反向视图：该条目所属 Story 的成员列表显示它作为证据关联到目标 Story。
+    const primaryStoryTitle = await page.evaluate(async (id) => {
+        const listResponse = await fetch("/api/v1/entries?limit=100");
+        const list = await listResponse.json() as {
+            items: Array<{ id: string; storyId: string | null }>;
+        };
+        const storyId = list.items.find((item) => item.id === id)?.storyId;
+        if (!storyId) {
+            return null;
+        }
+        const storyResponse = await fetch(`/api/v1/stories/${encodeURIComponent(storyId)}`);
+        const story = await storyResponse.json() as { story: { title: string } };
+        return story.story.title;
+    }, entryId);
+    expect(primaryStoryTitle).not.toBeNull();
+    await page
+        .locator("article")
+        .filter({ hasText: sourceName })
+        .filter({ hasText: primaryStoryTitle! })
+        .getByRole("button", { name: "打开 Story" })
+        .click();
+    const reverseDialog = page.getByRole("dialog");
+    await expect(reverseDialog).toBeVisible();
+    const member = reverseDialog.locator(`[data-story-member-id="${entryId}"]`);
+    await expect(member).toBeVisible();
+    await expect(member).toContainText("作为证据关联到");
+    await expect(member).toContainText(targetTitle!);
+
+    // 解除后目标 Story 的证据来源清空。
+    await page.keyboard.press("Escape");
+    await page
+        .locator("article")
+        .filter({ hasText: sourceName })
+        .filter({ hasText: targetTitle! })
+        .getByRole("button", { name: "打开 Story" })
+        .click();
+    const targetDialog = page.getByRole("dialog");
+    const targetEvidence = targetDialog.locator('section[aria-label="证据来源"]');
+    await targetEvidence
+        .locator(`[data-story-evidence-entry-id="${entryId}"]`)
+        .getByRole("button", { name: "解除" })
+        .click();
+    await expect(targetEvidence.getByText(/还没有其它 Story 引用/)).toBeVisible();
 
     expect(consoleErrors).toEqual([]);
 });

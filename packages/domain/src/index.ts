@@ -88,6 +88,18 @@ export const spotlightTargetTypes = [
 
 export type SpotlightTargetType = (typeof spotlightTargetTypes)[number];
 
+/**
+ * Auxiliary Entry↔Story relation kinds (ADR-0011 decision 1). The Entry's own
+ * primary Story is expressed by `Entry.storyId`, so a link never targets it;
+ * unknown values degrade on read, so the list is additive only.
+ */
+export const entryStoryRelationTypes = [
+    "evidence_for",
+    "mentions",
+] as const;
+
+export type EntryStoryRelationType = (typeof entryStoryRelationTypes)[number];
+
 export const contentKinds = [
     "post",
     "article",

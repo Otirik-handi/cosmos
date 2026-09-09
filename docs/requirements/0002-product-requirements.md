@@ -348,6 +348,8 @@ flowchart LR
 
 **Phase 2 第三切片注记（2026-09-08，[`entity-relation-v1` Proposal](../proposals/entity-relation-v1.md) accepted）**：ORG-003 的 v1 实施顺序按 Proposal 冻结——先交付 Entity 实体（受管类型枚举 `person`/`organization`/`product`/`project`/`model`/`location` + 规范名走不可变 `EntityRevision` + `EntityAlias` 名称别名）+ Story↔Entity 关联 + Entity↔Entity 类型化关系（受管关系类型枚举 + provenance：producer/version/confidence/evidence），全部手动优先；自动 Entity 识别/Knowledge Workflow（ORG-021）、Entity merge/dedup、`evidence_for`/`mentions` 跨 Story 引用（ORG-011）后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第六切片注记（2026-09-09，[`evidence-for-mentions-v1` Proposal](../proposals/evidence-for-mentions-v1.md) accepted）**：ORG-011 的 v1 实施顺序按 Proposal 冻结——先交付 Entry↔Story 证据关系（`(entryId, storyId)` 唯一当前关系 + 受管关系类型 `evidence_for`/`mentions` + provenance），`Entry.storyId` 保持主归属唯一真相且禁止指向自己的主 Story；`StoryDetail` 返回证据来源列表、`EntryDetail` 返回关联 Story 列表；`mergeStories` 同事务重定向、`moveEntryToStory` 删除指向新主 Story 的冗余关系；全部手动优先。正文片段字符级锚点、自动抽取/提议（ORG-021）、Story↔Story 类型化关系（§4.5 的 `followed_by`/`background_for`，服务 REC-008 完整形态）与 Story split 的关系迁移后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |

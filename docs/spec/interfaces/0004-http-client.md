@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-08-24。
+2026-09-09。
 
 ## 组件定位
 
@@ -68,6 +68,37 @@ options 注入。EventSource 默认从 globalThis 读取；运行时没有 Event
 | `entries(query?)` | `GET /api/v1/entries` | sourceId/cursor/limit 按 truthy 发送 | `EntryPage` |
 | `entry(entryId)` | `GET /api/v1/entries/:encodedId` | path encoded | `EntryDetail` |
 | `revision(revisionId)` | `GET /api/v1/revisions/:encodedId` | path encoded | `RevisionDetail` |
+
+Phase 2 编排方法（同一 transport 形态：先 parse 命令 schema，再 POST/PATCH，成功响应经对应 schema）：
+
+| Client method | HTTP method/path | 成功 schema/输出 |
+| --- | --- | --- |
+| `moveEntryToStory(storyId,input)` / `updateStoryRevision(storyId,input)` | `POST /api/v1/stories/:encodedId/entry-moves`、`/revisions` | `StoryDetail` |
+| `mergeStories(input)` | `POST /api/v1/stories/merges` | `StoryDetail` |
+| `listTopics(query?)` / `topic(topicId)` | `GET /api/v1/topics`、`/topics/:encodedId` | `TopicPage`、`TopicDetail` |
+| `createTopic(input)` / `updateTopic(topicId,input)` / `mergeTopics(input)` | `POST /api/v1/topics`、`/topics/:encodedId/revisions`、`/topics/merges` | `TopicDetail` |
+| `addTopicMember` / `updateTopicMemberRole` / `removeTopicMember` / `restoreTopicMember` | `POST /api/v1/topics/:encodedId/members`、`/member-role-updates`、`/member-removals`、`/member-restorations` | `TopicDetail` |
+| `listEntities(query?)` / `entity(entityId)` | `GET /api/v1/entities`、`/entities/:encodedId` | `EntityPage`、`EntityDetail` |
+| `createEntity(input)` / `updateEntity(entityId,input)` | `POST /api/v1/entities`、`/entities/:encodedId/revisions` | `EntityDetail` |
+| `addEntityAlias` / `removeEntityAlias` | `POST /api/v1/entities/:encodedId/aliases`、`/alias-removals` | `EntityDetail` |
+| `linkStoryEntity` / `unlinkStoryEntity` | `POST /api/v1/story-entity-links`、`/story-entity-links/removals` | `EntityDetail` |
+| `linkEntryStory` / `unlinkEntryStory` | `POST /api/v1/entry-story-links`、`/entry-story-links/removals` | `StoryDetail` |
+| `createEntityRelation` / `removeEntityRelation` | `POST /api/v1/entity-relations`、`/entity-relations/removals` | `EntityDetail` |
+| `listLabels` / `label(labelId)` | `GET /api/v1/labels`、`/labels/:encodedId` | `LabelList`、`LabelDetail` |
+| `createLabel` / `deleteLabel` | `POST /api/v1/labels`、`/labels/:encodedId/removals` | `LabelItem`、`UserOrganizationAck` |
+| `attachLabel` / `detachLabel` | `POST /api/v1/label-assignments`、`/label-assignments/removals` | `UserOrganizationAck` |
+| `listCollections(query?)` / `collection(collectionId)` | `GET /api/v1/collections`、`/collections/:encodedId` | `CollectionList`、`CollectionDetail` |
+| `createCollection` / `updateCollection` / `deleteCollection` | `POST /api/v1/collections`、`PATCH /collections/:encodedId`、`POST /collections/:encodedId/removals` | `CollectionSummary`、`UserOrganizationAck` |
+| `addCollectionItem` / `removeCollectionItem` | `POST /api/v1/collections/:encodedId/items`、`/items/removals` | `UserOrganizationAck` |
+| `listFavorites` / `setFavorite` / `unsetFavorite` | `GET /api/v1/favorites`、`POST /favorites`、`/favorites/removals` | `FavoriteList`、`UserOrganizationAck` |
+| `listAnnotations(query)` / `createAnnotation` / `updateAnnotation` / `deleteAnnotation` | `GET /api/v1/annotations`、`POST /annotations`、`PATCH /annotations/:encodedId`、`POST /annotations/:encodedId/removals` | `AnnotationList`、`Annotation`、`UserOrganizationAck` |
+| `listSavedViews` / `createSavedView` / `updateSavedView` / `deleteSavedView` | `GET /api/v1/saved-views`、`POST /saved-views`、`PATCH /saved-views/:encodedId`、`POST /saved-views/:encodedId/removals` | `SavedViewList`、`SavedView`、`UserOrganizationAck` |
+| `listBoards` / `getBoard` / `ensureDefaultBoard` | `GET /api/v1/boards`、`/boards/:encodedId`、`POST /boards/ensure-default` | `BoardList`、`BoardDetail` |
+| `createBoard` / `updateBoard` / `deleteBoard` | `POST /api/v1/boards`、`PATCH /boards/:encodedId`、`POST /boards/:encodedId/removals` | `BoardDetail`、`BoardCommandAck` |
+| `createBoardSection` / `updateBoardSection` / `deleteBoardSection` | `POST /api/v1/board-sections`、`PATCH /board-sections/:encodedId`、`POST /board-sections/:encodedId/removals` | `BoardDetail`、`BoardCommandAck` |
+| `createBoardBlock` / `updateBoardBlockConfig` / `moveBoardBlock` / `setBoardBlockVisibility` / `duplicateBoardBlock` / `deleteBoardBlock` | `POST /api/v1/board-blocks`、`PATCH /board-blocks/:encodedId`、`POST /board-blocks/:encodedId/moves`、`/visibility`、`/duplications`、`/removals` | `BoardDetail`、`BoardCommandAck` |
+| `listSpotlightPlacements(query?)` / `pinSpotlight` / `unpinSpotlight` | `GET /api/v1/spotlight-placements`、`POST /spotlight-placements`、`POST /spotlight-placements/:encodedId/removals` | `SpotlightPlacementList`、`SpotlightPlacement`、`BoardCommandAck` |
+| `listSourceDefinitions` / `createSourceConfigProbe` / `getSourceConfigProbe` | `GET /api/v1/source-definitions`、`POST /api/v1/source-config-probes`、`GET /api/v1/source-config-probes/:encodedId` | `SourceDefinitionPage`、`SourceConfigProbeJobSnapshot` |
 
 `feed`、`search`、`entries` 即使没有 query 也会生成带 `?` 的 path（例如
 `/api/v1/feed?`）；这是当前实现的 URL 结果，不影响服务器解析。Fetch options 默认

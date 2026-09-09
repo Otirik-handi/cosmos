@@ -6,6 +6,7 @@ import {
     deriveExternalKey,
     entityRelationTypes,
     entityTypes,
+    entryStoryRelationTypes,
     favoriteTargetTypes,
     fingerprintEntityRevision,
     fingerprintEntryRevision,
@@ -93,6 +94,15 @@ describe("board domain semantics", () => {
             "source-health",
             "topic-list",
             "collection",
+        ]);
+    });
+});
+
+describe("entry↔story evidence semantics", () => {
+    it("keeps the managed auxiliary relation enum stable and readonly", () => {
+        expect(entryStoryRelationTypes).toEqual([
+            "evidence_for",
+            "mentions",
         ]);
     });
 });

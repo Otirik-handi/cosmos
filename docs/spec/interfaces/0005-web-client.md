@@ -72,6 +72,10 @@ Asset download 中未被 client 封装的部分不由它承担。
 - **Story 相关内容**：与本 Story 共享分类或共享 Entity 的其它 Story，纯读组合
   `search`/`entity`/`story` 三个既有端点，最多 5 条；只用于“相关但不同事件”的浏览提示，
   不改变 Story 的权威关系。
+- **Story 证据来源**：`StoryDetail.evidence` 的渲染——把本 Story 当作证据/提及目标的其它
+  条目（来源、标题、关系类型、理由），支持解除与从最近条目下拉添加；Story 成员列表里
+  每条成员还会显示它作为证据关联到的其它 Story（`EntryDetail.relatedStories`），这是反向
+  视图、不额外发请求（ADR-0011）。
 
 ## 外部行为
 首次挂载时页面将 `loading=true`，并行调用 `client.feed()`（或 active search）和
@@ -113,10 +117,11 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 7. **加载更多**：有 `nextCursor` 时按当前搜索或 Feed query 追加下一页 items；没有 cursor
    不发请求。
 8. **Story 展开**：点击卡片的“打开 Story”调用 `client.story(storyId)`，在页面下方显示
-   Story title、来源成员（`entries` 全部成员，含来源名/标题/Entry id）、时间线（成员
-   Revision 与 Observation 按时间倒序，来源名与事件类型分开表达）、相关内容（共享分类或
-   共享 Entity 的其它 Story，先渲染面板再后台补齐，读取失败只留空列表）、最新正文、
-   Entry id、Revision badges 与 Observation badges。
+   Story title、来源成员（`entries` 全部成员，含来源名/标题/Entry id，以及该成员作为证据
+   关联到的其它 Story）、证据来源（`evidence`：来源、标题、关系类型、理由，可解除或从最近
+   条目下拉添加）、时间线（成员 Revision 与 Observation 按时间倒序，来源名与事件类型分开
+   表达）、相关内容（共享分类或共享 Entity 的其它 Story，先渲染面板再后台补齐，读取失败
+   只留空列表）、最新正文、Entry id、Revision badges 与 Observation badges。
 9. **Story 编排**：面板“Story 操作”区可编辑标题（`updateStoryRevision`，携带当前
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
    （`mergeStories`）；成功后页面用返回的 StoryDetail 刷新面板。面板不直接发 API
@@ -224,9 +229,9 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
   时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多；
   搜索表单在存在 Label/Topic 时渲染多选筛选 chip，命中条件回显为筛选 chip。
-- Story panel：展示 title、source、revision 数、来源成员、时间线（时间/事件类型/来源/标题）、
-  相关内容（标题 + 相关原因）、最新 revision contentText、Entry/source 信息、
-  Revision/Observation badges。
+- Story panel：展示 title、source、revision 数、来源成员（含反向证据关联）、证据来源、
+  时间线（时间/事件类型/来源/标题）、相关内容（标题 + 相关原因）、最新 revision contentText、
+  Entry/source 信息、Revision/Observation badges。
 
 页面使用共享 DTO 的 response shape，不在 UI 重新定义 API DTO；`readError` 对
 `CosmosTransportError` 显示 `服务请求失败（HTTP <status>）。`，其它 Error 显示 message，
@@ -381,7 +386,8 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
    “SSE 不可用”，且不发生自动重连。
 6. 点击 Story 后观察 Story title、来源成员列表、时间线事件（来源名 + 事件类型 + 时间）、
    最新正文、Entry、Revision、Observation 展开；给两条 Story 打同一分类后重新打开，观察
-   “相关内容”列出对方并标注“共享分类：<名称>”，且不把当前 Story 列进自己；更新标题后标题
+   “相关内容”列出对方并标注“共享分类：<名称>”，且不把当前 Story 列进自己；把另一条 Story
+   的条目作为证据加入后观察“证据来源”出现该项并标注关系类型，解除后消失；更新标题后标题
    与 Revision 变化、归并后来源成员数增加、旧 Story id 打开仍显示 canonical；Story 404/
    网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
 7. 点击检查服务，观察 health card 更新为 `service · workerStatus`，notice 包含

@@ -230,6 +230,8 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /story-entity-links/removals` | body `UnlinkStoryEntityCommand` | `EntityDetail`；Schema 失败 400，Story/Entity 缺失 404。 |
 | `POST /entity-relations` | body `CreateEntityRelationCommand` | `EntityDetail`；Schema 失败 400，未知关系类型/自环 409，端点 Entity 缺失 404。 |
 | `POST /entity-relations/removals` | body `RemoveEntityRelationCommand` | `EntityDetail`；Schema 失败 400，from Entity 缺失 404。 |
+| `POST /entry-story-links` | body `LinkEntryStoryCommand` | `StoryDetail`（canonical 目标 Story）；Schema 失败 400，Entry/Story 缺失 404，指向自己的主 Story 409。 |
+| `POST /entry-story-links/removals` | body `UnlinkEntryStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404；不存在的关系是幂等 no-op。 |
 | `GET /labels` | 无 | `LabelList`；按 name 升序，含 `assignedCount`。 |
 | `GET /labels/:labelId` | path `labelId` | `LabelDetail`（按类型分组的 `assignedStories`/`assignedEntries`/`assignedTopics`，各含解析后的标题）；不存在 404。 |
 | `POST /labels` | body `CreateLabelCommand` | `LabelItem`；Schema 失败 400，重名 409。 |
@@ -278,7 +280,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 
 Feed/Search/Entry 的 cursor 是当前存储实现的偏移 cursor；非法/负 cursor 在存储层按
 0 处理。Search date 仍会经过 contracts 的 offset datetime 校验；存储层无法构造有效
-日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述三个编排端点（entry-moves、revisions、merges），Entity/关系写操作仅限上方
+日期时也拒绝。Entry/Revision 只读；Story 写操作仅限上述四个编排端点（entry-moves、revisions、merges、entry-story-links），Entity/关系写操作仅限上方
 entities/revisions/aliases/alias-removals/story-entity-links/entity-relations 端点，用户组织写操作仅限
 labels/label-assignments/collections/items/favorites/annotations/saved-views 端点，看板写操作仅限
 boards/board-sections/board-blocks/spotlight-placements 端点，其余路径不在 API 层修改事实。

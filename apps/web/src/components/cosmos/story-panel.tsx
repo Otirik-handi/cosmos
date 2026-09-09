@@ -6,6 +6,8 @@ import type {
     AssetSnapshot,
     CollectionSummary,
     EntitySummary,
+    EntryListItem,
+    EntryStoryRelationType,
     LabelRef,
     StoryDetail,
     StoryEntitySummary,
@@ -58,7 +60,20 @@ type StoryPanelProps = {
     /** 相关内容 v1（REC-008）：共享分类或共享实体的其它 Story，不是同一 Story。 */
     relatedStories?: readonly RelatedStory[];
     onOpenRelatedStory?: (storyId: string) => Promise<void>;
+    /** 证据关系候选条目（来自 GET /entries）；页面已排除本 Story 的成员。 */
+    entryOptions?: readonly Pick<EntryListItem, "id" | "title" | "sourceName">[];
+    onLinkEntry?: (input: { entryId: string; relationType: EntryStoryRelationType }) => Promise<void>;
+    onUnlinkEntry?: (entryId: string) => Promise<void>;
 };
+
+const RELATION_TYPE_LABELS: Record<string, string> = {
+    evidence_for: "证据",
+    mentions: "提及",
+};
+
+function relationTypeLabel(type: string): string {
+    return RELATION_TYPE_LABELS[type] ?? type;
+}
 
 function formatTimelineDate(value: string | null): string {
     if (!value) {
@@ -260,6 +275,9 @@ export function StoryPanel({
     onPinToBoard,
     relatedStories = [],
     onOpenRelatedStory,
+    entryOptions = [],
+    onLinkEntry,
+    onUnlinkEntry,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -282,6 +300,8 @@ export function StoryPanel({
     const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
     const [editingAnnotationBody, setEditingAnnotationBody] = useState("");
     const [editingAnnotationQuote, setEditingAnnotationQuote] = useState("");
+    const [linkEntryId, setLinkEntryId] = useState("");
+    const [linkRelationType, setLinkRelationType] = useState<EntryStoryRelationType>("evidence_for");
 
     useEffect(() => {
         onCloseRef.current = onClose;
@@ -343,6 +363,37 @@ export function StoryPanel({
             setMergeStoryId("");
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "Story 归并失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitLinkEntry = async (): Promise<void> => {
+        if (!onLinkEntry || !linkEntryId) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onLinkEntry({ entryId: linkEntryId, relationType: linkRelationType });
+            setLinkEntryId("");
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "添加证据来源失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitUnlinkEntry = async (entryId: string): Promise<void> => {
+        if (!onUnlinkEntry) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onUnlinkEntry(entryId);
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "解除证据来源失败。");
         } finally {
             setBusy(false);
         }
@@ -684,14 +735,111 @@ export function StoryPanel({
                                     <li
                                         key={member.id}
                                         data-story-member-id={member.id}
-                                        className="truncate"
+                                        className="flex flex-col"
                                     >
-                                        {member.sourceName} ·{" "}
-                                        {member.revisions[0]?.title ?? "无标题"} ·{" "}
-                                        {member.id}
+                                        <span className="truncate">
+                                            {member.sourceName} ·{" "}
+                                            {member.revisions[0]?.title ?? "无标题"} ·{" "}
+                                            {member.id}
+                                        </span>
+                                        {member.relatedStories.length > 0 && (
+                                            <span
+                                                className="truncate text-xs"
+                                                data-story-member-links={member.id}
+                                            >
+                                                作为{member.relatedStories
+                                                    .map((related) => relationTypeLabel(related.relationType))
+                                                    .join("、")}
+                                                关联到：
+                                                {member.relatedStories
+                                                    .map((related) => related.title)
+                                                    .join("、")}
+                                            </span>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
+                        )}
+                    </section>
+                    <section aria-label="证据来源" className="border-b pb-4">
+                        <h3 className="font-medium">证据来源（{story.evidence.length}）</h3>
+                        {story.evidence.length === 0 ? (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                还没有其它 Story 引用本 Story 的条目；可在下方添加一条证据或提及。
+                            </p>
+                        ) : (
+                            <ul className="mt-2 grid gap-2" data-story-evidence="true">
+                                {story.evidence.map((item) => (
+                                    <li
+                                        key={item.entryId}
+                                        data-story-evidence-entry-id={item.entryId}
+                                        className="flex flex-col gap-1 rounded-sm border bg-muted/40 px-3 py-2"
+                                    >
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                            <Badge variant="secondary">
+                                                {relationTypeLabel(item.relationType)}
+                                            </Badge>
+                                            <span>{item.sourceName}</span>
+                                            {item.reason && <span>· {item.reason}</span>}
+                                        </div>
+                                        <span className="truncate text-sm">
+                                            {item.title ?? item.entryId}
+                                        </span>
+                                        <span className="truncate text-xs text-muted-foreground">
+                                            {item.entryId}
+                                        </span>
+                                        {onUnlinkEntry && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="w-fit"
+                                                disabled={busy}
+                                                onClick={() => void submitUnlinkEntry(item.entryId)}
+                                            >
+                                                解除
+                                            </Button>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {onLinkEntry && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <select
+                                    aria-label="选择证据条目"
+                                    value={linkEntryId}
+                                    disabled={busy}
+                                    className="max-w-xs rounded-sm border bg-card px-2 py-1 text-sm"
+                                    onChange={(event) => setLinkEntryId(event.target.value)}
+                                >
+                                    <option value="">选择条目…</option>
+                                    {entryOptions.map((option) => (
+                                        <option key={option.id} value={option.id}>
+                                            {option.sourceName} · {option.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                <select
+                                    aria-label="证据关系类型"
+                                    value={linkRelationType}
+                                    disabled={busy}
+                                    className="rounded-sm border bg-card px-2 py-1 text-sm"
+                                    onChange={(event) => {
+                                        setLinkRelationType(event.target.value as EntryStoryRelationType);
+                                    }}
+                                >
+                                    <option value="evidence_for">证据</option>
+                                    <option value="mentions">提及</option>
+                                </select>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={busy || !linkEntryId}
+                                    onClick={() => void submitLinkEntry()}
+                                >
+                                    添加
+                                </Button>
+                            </div>
                         )}
                     </section>
                     <TimelineSection events={timeline} />

@@ -22,11 +22,13 @@ const baseStory: StoryDetail = {
         metrics: null,
         revisions: [],
         observations: [],
+        relatedStories: [],
     },
     entries: [],
     entities: [],
     labels: [],
     favorited: false,
+    evidence: [],
 };
 
 function ports(overrides: Partial<RelatedStoryPorts> = {}): RelatedStoryPorts {

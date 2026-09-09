@@ -301,6 +301,82 @@ describe("HttpCosmosClient", () => {
         expect(requests[1]?.url).toBe("http://localhost:4310/api/v1/story-entity-links");
     });
 
+    it("calls the entry↔story evidence endpoints", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                return new Response(JSON.stringify({
+                    story: {
+                        id: "story-b",
+                        kind: "event",
+                        subtype: null,
+                        revisionId: "rev-b-1",
+                        title: "Event",
+                        summary: null,
+                    },
+                    entry: {
+                        id: "entry-a",
+                        sourceId: "source-a",
+                        sourceName: "Source A",
+                        sourceKind: "rss",
+                        currentRevisionId: "er-a-1",
+                        metrics: null,
+                        revisions: [],
+                        observations: [],
+                        relatedStories: [{
+                            storyId: "story-b",
+                            relationType: "evidence_for",
+                            title: "Event",
+                            reason: null,
+                        }],
+                    },
+                    entries: [],
+                    entities: [],
+                    labels: [],
+                    favorited: false,
+                    evidence: [{
+                        entryId: "entry-a",
+                        sourceId: "source-a",
+                        sourceName: "Source A",
+                        relationType: "evidence_for",
+                        title: "Long article",
+                        producer: "human",
+                        producerVersion: null,
+                        confidence: 1,
+                        evidence: null,
+                        actor: null,
+                        reason: null,
+                    }],
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const linked = await client.linkEntryStory({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "evidence_for",
+        });
+        expect(linked.evidence[0]?.entryId).toBe("entry-a");
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/entry-story-links");
+        expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+            entryId: "entry-a",
+            storyId: "story-b",
+            relationType: "evidence_for",
+        });
+
+        const unlinked = await client.unlinkEntryStory({
+            entryId: "entry-a",
+            storyId: "story-b",
+        });
+        expect(unlinked.story.id).toBe("story-b");
+        expect(requests[1]?.url).toBe("http://localhost:4310/api/v1/entry-story-links/removals");
+    });
+
     it("calls the user organization endpoints (labels/collections/favorites)", async () => {
         const requests: Array<{ url: string; init?: RequestInit }> = [];
         const ack = (id: string, action: string) => JSON.stringify({

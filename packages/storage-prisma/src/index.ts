@@ -14,6 +14,7 @@ import {
     type ContentMetrics,
     type EntryDetail,
     type EntryPage,
+    type EntryRelatedStory,
     type FeedItem,
     type FeedPage,
     type HealthResponse,
@@ -58,6 +59,7 @@ import {
     deriveExternalKey,
     entityRelationTypes,
     entityTypes,
+    entryStoryRelationTypes,
     fingerprintEntityRevision,
     fingerprintEntryRevision,
     fingerprintStoryRevision,
@@ -67,6 +69,7 @@ import {
     type BlockType,
     type EntityRelationType,
     type EntityType,
+    type EntryStoryRelationType,
     type FavoriteTargetType,
     type NormalizedIngestItem,
     type SpotlightTargetType,
@@ -79,6 +82,7 @@ import {
     EntityRelationConflictError,
     EntityRevisionConflictError,
     EntryNotFoundError,
+    EntryStoryLinkConflictError,
     AnnotationNotFoundError,
     SavedViewNotFoundError,
     CollectionNotFoundError,
@@ -1863,6 +1867,26 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 where: { id: entry.id },
                 data: { storyId: canonicalStoryId },
             });
+            // Changing the primary Story can make an auxiliary link redundant:
+            // an Entry never keeps a link to its own primary Story
+            // (ADR-0011 decision 4).
+            const removedLinks = await tx.entryStoryLink.deleteMany({
+                where: { entryId: entry.id, storyId: canonicalStoryId },
+            });
+            if (removedLinks.count > 0) {
+                await appendDomainEvent(tx, {
+                    type: "entry.story_unlinked.v1",
+                    aggregateType: "Entry",
+                    aggregateId: entry.id,
+                    payload: {
+                        entryId: entry.id,
+                        storyId: canonicalStoryId,
+                        actor: input.actor ?? null,
+                        reason: input.reason ?? null,
+                        cause: "primary_story_changed",
+                    },
+                });
+            }
             await appendDomainEvent(tx, {
                 type: "story.entry_moved.v1",
                 aggregateType: "Story",
@@ -1977,6 +2001,52 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 await tx.entry.updateMany({
                     where: { storyId: obsoleteStoryId },
                     data: { storyId: canonicalStoryId },
+                });
+                // Auxiliary Entry↔Story links follow the same merge: links that
+                // pointed at the merged-away Story move to the canonical Story,
+                // collapsing to one per (entry, story); links that would end up
+                // pointing at the Entry's own primary Story are dropped
+                // (ADR-0011 decision 4).
+                const obsoleteEntryLinks = await tx.entryStoryLink.findMany({
+                    where: { storyId: obsoleteStoryId },
+                });
+                for (const link of obsoleteEntryLinks) {
+                    const existing = await tx.entryStoryLink.findUnique({
+                        where: {
+                            entryId_storyId: {
+                                entryId: link.entryId,
+                                storyId: canonicalStoryId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.entryStoryLink.update({
+                            where: { id: link.id },
+                            data: { storyId: canonicalStoryId },
+                        });
+                    } else {
+                        await tx.entryStoryLink.delete({
+                            where: { id: link.id },
+                        });
+                        await appendDomainEvent(tx, {
+                            type: "entry_story.merged.v1",
+                            aggregateType: "Entry",
+                            aggregateId: link.entryId,
+                            payload: {
+                                entryId: link.entryId,
+                                obsoleteStoryId,
+                                canonicalStoryId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
+                await tx.entryStoryLink.deleteMany({
+                    where: {
+                        storyId: canonicalStoryId,
+                        entry: { storyId: canonicalStoryId },
+                    },
                 });
                 // Topic memberships point at a Story id; a merged-away Story must
                 // not leave duplicate memberships behind on its alias id. Migrate
@@ -2265,6 +2335,23 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (!story || !story.currentRevision || story.entries.length === 0 || !story.entries[0].currentRevision) {
             return null;
         }
+        // Reverse view of the auxiliary relations: one query for every member
+        // entry, then group in memory (ADR-0011 decision 6).
+        const memberLinks = await this.prisma.entryStoryLink.findMany({
+            where: { entryId: { in: story.entries.map((entry) => entry.id) } },
+            include: { story: { include: { currentRevision: { select: { title: true } } } } },
+        });
+        const relatedByEntry = new Map<string, EntryRelatedStory[]>();
+        for (const link of memberLinks) {
+            const related = relatedByEntry.get(link.entryId) ?? [];
+            related.push({
+                storyId: link.storyId,
+                relationType: link.relationType,
+                title: link.story.currentRevision?.title ?? link.storyId,
+                reason: link.reason,
+            });
+            relatedByEntry.set(link.entryId, related);
+        }
         const toEntryDetail = (entry: (typeof story.entries)[number]): EntryDetail => ({
             id: entry.id,
             sourceId: entry.sourceInstance.id,
@@ -2297,6 +2384,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 capturedAt: observation.capturedAt.toISOString(),
                 sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
             })),
+            relatedStories: relatedByEntry.get(entry.id) ?? [],
         });
         const entries = story.entries
             .filter((entry) => entry.currentRevision !== null)
@@ -2317,7 +2405,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
         // User-organization state for this Story: attached labels and the
         // lightweight favorite flag (ADR-0009). Queried separately because
         // LabelAssignment/Favorite carry polymorphic targets, not Story FKs.
-        const [labelAssignments, favorite] = await Promise.all([
+        const [labelAssignments, favorite, evidenceLinks] = await Promise.all([
             this.prisma.labelAssignment.findMany({
                 where: { targetType: "story", targetId: canonicalId },
                 include: { label: { select: { id: true, name: true } } },
@@ -2327,6 +2415,21 @@ export class PrismaCosmosRepository implements CosmosRepository {
                     targetType_targetId: { targetType: "story", targetId: canonicalId },
                 },
                 select: { id: true },
+            }),
+            // Auxiliary Entry↔Story relations: these entries are evidence for
+            // (or mention) this Story without being primary members
+            // (ADR-0011 decision 6).
+            this.prisma.entryStoryLink.findMany({
+                where: { storyId: canonicalId },
+                orderBy: { createdAt: "desc" },
+                include: {
+                    entry: {
+                        include: {
+                            sourceInstance: { select: { id: true, name: true } },
+                            currentRevision: { select: { title: true } },
+                        },
+                    },
+                },
             }),
         ]);
         return {
@@ -2346,6 +2449,19 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 name: assignment.label.name,
             })),
             favorited: favorite !== null,
+            evidence: evidenceLinks.map((link) => ({
+                entryId: link.entryId,
+                sourceId: link.entry.sourceInstance.id,
+                sourceName: link.entry.sourceInstance.name,
+                relationType: link.relationType,
+                title: link.entry.currentRevision?.title ?? null,
+                producer: link.producer,
+                producerVersion: link.producerVersion,
+                confidence: link.confidence,
+                evidence: link.evidence,
+                actor: link.actorJson == null ? null : parseJson<string>(link.actorJson),
+                reason: link.reason,
+            })),
         };
     }
 
@@ -3269,6 +3385,149 @@ export class PrismaCosmosRepository implements CosmosRepository {
             });
         });
         return this.toEntityDetail(input.entityId);
+    }
+
+    async linkEntryStory(input: {
+        entryId: string;
+        storyId: string;
+        relationType: EntryStoryRelationType;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null> {
+        const entry = await this.prisma.entry.findUnique({
+            where: { id: input.entryId },
+            select: { id: true, storyId: true },
+        });
+        if (!entry) {
+            throw new EntryNotFoundError(input.entryId);
+        }
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        const primaryStoryId = entry.storyId == null
+            ? null
+            : await this.resolveCanonicalStoryId(entry.storyId);
+        if (primaryStoryId === canonicalStoryId) {
+            throw new EntryStoryLinkConflictError(input.entryId, canonicalStoryId);
+        }
+        const producer = input.producer?.trim() || "human";
+        const actorJson = input.actor == null ? null : JSON.stringify(input.actor);
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.entryStoryLink.findUnique({
+                where: {
+                    entryId_storyId: {
+                        entryId: input.entryId,
+                        storyId: canonicalStoryId,
+                    },
+                },
+            });
+            // One pair keeps exactly one meaning: re-linking overwrites the
+            // relation type and provenance, and an identical replay is a no-op
+            // (ADR-0011 decision 1).
+            if (existing) {
+                const unchanged = existing.relationType === input.relationType
+                    && existing.producer === producer
+                    && existing.producerVersion === (input.producerVersion ?? null)
+                    && existing.confidence === (input.confidence ?? 1)
+                    && existing.evidence === (input.evidence ?? null)
+                    && existing.actorJson === actorJson
+                    && existing.reason === (input.reason ?? null);
+                if (unchanged) {
+                    return;
+                }
+                await tx.entryStoryLink.update({
+                    where: { id: existing.id },
+                    data: {
+                        relationType: input.relationType,
+                        producer,
+                        producerVersion: input.producerVersion ?? null,
+                        confidence: input.confidence ?? 1,
+                        evidence: input.evidence ?? null,
+                        actorJson,
+                        reason: input.reason ?? null,
+                    },
+                });
+            } else {
+                await tx.entryStoryLink.create({
+                    data: {
+                        entryId: input.entryId,
+                        storyId: canonicalStoryId,
+                        relationType: input.relationType,
+                        producer,
+                        producerVersion: input.producerVersion ?? null,
+                        confidence: input.confidence ?? 1,
+                        evidence: input.evidence ?? null,
+                        actorJson,
+                        reason: input.reason ?? null,
+                    },
+                });
+            }
+            await appendDomainEvent(tx, {
+                type: "entry.story_linked.v1",
+                aggregateType: "Entry",
+                aggregateId: input.entryId,
+                payload: {
+                    entryId: input.entryId,
+                    storyId: canonicalStoryId,
+                    relationType: input.relationType,
+                    producer,
+                    confidence: input.confidence ?? 1,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.story(canonicalStoryId);
+    }
+
+    async unlinkEntryStory(input: {
+        entryId: string;
+        storyId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<StoryDetail | null> {
+        const entry = await this.prisma.entry.findUnique({
+            where: { id: input.entryId },
+            select: { id: true },
+        });
+        if (!entry) {
+            throw new EntryNotFoundError(input.entryId);
+        }
+        const canonicalStoryId = await this.resolveCanonicalStoryId(input.storyId);
+        if (!canonicalStoryId) {
+            throw new StoryNotFoundError(input.storyId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.entryStoryLink.findUnique({
+                where: {
+                    entryId_storyId: {
+                        entryId: input.entryId,
+                        storyId: canonicalStoryId,
+                    },
+                },
+            });
+            if (!existing) {
+                return;
+            }
+            await tx.entryStoryLink.delete({ where: { id: existing.id } });
+            await appendDomainEvent(tx, {
+                type: "entry.story_unlinked.v1",
+                aggregateType: "Entry",
+                aggregateId: input.entryId,
+                payload: {
+                    entryId: input.entryId,
+                    storyId: canonicalStoryId,
+                    actor: input.actor ?? null,
+                    reason: input.reason ?? null,
+                },
+            });
+        });
+        return this.story(canonicalStoryId);
     }
 
     async createEntityRelation(input: {
@@ -5018,6 +5277,10 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (!entry || !entry.currentRevision) {
             return null;
         }
+        const entryLinks = await this.prisma.entryStoryLink.findMany({
+            where: { entryId: entry.id },
+            include: { story: { include: { currentRevision: { select: { title: true } } } } },
+        });
         return {
             id: entry.id,
             sourceId: entry.sourceInstance.id,
@@ -5049,6 +5312,12 @@ export class PrismaCosmosRepository implements CosmosRepository {
                 webUrl: observation.webUrl,
                 capturedAt: observation.capturedAt.toISOString(),
                 sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
+            })),
+            relatedStories: entryLinks.map((link) => ({
+                storyId: link.storyId,
+                relationType: link.relationType,
+                title: link.story.currentRevision?.title ?? link.storyId,
+                reason: link.reason,
             })),
         };
     }

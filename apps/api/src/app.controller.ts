@@ -57,6 +57,8 @@ import {
     removeEntityAliasCommandSchema,
     linkStoryEntityCommandSchema,
     unlinkStoryEntityCommandSchema,
+    linkEntryStoryCommandSchema,
+    unlinkEntryStoryCommandSchema,
     createEntityRelationCommandSchema,
     removeEntityRelationCommandSchema,
     createLabelCommandSchema,
@@ -910,6 +912,43 @@ export class AppController {
             return await this.repository.unlinkStoryEntity({
                 storyId: parsed.storyId,
                 entityId: parsed.entityId,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entry-story-links")
+    @Bind(Body())
+    async linkEntryStory(body: unknown) {
+        try {
+            const parsed = linkEntryStoryCommandSchema.parse(body);
+            return await this.repository.linkEntryStory({
+                entryId: parsed.entryId,
+                storyId: parsed.storyId,
+                relationType: parsed.relationType,
+                producer: parsed.producer ?? null,
+                producerVersion: parsed.producerVersion ?? null,
+                confidence: parsed.confidence ?? null,
+                evidence: parsed.evidence ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entry-story-links/removals")
+    @Bind(Body())
+    async unlinkEntryStory(body: unknown) {
+        try {
+            const parsed = unlinkEntryStoryCommandSchema.parse(body);
+            return await this.repository.unlinkEntryStory({
+                entryId: parsed.entryId,
+                storyId: parsed.storyId,
                 actor: parsed.actor ?? null,
                 reason: parsed.reason ?? null,
             });
