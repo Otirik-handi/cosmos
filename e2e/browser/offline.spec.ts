@@ -17,7 +17,8 @@ test("offline: locally saved images render from the API after the network is blo
     await page.getByRole("button", { name: "新建来源" }).click();
     const feedUrlInput = page.getByLabel("Feed URL");
     await expect(feedUrlInput).toBeVisible();
-    await page.getByLabel("名称").fill(sourceName);
+    // 精确匹配：Saved View 的“视图名称”输入框也包含“名称”子串。
+    await page.getByLabel("名称", { exact: true }).fill(sourceName);
     await feedUrlInput.fill("http://127.0.0.1:4380/offline.xml");
     await page.getByRole("button", { name: "保存来源" }).click();
     await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();

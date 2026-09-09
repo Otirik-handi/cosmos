@@ -18,6 +18,8 @@ import { useForm } from "react-hook-form";
 import {
     createSourceCommandSchema,
     type Annotation,
+    type BoardDetail,
+    type BoardSummary,
     type CollectionList,
     type EntityDetail,
     type EntityRelationType,
@@ -45,6 +47,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BoardView, type BoardCommands } from "@/components/cosmos/board-view";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
@@ -93,6 +96,11 @@ function delay(ms: number): Promise<void> {
 
 export default function Home() {
     const {preference, setPreference} = useTheme();
+    const [board, setBoard] = useState<BoardDetail | null>(null);
+    const [boards, setBoards] = useState<readonly BoardSummary[]>([]);
+    const [boardEditing, setBoardEditing] = useState(false);
+    const [boardRefreshToken, setBoardRefreshToken] = useState(0);
+    const [newBoardName, setNewBoardName] = useState("");
     const [feed, setFeed] = useState<readonly FeedItem[]>([]);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [activeSearch, setActiveSearch] = useState<SearchQuery | null>(null);
@@ -212,6 +220,131 @@ export default function Home() {
         });
         return closeEvents;
     }, []);
+
+    /**
+     * 看板配置低频变化：只首载一次；ensureDefaultBoard 幂等 seed 保证默认
+     * 看板存在（ADR-0010 决定 4）。加载失败时主区直接回退完整 Feed，
+     * 不阻断阅读。
+     */
+    useEffect(() => {
+        let cancelled = false;
+        // 先确保默认看板存在，再读列表：并行会让 listBoards 在 seed 完成前
+        // 返回空列表，看板切换器与编辑入口就不会出现。
+        client.ensureDefaultBoard()
+            .then(async (detail) => {
+                if (cancelled) {
+                    return;
+                }
+                setBoard(detail);
+                const page = await client.listBoards();
+                if (!cancelled) {
+                    setBoards(page.items);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setBoard(null);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const reloadBoards = async (): Promise<void> => {
+        setBoards((await client.listBoards()).items);
+    };
+
+    /** 看板写命令统一用返回的树刷新当前 Board，保证顺序/可见性与服务端一致。 */
+    const boardCommands: BoardCommands = {
+        createSection: async (title) => {
+            if (!board) {
+                return;
+            }
+            setBoard(await client.createBoardSection({ boardId: board.id, title }));
+            await reloadBoards();
+        },
+        updateSection: async (sectionId, input) => {
+            setBoard(await client.updateBoardSection(sectionId, input));
+        },
+        deleteSection: async (sectionId) => {
+            await client.deleteBoardSection(sectionId);
+            if (board) {
+                setBoard(await client.getBoard(board.id));
+                await reloadBoards();
+            }
+        },
+        createBlock: async (sectionId, type, config) => {
+            setBoard(await client.createBoardBlock({
+                sectionId,
+                type: type as Parameters<typeof client.createBoardBlock>[0]["type"],
+                config,
+            }));
+        },
+        updateBlockConfig: async (blockId, config) => {
+            setBoard(await client.updateBoardBlockConfig(blockId, { config }));
+        },
+        deleteBlock: async (blockId) => {
+            await client.deleteBoardBlock(blockId);
+            if (board) {
+                setBoard(await client.getBoard(board.id));
+            }
+        },
+        moveBlock: async (blockId, sectionId, position) => {
+            setBoard(await client.moveBoardBlock(blockId, { sectionId, position }));
+        },
+        setBlockVisibility: async (blockId, visible) => {
+            setBoard(await client.setBoardBlockVisibility(blockId, { visible }));
+        },
+        duplicateBlock: async (blockId) => {
+            setBoard(await client.duplicateBoardBlock(blockId));
+        },
+    };
+
+    const switchBoard = async (boardId: string): Promise<void> => {
+        setError(null);
+        try {
+            setBoard(await client.getBoard(boardId));
+            setBoardEditing(false);
+        } catch (caught) {
+            setError(readError(caught));
+        }
+    };
+
+    const createBoard = async (name: string): Promise<void> => {
+        const trimmed = name.trim();
+        if (trimmed === "") {
+            return;
+        }
+        setError(null);
+        try {
+            setBoard(await client.createBoard({ name: trimmed }));
+            await reloadBoards();
+            setBoardEditing(true);
+            setNotice(`已创建看板「${trimmed}」，可在编辑模式添加分区与区块。`);
+        } catch (caught) {
+            setError(readError(caught));
+        }
+    };
+
+    /** 把当前 Story/Topic 固定到当前看板热点区（Spotlight 人工固定，ADR-0010）。 */
+    const pinToBoard = async (
+        targetType: "story" | "topic",
+        targetId: string,
+    ): Promise<void> => {
+        if (!board) {
+            setError("看板尚未加载，无法固定。");
+            return;
+        }
+        setError(null);
+        try {
+            await client.pinSpotlight({ boardId: board.id, targetType, targetId });
+            setBoardRefreshToken((token) => token + 1);
+            setNotice("已固定到看板热点区。");
+        } catch (caught) {
+            setError(readError(caught));
+        }
+    };
 
     const sourceSummary = useMemo(() => {
         if (sources.length === 0) {
@@ -1064,6 +1197,35 @@ export default function Home() {
         </section>
     );
 
+    const feedBrowser = (
+        <FeedBrowser
+            activeSearch={activeSearch}
+            feed={feed}
+            loading={loading}
+            loadingMore={loadingMore}
+            nextCursor={nextCursor}
+            onClearSearch={() => void clearSearch()}
+            onLoadMore={loadMore}
+            onOpenStory={openStory}
+            onSubmit={onSearch}
+            openingStoryId={openingStoryId}
+            refreshing={loading && feed.length > 0}
+            searchExtras={savedViewsPanel}
+            searchForm={searchForm}
+            sources={sources}
+        />
+    );
+
+    const sourceActions = (
+        <SourceActions
+            onRun={runSource}
+            onToggleActivation={toggleActivation}
+            activatingSourceId={activatingSourceId}
+            runningSourceId={runningSourceId}
+            sources={sources}
+        />
+    );
+
     return (
         <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-10">
             <header className="border-b pb-6">
@@ -1114,6 +1276,54 @@ export default function Home() {
                 </div>
             )}
 
+            {boards.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 border-b pb-4">
+                    <label className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">看板</span>
+                        <select
+                            aria-label="切换看板"
+                            className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                            value={board?.id ?? ""}
+                            onChange={(event) => void switchBoard(event.target.value)}
+                        >
+                            {boards.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                    {item.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <Button
+                        variant="outline"
+                        onClick={() => setBoardEditing((value) => !value)}
+                    >
+                        {boardEditing ? "完成编辑" : "编辑看板"}
+                    </Button>
+                    {boardEditing && (
+                        <>
+                            <Input
+                                aria-label="新看板名称"
+                                className="max-w-xs"
+                                placeholder="新看板名称"
+                                value={newBoardName}
+                                onChange={(event) => setNewBoardName(event.target.value)}
+                            />
+                            <Button
+                                variant="outline"
+                                disabled={newBoardName.trim() === ""}
+                                onClick={() => {
+                                    const name = newBoardName;
+                                    setNewBoardName("");
+                                    void createBoard(name);
+                                }}
+                            >
+                                新建看板
+                            </Button>
+                        </>
+                    )}
+                </div>
+            )}
+
             <div className="grid w-full flex-1 items-start gap-8 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[330px_minmax(0,1fr)]">
                 <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-8">
                     <StatusSummary
@@ -1121,38 +1331,6 @@ export default function Home() {
                         health={health}
                         sourceSummary={sourceSummary}
                     />
-                    <SourceActions
-                        onRun={runSource}
-                        onToggleActivation={toggleActivation}
-                        activatingSourceId={activatingSourceId}
-                        runningSourceId={runningSourceId}
-                        sources={sources}
-                    />
-                    <section aria-label="Topics" className="grid gap-2">
-                        <h2 className="font-display text-lg font-semibold">Topics</h2>
-                        {topics.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                                尚未创建 Topic；在 Story 详情里可创建并加入。
-                            </p>
-                        ) : (
-                            <ul className="grid gap-1">
-                                {topics.map((item) => (
-                                    <li key={item.id}>
-                                        <button
-                                            type="button"
-                                            data-topic-id={item.id}
-                                            disabled={openingTopicId === item.id}
-                                            onClick={() => void openTopic(item.id)}
-                                            className="flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
-                                        >
-                                            <span className="truncate">{item.title}</span>
-                                            <Badge variant="secondary">{item.memberCount}</Badge>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </section>
                     <section aria-label="Entities" className="grid gap-2">
                         <h2 className="font-display text-lg font-semibold">Entities</h2>
                         {entities.length === 0 ? (
@@ -1189,22 +1367,25 @@ export default function Home() {
                         />
                     )}
                 </aside>
-                <FeedBrowser
-                    activeSearch={activeSearch}
-                    feed={feed}
-                    loading={loading}
-                    loadingMore={loadingMore}
-                    nextCursor={nextCursor}
-                    onClearSearch={() => void clearSearch()}
-                    onLoadMore={loadMore}
-                    onOpenStory={openStory}
-                    onSubmit={onSearch}
-                    openingStoryId={openingStoryId}
-                    refreshing={loading && feed.length > 0}
-                    searchExtras={savedViewsPanel}
-                    searchForm={searchForm}
-                    sources={sources}
-                />
+                {board ? (
+                    <BoardView
+                        board={board}
+                        client={client}
+                        feedSlot={feedBrowser}
+                        sourceActionsSlot={sourceActions}
+                        topics={topics}
+                        openingTopicId={openingTopicId}
+                        onOpenTopic={(topicId) => void openTopic(topicId)}
+                        onOpenStory={(storyId) => void openStory(storyId)}
+                        editable={boardEditing}
+                        commands={boardCommands}
+                        savedViews={savedViews}
+                        collections={collections.items}
+                        refreshToken={boardRefreshToken}
+                    />
+                ) : (
+                    feedBrowser
+                )}
             </div>
 
             {story && (
@@ -1232,6 +1413,7 @@ export default function Home() {
                     onCreateAnnotation={createStoryAnnotation}
                     onUpdateAnnotation={updateStoryAnnotation}
                     onDeleteAnnotation={deleteStoryAnnotation}
+                    onPinToBoard={() => pinToBoard("story", story.story.id)}
                 />
             )}
 
@@ -1247,6 +1429,7 @@ export default function Home() {
                     onCreateAnnotation={createTopicAnnotation}
                     onUpdateAnnotation={updateTopicAnnotation}
                     onDeleteAnnotation={deleteTopicAnnotation}
+                    onPinToBoard={() => pinToBoard("topic", topic.topic.id)}
                 />
             )}
 

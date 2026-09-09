@@ -27,6 +27,7 @@ import {
     renderThemeSwitcherLab,
     renderTopicPanelLab,
     renderEntityPanelLab,
+    renderBoardViewLab,
 } from "./product-fixtures";
 
 import type {LabComponentDefinition, LabControlDefinition, LabProps} from "./types";
@@ -514,6 +515,22 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderEntityPanelLab,
+    },
+    {
+        id: "board-view",
+        label: "BoardView",
+        category: "Cosmos",
+        modulePath: "components/cosmos/board-view.tsx",
+        defaultSceneId: "default",
+        controls: [
+            control("state", "State", "select", "default", ["default", "unknown-block"]),
+        ] as const satisfies readonly LabControlDefinition[],
+        scenes: [
+            {id: "default", label: "Default", props: {state: "default"}},
+            {id: "unknown-block", label: "Unknown block", props: {state: "unknown-block"}},
+        ],
+        tokens: sharedTokens,
+        render: renderBoardViewLab,
     },
     {
         id: "theme-switcher",

@@ -51,6 +51,8 @@ type StoryPanelProps = {
         input: { body: string; quote?: string | null },
     ) => Promise<void>;
     onDeleteAnnotation?: (annotationId: string) => Promise<void>;
+    /** 固定到当前看板的 Spotlight 区块（ADR-0010 人工固定）。 */
+    onPinToBoard?: () => Promise<void>;
 };
 
 function EntityRow({
@@ -211,6 +213,7 @@ export function StoryPanel({
     onCreateAnnotation,
     onUpdateAnnotation,
     onDeleteAnnotation,
+    onPinToBoard,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -398,6 +401,21 @@ export function StoryPanel({
             await onToggleFavorite(!story.favorited);
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "更新收藏失败。");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitPinToBoard = async (): Promise<void> => {
+        if (!onPinToBoard) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onPinToBoard();
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "固定到看板失败。");
         } finally {
             setBusy(false);
         }
@@ -733,12 +751,29 @@ export function StoryPanel({
                         || onCreateCollection
                         || onCreateAnnotation
                         || onUpdateAnnotation
-                        || onDeleteAnnotation) && (
+                        || onDeleteAnnotation
+                        || onPinToBoard) && (
                         <section
                             aria-label="用户组织"
                             className="grid gap-4 border-t pt-4"
                         >
                             <h3 className="font-medium">用户组织</h3>
+                            {onPinToBoard && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={busy}
+                                        data-testid="story-pin-to-board"
+                                        onClick={() => void submitPinToBoard()}
+                                    >
+                                        固定到看板热点区
+                                    </Button>
+                                    <span className="text-sm text-muted-foreground">
+                                        在当前看板的 Spotlight 区块展示本条 Story。
+                                    </span>
+                                </div>
+                            )}
                             {onToggleFavorite && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Button

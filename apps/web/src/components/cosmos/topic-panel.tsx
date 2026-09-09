@@ -30,6 +30,8 @@ type TopicPanelProps = {
         input: { body: string; quote?: string | null },
     ) => Promise<void>;
     onDeleteAnnotation?: (annotationId: string) => Promise<void>;
+    /** 固定到当前看板的 Spotlight 区块（ADR-0010 人工固定）。 */
+    onPinToBoard?: () => Promise<void>;
 };
 
 export const ROLE_OPTIONS: readonly { value: TopicMemberRole; label: string }[] = [
@@ -126,6 +128,7 @@ export function TopicPanel({
     onCreateAnnotation,
     onUpdateAnnotation,
     onDeleteAnnotation,
+    onPinToBoard,
 }: TopicPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -194,6 +197,21 @@ export function TopicPanel({
         setEditingAnnotationId(null);
         setEditingAnnotationBody("");
         setEditingAnnotationQuote("");
+    };
+
+    const submitPinToBoard = async (): Promise<void> => {
+        if (!onPinToBoard) {
+            return;
+        }
+        setBusy(true);
+        setActionError(null);
+        try {
+            await onPinToBoard();
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "固定到看板失败。");
+        } finally {
+            setBusy(false);
+        }
     };
 
     const submitCreateAnnotation = async (): Promise<void> => {
@@ -379,12 +397,24 @@ export function TopicPanel({
                     </section>
                     {(onCreateAnnotation
                         || onUpdateAnnotation
-                        || onDeleteAnnotation) && (
+                        || onDeleteAnnotation
+                        || onPinToBoard) && (
                         <section
                             aria-label="批注"
                             className="grid gap-3 border-t pt-4"
                         >
                             <h3 className="font-medium">批注</h3>
+                            {onPinToBoard && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={busy}
+                                    data-testid="topic-pin-to-board"
+                                    onClick={() => void submitPinToBoard()}
+                                >
+                                    固定到看板热点区
+                                </Button>
+                            )}
                             {annotations && annotations.length > 0 ? (
                                 <ul className="grid gap-3">
                                     {annotations.map((annotation) => (

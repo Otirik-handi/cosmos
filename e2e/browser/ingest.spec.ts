@@ -24,7 +24,8 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     const scheduleInput = page.getByLabel("定时抓取间隔");
     await expect(scheduleInput).toHaveValue("30");
 
-    await page.getByLabel("名称").fill("浏览器 RSS 来源");
+    // 精确匹配：Saved View 的“视图名称”输入框也包含“名称”子串。
+    await page.getByLabel("名称", { exact: true }).fill("浏览器 RSS 来源");
     await feedUrlInput.fill("http://127.0.0.1:4380/feed.xml");
 
     // 未保存配置测试：Worker 真实抓取受控 RSS 一页并回显统计与样例标题。
@@ -124,6 +125,55 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
         clientWidth: document.documentElement.clientWidth,
     }));
     expect(scroll.scrollWidth).toBeLessThanOrEqual(scroll.clientWidth);
+
+    // 看板编辑模式：隐藏来源健康区块后浏览视图不再显示，重新进入编辑模式可恢复
+    // （BRD-002「隐藏 ≠ 删除」，底层来源数据不变）。
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole("button", { name: "编辑看板" }).click();
+    const sourceHealthBlock = page.locator('[data-block-type="source-health"]').first();
+    await sourceHealthBlock
+        .getByRole("button", { name: /^隐藏区块/ })
+        .click();
+    await expect(sourceHealthBlock.getByText("已隐藏：来源健康")).toBeVisible();
+    await page.getByRole("button", { name: "完成编辑" }).click();
+    await expect(page.getByRole("heading", { name: "来源健康" })).toHaveCount(0);
+    await page.getByRole("button", { name: "编辑看板" }).click();
+    await page
+        .locator('[data-block-type="source-health"]')
+        .first()
+        .getByRole("button", { name: /^显示区块/ })
+        .click();
+    await expect(page.getByRole("heading", { name: "来源健康" })).toBeVisible();
+    await page.getByRole("button", { name: "完成编辑" }).click();
+
+    // 人工 Spotlight：把当前 Story 固定到看板热点区，热点区出现后可解除。
+    await page.getByRole("button", { name: "打开 Story" }).first().click();
+    const storyDialog = page.getByRole("dialog");
+    await storyDialog.getByRole("button", { name: "固定到看板热点区" }).click();
+    await page.keyboard.press("Escape");
+    const spotlightBlock = page.locator('[data-block-type="spotlight"]').first();
+    const pinnedStory = spotlightBlock.locator("li").filter({ hasText: mergedTitle });
+    await expect(pinnedStory).toBeVisible();
+    await pinnedStory.getByRole("button", { name: /^解除固定/ }).click();
+    await expect(spotlightBlock.locator("li").filter({ hasText: mergedTitle })).toHaveCount(0);
+
+    // 未绑定的收藏夹区块可以创建（回归：曾因 collectionId 必填而 400 失败），
+    // 创建后显示占位而不是报错，删除区块不影响底层内容。
+    await page.getByRole("button", { name: "编辑看板" }).click();
+    const feedSection = page
+        .locator("[data-section-id]")
+        .filter({ hasText: "信息流" })
+        .first();
+    await feedSection.getByLabel("新增区块类型").selectOption("collection");
+    await feedSection.getByRole("button", { name: "添加区块" }).click();
+    await expect(page.getByText("此区块尚未绑定收藏夹")).toBeVisible();
+    await page
+        .locator('[data-block-type="collection"]')
+        .last()
+        .getByRole("button", { name: /^删除区块/ })
+        .click();
+    await expect(page.getByText("此区块尚未绑定收藏夹")).toHaveCount(0);
+    await page.getByRole("button", { name: "完成编辑" }).click();
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

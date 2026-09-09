@@ -3,6 +3,8 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {useForm} from "react-hook-form";
 
 import type {
+    BoardBlock,
+    BoardDetail,
     EntityDetail,
     EntitySummary,
     FeedItem,
@@ -13,7 +15,9 @@ import type {
     StoryDetail,
     TopicDetail,
 } from "@cosmos/contracts";
+import { HttpCosmosClient } from "@cosmos/transport-http";
 
+import { BoardView } from "@/components/cosmos/board-view";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
@@ -432,6 +436,112 @@ export function renderEntityPanelLab(props: LabProps) {
             onUnlinkStory={async () => undefined}
             onCreateRelation={async () => undefined}
             onRemoveRelation={async () => undefined}
+        />
+    );
+}
+
+const labBoardClient = new HttpCosmosClient({ baseUrl: "" });
+
+export function renderBoardViewLab(props: LabProps) {
+    const state = optionProp(props, "state", "default", ["default", "unknown-block"] as const);
+    const timestamp = fixtureTimestamp;
+    const hotBlock: BoardBlock = {
+        id: "block-fixture-hot",
+        sectionId: "section-fixture-hot",
+        // source-health 渲染页面传入的插槽，实验室零请求；spotlight/collection
+        // 是自取数区块，不在 fixture 中出现（真实流程由浏览器 E2E 覆盖）。
+        type: "source-health",
+        config: {},
+        position: 0,
+        visible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    const feedBlock: BoardBlock = {
+        id: "block-fixture-feed",
+        sectionId: "section-fixture-feed",
+        type: "feed",
+        config: {},
+        position: 0,
+        visible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    const topicBlock: BoardBlock = {
+        id: "block-fixture-topics",
+        sectionId: "section-fixture-feed",
+        type: "topic-list",
+        config: { limit: 5 },
+        position: 1,
+        visible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    const unknownBlock: BoardBlock = {
+        id: "block-fixture-unknown",
+        sectionId: "section-fixture-feed",
+        type: "gadget",
+        config: {},
+        position: 2,
+        visible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    const board: BoardDetail = {
+        id: "board-fixture",
+        name: "默认看板",
+        description: null,
+        sections: [
+            {
+                id: "section-fixture-hot",
+                boardId: "board-fixture",
+                title: "热点",
+                position: 0,
+                blocks: [hotBlock],
+                createdAt: timestamp,
+                updatedAt: timestamp,
+            },
+            {
+                id: "section-fixture-feed",
+                boardId: "board-fixture",
+                title: "信息流",
+                position: 1,
+                blocks: state === "unknown-block"
+                    ? [feedBlock, topicBlock, unknownBlock]
+                    : [feedBlock, topicBlock],
+                createdAt: timestamp,
+                updatedAt: timestamp,
+            },
+        ],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    return (
+        <BoardView
+            board={board}
+            client={labBoardClient}
+            feedSlot={(
+                <div className="rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-sm text-muted-foreground">
+                    合成阅读流区块（实验室不发起 Product API 请求）。
+                </div>
+            )}
+            sourceActionsSlot={(
+                <div className="rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-sm text-muted-foreground">
+                    合成来源健康区块。
+                </div>
+            )}
+            topics={[{
+                id: "topic-fixture",
+                revisionId: "rev-t-fixture",
+                title: "Qwen 3.8 发布跟踪",
+                purpose: "合成 Topic",
+                scope: null,
+                memberCount: 3,
+                updatedAt: timestamp,
+            }]}
+            openingTopicId={null}
+            onOpenTopic={() => undefined}
+            onOpenStory={() => undefined}
         />
     );
 }
