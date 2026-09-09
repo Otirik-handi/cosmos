@@ -60,7 +60,7 @@ Non-goals（见 Proposal / ADR-0010）：
 
 ## Current State
 
-- 生命周期阶段：子切片 A、B 均实现完成、门禁通过（verifying）；等待 commit/合入授权。
+- 生命周期阶段：子切片 A、B 均实现完成、门禁通过，已随 `2ea8939` 合入并推送 `master`。
 - 本轮（2026-09-09）：Proposal accepted、稳定文档同步（PRD/信息模型/ADR-0010/ADR 索引）；worktree `.worktree/board-section-block`、分支 `feat/t14-board-section-block`（基线 master `038ae1b`）已按授权创建；两个子切片代码、focused 测试、浏览器 E2E 与 spec 同步完成。
 - 连贯目标：交付 Board/Section/Block 配置域、只读渲染与编辑模式，以及人工 Spotlight 固定。
 - 可观察验收（≤3 条）：
@@ -149,6 +149,6 @@ Non-goals（见 Proposal / ADR-0010）：
 
 ## Follow-ups
 
-- 子切片 B 已完成；本 Task 实现阶段结束，等待 commit/合入授权。
+- 子切片 B 已完成；本 Task 实现阶段结束，已随 `2ea8939` 合入并推送 `master`。
 - 后续 Phase 2 切片候选：Story split 完整生命周期、`evidence_for`/`mentions`、自动聚类/Knowledge Workflow、Entity merge/dedup。
 - 后续能力：Phase 4 Spotlight policy（为 `SpotlightPlacement` 加列与写入路径）、Phase 3 Workspace/Artifact Block、拖拽排序、多 Feed Block 独立取数、Read State「未读」过滤。

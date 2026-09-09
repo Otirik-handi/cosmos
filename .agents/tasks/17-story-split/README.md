@@ -1,7 +1,5 @@
 # Task 17：Story split v1（历史壳 + `replaced_by[]` + 显式关系迁移，Phase 2 第七切片）
 
-> 编号为临时值，待维护者确认；若不同，需重命名本目录并同步引用。
-
 ## User Request / Topic
 
 2026-09-09 用户指示「开下一片」。Proposal [`story-split-v1`](../../../docs/proposals/story-split-v1.md) 经评审接受（两项裁决：映射范围取「单命令全映射」、`StoryDetail.entry` 放宽为可空），稳定决定沉淀于 [`ADR-0012`](../../../docs/adr/0012-story-split-v1.md)，PRD §7.5 第七切片注记与信息模型 §4.6 注记已同步。
@@ -60,7 +58,7 @@ Non-goals（见 Proposal / ADR-0012）：
 
 ## Current State
 
-- 生命周期阶段：切片 1（持久化 + 域命令）、切片 2（合同 + API + transport）与切片 3（Web + 组件实验室 + 浏览器 E2E）均已实现并通过门禁；等待 commit/合入授权。
+- 生命周期阶段：切片 1（持久化 + 域命令）、切片 2（合同 + API + transport）与切片 3（Web + 组件实验室 + 浏览器 E2E）均已实现并通过门禁，已随 `8d44000` 合入并推送 `master`。
 - 连贯目标：让用户能把一个 Story 显式拆成多个后继，同时保留可回看的历史壳。
 - 可观察验收（≤3 条）：
   1. 把 2 个成员的 Story 拆成两个后继后，旧 Story 详情返回 `status=split` 与两个后继，且不再有成员；两个后继各自可打开且带各自的成员与迁移过来的关系；

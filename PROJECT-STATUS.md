@@ -1,10 +1,10 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第七切片 Story split v1（Task 17）已实现并通过门禁，尚未 commit。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
 
-## 2026-09-09：Story split v1 实现（Phase 2 第七切片，Task 17）
+## 2026-09-09：Story split v1 实现合入（Phase 2 第七切片，Task 17）
 
-Proposal [`story-split-v1`](docs/proposals/story-split-v1.md)（accepted，2026-09-09）与 ADR-0012 的实现已完成（切片 1–3），尚未 commit：
+Proposal [`story-split-v1`](docs/proposals/story-split-v1.md)（accepted，2026-09-09）与 ADR-0012 的实现已完成（切片 1–3），并已随 `8d44000` 合入并推送 `master`：
 
 1. **持久化与读取**：schema + migration `20260909160000_story_split_v1`（`StoryReplacement`：`(storyId, successorStoryId)` 唯一、级联到 Story，forward-only、全新表无 backfill）。历史壳不写 `StoryAlias`，旧 ID 仍解析到它自己；`StoryDetail.story` 新增 `status`（`active`/`split`）与 `replacedBy[]`，`entry` 放宽为可空、`entries` 可为空，并新增 `topics` 投影。
 2. **公共合同与 API**：contracts 新增 `SplitStoryCommand`（2–20 个后继、每个后继 ≥1 个主成员 + 三组可选迁移清单）；transport client 与 API 新增 `POST /api/v1/stories/:storyId/splits`（返回历史壳的 `StoryDetail`）。
@@ -14,7 +14,7 @@ Proposal [`story-split-v1`](docs/proposals/story-split-v1.md)（accepted，2026-
 
 验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 364 文件 failures=[]；`git diff --check` 干净。聚焦测试：contracts 32、transport-http 14、api controller 35、storage `story-split` 4、component-lab registry 12 全部通过。全量 `bun run test` 48 文件/417 用例，362 通过；55 例失败全部是既有 Windows SQLite 并行负载抖动（`migrate deploy` 5s 超时 + EBUSY），串行 `bunx vitest run --no-file-parallelism packages/storage-prisma` 12 文件/103 用例全部通过。浏览器产品 E2E 13/13（新增归并后拆分、壳视图与后继打开用例）；组件实验室浏览器 13/13；Node 进程 E2E 4/4。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
 
-过程与偏差记录见 Task 17 walkthrough [`.agents/tasks/17-story-split/README.md`](.agents/tasks/17-story-split/README.md)（编号为临时值，待维护者确认）。
+过程与偏差记录见 Task 17 walkthrough [`.agents/tasks/17-story-split/README.md`](.agents/tasks/17-story-split/README.md)。
 
 ## 2026-09-09：Entry↔Story 证据关系 v1 实现（Phase 2 第六切片，Task 16）
 
@@ -256,8 +256,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 （2026-09-09 更新：最新基线、Phase 2 验收补完与可配置看板切片合入见顶部两条记录。）
 
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
-- Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已实现并通过门禁（见顶部记录），尚未 commit；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
-- Phase 2 下一切片候选：Story split（ORG-014/020，split 的关系迁移按 ADR-0011 Revisit Gate 评估）、subtype 受管注册表（ORG-013）、自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（ING-009 per-source 媒体策略、RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。
+- Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
+- Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
+- Phase 2 下一切片候选：subtype 受管注册表（ORG-013，不依赖 LLM）、自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（ING-009 per-source 媒体策略、RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。

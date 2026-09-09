@@ -58,7 +58,7 @@ Non-goals（见 Proposal / ADR-0011）：
 
 ## Current State
 
-- 生命周期阶段：切片 1（域 + 持久化）、切片 2（合同 + API + transport）与切片 3（Web + 浏览器 E2E）均已实现并通过门禁；等待 commit/合入授权。
+- 生命周期阶段：切片 1（域 + 持久化）、切片 2（合同 + API + transport）与切片 3（Web + 浏览器 E2E）均已实现并通过门禁，已随 `961e942` 合入并推送 `master`。
 - 连贯目标：让一个 Entry 可以作为证据/提及关联多个其它 Story，且主归属与一致性语义不变。
 - 可观察验收（≤3 条）：
   1. 一篇长文（document Story 成员）关联到另一个 event Story 后，event Story 详情「证据来源」出现该条目并标注类型与理由；解除后消失；
