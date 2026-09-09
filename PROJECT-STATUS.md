@@ -1,6 +1,16 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-08。Phase 2 第四切片用户组织 v1（Task 13）已实现并合入 `master`（`06ffe7b..77ca54f`）。Label 分类标签、Collection 命名收藏夹 + Story/Entry 轻量收藏、Annotation 批注、Saved View 持久查询视图（含 `search` 的 label/topic 过滤）均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第五切片可配置看板 v1（Task 14）已实现并合入 `master`（tip `2ea8939`）。Board/Section/Block 三层展示配置、四类 Block（Feed 绑定 Saved View / Spotlight / 来源健康 / Topic 与 Collection 列表）、多 Board 实体 + 默认 Board seed、人工 Spotlight 固定与 Web 编辑模式均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：可配置看板 v1 实现合入（Phase 2 第五切片，Task 14）
+
+Proposal [`board-section-block-v1`](docs/proposals/board-section-block-v1.md)（accepted）与 ADR-0010 的实现已按两个子切片合入 `master`（tip `2ea8939`，实现提交 `796a671`/`17d36b0`/`81682b2`/`2ea8939`）：
+
+1. **子切片 A — Board/Section/Block 域 + API + 只读渲染**：schema + migration `20260909100000_board_section_block_v1`（`Board`/`BoardSection`/`BoardBlock`，forward-only、全新表无 backfill）；domain 新增 `blockTypes` 受管枚举；contracts 新增按类型判别的 strict `blockConfigSchemas`（`feed`/`collection` 绑定可选，未绑定或悬空引用渲染占位）、Board 树 DTO 与 8 个命令 schema；storage 实现树读取、分区/区块排序、隐藏、原位复制、跨分区移动、config 白名单校验与应用侧幂等 seed（默认看板：热点/精华/信息流三 Section，含 spotlight/topic-list/feed/source-health 初始 Block）；API 15 个端点；Web 首页改为按 Board 树渲染，侧栏来源健康与 Topics 列表迁入 Block。
+2. **子切片 B — 人工 Spotlight + Web 编辑模式**：migration `20260909120000_spotlight_placement_v1`（`SpotlightPlacement`，`(boardId, targetType, targetId)` 唯一、绑定具体 Board、物理解除）；contracts 新增 `spotlightTargetTypes` 与 pin 命令/DTO（读取侧附带目标标题）；storage 实现幂等 pin（canonical 解析 + 目标/Board 校验）、unpin 与批量标题解析，`mergeStories`/`mergeTopics` 同事务重定向 placement（同 Board 冲突丢弃 obsolete 侧）；API 3 个端点；Web 编辑模式（分区与区块增删/排序/隐藏/复制/跨分区移动/绑定配置、多 Board 创建切换）与 Story/Topic 面板「固定到看板热点区」。
+3. **维护者实测缺陷修复**：编辑模式创建「收藏夹」Block 曾因 `collectionId` 必填而必然 400 失败；已改为绑定可选（与 `feed.savedViewId` 一致，未绑定渲染占位），添加区块表单支持创建时直接选 Saved View / 收藏夹，并补浏览器 E2E 断言。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run db:validate`/`db:generate` 通过；`bun run build`（含 Next standalone）通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run docs:check` 348 文件 failures=[]；`git diff --check` 干净。聚焦测试：domain 10、contracts 41、transport-http 12、api controller 32、component-lab 27、storage `board-domain` 7 全部通过。全量 `bun run test` 44 文件/392 用例，357 通过；35 例失败全部是既有 Windows SQLite 并行负载抖动（storage-prisma 迁移测试 `migrate deploy` 5s 超时 + EBUSY），`bunx vitest run --no-file-parallelism packages/storage-prisma` 串行 93/93 通过。浏览器产品 E2E 9/9（含隐藏/恢复、Spotlight 固定/解除、未绑定收藏夹 Block 创建与删除）；组件实验室浏览器 13/13；Node 进程 E2E 4/4（Windows 需 `BUN_BINARY` 指向 `node_modules/bun/bin/bun.exe`，npm shim 路径会 ENOENT）。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。已知限制：多个 `feed` Block 只有第一个渲染真实阅读流（独立取数留待后续）；无拖拽排序（用上移/下移）；Spotlight 仅人工固定，自动 policy 属 Phase 4。
 
 ## 2026-09-08：用户组织 v1 实现合入（Phase 2 第四切片，Task 13）
 
@@ -205,13 +215,14 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-08 更新：最新基线、用户组织切片合入与门禁见顶部“2026-09-08：用户组织 v1 实现合入”。）
+（2026-09-09 更新：最新基线、可配置看板切片合入与门禁见顶部“2026-09-09：可配置看板 v1 实现合入”。）
 
-- 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端（`origin/master` = `31cfdbd`）；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
+- 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
+- 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
-- 后续 Phase 2 切片候选（按 PRD 顺序）：可配置 Board/Section/Block 与 Spotlight（含 BRD-006 Feed Block 绑定 Saved View）；Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；用户组织与 Entity/关系流程的浏览器 E2E 与人工验收留待后续。
-- 已知待补：搜索表单的标签/Topic 选择控件（使 Web 能保存带 label/topic 条件的 Saved View）；批注 Artifact 目标与正文片段字符级锚点；Read State 驱动的「未读」过滤。
+- 后续 Phase 2 切片候选（按 PRD 顺序）：Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；用户组织、Entity/关系与看板流程的浏览器 E2E 与人工验收留待后续。
+- 已知待补：多个 Feed Block 的独立取数（当前只有第一个渲染真实阅读流）；拖拽排序；搜索表单的标签/Topic 选择控件（使 Web 能保存带 label/topic 条件的 Saved View）；批注 Artifact 目标与正文片段字符级锚点；Read State 驱动的「未读」过滤。
 
 ## 已完成
 
