@@ -352,6 +352,8 @@ flowchart LR
 
 **Phase 2 第七切片注记（2026-09-09，[`story-split-v1` Proposal](../proposals/story-split-v1.md) accepted）**：ORG-004/014/020/022 的 split 侧 v1 实施顺序按 Proposal 冻结——先交付「历史壳 + 全部后继」的 Story split（`StoryReplacement` 关系表、状态派生、旧 ID 不写 alias、不静默重定向；`StoryDetail` 新增 `status`/`replacedBy[]`，`entry` 放宽为可空）与单命令显式映射（每个后继至少 1 个主成员，可显式迁移主成员/证据链接/Story↔Entity/Topic 成员，未列出的关系留在历史壳）；用户状态（收藏/标签/收藏夹/批注/Spotlight）留在历史壳、v1 不迁移；历史壳拒绝 merge、改 Revision 与再次 split。用户状态的显式迁移与撤销（待决定事项 10）、Read State 上线后 `updated_since_last_seen` 的 split 投影（待决定事项 9）、自动拆分建议（ORG-021）与 Story↔Story 类型化关系后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第八切片注记（2026-09-09，[`story-subtype-registry-v1` Proposal](../proposals/story-subtype-registry-v1.md) accepted）**：ORG-013 的 v1 实施顺序按 Proposal 冻结——subtype 从任意字符串变为受管理注册项（id 按核心 kind 命名空间化、所属 kind、注册项版本、用户可读名称/描述、状态 `active`/`deprecated`/`retired`、声明式身份规则标识、owner），v1 注册表是**代码内静态清单**（不建表、不改 Prisma schema、不写 migration）；写入侧（改 Story Revision、拆分后继）只接受该 kind 下 `active` 的注册项，既有未知 subtype 数据不改写、仍按核心 kind 降级展示；新增只读 `GET /api/v1/story-subtypes` 目录接口，Web 编辑与拆分改用下拉选择。首批只注册 `media.comic`/`media.anime`/`media.video`；身份规则的判定执行（ORG-021）、插件运行时注册、subtype 重命名/合并/迁移工具后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 ### 7.6 采集相关性与推荐
 
 | ID | 阶段 | 需求 | 验收条件 |

@@ -69,6 +69,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **EntityRevisionContent** 是 Entity Revision 的展示字段集合（`name`、受管 `type`）；`fingerprintEntityRevision` 对这两个字段做确定性 SHA-256 指纹，用于判定 Entity 身份表示的“实质性变化”与 no-op（ADR-0008 决策 2）。Entity 名称别名、Story↔Entity/Entity↔Entity 的 provenance 语义由 storage 命令执行，domain 只提供类型枚举与指纹纯函数。
 - **targetTypes** 是用户组织对象的附加目标受管枚举（`story`/`entry`/`topic`），供 Label 附加与后续 Annotation 目标共用；读取侧未知值降级（ADR-0009 决策 1）。**favoriteTargetTypes** 是收藏标记的目标子集（`story`/`entry`）——Topic 本身已是长期容器，不作为收藏目标（ADR-0009 决策 3）。Label/Collection/Favorite 的注册、附加与成员关系由 storage 命令执行，domain 只提供枚举常量，不产生指纹。
 - **blockTypes** 是看板区块类型的受管枚举（`feed`/`spotlight`/`source-health`/`topic-list`/`collection`）；写入侧由公共合同校验，读取侧未知值降级为占位（ADR-0010 决策 2）。区块的 config 白名单、持久化与排序由 contracts/storage 执行，domain 只提供枚举常量。**spotlightTargetTypes** 是人工 Spotlight 固定的目标受管枚举（`story`/`topic`）；Workspace/Artifact 留待 Phase 3（ADR-0010 决策 3）。
+- **Story subtype 注册表**是 Story 核心 kind 之上的受管取值清单（`storySubtypeRegistry`，ADR-0013）：每个注册项声明 `id`（必须按 `<kind>.<name>` 命名空间化）、所属 `kind`、注册项 `version`、`label`/`description`、状态 `status`（`active`/`deprecated`/`retired`）、声明式 `identityPolicy`（v1 只记录不执行）与 `owner`。v1 首批注册 `media.comic`/`media.anime`/`media.video`。`listStorySubtypes` 只返回 `active` 与 `deprecated` 条目供产品消费；`checkStorySubtype` 是写入侧门槛——`null` 合法，空字符串、未注册、跨 kind 或非 `active` 都返回带原因的拒绝，未知 subtype 的既有数据仍可读取并按核心 kind 降级展示。注册表是代码常量，不建表、不写 migration。
 
 ## 外部行为
 
@@ -109,6 +110,10 @@ exact 成功时返回 `{ exact: ISO, exactPrecision: "second", fallback: null }`
 `deriveExternalKey` 返回：`external:<trimmed externalId>`、`url:<trimmed webUrl>`，或 `fallback:<64位 sha256 hex>`。`fingerprintEntryRevision` 返回 64 位 SHA-256 十六进制字符串。
 
 `projectEntryToStory` 返回 `MinimalStoryProjection` 的八个字段：`id`、`kind`、`subtype`、`title`、`summary`、`entryId`、`revisionId`。id 固定为 `story:${entryId}`；显式 kind 优先；否则 video/audio/image 映射为 media、comment 映射为 thread、post/article/listing 映射为 document，缺省为 document；subtype 和 summary 默认 null，title 与 ID 原样保留。`fingerprintStoryRevision` 接受 `StoryRevisionContent` 并返回 64 位 SHA-256 十六进制字符串；相同展示字段重复计算得到同一指纹。`fingerprintTopicRevision` 接受 `TopicRevisionContent` 并返回 64 位 SHA-256 十六进制字符串；title/purpose/scope 任一变化都会改变指纹。
+
+### Story subtype 输出
+
+`listStorySubtypes` 接受可选 `kind` 与可选 `statuses`（缺省 `["active","deprecated"]`），返回按注册表顺序过滤后的注册项数组，不复制对象。`checkStorySubtype` 接受 `kind`、`subtype`（可空）与可选注册表覆盖，返回 `{ok:true, registration}` 或 `{ok:false, reason, registration}`；`reason` 取 `empty`/`unregistered`/`kind_mismatch`/`not_active`，`registration` 在能定位到条目时一并返回，便于调用方生成可读错误。
 
 ## 状态与持久化
 
@@ -176,6 +181,7 @@ Connector 读取外部来源的网络/进程副作用属于 Connector；storage 
 12. **纯函数边界**：调用所有 domain 导出函数并比较调用前后的数据库、Blob Root、网络请求和日志计数，观察均无 domain 直接副作用；进程重启后不应从 domain 模块恢复任何 durable state。
 13. **用户组织枚举**：给定 `targetTypes`，观察其为 `story`/`entry`/`topic`；给定 `favoriteTargetTypes`，观察其为 `story`/`entry` 且是 `targetTypes` 的子集；domain 不导出 Label/Collection/Favorite 的事务或指纹函数。
 14. **看板区块枚举**：给定 `blockTypes`，观察其为 `feed`/`spotlight`/`source-health`/`topic-list`/`collection`；给定 `spotlightTargetTypes`，观察其为 `story`/`topic`；domain 不导出 Board/Section/Block 的写入事务或 config 校验。
+15. **Story subtype 注册表**：给定 `storySubtypeRegistry`，观察每个 id 以 `<kind>.` 开头、kind 属于 `storyKinds`、version 为正、owner 非空；给定 `checkStorySubtype`，观察 `null` 与 `media.comic`（kind=media）通过，空字符串/未注册/跨 kind/`retired` 分别返回 `empty`/`unregistered`/`kind_mismatch`/`not_active`；给定 `listStorySubtypes({kind:"media"})`，观察返回注册表中 media 的 `active`/`deprecated` 条目且 `retired` 不出现。
 
 ## 实现与测试锚点
 

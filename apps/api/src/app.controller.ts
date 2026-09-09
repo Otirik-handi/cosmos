@@ -45,6 +45,7 @@ import {
     mergeStoriesCommandSchema,
     moveEntryToStoryCommandSchema,
     splitStoryCommandSchema,
+    storySubtypeQuerySchema,
     addTopicMemberCommandSchema,
     createTopicCommandSchema,
     mergeTopicsCommandSchema,
@@ -144,6 +145,9 @@ function sourceCommandError(error: unknown): never {
     }
     if (error instanceof Error && "code" in error && error.code === "conflict") {
         throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
+    }
+    if (error instanceof Error && "code" in error && error.code === "validation") {
+        throw new BadRequestException({ code: "validation_failed", message: error.message, retryable: false });
     }
     throw new InternalServerErrorException({
         code: "internal_error",
@@ -675,6 +679,18 @@ export class AppController {
             return result;
         } catch (error) {
             sourceCommandError(error);
+        }
+    }
+
+    @Get("story-subtypes")
+    @Bind(Query("kind"))
+    async listStorySubtypes(kind?: string) {
+        try {
+            const parsed = storySubtypeQuerySchema.parse({ kind });
+            const items = await this.repository.listStorySubtypes({ kind: parsed.kind });
+            return catalogPage(items);
+        } catch (error) {
+            validationError(error);
         }
     }
 

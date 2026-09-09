@@ -259,6 +259,8 @@ Subtype 不是任意散落在内容记录中的字符串，而是核心 kind 之
 
 内置 subtype 和插件 subtype 共用同一注册合同。插件可以在允许的核心 kind 下增加 subtype，但不能重新定义已有 subtype 的身份语义；未知 subtype 仍保留在数据中，并按核心 kind 的通用合同降级展示，避免新版本写入的数据让旧客户端无法读取。Subtype 主要提供分类和专门判定规则，不自动意味着要新建一个顶层 Story kind。
 
+**v1 切片（[`story-subtype-registry-v1` Proposal](../proposals/story-subtype-registry-v1.md)，2026-09-09 accepted）**：注册表先以**代码内静态清单**落地（`packages/domain` 的 `storySubtypeRegistry`），不建 Prisma 表、不写 migration——当前没有运行时注册者，建表属于为不存在的消费者提前造机制。注册项字段冻结为 id（必须按核心 kind 命名空间化）、kind、version、label、description、status（`active`/`deprecated`/`retired`）、identityPolicy（声明式标识，v1 不执行判定）、owner（内置为 `core`）。写入侧（改 Story Revision、拆分后继）只接受该 kind 下 `active` 的注册项，否则拒绝并说明原因；既有未知 subtype 不改写、继续按核心 kind 降级展示。读取投影保持字符串形状。首批只注册 `media.comic`/`media.anime`/`media.video`；身份规则的判定执行（ORG-021）、插件运行时注册、注册项的兼容 SDK 版本与重命名/合并/迁移工具后置。
+
 `event` Story 的示例：
 
 ```text

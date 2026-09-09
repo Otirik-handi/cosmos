@@ -267,6 +267,72 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
     expect(consoleErrors).toEqual([]);
 });
 
+test("classifies a Story with a managed subtype and rejects an unregistered value", async ({ page }) => {
+    test.setTimeout(300_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    const sourceName = await ingestFeed(page, "subtype 验收来源");
+
+    await page
+        .locator("article")
+        .filter({ hasText: sourceName })
+        .first()
+        .getByRole("button", { name: "打开 Story" })
+        .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const storyId = await dialog.getAttribute("data-story-id");
+    expect(storyId).toBeTruthy();
+    const originalTitle = await dialog.getByRole("heading", { level: 2 }).innerText();
+
+    // 受管理目录只注册 media.*，所以先把 Story 类型改成媒体才能选到注册项。
+    await dialog.getByLabel("Story 类型").selectOption("media");
+    await dialog.getByLabel("Story subtype").selectOption("media.comic");
+    await dialog.getByRole("button", { name: "保存修改" }).click();
+    await expect(dialog.locator("[data-story-subtype]")).toHaveText("漫画");
+
+    // 未注册值被服务端拒绝，Story 保持上一次保存的状态。
+    const rejection = await page.evaluate(async (id) => {
+        const detail = await (await fetch(`/api/v1/stories/${encodeURIComponent(id!)}`)).json() as {
+            story: { revisionId: string };
+        };
+        const response = await fetch(`/api/v1/stories/${encodeURIComponent(id!)}/revisions`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                baseRevisionId: detail.story.revisionId,
+                title: "不应保存的标题",
+                kind: "media",
+                subtype: "media.unknown",
+            }),
+        });
+        return {
+            status: response.status,
+            body: await response.json() as { code: string },
+        };
+    }, storyId);
+    expect(rejection.status).toBe(400);
+    expect(rejection.body.code).toBe("validation_failed");
+
+    const stored = await page.evaluate(async (id) => {
+        const body = await (await fetch(`/api/v1/stories/${encodeURIComponent(id!)}`)).json() as {
+            story: { kind: string; subtype: string | null; title: string };
+        };
+        return body.story;
+    }, storyId);
+    expect(stored).toMatchObject({
+        kind: "media",
+        subtype: "media.comic",
+        title: originalTitle,
+    });
+
+    // 上面的 API 调用是故意构造的 400；浏览器会把它记为一条资源加载错误。
+    expect(consoleErrors.filter((text) => !text.includes("status of 400"))).toEqual([]);
+});
+
 test("organizes a Story with Topic, Entity, favorite, collection, and annotation", async ({ page }) => {
     test.setTimeout(300_000);
     const consoleErrors: string[] = [];

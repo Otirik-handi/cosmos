@@ -40,6 +40,8 @@ Entry↔Story 证据关系 v1（ADR-0011）的迁移为全新表（`202609091400
 
 Story split v1（ADR-0012）的迁移为全新表（`20260909160000_story_split_v1`），无旧数据 backfill，仍按门禁跑 fresh + 旧库 upgrade 两态。拆分命令的显式映射校验（非当前成员/跨后继重复/自关联/未知实体或 Topic）、历史壳投影（`status`/`replacedBy`/可零成员）、四类关系只按显式清单迁移而用户状态留在壳、历史壳拒绝 merge/改 Revision/再次 split，以及旧库 upgrade 后零成员历史壳仍可读由 `packages/storage-prisma/src/story-split.test.ts` 使用隔离库覆盖；`SplitStoryCommand` 与 `StoryDetail` 新字段由 `packages/contracts/src/index.test.ts` 覆盖；transport 路径与请求体由 `packages/transport-http/src/index.test.ts` 覆盖，API 回执与 400/409 映射由 `apps/api/src/app.controller.test.ts` 覆盖；组件实验室新增 Splittable/Historical shell 场景，浏览器侧由 `e2e/browser/phase2-organization.spec.ts` 覆盖（归并成双成员 Story 后拆分、壳视图与后继打开）。
 
+Story subtype 受管注册表 v1（ADR-0013）无 Prisma schema/migration 变更，注册表是 `packages/domain` 的代码常量。注册项命名空间/唯一性、`checkStorySubtype` 的四类拒绝与 `listStorySubtypes` 的状态过滤由 `packages/domain/src/index.test.ts` 覆盖；写入侧「新赋值必须是该 kind 的 `active` 注册项、未注册旧值可原样保留、kind 变化或换值必须合法、后继不接受未注册 subtype」以及 kind/subtype 写回 Story 行由 `packages/storage-prisma/src/story-subtype-registry.test.ts` 使用隔离库覆盖（先红后绿：移除校验后 5 例全部失败）；目录 DTO 与查询 schema 由 `packages/contracts/src/index.test.ts` 覆盖，transport 路径与 kind 过滤由 `packages/transport-http/src/index.test.ts` 覆盖，API 目录页与 400 `validation_failed` 映射由 `apps/api/src/app.controller.test.ts` 覆盖；组件实验室新增 Legacy subtype 场景，浏览器侧由 `e2e/browser/phase2-organization.spec.ts` 覆盖（改类型为媒体并选中「漫画」后徽章变化、API 提交未注册 subtype 返回 400 且 Story 不变）。
+
 性能修复使用 Task 记录的确定性 seed 或本地生成器，数据位于 `.agent/tmp/`。修复前后必须使用同一数据形状、规模、环境、命令和测量口径并重复采样；墙钟阈值不进入默认 `bun run test`，优先用查询次数、查询计划/索引、复杂度或有界结果等确定性断言防回归。原始基准输出不入库，Task/PR 记录完整命令、数据规模、环境、样本统计、波动和结论。
 
 ## 文档治理

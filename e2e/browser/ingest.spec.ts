@@ -90,7 +90,7 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
         .find((storyId) => storyId !== currentStoryId)!;
     const mergedTitle = `合并后标题 ${Date.now()}`;
     await dialog.getByLabel("标题").fill(mergedTitle);
-    await dialog.getByRole("button", { name: "更新标题" }).click();
+    await dialog.getByRole("button", { name: "保存修改" }).click();
     await expect(dialog.getByRole("heading", { name: mergedTitle, exact: true })).toBeVisible();
     await dialog.getByLabel("并入本 Story 的 Story ID").fill(obsoleteStoryId);
     await dialog.getByRole("button", { name: "归并", exact: true }).click();

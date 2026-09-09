@@ -392,12 +392,15 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
    收到 `run.failed.v1` 时观察失败 notice；收到
    `snapshot_required` 时只观察指定 notice、没有自动 refresh；触发 EventSource error 时观察
    “SSE 不可用”，且不发生自动重连。
-6. 点击 Story 后观察 Story title、来源成员列表、时间线事件（来源名 + 事件类型 + 时间）、
+6. 点击 Story 后观察 Story title、类型/subtype 徽章、来源成员列表、时间线事件（来源名 + 事件类型 + 时间）、
    最新正文、Entry、Revision、Observation 展开；给两条 Story 打同一分类后重新打开，观察
    “相关内容”列出对方并标注“共享分类：<名称>”，且不把当前 Story 列进自己；把另一条 Story
    的条目作为证据加入后观察“证据来源”出现该项并标注关系类型，解除后消失；更新标题后标题
    与 Revision 变化、归并后来源成员数增加、旧 Story id 打开仍显示 canonical；Story 404/
-   网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
+   网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。受管理 subtype 目录
+   加载后，编辑表单的 subtype 下拉只列出当前类型的注册项（含「无 subtype」）；把类型改为
+   媒体并选中「漫画」保存后，标题旁徽章显示「漫画」，且用 API 直接提交未注册 subtype
+   返回 400 且 Story 保持上一次保存的状态（ADR-0013）。
 7. 点击检查服务，观察 health card 更新为 `service · workerStatus`，notice 包含
    `storageStatus`；让 health 请求非 2xx，观察 error 文本包含 HTTP status。
 8. 刷新浏览器或卸载页面，观察所有 React/SSE 状态重新初始化，且除主题偏好外没有

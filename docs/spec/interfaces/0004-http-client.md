@@ -76,6 +76,7 @@ Phase 2 编排方法（同一 transport 形态：先 parse 命令 schema，再 P
 | `moveEntryToStory(storyId,input)` / `updateStoryRevision(storyId,input)` | `POST /api/v1/stories/:encodedId/entry-moves`、`/revisions` | `StoryDetail` |
 | `mergeStories(input)` | `POST /api/v1/stories/merges` | `StoryDetail` |
 | `splitStory(storyId,input)` | `POST /api/v1/stories/:encodedId/splits` | `StoryDetail`（历史壳） |
+| `listStorySubtypes({kind?})` | `GET /api/v1/story-subtypes` | `StorySubtypePage` 的 `items`（`readonly StorySubtype[]`）；kind 按 truthy 发送 |
 | `listTopics(query?)` / `topic(topicId)` | `GET /api/v1/topics`、`/topics/:encodedId` | `TopicPage`、`TopicDetail` |
 | `createTopic(input)` / `updateTopic(topicId,input)` / `mergeTopics(input)` | `POST /api/v1/topics`、`/topics/:encodedId/revisions`、`/topics/merges` | `TopicDetail` |
 | `addTopicMember` / `updateTopicMemberRole` / `removeTopicMember` / `restoreTopicMember` | `POST /api/v1/topics/:encodedId/members`、`/member-role-updates`、`/member-removals`、`/member-restorations` | `TopicDetail` |

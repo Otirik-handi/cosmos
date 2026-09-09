@@ -14,6 +14,7 @@ import type {
     SourceDefinitionManifest,
     SourceSnapshot,
     StoryDetail,
+    StorySubtype,
     TopicDetail,
 } from "@cosmos/contracts";
 import { HttpCosmosClient } from "@cosmos/transport-http";
@@ -42,6 +43,40 @@ import type {CosmosThemePreference} from "@/theme/theme";
 import type {LabProps} from "./types";
 
 const fixtureTimestamp = "2026-01-01T00:00:00.000Z";
+
+/** 与 domain 注册表同构的合成目录；实验室不发任何 Product API 请求。 */
+const labStorySubtypeOptions: readonly StorySubtype[] = [
+    {
+        id: "media.comic",
+        kind: "media",
+        version: 1,
+        label: "漫画",
+        description: "同一部漫画作品。",
+        status: "active",
+        identityPolicy: "same-work-v1",
+        owner: "core",
+    },
+    {
+        id: "media.anime",
+        kind: "media",
+        version: 1,
+        label: "动画",
+        description: "同一部动画作品。",
+        status: "active",
+        identityPolicy: "same-work-v1",
+        owner: "core",
+    },
+    {
+        id: "media.video",
+        kind: "media",
+        version: 1,
+        label: "视频",
+        description: "同一段视频或影像作品。",
+        status: "active",
+        identityPolicy: "same-work-v1",
+        owner: "core",
+    },
+];
 
 function textProp(props: LabProps, name: string, fallback: string): string {
     const value = props[name];
@@ -280,7 +315,7 @@ export function renderStoryPanelLab(props: LabProps) {
         props,
         "state",
         "revision",
-        ["revision", "empty", "split", "splittable"] as const,
+        ["revision", "empty", "split", "splittable", "legacy-subtype"] as const,
     );
     const title = textProp(props, "title", "Cosmos fixture story");
     const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
@@ -339,8 +374,8 @@ export function renderStoryPanelLab(props: LabProps) {
     const story: StoryDetail = {
         story: {
             id: "story-fixture",
-            kind: "document",
-            subtype: null,
+            kind: state === "legacy-subtype" ? "media" : "document",
+            subtype: state === "legacy-subtype" ? "media.legacy" : null,
             revisionId: "revision-fixture",
             title,
             summary: "A synthetic Story summary.",
@@ -383,6 +418,7 @@ export function renderStoryPanelLab(props: LabProps) {
             onUpdateStoryRevision={async () => undefined}
             onMergeStory={async () => undefined}
             onSplitStory={async () => undefined}
+            subtypeOptions={labStorySubtypeOptions}
             relatedStories={[{
                 storyId: "story-related-fixture",
                 title: "A related but different fixture Story",

@@ -56,6 +56,7 @@ import {
     blockConfigSchemaFor,
 } from "@cosmos/contracts";
 import {
+    checkStorySubtype,
     deriveExternalKey,
     entityRelationTypes,
     entityTypes,
@@ -64,6 +65,7 @@ import {
     fingerprintEntryRevision,
     fingerprintStoryRevision,
     fingerprintTopicRevision,
+    listStorySubtypes as listRegisteredStorySubtypes,
     projectEntryToStory,
     temporalProjection,
     type BlockType,
@@ -73,6 +75,8 @@ import {
     type FavoriteTargetType,
     type NormalizedIngestItem,
     type SpotlightTargetType,
+    type StoryKind,
+    type StorySubtypeRegistration,
     type TargetType,
     type TopicMemberRole,
 } from "@cosmos/domain";
@@ -99,6 +103,7 @@ import {
     StoryNotFoundError,
     StoryRevisionConflictError,
     StorySplitConflictError,
+    StorySubtypeInvalidError,
     TopicMergeConflictError,
     TopicMembershipNotFoundError,
     TopicNotFoundError,
@@ -1942,6 +1947,12 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (!story.currentRevision || story.currentRevision.id !== input.baseRevisionId) {
             throw new StoryRevisionConflictError(input.storyId);
         }
+        // A subtype already stored on this Story may be unregistered (legacy
+        // data); editing other fields keeps it. Any other value is a new
+        // assignment and must be a writable registration (ORG-013).
+        if (input.kind !== story.kind || input.subtype !== story.subtype) {
+            assertStorySubtype(input.kind, input.subtype);
+        }
         const fingerprint = fingerprintStoryRevision({
             title: input.title,
             summary: input.summary,
@@ -1970,7 +1981,13 @@ export class PrismaCosmosRepository implements CosmosRepository {
             });
             await tx.story.update({
                 where: { id: canonicalStoryId },
-                data: { currentRevisionId: created.id },
+                data: {
+                    currentRevisionId: created.id,
+                    // kind/subtype are Story display fields (ADR-0006 decision 3);
+                    // before ORG-013 they were fingerprinted but never persisted.
+                    kind: input.kind,
+                    subtype: input.subtype,
+                },
             });
             await appendDomainEvent(tx, {
                 type: "story.revision_created.v1",
@@ -2379,6 +2396,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
         const claimedEntityIds = new Set<string>();
         const claimedTopicIds = new Set<string>();
         for (const successor of input.successors) {
+            assertStorySubtype(successor.kind, successor.subtype);
             const successorEntryIds = new Set(successor.entryIds);
             for (const entryId of successorEntryIds) {
                 if (!memberEntryIds.has(entryId)) {
@@ -2547,6 +2565,10 @@ export class PrismaCosmosRepository implements CosmosRepository {
             });
         });
         return this.story(shellStoryId);
+    }
+
+    async listStorySubtypes(input?: { kind?: StoryKind }): Promise<StorySubtypeRegistration[]> {
+        return listRegisteredStorySubtypes(input);
     }
 
     async story(storyId: string): Promise<StoryDetail | null> {
@@ -6044,6 +6066,31 @@ function isUniqueConstraintError(error: unknown): boolean {
         && error !== null
         && "code" in error
         && error.code === "P2002";
+}
+
+/**
+ * Story subtype writes go through the managed registry (ORG-013). Existing
+ * unknown values stay readable; they just cannot be written again.
+ */
+function assertStorySubtype(kind: StoryKind, subtype: string | null): void {
+    const check = checkStorySubtype(kind, subtype);
+    if (check.ok) {
+        return;
+    }
+    switch (check.reason) {
+        case "empty":
+            throw new StorySubtypeInvalidError("Story subtype must not be empty.");
+        case "unregistered":
+            throw new StorySubtypeInvalidError(`Unknown Story subtype: ${subtype}`);
+        case "kind_mismatch":
+            throw new StorySubtypeInvalidError(
+                `Story subtype ${subtype} belongs to ${check.registration?.kind ?? "another kind"}, not ${kind}.`,
+            );
+        case "not_active":
+            throw new StorySubtypeInvalidError(
+                `Story subtype ${subtype} is ${check.registration?.status ?? "inactive"} and cannot be assigned.`,
+            );
+    }
 }
 
 export { PrismaWorkflowBackend } from "./workflow-backend.js";

@@ -35,6 +35,7 @@ import {
     type SourceSnapshot,
     type SplitStoryCommand,
     type StoryDetail,
+    type StorySubtype,
     type TopicDetail,
     type TopicMemberRole,
     type TopicSummary,
@@ -126,6 +127,7 @@ export default function Home() {
     const [activeSearch, setActiveSearch] = useState<SearchQuery | null>(null);
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [story, setStory] = useState<StoryDetail | null>(null);
+    const [storySubtypes, setStorySubtypes] = useState<readonly StorySubtype[]>([]);
     const [relatedStories, setRelatedStories] = useState<readonly RelatedStory[]>([]);
     const [entryOptions, setEntryOptions] = useState<
         readonly Pick<EntryListItem, "id" | "title" | "sourceName">[]
@@ -915,10 +917,19 @@ export default function Home() {
         }
     }, []);
 
+    const loadStorySubtypes = useCallback(async (): Promise<void> => {
+        try {
+            setStorySubtypes(await client.listStorySubtypes());
+        } catch {
+            // subtype 目录读取失败不阻断主 Feed；面板下拉退化为「无 subtype」。
+        }
+    }, []);
+
     useEffect(() => {
         void loadTopics();
         void loadEntities();
-    }, [loadTopics, loadEntities]);
+        void loadStorySubtypes();
+    }, [loadTopics, loadEntities, loadStorySubtypes]);
 
     const openTopic = async (topicId: string): Promise<void> => {
         setOpeningTopicId(topicId);
@@ -1505,6 +1516,7 @@ export default function Home() {
                     onUpdateStoryRevision={updateStoryRevision}
                     onMergeStory={mergeStory}
                     onSplitStory={splitStory}
+                    subtypeOptions={storySubtypes}
                     topics={topics}
                     onJoinTopic={joinTopic}
                     onCreateTopic={createTopicFromStory}

@@ -12,6 +12,7 @@ import type {
     SplitStoryCommand,
     StoryDetail,
     StoryEntitySummary,
+    StorySubtype,
     TopicMemberRole,
     TopicSummary,
     UpdateStoryRevisionCommand,
@@ -34,6 +35,8 @@ type StoryPanelProps = {
     story: StoryDetail;
     onUpdateStoryRevision: (command: UpdateStoryRevisionCommand) => Promise<void>;
     onMergeStory: (obsoleteStoryId: string) => Promise<void>;
+    /** 受管理 subtype 目录（ORG-013）；读取失败时下拉只有「无 subtype」。 */
+    subtypeOptions?: readonly StorySubtype[];
     /** 拆分 Story（ADR-0012）：一次提交全部后继与显式关系映射。 */
     onSplitStory?: (command: SplitStoryCommand) => Promise<void>;
     topics?: readonly TopicSummary[];
@@ -190,6 +193,13 @@ const KIND_LABELS: Record<string, string> = {
     enclosure: "附件",
 };
 
+const STORY_KIND_LABELS: Record<string, string> = {
+    event: "事件",
+    document: "文档",
+    media: "媒体",
+    thread: "讨论串",
+};
+
 const STATUS_LABELS: Record<AssetSnapshot["status"], string> = {
     saved: "已保存",
     metadata_only: "仅记录元数据",
@@ -281,6 +291,62 @@ function RevisionAssets({ assets }: { assets: readonly AssetSnapshot[] }) {
     );
 }
 
+/** 目录里属于该 kind 的注册项才可用于新写入（ORG-013）。 */
+function registeredStorySubtype(
+    options: readonly StorySubtype[],
+    subtype: string | null,
+    kind: StoryDetail["story"]["kind"],
+): string | null {
+    if (subtype === null) {
+        return null;
+    }
+    return options.some((option) => option.id === subtype && option.kind === kind)
+        ? subtype
+        : null;
+}
+
+function StorySubtypeSelect({
+    id,
+    label,
+    value,
+    kind,
+    options,
+    disabled,
+    onChange,
+}: {
+    id: string;
+    label: string;
+    value: string | null;
+    kind: StoryDetail["story"]["kind"];
+    options: readonly StorySubtype[];
+    disabled: boolean;
+    onChange: (value: string | null) => void;
+}) {
+    const forKind = options.filter((option) => option.kind === kind);
+    // 旧数据可能是未注册值；原样保留而不是替用户丢掉。
+    const showLegacy = value !== null && !forKind.some((option) => option.id === value);
+    return (
+        <select
+            id={id}
+            aria-label={label}
+            value={value ?? ""}
+            disabled={disabled}
+            className="rounded-sm border bg-card px-2 py-1 text-sm"
+            onChange={(event) => {
+                onChange(event.target.value === "" ? null : event.target.value);
+            }}
+        >
+            <option value="">无 subtype</option>
+            {showLegacy && <option value={value}>{value}（未注册）</option>}
+            {forKind.map((option) => (
+                <option key={option.id} value={option.id}>
+                    {option.label}（{option.id}）{option.status === "deprecated" ? " · 已弃用" : ""}
+                </option>
+            ))}
+        </select>
+    );
+}
+
 /**
  * 阅读抽屉：固定定位的响应式阅读层，不依赖 Dialog 原语。
  * 打开时焦点进入关闭按钮，Escape 关闭，卸载时把焦点还给触发按钮。
@@ -291,6 +357,7 @@ export function StoryPanel({
     onUpdateStoryRevision,
     onMergeStory,
     onSplitStory,
+    subtypeOptions = [],
     topics,
     onJoinTopic,
     onCreateTopic,
@@ -320,6 +387,10 @@ export function StoryPanel({
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
     const [title, setTitle] = useState(story.story.title);
+    const [kind, setKind] = useState<StoryDetail["story"]["kind"]>(story.story.kind);
+    // A subtype already stored on the Story may be unregistered legacy data;
+    // keeping it unchanged is allowed, so it must stay selectable.
+    const [subtype, setSubtype] = useState<string | null>(story.story.subtype);
     const [mergeStoryId, setMergeStoryId] = useState("");
     const [actionError, setActionError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -343,9 +414,10 @@ export function StoryPanel({
     const [splitSuccessors, setSplitSuccessors] = useState<Array<{
         title: string;
         kind: StoryDetail["story"]["kind"];
+        subtype: string | null;
     }>>([
-        { title: `${story.story.title}（1）`, kind: story.story.kind },
-        { title: `${story.story.title}（2）`, kind: story.story.kind },
+        { title: `${story.story.title}（1）`, kind: story.story.kind, subtype: registeredStorySubtype(subtypeOptions, story.story.subtype, story.story.kind) },
+        { title: `${story.story.title}（2）`, kind: story.story.kind, subtype: registeredStorySubtype(subtypeOptions, story.story.subtype, story.story.kind) },
     ]);
     const [splitEntryTargets, setSplitEntryTargets] = useState<Record<string, number>>({});
     const [splitEvidenceTargets, setSplitEvidenceTargets] = useState<Record<string, number>>({});
@@ -378,6 +450,11 @@ export function StoryPanel({
     const currentWebUrl = currentRevision?.webUrl ?? null;
     const timeline = buildStoryTimeline(story);
     const isShell = story.story.status === "split";
+    const storySubtypeLabel = story.story.subtype === null
+        ? null
+        : subtypeOptions.find((option) => (
+            option.id === story.story.subtype && option.kind === story.story.kind
+        ))?.label ?? `${story.story.subtype}（未注册）`;
     const submitRevisionUpdate: FormEventHandler = async (event) => {
         event.preventDefault();
         const normalized = title.trim();
@@ -391,8 +468,8 @@ export function StoryPanel({
                 baseRevisionId: story.story.revisionId,
                 title: normalized,
                 summary: story.story.summary,
-                kind: story.story.kind,
-                subtype: story.story.subtype,
+                kind,
+                subtype,
             });
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "Story 操作失败。");
@@ -420,16 +497,29 @@ export function StoryPanel({
 
     const updateSplitSuccessor = (
         index: number,
-        patch: Partial<{ title: string; kind: StoryDetail["story"]["kind"] }>,
+        patch: Partial<{ title: string; kind: StoryDetail["story"]["kind"]; subtype: string | null }>,
     ): void => {
-        setSplitSuccessors((current) => current.map((successor, position) => (
-            position === index ? { ...successor, ...patch } : successor
-        )));
+        setSplitSuccessors((current) => current.map((successor, position) => {
+            if (position !== index) {
+                return successor;
+            }
+            const next = { ...successor, ...patch };
+            // A subtype registered for the old kind is not writable on the new
+            // kind; clear it instead of letting the server reject the split.
+            if (patch.kind !== undefined && patch.kind !== successor.kind) {
+                next.subtype = registeredStorySubtype(subtypeOptions, next.subtype, next.kind);
+            }
+            return next;
+        }));
     };
     const addSplitSuccessor = (): void => {
         setSplitSuccessors((current) => (current.length >= 5 ? current : [
             ...current,
-            { title: `${story.story.title}（${current.length + 1}）`, kind: story.story.kind },
+            {
+                title: `${story.story.title}（${current.length + 1}）`,
+                kind: story.story.kind,
+                subtype: registeredStorySubtype(subtypeOptions, story.story.subtype, story.story.kind),
+            },
         ]));
     };
     const submitSplit: FormEventHandler = async (event) => {
@@ -446,8 +536,7 @@ export function StoryPanel({
             title: successor.title.trim(),
             summary: null,
             kind: successor.kind,
-            // 后继默认继承原 Story 的 subtype；表单暂不提供逐后继编辑。
-            subtype: story.story.subtype,
+            subtype: successor.subtype,
             entryIds: story.entries
                 .filter((member) => (splitEntryTargets[member.id] ?? -1) === index)
                 .map((member) => member.id),
@@ -809,6 +898,7 @@ export function StoryPanel({
                 aria-labelledby="cosmos-story-title"
                 aria-modal="true"
                 role="dialog"
+                data-story-id={story.story.id}
                 className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[var(--radius-panel)] border bg-card shadow-[var(--elevation-dialog)] sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-xl sm:rounded-r-none sm:rounded-bl-[var(--radius-panel)]"
                 onClick={(event) => event.stopPropagation()}
             >
@@ -821,6 +911,19 @@ export function StoryPanel({
                         >
                             {story.story.title}
                         </h2>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">
+                                {STORY_KIND_LABELS[story.story.kind] ?? story.story.kind}
+                            </Badge>
+                            {storySubtypeLabel !== null && (
+                                <Badge
+                                    variant="outline"
+                                    data-story-subtype={story.story.subtype ?? undefined}
+                                >
+                                    {storySubtypeLabel}
+                                </Badge>
+                            )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                             {story.entry
                                 ? `${story.entry.sourceName} · ${story.entry.revisions.length} 个 Revision`
@@ -1093,8 +1196,52 @@ export function StoryPanel({
                                     disabled={busy}
                                     className="max-w-xs"
                                 />
+                                <label
+                                    htmlFor="cosmos-story-kind-edit"
+                                    className="text-sm font-medium"
+                                >
+                                    类型
+                                </label>
+                                <select
+                                    id="cosmos-story-kind-edit"
+                                    aria-label="Story 类型"
+                                    value={kind}
+                                    disabled={busy}
+                                    className="rounded-sm border bg-card px-2 py-1 text-sm"
+                                    onChange={(event) => {
+                                        const nextKind = event.target.value as StoryDetail["story"]["kind"];
+                                        setKind(nextKind);
+                                        // A subtype registered for the old kind is
+                                        // not writable on the new kind.
+                                        setSubtype((current) => registeredStorySubtype(
+                                            subtypeOptions,
+                                            current,
+                                            nextKind,
+                                        ));
+                                    }}
+                                >
+                                    <option value="event">事件</option>
+                                    <option value="document">文档</option>
+                                    <option value="media">媒体</option>
+                                    <option value="thread">讨论串</option>
+                                </select>
+                                <label
+                                    htmlFor="cosmos-story-subtype-edit"
+                                    className="text-sm font-medium"
+                                >
+                                    subtype
+                                </label>
+                                <StorySubtypeSelect
+                                    id="cosmos-story-subtype-edit"
+                                    label="Story subtype"
+                                    value={subtype}
+                                    kind={kind}
+                                    options={subtypeOptions}
+                                    disabled={busy}
+                                    onChange={setSubtype}
+                                />
                                 <Button type="submit" disabled={busy} variant="outline">
-                                    更新标题
+                                    保存修改
                                 </Button>
                             </form>
                             <form
@@ -1168,6 +1315,17 @@ export function StoryPanel({
                                             <option value="media">media</option>
                                             <option value="thread">thread</option>
                                         </select>
+                                        <StorySubtypeSelect
+                                            id={`cosmos-split-subtype-${index}`}
+                                            label={`后继 ${index + 1} subtype`}
+                                            value={successor.subtype}
+                                            kind={successor.kind}
+                                            options={subtypeOptions}
+                                            disabled={busy}
+                                            onChange={(value) => {
+                                                updateSplitSuccessor(index, { subtype: value });
+                                            }}
+                                        />
                                     </div>
                                 ))}
                                 {splitSuccessors.length < 5 && (

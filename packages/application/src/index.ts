@@ -51,6 +51,7 @@ import type {
     FavoriteTargetType,
     NormalizedIngestItem,
     StoryKind,
+    StorySubtypeRegistration,
     TargetType,
     TopicMemberRole,
     BlockType,
@@ -192,6 +193,20 @@ export class StorySplitConflictError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "StorySplitConflictError";
+    }
+}
+
+/**
+ * A Story subtype is not a writable registration of the target core kind
+ * (ORG-013). Distinct from `conflict`: the request itself is invalid, not the
+ * Story state.
+ */
+export class StorySubtypeInvalidError extends Error {
+    readonly code = "validation" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "StorySubtypeInvalidError";
     }
 }
 
@@ -499,6 +514,7 @@ export interface CosmosRepository {
         limit: number;
     }): Promise<EntryPage>;
     story(storyId: string): Promise<StoryDetail | null>;
+    listStorySubtypes(input?: { kind?: StoryKind }): Promise<StorySubtypeRegistration[]>;
     moveEntryToStory(input: {
         entryId: string;
         storyId: string;

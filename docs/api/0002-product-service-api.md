@@ -66,7 +66,7 @@ API readiness 不要求 Worker 在线。`ServiceHealthSnapshot` 可以同时显�
 | Convergence | `GET` | `/action-definitions` | `Page<ActionDefinitionSummary>` |
 | Convergence | `GET` | `/action-definitions/{id}/versions/{version}` | `ActionDefinitionDetail` |
 | Planned | `GET` | `/trigger-definitions` | `Page<TriggerDefinitionSummary>` |
-| Planned | `GET` | `/story-subtypes` | `Page<StorySubtypeDefinition>` |
+| Current | `GET` | `/story-subtypes` | `Page<StorySubtype>`（受管理注册表目录，可选 `kind` 过滤） |
 | Planned | `GET` | `/workspace-view-definitions` | `Page<WorkspaceViewDefinition>` |
 | Planned | `GET` | `/board-block-definitions` | `Page<BoardBlockDefinition>` |
 
@@ -326,7 +326,7 @@ Entry interaction。
 | Planned | `POST` | `/story-state-migration-previews` | merge/split 后用户状态与 Topic membership 影响预览 |
 | Planned | `POST` | `/story-state-migration-commands` | 显式 apply/revert；保存 actor、依据和关联 Run |
 
-当前实现的 Story 编排：`entry-moves`/`revisions`/`merges` 同步返回 StoryDetail，actor/reason 可选，revision 更新以 `baseRevisionId` 做 CAS；完整 Proposal/evidence、split 与状态迁移预览仍为上方 Planned 设计。
+当前实现的 Story 编排：`entry-moves`/`revisions`/`merges` 同步返回 StoryDetail，actor/reason 可选，revision 更新以 `baseRevisionId` 做 CAS；`POST /stories/{id}/splits`（历史壳 + 显式映射）与只读 `/story-subtypes` 目录也已实现；完整 Proposal/evidence 与状态迁移预览仍为上方 Planned 设计。
 
 ### 8.2 Topic
 

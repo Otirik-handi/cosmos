@@ -11,6 +11,7 @@ import {
     StoryNotFoundError,
     StoryRevisionConflictError,
     StorySplitConflictError,
+    StorySubtypeInvalidError,
     TopicMembershipNotFoundError,
     TopicMergeConflictError,
     TopicNotFoundError,
@@ -664,6 +665,57 @@ describe("AppController story orchestration", () => {
         await expect(createController(validationRepository)
             .moveEntryToStory("story-a", { entryId: "" }))
             .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("returns the managed subtype catalog page and filters by kind", async () => {
+        const repository = {
+            listStorySubtypes: vi.fn().mockResolvedValue([{
+                id: "media.comic",
+                kind: "media",
+                version: 1,
+                label: "漫画",
+                description: null,
+                status: "active",
+                identityPolicy: "same-work-v1",
+                owner: "core",
+            }]),
+        };
+        const controller = createController(repository);
+
+        const page = await controller.listStorySubtypes("media");
+        expect(page.items).toHaveLength(1);
+        expect(page.items[0]).toMatchObject({ id: "media.comic", kind: "media", status: "active" });
+        expect(page.nextCursor).toBeNull();
+        expect(repository.listStorySubtypes).toHaveBeenCalledWith({ kind: "media" });
+
+        await expect(controller.listStorySubtypes("unknown"))
+            .rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("maps an unregistered subtype write to 400", async () => {
+        const repository = {
+            updateStoryRevision: vi.fn().mockRejectedValue(
+                new StorySubtypeInvalidError("Unknown Story subtype: media.unknown"),
+            ),
+            splitStory: vi.fn().mockRejectedValue(
+                new StorySubtypeInvalidError("Unknown Story subtype: media.unknown"),
+            ),
+        };
+        const controller = createController(repository);
+
+        await expect(controller.updateStoryRevision("story-a", {
+            baseRevisionId: "rev-a-1",
+            title: "Story A",
+            kind: "media",
+            subtype: "media.unknown",
+        })).rejects.toBeInstanceOf(BadRequestException);
+
+        await expect(controller.splitStory("story-a", {
+            successors: [
+                { title: "A", kind: "media", subtype: "media.unknown", entryIds: ["entry-a"] },
+                { title: "B", kind: "media", entryIds: ["entry-b"] },
+            ],
+        })).rejects.toBeInstanceOf(BadRequestException);
     });
 });
 

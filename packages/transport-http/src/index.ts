@@ -15,6 +15,7 @@ import {
     sourceDefinitionPageSchema,
     sourceSnapshotSchema,
     storyDetailSchema,
+    storySubtypePageSchema,
     topicDetailSchema,
     topicPageSchema,
     addTopicMemberCommandSchema,
@@ -43,6 +44,7 @@ import {
     type SourceDefinitionManifest,
     type SourceSnapshot,
     type StoryDetail,
+    type StorySubtype,
     type SseEvent,
     type TopicDetail,
     type TopicPage,
@@ -418,6 +420,17 @@ export class HttpCosmosClient {
             body: payload,
             schema: storyDetailSchema,
         });
+    }
+
+    async listStorySubtypes(query: { kind?: StorySubtype["kind"] } = {}): Promise<readonly StorySubtype[]> {
+        const params = new URLSearchParams();
+        if (query.kind) {
+            params.set("kind", query.kind);
+        }
+        const page = await this.request(`/api/v1/story-subtypes?${params.toString()}`, {
+            schema: storySubtypePageSchema,
+        });
+        return page.items;
     }
 
     async listTopics(query: { cursor?: string; limit?: number } = {}): Promise<TopicPage> {

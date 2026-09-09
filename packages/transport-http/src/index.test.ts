@@ -463,6 +463,53 @@ describe("HttpCosmosClient", () => {
         });
     });
 
+    it("reads the managed Story subtype catalog with an optional kind filter", async () => {
+        const requests: string[] = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input) => {
+                requests.push(String(input));
+                return new Response(JSON.stringify({
+                    items: [
+                        {
+                            id: "media.comic",
+                            kind: "media",
+                            version: 1,
+                            label: "漫画",
+                            description: null,
+                            status: "active",
+                            identityPolicy: "same-work-v1",
+                            owner: "core",
+                        },
+                    ],
+                    nextCursor: null,
+                    snapshotAt: "2026-09-09T00:00:00.000Z",
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const subtypes = await client.listStorySubtypes({ kind: "media" });
+        expect(subtypes).toEqual([
+            {
+                id: "media.comic",
+                kind: "media",
+                version: 1,
+                label: "漫画",
+                description: null,
+                status: "active",
+                identityPolicy: "same-work-v1",
+                owner: "core",
+            },
+        ]);
+        expect(requests).toEqual(["http://localhost:4310/api/v1/story-subtypes?kind=media"]);
+
+        await client.listStorySubtypes();
+        expect(requests[1]).toBe("http://localhost:4310/api/v1/story-subtypes?");
+    });
+
     it("calls the user organization endpoints (labels/collections/favorites)", async () => {
         const requests: Array<{ url: string; init?: RequestInit }> = [];
         const ack = (id: string, action: string) => JSON.stringify({

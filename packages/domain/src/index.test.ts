@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     blockTypes,
+    checkStorySubtype,
     createTemporalValue,
     deriveExternalKey,
     entityRelationTypes,
@@ -12,8 +13,11 @@ import {
     fingerprintEntryRevision,
     fingerprintStoryRevision,
     fingerprintTopicRevision,
+    listStorySubtypes,
     normalizePublisher,
     projectEntryToStory,
+    storyKinds,
+    storySubtypeRegistry,
     targetTypes,
     topicMemberRoles,
 } from "./index.js";
@@ -262,5 +266,57 @@ describe("ingestion identity", () => {
             kind: "event",
             subtype: "event.announcement",
         })).not.toBe(base);
+    });
+
+    it("keeps the managed subtype registry namespaced by core kind", () => {
+        expect(storySubtypeRegistry.map((entry) => entry.id)).toEqual([
+            "media.comic",
+            "media.anime",
+            "media.video",
+        ]);
+        for (const entry of storySubtypeRegistry) {
+            expect(entry.id.startsWith(`${entry.kind}.`)).toBe(true);
+            expect(storyKinds).toContain(entry.kind);
+            expect(entry.version).toBeGreaterThan(0);
+            expect(entry.status).toBe("active");
+            expect(entry.owner).toBe("core");
+        }
+    });
+
+    it("accepts only active registrations of the story's own kind", () => {
+        expect(checkStorySubtype("media", null)).toEqual({ ok: true, registration: null });
+        expect(checkStorySubtype("media", "media.comic")).toMatchObject({
+            ok: true,
+            registration: { id: "media.comic", kind: "media", status: "active" },
+        });
+
+        expect(checkStorySubtype("media", "  ")).toMatchObject({ ok: false, reason: "empty" });
+        expect(checkStorySubtype("media", "media.unknown")).toMatchObject({ ok: false, reason: "unregistered" });
+        expect(checkStorySubtype("event", "media.comic")).toMatchObject({ ok: false, reason: "kind_mismatch" });
+
+        const retired = [{
+            id: "media.legacy",
+            kind: "media" as const,
+            version: 1,
+            label: "Legacy",
+            description: null,
+            status: "retired" as const,
+            identityPolicy: null,
+            owner: "core",
+        }];
+        expect(checkStorySubtype("media", "media.legacy", retired)).toMatchObject({
+            ok: false,
+            reason: "not_active",
+        });
+    });
+
+    it("offers active and deprecated registrations to product consumers", () => {
+        expect(listStorySubtypes({ kind: "media" }).map((entry) => entry.id)).toEqual([
+            "media.comic",
+            "media.anime",
+            "media.video",
+        ]);
+        expect(listStorySubtypes({ kind: "event" })).toEqual([]);
+        expect(listStorySubtypes({ statuses: ["retired"] })).toEqual([]);
     });
 });

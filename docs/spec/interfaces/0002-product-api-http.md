@@ -209,9 +209,10 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
 | `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要（含 `status`/`replacedBy`）、可空 `entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）、`entities`（关联 Entity 快照列表）与 `topics`（当前 Topic 成员）。旧 merge id 先解析到 canonical Story；split 历史壳保留自身 id 且可零成员；不存在/无当前 Revision 404。 |
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
-| `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期或目标是历史壳 409 conflict。 |
+| `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期或目标是历史壳 409 conflict，subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。 |
 | `POST /stories/merges` | body `MergeStoriesCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，归并自身/已 merge Story/历史壳 409 conflict。 |
-| `POST /stories/:storyId/splits` | body `SplitStoryCommand` | `StoryDetail`（历史壳）；Schema 失败 400，Story 缺失 404，后继不足 2 个、映射不属于当前关系、跨后继重复、自关联或已是历史壳 409 conflict（ADR-0012）。 |
+| `POST /stories/:storyId/splits` | body `SplitStoryCommand` | `StoryDetail`（历史壳）；Schema 失败 400，Story 缺失 404，后继不足 2 个、映射不属于当前关系、跨后继重复、自关联或已是历史壳 409 conflict（ADR-0012），后继 subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。 |
+| `GET /story-subtypes` | query `kind?`（核心 kind 枚举） | `StorySubtypePage`：受管理 subtype 目录（`active` + `deprecated`，`retired` 不返回）；未知 `kind` 400。只读，不写任何状态。 |
 | `GET /topics` | query `cursor?`、`limit?` | `TopicPage`；limit 经 clampLimit，按 Topic `updatedAt` 倒序，nextCursor 为偏移字符串或 null。 |
 | `GET /topics/:topicId` | path `topicId` | `TopicDetail`（topic 摘要 + 成员列表，含 removed/tombstone 成员）；旧 merge id 解析到 canonical Topic，不存在 404。 |
 | `POST /topics` | body `CreateTopicCommand` | `TopicDetail`；Schema 失败 400，`seedStoryId` 不是有效 Story 404。 |

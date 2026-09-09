@@ -1,6 +1,20 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）实现完成，位于任务分支 `feat/t18-story-subtype-registry`（worktree `.worktree/story-subtype-registry`），**尚未 commit、push 或合入 `master`**（无相应授权）。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：Story subtype 受管注册表 v1 实现完成（Phase 2 第八切片，Task 18，未合入）
+
+Proposal [`story-subtype-registry-v1`](docs/proposals/story-subtype-registry-v1.md)（accepted，2026-09-09，用户裁决三项：做 ORG-013、注册表取代码内静态清单、写入侧拒绝新值并保留旧值）与 ADR-0013 的实现已完成（切片 1–3），落在 `feat/t18-story-subtype-registry`：
+
+1. **domain 注册表**：`storySubtypeRegistry` 首批注册 `media.comic`/`media.anime`/`media.video`，每项声明 id（按 `<kind>.` 命名空间化）、kind、version、label/description、status、`identityPolicy`（声明不执行）、owner；`checkStorySubtype` 给出 `empty`/`unregistered`/`kind_mismatch`/`not_active` 四类拒绝，`listStorySubtypes` 默认只出 `active`+`deprecated`。无 Prisma schema、migration、回填。
+2. **写入边界**：`updateStoryRevision` 与 `splitStory` 的新赋值必须是该 kind 的 `active` 注册项，否则 400 `validation_failed`（新增 `StorySubtypeInvalidError`，`code: validation`）；`updateStoryRevision` 在 kind 与 subtype 都没变时允许保留 Story 上既有的未注册旧值；`splitStory` 的后继是新对象，一律要求注册项。
+3. **修复既有缺陷**：`updateStoryRevision` 此前只把 kind/subtype 计入 fingerprint、从未写回 `Story` 行，导致改 kind/subtype 只追加 Revision、读取投影仍是旧值；本切片在同一事务里写回两列。
+4. **公共面**：contracts 新增 subtype 目录 DTO 与查询 schema；transport client 与 Product API 新增只读 `GET /api/v1/story-subtypes`（可选 `kind` 过滤）。
+5. **Web**：Story 面板头部新增类型/subtype 徽章，编辑表单新增类型与 subtype 下拉（未注册旧值显示「（未注册）」、按钮改为「保存修改」），拆分表单每个后继新增 subtype 下拉并在换 kind 时清空不兼容值；组件实验室新增 Legacy subtype 场景。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 368 文件 failures=[]；`git diff --check` 干净。聚焦测试：domain 14、contracts 34、transport-http 15、api controller 37、storage `story-subtype-registry` 5、component-lab registry 12 全部通过；先红后绿证据（临时移除校验后 5 例全红，恢复后全绿）。全量 `bun run test` 49 文件/430 用例，368 通过；62 例失败全部是既有 Windows SQLite 并行负载抖动（`migrate deploy` 5s 超时 + EBUSY），串行 `bunx vitest run --no-file-parallelism packages/storage-prisma` 13 文件/108 用例全部通过。浏览器产品 E2E 14/14（新增 subtype 分类与未注册值拒绝用例）；组件实验室浏览器 13/13；Node 进程 E2E 4/4。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
+
+过程、偏差与完整命令见 Task 18 walkthrough [`.agents/tasks/18-story-subtype-registry/README.md`](.agents/tasks/18-story-subtype-registry/README.md)。
 
 ## 2026-09-09：Story split v1 实现合入（Phase 2 第七切片，Task 17）
 
@@ -253,12 +267,13 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：最新基线、Phase 2 验收补完与可配置看板切片合入见顶部两条记录。）
+（2026-09-09 更新：Phase 2 第八切片实现完成，见顶部记录。）
 
+- Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）实现完成，位于 `feat/t18-story-subtype-registry`，**待维护者评审与合并授权**；未 commit/push/合并。
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
-- Phase 2 下一切片候选：subtype 受管注册表（ORG-013，不依赖 LLM）、自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（ING-009 per-source 媒体策略、RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。
+- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（ING-009 per-source 媒体策略、RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。

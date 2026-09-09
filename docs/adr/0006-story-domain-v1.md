@@ -30,6 +30,8 @@ Story 从 ingest 私有的最小投影升级为独立域对象。v1 的实现顺
 
 核心 kind 继续使用稳定枚举（event/document/media/thread），subtype 允许 null；未知 subtype 读取时按核心 kind 降级展示（ORG-013 的读取兼容部分）。动态插件 subtype 注册表后置，不建立第二套注册机制。
 
+（2026-09-09 更新：[`0013`](0013-story-subtype-registry-v1.md) 已以代码内静态注册表落地 ORG-013 的受管部分——写入侧校验、只读目录与 Web 下拉；插件运行时注册仍在本文的 Revisit Gate 内。）
+
 ### 5. Story merge 进 v1，split 后置
 
 merge 是 v1 最小编排的一部分：选择 canonical ID，obsolete Story 的 Entry 主归属全部移到 canonical；旧 Story id 永久保留 alias/redirect，旧 Story 及其历史 Revision 不删除。Story split 的完整生命周期（历史壳 + `replaced_by[]` 多后继 + 状态/Topic membership 迁移）后置为独立切片；v1 不产生需要 split 才能纠正的数据形状。
