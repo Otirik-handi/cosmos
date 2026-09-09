@@ -1,10 +1,10 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第九切片按来源的媒体策略 v1（Task 19）实现完成，位于任务分支 `feat/t19-per-source-media-policy`（worktree `.worktree/per-source-media-policy`），**尚未 commit、push 或合入 `master`**；提案的三项裁决为 Agent 推荐默认（维护者评审问题未获回复），可随时否决。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
 
-## 2026-09-09：按来源的媒体策略 v1 实现完成（Phase 2 第九切片，Task 19，未合入）
+## 2026-09-09：按来源的媒体策略 v1 实现合入（Phase 2 第九切片，Task 19）
 
-Proposal [`per-source-media-policy-v1`](docs/proposals/per-source-media-policy-v1.md)（accepted，2026-09-09；三项裁决为 Agent 推荐默认，**非用户裁决**）与 ADR-0014 的实现已完成（切片 1–2），落在 `feat/t19-per-source-media-policy`：
+Proposal [`per-source-media-policy-v1`](docs/proposals/per-source-media-policy-v1.md)（accepted，2026-09-09，用户确认三项默认：范围取「类型 + 预算」、来源只能收紧、策略放进来源配置）与 ADR-0014 的实现已完成（切片 1–2），并已随 `a5a8005` 合入并推送 `master`：
 
 1. **策略合同**：`Source.config.media`（可选 `images`/`maxFileBytes`/`maxRunBytes`）；上界即全局默认 10MB/50MB，来源只能收紧；v1 只对声明 `media-download` 的 `source.rss@1` 开放，manifest JSON Schema 同步声明（描述用）。无 Prisma schema、migration、回填。
 2. **生效边界**：`resolveMediaPolicy` 在 fetch 时从本次 Run 的 `SourceExecutionSnapshot.config.media` 解析；`images=metadata_only` 时媒体获取组件原样返回 connector 输出（不下载、不改状态），否则用来源预算覆盖本次 Run 限额。durable 与 legacy 两条泳道行为一致，已存 Asset 不受影响。
@@ -281,9 +281,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：Phase 2 第九切片实现完成，见顶部记录。）
+（2026-09-09 更新：Phase 2 第九切片实现已合入，见顶部记录。）
 
-- Phase 2 第九切片按来源的媒体策略 v1（Task 19）实现完成，位于 `feat/t19-per-source-media-policy`，**待维护者评审与合并授权**；未 commit/push/合并，提案裁决为 Agent 默认。
+- Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`；稳定文档（PRD/架构/ADR-0014/spec/testing）已同步。
 - Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0013/spec/testing）已同步。
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。

@@ -2,7 +2,7 @@
 
 ## User Request / Topic
 
-2026-09-09 用户指示「继续下一片，选择 ing-009」。Proposal [`per-source-media-policy-v1`](../../../docs/proposals/per-source-media-policy-v1.md) 起草后列出三项裁决（v1 范围、预算方向、策略存放位置）与实施授权问题；维护者评审问题未获回复，Agent 按推荐默认推进（范围取「类型 + 预算」、来源只能收紧、策略放进来源配置），稳定决定沉淀于 [`ADR-0014`](../../../docs/adr/0014-per-source-media-policy-v1.md)，PRD §7.5 第九切片注记与架构 §6.4 注记已同步。**这三项默认不是用户裁决，维护者可随时否决并要求返工。**
+2026-09-09 用户指示「继续下一片，选择 ing-009」。Proposal [`per-source-media-policy-v1`](../../../docs/proposals/per-source-media-policy-v1.md) 起草后列出三项裁决（v1 范围、预算方向、策略存放位置）与实施授权问题；评审问题未获即时回复时 Agent 按推荐默认推进（范围取「类型 + 预算」、来源只能收紧、策略放进来源配置），随后维护者确认接受这三项默认并授权提交、合并与推送。稳定决定沉淀于 [`ADR-0014`](../../../docs/adr/0014-per-source-media-policy-v1.md)，PRD §7.5 第九切片注记与架构 §6.4 注记已同步。
 
 ## Goal
 
@@ -53,7 +53,7 @@ Non-goals（见 Proposal / ADR-0014）：
 
 ## Current State
 
-- 生命周期阶段：切片 1（合同 + 策略生效 + worker 接线）与切片 2（Web 编辑 + 组件实验室 + 浏览器 E2E）均已实现并通过门禁。
+- 生命周期阶段：切片 1（合同 + 策略生效 + worker 接线）与切片 2（Web 编辑 + 组件实验室 + 浏览器 E2E）均已实现并通过门禁，已随 `a5a8005` 合入并推送 `master`（用户授权 commit/push/merge）。
 - 连贯目标：让用户能按来源控制媒体下载的类型与预算，且只影响之后的采集。
 - 可观察验收（≤3 条）：
   1. 把某来源的图片开关关掉后，该来源新采集条目的图片保持「仅记录元数据」，其它来源不受影响；
