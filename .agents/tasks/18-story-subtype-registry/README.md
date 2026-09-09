@@ -55,7 +55,7 @@ Non-goals（见 Proposal / ADR-0013）：
 
 ## Current State
 
-- 生命周期阶段：切片 1（domain + storage）、切片 2（合同 + API + transport）与切片 3（Web + 组件实验室 + 浏览器 E2E）均已实现并通过门禁。
+- 生命周期阶段：切片 1（domain + storage）、切片 2（合同 + API + transport）与切片 3（Web + 组件实验室 + 浏览器 E2E）均已实现并通过门禁，已随 `087544b` 合入并推送 `master`（用户授权 commit/push/merge）。
 - 连贯目标：让 subtype 成为可查、可校验的受管理取值，而不是任意字符串。
 - 可观察验收（≤3 条）：
   1. 编辑 Story 时 subtype 从目录下拉选择，选中的值保存后仍能在详情读回；

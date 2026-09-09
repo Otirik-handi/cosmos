@@ -1,10 +1,10 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）实现完成，位于任务分支 `feat/t18-story-subtype-registry`（worktree `.worktree/story-subtype-registry`），**尚未 commit、push 或合入 `master`**（无相应授权）。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
 
-## 2026-09-09：Story subtype 受管注册表 v1 实现完成（Phase 2 第八切片，Task 18，未合入）
+## 2026-09-09：Story subtype 受管注册表 v1 实现合入（Phase 2 第八切片，Task 18）
 
-Proposal [`story-subtype-registry-v1`](docs/proposals/story-subtype-registry-v1.md)（accepted，2026-09-09，用户裁决三项：做 ORG-013、注册表取代码内静态清单、写入侧拒绝新值并保留旧值）与 ADR-0013 的实现已完成（切片 1–3），落在 `feat/t18-story-subtype-registry`：
+Proposal [`story-subtype-registry-v1`](docs/proposals/story-subtype-registry-v1.md)（accepted，2026-09-09，用户裁决三项：做 ORG-013、注册表取代码内静态清单、写入侧拒绝新值并保留旧值）与 ADR-0013 的实现已完成（切片 1–3），并已随 `087544b` 合入并推送 `master`：
 
 1. **domain 注册表**：`storySubtypeRegistry` 首批注册 `media.comic`/`media.anime`/`media.video`，每项声明 id（按 `<kind>.` 命名空间化）、kind、version、label/description、status、`identityPolicy`（声明不执行）、owner；`checkStorySubtype` 给出 `empty`/`unregistered`/`kind_mismatch`/`not_active` 四类拒绝，`listStorySubtypes` 默认只出 `active`+`deprecated`。无 Prisma schema、migration、回填。
 2. **写入边界**：`updateStoryRevision` 与 `splitStory` 的新赋值必须是该 kind 的 `active` 注册项，否则 400 `validation_failed`（新增 `StorySubtypeInvalidError`，`code: validation`）；`updateStoryRevision` 在 kind 与 subtype 都没变时允许保留 Story 上既有的未注册旧值；`splitStory` 的后继是新对象，一律要求注册项。
@@ -267,9 +267,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：Phase 2 第八切片实现完成，见顶部记录。）
+（2026-09-09 更新：Phase 2 第八切片实现已合入，见顶部记录。）
 
-- Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）实现完成，位于 `feat/t18-story-subtype-registry`，**待维护者评审与合并授权**；未 commit/push/合并。
+- Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0013/spec/testing）已同步。
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
