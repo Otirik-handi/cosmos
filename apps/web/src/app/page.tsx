@@ -63,12 +63,29 @@ import {TopicPanel} from "@/components/cosmos/topic-panel";
 import {EntityPanel} from "@/components/cosmos/entity-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
 import {useTheme} from "@/theme/theme-provider";
+import {
+    loadRelatedStories,
+    type RelatedStory,
+    type RelatedStoryPorts,
+} from "@/lib/related-stories";
 
 
 
 const client = new HttpCosmosClient({
     baseUrl: process.env.NEXT_PUBLIC_COSMOS_API_URL ?? "",
 });
+
+/**
+ * 相关内容 v1 的读取端口：只组合已有读合同（search/entity/story），
+ * 不引入新的服务端接口，也不参与 Story 的权威关系。
+ */
+const RELATED_STORY_PORTS: RelatedStoryPorts = {
+    searchByLabelIds: async (labelIds) => {
+        return (await client.search({labelIds, limit: 10})).items;
+    },
+    entity: (entityId) => client.entity(entityId),
+    story: (storyId) => client.story(storyId),
+};
 
 /** 产品入口只暴露这一个来源定义；表单字段仍由该 manifest 的 schema 驱动。 */
 const RSS_SOURCE_DEFINITION_REF = "source.rss@1";
@@ -106,6 +123,7 @@ export default function Home() {
     const [activeSearch, setActiveSearch] = useState<SearchQuery | null>(null);
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [story, setStory] = useState<StoryDetail | null>(null);
+    const [relatedStories, setRelatedStories] = useState<readonly RelatedStory[]>([]);
     const [topics, setTopics] = useState<readonly TopicSummary[]>([]);
     const [topic, setTopic] = useState<TopicDetail | null>(null);
     const [openingTopicId, setOpeningTopicId] = useState<string | null>(null);
@@ -132,6 +150,7 @@ export default function Home() {
     const [definitionState, setDefinitionState] = useState<SourceDefinitionState>({status: "loading"});
     const [probeState, setProbeState] = useState<ProbeState>({status: "idle"});
     const probeConfigKeyRef = useRef<string | null>(null);
+    const openStoryIdRef = useRef<string | null>(null);
     const sourceForm = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
         defaultValues: {
@@ -147,6 +166,8 @@ export default function Home() {
             sourceId: "",
             publishedAfter: "",
             publishedBefore: "",
+            labelIds: [],
+            topicIds: [],
         },
     });
 
@@ -485,6 +506,8 @@ export default function Home() {
         sourceId,
         publishedAfter,
         publishedBefore,
+        labelIds = [],
+        topicIds = [],
     }) => {
         setError(null);
         try {
@@ -493,6 +516,8 @@ export default function Home() {
                 sourceId: sourceId || undefined,
                 publishedAfter: toBoundaryIso(publishedAfter, false),
                 publishedBefore: toBoundaryIso(publishedBefore, true),
+                labelIds: labelIds.join(",") || undefined,
+                topicIds: topicIds.join(",") || undefined,
                 limit: 20,
             };
             const result = await client.search(query);
@@ -501,6 +526,7 @@ export default function Home() {
             setNextCursor(result.nextCursor);
             setNotice(
                 text || sourceId || publishedAfter || publishedBefore
+                    || labelIds.length > 0 || topicIds.length > 0
                     ? `搜索到 ${result.items.length} 条结果。`
                     : "已恢复 Feed。",
             );
@@ -523,10 +549,7 @@ export default function Home() {
         }
     }, [searchForm]);
 
-    /**
-     * 保存视图只记录当前搜索表单的条件；labelIds/topicIds 目前没有编辑入口，
-     * 保存为空数组，套用时仍按视图里已存的值传给 search。
-     */
+    /** 保存视图记录当前搜索表单的全部条件，包括分类（Label）与 Topic 多选。 */
     const saveCurrentSearchAsView = async (name: string): Promise<void> => {
         const trimmedName = name.trim();
         if (trimmedName === "") {
@@ -542,8 +565,8 @@ export default function Home() {
                     sourceId: values.sourceId?.trim() || null,
                     publishedAfter: toBoundaryIso(values.publishedAfter, false) ?? null,
                     publishedBefore: toBoundaryIso(values.publishedBefore, true) ?? null,
-                    labelIds: [],
-                    topicIds: [],
+                    labelIds: values.labelIds,
+                    topicIds: values.topicIds,
                 },
             });
             setSavedViewName("");
@@ -561,6 +584,8 @@ export default function Home() {
             sourceId: view.sourceId ?? "",
             publishedAfter: toDateInputValue(view.publishedAfter),
             publishedBefore: toDateInputValue(view.publishedBefore),
+            labelIds: view.labelIds,
+            topicIds: view.topicIds,
         });
         setError(null);
         try {
@@ -594,6 +619,23 @@ export default function Home() {
         }
     };
 
+    /**
+     * 相关内容是当前 Story 的派生视图：打开、改标签、改实体后都要重算，
+     * 且切换 Story 后旧请求的结果必须丢弃。
+     */
+    const refreshRelatedStories = useCallback(async (detail: StoryDetail): Promise<void> => {
+        try {
+            const next = await loadRelatedStories(detail, RELATED_STORY_PORTS);
+            if (openStoryIdRef.current === detail.story.id) {
+                setRelatedStories(next);
+            }
+        } catch {
+            if (openStoryIdRef.current === detail.story.id) {
+                setRelatedStories([]);
+            }
+        }
+    }, []);
+
     const openStory = async (storyId: string): Promise<void> => {
         setOpeningStoryId(storyId);
         setError(null);
@@ -610,12 +652,22 @@ export default function Home() {
             setStory(storyDetail);
             setCollections(storyCollections);
             setStoryAnnotations(annotationList.items);
+            // 相关内容是附加区块：先渲染 Story，再后台补齐，读取失败不阻塞阅读。
+            openStoryIdRef.current = storyDetail.story.id;
+            setRelatedStories([]);
+            void refreshRelatedStories(storyDetail);
         } catch (caught) {
             setError(readError(caught));
         } finally {
             setOpeningStoryId(null);
         }
     };
+
+    const closeStory = useCallback((): void => {
+        openStoryIdRef.current = null;
+        setStory(null);
+        setRelatedStories([]);
+    }, []);
 
     const updateStoryRevision = async (command: UpdateStoryRevisionCommand): Promise<void> => {
         if (!story) {
@@ -647,6 +699,7 @@ export default function Home() {
         ]);
         setStory(nextStory);
         setLabels(nextLabels);
+        await refreshRelatedStories(nextStory);
     };
 
     /** 刷新当前 Story 的收藏夹成员视图（携带 containsStory 与 itemCount）。 */
@@ -875,8 +928,10 @@ export default function Home() {
         if (!story) {
             return;
         }
-        setStory(await client.story(story.story.id));
+        const nextStory = await client.story(story.story.id);
+        setStory(nextStory);
         await loadEntities();
+        await refreshRelatedStories(nextStory);
     };
 
     const unlinkStoryFromEntityPage = async (storyId: string): Promise<void> => {
@@ -1213,6 +1268,8 @@ export default function Home() {
             searchExtras={savedViewsPanel}
             searchForm={searchForm}
             sources={sources}
+            labels={labels.items}
+            topics={topics}
         />
     );
 
@@ -1390,7 +1447,7 @@ export default function Home() {
 
             {story && (
                 <StoryPanel
-                    onClose={() => setStory(null)}
+                    onClose={closeStory}
                     story={story}
                     onUpdateStoryRevision={updateStoryRevision}
                     onMergeStory={mergeStory}
@@ -1414,6 +1471,8 @@ export default function Home() {
                     onUpdateAnnotation={updateStoryAnnotation}
                     onDeleteAnnotation={deleteStoryAnnotation}
                     onPinToBoard={() => pinToBoard("story", story.story.id)}
+                    relatedStories={relatedStories}
+                    onOpenRelatedStory={openStory}
                 />
             )}
 

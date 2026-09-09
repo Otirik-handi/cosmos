@@ -216,6 +216,8 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
             sourceId: "",
             publishedAfter: "",
             publishedBefore: "",
+            labelIds: [],
+            topicIds: [],
         },
     });
     const state = optionProp(props, "state", "populated", ["loading", "empty", "populated"] as const);
@@ -243,6 +245,16 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
             onSubmit={(event) => event.preventDefault()}
             searchForm={form}
             nextCursor={state === "populated" ? "fixture-next" : null}
+            labels={[{id: "label-fixture", name: "开发"}]}
+            topics={[{
+                id: "topic-fixture",
+                revisionId: "revision-topic-fixture",
+                title: "Cosmos fixture topic",
+                purpose: "一个用于组件检查的合成 Topic。",
+                scope: null,
+                memberCount: 1,
+                updatedAt: fixtureTimestamp,
+            }]}
             sources={[{
                 id: "source-fixture",
                 name: "Cosmos fixture",
@@ -266,6 +278,38 @@ export function renderStoryPanelLab(props: LabProps) {
     const state = optionProp(props, "state", "revision", ["revision", "empty"] as const);
     const title = textProp(props, "title", "Cosmos fixture story");
     const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
+    const memberEntry: StoryDetail["entry"] = {
+        id: "entry-fixture",
+        sourceId: "source-fixture",
+        sourceName: "Cosmos fixture",
+        sourceKind: "fixture-rss",
+        currentRevisionId: "revision-fixture",
+        metrics: null,
+        revisions: state === "empty" ? [] : [{
+            id: "revision-fixture",
+            revision: 1,
+            title,
+            summary: "A synthetic Story summary.",
+            contentText,
+            webUrl: null,
+            contentKind: "article",
+            publisher: null,
+            publishedAt: null,
+            updatedAt: null,
+            sourcePublishedAt: null,
+            createdAt: fixtureTimestamp,
+            assets: [],
+        }],
+        observations: [{
+            id: "observation-fixture",
+            externalId: null,
+            externalKey: "fixture:story",
+            eventKind: "snapshot",
+            webUrl: null,
+            capturedAt: fixtureTimestamp,
+            sourcePublishedAt: null,
+        }],
+    };
     const story: StoryDetail = {
         story: {
             id: "story-fixture",
@@ -275,39 +319,8 @@ export function renderStoryPanelLab(props: LabProps) {
             title,
             summary: "A synthetic Story summary.",
         },
-        entry: {
-            id: "entry-fixture",
-            sourceId: "source-fixture",
-            sourceName: "Cosmos fixture",
-            sourceKind: "fixture-rss",
-            currentRevisionId: "revision-fixture",
-            metrics: null,
-            revisions: state === "empty" ? [] : [{
-                id: "revision-fixture",
-                revision: 1,
-                title,
-                summary: "A synthetic Story summary.",
-                contentText,
-                webUrl: null,
-                contentKind: "article",
-                publisher: null,
-                publishedAt: null,
-                updatedAt: null,
-                sourcePublishedAt: null,
-                createdAt: fixtureTimestamp,
-                assets: [],
-            }],
-            observations: [{
-                id: "observation-fixture",
-                externalId: null,
-                externalKey: "fixture:story",
-                eventKind: "snapshot",
-                webUrl: null,
-                capturedAt: fixtureTimestamp,
-                sourcePublishedAt: null,
-            }],
-        },
-        entries: [],
+        entry: memberEntry,
+        entries: [memberEntry],
         entities: [],
         labels: [],
         favorited: false,
@@ -318,6 +331,11 @@ export function renderStoryPanelLab(props: LabProps) {
             story={story}
             onUpdateStoryRevision={async () => undefined}
             onMergeStory={async () => undefined}
+            relatedStories={[{
+                storyId: "story-related-fixture",
+                title: "A related but different fixture Story",
+                reason: "共享分类：开发",
+            }]}
         />
     );
 }

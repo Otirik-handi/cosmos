@@ -1,6 +1,19 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第五切片可配置看板 v1（Task 14）已实现并合入 `master`（tip `2ea8939`）。Board/Section/Block 三层展示配置、四类 Block（Feed 绑定 Saved View / Spotlight / 来源健康 / Topic 与 Collection 列表）、多 Board 实体 + 默认 Board seed、人工 Spotlight 固定与 Web 编辑模式均已落地并同步 `docs/spec`/`docs/testing`。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。PRD Phase 2 的四条验收标准已全部满足：本轮补齐 Web 分类（Label）/Topic 浏览、Story 时间线与相关内容（REC-008 v1），未新增 Prisma 模型、migration、公共合同或 API 端点（Task 15，已按维护者授权提交并推送）。Phase 2 第五切片可配置看板 v1（Task 14）此前已合入 `master`（tip `2ea8939`）。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：Phase 2 验收补完（分类/Topic 浏览、Story 时间线、相关内容）
+
+PRD Phase 2 验收此前只差两处：Web 不能按分类（Label）浏览，Story 详情没有时间线与相关内容。本轮以纯展示层补齐，**不新增 Prisma 模型、migration、公共合同或 API 端点**：
+
+1. **分类与 Topic 浏览**：搜索表单把已加载的 Label/Topic 渲染成多选筛选 chip（`searchSchema` 新增 `labelIds`/`topicIds` 数组），提交时拼成 `search` 的逗号串，命中条件回显为“分类：<名称>”/“Topic：<标题>”。
+2. **Saved View 条件编辑**：保存视图记录表单全部条件（含分类与 Topic 多选），套用视图把多选回填到表单；此前保存时硬写空数组（代码注释即缺口说明）。
+3. **Story 时间线**：Story 面板新增时间线区块，由 `StoryDetail.entries` 的全部 Revision 与 Observation 展平成按时间倒序的事件流（时间/事件类型/来源/标题），TemporalValue 缺失时回退 `createdAt`。
+4. **Story 相关内容（REC-008 v1）**：新增“相关内容”区块，列出与本 Story 共享分类或共享 Entity 的其它 Story（最多 5 条并标注相关原因），只组合既有 `search`/`entity`/`story` 读端点；打开 Story、改标签、改实体后重算，切换 Story 丢弃旧结果。服务端排序推荐与 Artifact 目标不在本轮。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 353 文件 failures=[]；`git diff --check` 干净。聚焦测试：新增 `apps/web/src/lib/story-timeline.test.ts` 3 例、`related-stories.test.ts` 4 例与 component-lab 27 例全部通过。全量 `bun run test` 46 文件/399 用例，373 通过；26 例失败全部集中在 storage-prisma 的 `prisma migrate deploy` EBUSY/5s 超时（既有 Windows SQLite 并行负载抖动），`bunx vitest run --no-file-parallelism packages/storage-prisma` 串行 10 文件/93 用例全部通过。浏览器产品 E2E 11/11（新增 `phase2-organization.spec.ts` 2 例：分类筛选 + 保存/套用带分类条件的视图 + 时间线 + 相关内容；Topic/Entity/收藏/收藏夹/批注与 Topic 成员改角色/移除/恢复），组件实验室浏览器 13/13，Node 进程 E2E 4/4（Windows 需 `BUN_BINARY` 指向真实 `bun.exe`）。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
+
+过程与偏差记录见 Task 15 walkthrough [`.agents/tasks/15-phase2-acceptance/README.md`](.agents/tasks/15-phase2-acceptance/README.md)（维护者分配编号 15 并授权提交推送）。
 
 ## 2026-09-09：可配置看板 v1 实现合入（Phase 2 第五切片，Task 14）
 
@@ -215,14 +228,15 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：最新基线、可配置看板切片合入与门禁见顶部“2026-09-09：可配置看板 v1 实现合入”。）
+（2026-09-09 更新：最新基线、Phase 2 验收补完与可配置看板切片合入见顶部两条记录。）
 
+- Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
-- 后续 Phase 2 切片候选（按 PRD 顺序）：Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；用户组织、Entity/关系与看板流程的浏览器 E2E 与人工验收留待后续。
-- 已知待补：多个 Feed Block 的独立取数（当前只有第一个渲染真实阅读流）；拖拽排序；搜索表单的标签/Topic 选择控件（使 Web 能保存带 label/topic 条件的 Saved View）；批注 Artifact 目标与正文片段字符级锚点；Read State 驱动的「未读」过滤。
+- 后续 Phase 2 切片候选（按 PRD 顺序）：Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；Topic/Entity/用户组织/看板流程的人工验收留待后续。
+- 已知待补：多个 Feed Block 的独立取数（当前只有第一个渲染真实阅读流）；拖拽排序；批注 Artifact 目标与正文片段字符级锚点；Read State 驱动的「未读」过滤；相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）。
 
 ## 已完成
 

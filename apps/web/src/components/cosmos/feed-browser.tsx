@@ -3,7 +3,7 @@ import type { FormEventHandler, ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
-import type { FeedItem, SearchQuery, SourceSnapshot } from "@cosmos/contracts";
+import type { FeedItem, LabelRef, SearchQuery, SourceSnapshot, TopicSummary } from "@cosmos/contracts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,9 @@ export const searchSchema = z.object({
     sourceId: z.string().default(""),
     publishedAfter: z.string().default(""),
     publishedBefore: z.string().default(""),
+    /** 分类（Label）与 Topic 是多选筛选，条件本身存 id 数组，提交时再拼成 search 的逗号串。 */
+    labelIds: z.array(z.string()).default([]),
+    topicIds: z.array(z.string()).default([]),
 });
 
 export type SearchFormValues = z.input<typeof searchSchema>;
@@ -93,6 +96,8 @@ function formatFeedDate(value: string | null | undefined): string | null {
 type FeedBrowserProps = {
     activeSearch?: SearchQuery | null;
     feed: readonly FeedItem[];
+    /** 分类筛选入口：列出全部标签，点选即按分类浏览。 */
+    labels?: readonly LabelRef[];
     loading: boolean;
     loadingMore?: boolean;
     nextCursor: string | null;
@@ -106,37 +111,49 @@ type FeedBrowserProps = {
     searchExtras?: ReactNode;
     searchForm: UseFormReturn<SearchFormValues>;
     sources: readonly SourceSnapshot[];
+    topics?: readonly TopicSummary[];
 };
 
 function activeFilterLabels(
     activeSearch: SearchQuery | null,
     sources: readonly SourceSnapshot[],
+    labels: readonly LabelRef[],
+    topics: readonly TopicSummary[],
 ): string[] {
     if (!activeSearch) {
         return [];
     }
-    const labels: string[] = [];
+    const chips: string[] = [];
     if (activeSearch.text) {
-        labels.push(`“${activeSearch.text}”`);
+        chips.push(`“${activeSearch.text}”`);
     }
     if (activeSearch.sourceId) {
         const source = sources.find((candidate) => candidate.id === activeSearch.sourceId);
-        labels.push(source ? `来源：${source.name}` : `来源：${activeSearch.sourceId}`);
+        chips.push(source ? `来源：${source.name}` : `来源：${activeSearch.sourceId}`);
     }
     const afterLabel = formatFeedDate(activeSearch.publishedAfter);
     if (afterLabel) {
-        labels.push(`自 ${afterLabel}`);
+        chips.push(`自 ${afterLabel}`);
     }
     const beforeLabel = formatFeedDate(activeSearch.publishedBefore);
     if (beforeLabel) {
-        labels.push(`至 ${beforeLabel}`);
+        chips.push(`至 ${beforeLabel}`);
     }
-    return labels;
+    for (const labelId of activeSearch.labelIds?.split(",").filter(Boolean) ?? []) {
+        const label = labels.find((candidate) => candidate.id === labelId);
+        chips.push(`分类：${label ? label.name : labelId}`);
+    }
+    for (const topicId of activeSearch.topicIds?.split(",").filter(Boolean) ?? []) {
+        const topic = topics.find((candidate) => candidate.id === topicId);
+        chips.push(`Topic：${topic ? topic.title : topicId}`);
+    }
+    return chips;
 }
 
 export function FeedBrowser({
     activeSearch = null,
     feed,
+    labels = [],
     loading,
     loadingMore = false,
     nextCursor,
@@ -149,8 +166,21 @@ export function FeedBrowser({
     searchExtras,
     searchForm,
     sources,
+    topics = [],
 }: FeedBrowserProps) {
-    const filterChips = activeFilterLabels(activeSearch, sources);
+    const filterChips = activeFilterLabels(activeSearch, sources, labels, topics);
+    const selectedLabelIds = searchForm.watch("labelIds") ?? [];
+    const selectedTopicIds = searchForm.watch("topicIds") ?? [];
+    const toggleSelection = (
+        field: "labelIds" | "topicIds",
+        selected: readonly string[],
+        value: string,
+    ): void => {
+        const next = selected.includes(value)
+            ? selected.filter((candidate) => candidate !== value)
+            : [...selected, value];
+        searchForm.setValue(field, next, { shouldDirty: true });
+    };
 
     return (
         <section aria-label="阅读流" className="flex flex-col gap-5">
@@ -200,6 +230,58 @@ export function FeedBrowser({
                         <Search data-icon="inline-start" />
                         搜索
                     </Button>
+                    {(labels.length > 0 || topics.length > 0) && (
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:w-full">
+                            {labels.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">分类</span>
+                                    {labels.map((label) => {
+                                        const active = selectedLabelIds.includes(label.id);
+                                        return (
+                                            <button
+                                                key={label.id}
+                                                type="button"
+                                                aria-pressed={active}
+                                                aria-label={`按分类筛选 ${label.name}`}
+                                                onClick={() => {
+                                                    toggleSelection("labelIds", selectedLabelIds, label.id);
+                                                }}
+                                                className={active
+                                                    ? "rounded-full border border-primary bg-primary/10 px-2.5 py-0.5 text-xs text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"
+                                                    : "rounded-full border bg-card px-2.5 py-0.5 text-xs hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"}
+                                            >
+                                                {label.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {topics.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Topic</span>
+                                    {topics.map((topic) => {
+                                        const active = selectedTopicIds.includes(topic.id);
+                                        return (
+                                            <button
+                                                key={topic.id}
+                                                type="button"
+                                                aria-pressed={active}
+                                                aria-label={`按 Topic 筛选 ${topic.title}`}
+                                                onClick={() => {
+                                                    toggleSelection("topicIds", selectedTopicIds, topic.id);
+                                                }}
+                                                className={active
+                                                    ? "rounded-full border border-primary bg-primary/10 px-2.5 py-0.5 text-xs text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"
+                                                    : "rounded-full border bg-card px-2.5 py-0.5 text-xs hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"}
+                                            >
+                                                {topic.title}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </form>
                 {filterChips.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2">

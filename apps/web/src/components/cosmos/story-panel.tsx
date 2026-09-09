@@ -23,6 +23,8 @@ import {
     ENTITY_TYPE_OPTIONS,
     entityTypeLabel,
 } from "@/components/cosmos/entity-panel";
+import { buildStoryTimeline, type StoryTimelineEvent } from "@/lib/story-timeline";
+import type { RelatedStory } from "@/lib/related-stories";
 
 type StoryPanelProps = {
     onClose: () => void;
@@ -53,7 +55,49 @@ type StoryPanelProps = {
     onDeleteAnnotation?: (annotationId: string) => Promise<void>;
     /** 固定到当前看板的 Spotlight 区块（ADR-0010 人工固定）。 */
     onPinToBoard?: () => Promise<void>;
+    /** 相关内容 v1（REC-008）：共享分类或共享实体的其它 Story，不是同一 Story。 */
+    relatedStories?: readonly RelatedStory[];
+    onOpenRelatedStory?: (storyId: string) => Promise<void>;
 };
+
+function formatTimelineDate(value: string | null): string {
+    if (!value) {
+        return "时间未知";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "时间未知";
+    }
+    const pad = (part: number): string => part.toString().padStart(2, "0");
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function TimelineSection({ events }: { events: readonly StoryTimelineEvent[] }) {
+    return (
+        <section aria-label="时间线" className="border-b pb-4">
+            <h3 className="font-medium">时间线（{events.length}）</h3>
+            {events.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                    本条 Story 还没有可展示的来源事件。
+                </p>
+            ) : (
+                <ol className="mt-3 flex flex-col gap-3" data-story-timeline="true">
+                    {events.map((event) => (
+                        <li key={event.id} className="flex flex-col gap-1 border-l-2 pl-3">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                <span>{formatTimelineDate(event.at)}</span>
+                                <Badge variant="secondary">{event.kind}</Badge>
+                                <span>{event.sourceName}</span>
+                                {event.detail && <span>· {event.detail}</span>}
+                            </div>
+                            <p className="truncate text-sm">{event.title}</p>
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </section>
+    );
+}
 
 function EntityRow({
     link,
@@ -214,6 +258,8 @@ export function StoryPanel({
     onUpdateAnnotation,
     onDeleteAnnotation,
     onPinToBoard,
+    relatedStories = [],
+    onOpenRelatedStory,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -261,6 +307,7 @@ export function StoryPanel({
 
     const currentRevision = story.entry.revisions[0];
     const currentWebUrl = currentRevision?.webUrl ?? null;
+    const timeline = buildStoryTimeline(story);
     const submitRevisionUpdate: FormEventHandler = async (event) => {
         event.preventDefault();
         const normalized = title.trim();
@@ -642,6 +689,40 @@ export function StoryPanel({
                                         {member.sourceName} ·{" "}
                                         {member.revisions[0]?.title ?? "无标题"} ·{" "}
                                         {member.id}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+                    <TimelineSection events={timeline} />
+                    <section aria-label="相关内容" className="border-b pb-4">
+                        <h3 className="font-medium">相关内容（{relatedStories.length}）</h3>
+                        {relatedStories.length === 0 ? (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                暂无相关但不同事件的 Story；给本条 Story 添加分类或关联 Entity 后会自动出现。
+                            </p>
+                        ) : (
+                            <ul className="mt-2 grid gap-2" data-story-related="true">
+                                {relatedStories.map((item) => (
+                                    <li
+                                        key={item.storyId}
+                                        className="flex flex-col gap-0.5 rounded-sm border bg-muted/40 px-3 py-2"
+                                    >
+                                        <button
+                                            type="button"
+                                            disabled={!onOpenRelatedStory || busy}
+                                            onClick={() => {
+                                                if (onOpenRelatedStory) {
+                                                    void onOpenRelatedStory(item.storyId);
+                                                }
+                                            }}
+                                            className="rounded-sm text-left text-sm hover:text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
+                                        >
+                                            {item.title}
+                                        </button>
+                                        <span className="text-xs text-muted-foreground">
+                                            {item.reason} · {item.storyId}
+                                        </span>
                                     </li>
                                 ))}
                             </ul>

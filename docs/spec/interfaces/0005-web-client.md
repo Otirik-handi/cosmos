@@ -2,13 +2,14 @@
 
 ## 状态
 
-当前实现规格；后续代码变化应同步更新本文。本文记录当前 Phase 1 Next.js Web 页面、
-开发态 React 组件实验室及其与 Product API 的边界。实验室浏览器/生产验收结果只在本轮 Task
-与 `PROJECT-STATUS.md` 记录，不把 Docker、真实来源或 Windows smoke 写成已验证能力。
+当前实现规格；后续代码变化应同步更新本文。本文记录当前 Next.js Web 页面（Phase 1 采集
+链路与 Phase 2 组织/看板浏览）、开发态 React 组件实验室及其与 Product API 的边界。实验室
+浏览器/生产验收结果只在本轮 Task 与 `PROJECT-STATUS.md` 记录，不把 Docker、真实来源或
+Windows smoke 写成已验证能力。
 
 ## 最后更新
 
-2026-09-03。
+2026-09-09。
 
 ## 组件定位
 
@@ -63,6 +64,14 @@ Asset download 中未被 client 封装的部分不由它承担。
   （启用+定时显示“每 N 自动抓取”；启用无定时显示“未配置定时，仅手动录入”；停用显示
   “已停用，定时抓取暂停”或“已停用”）、上次运行时间与最近错误。它不新增合同，全部
   投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/lastRunAt/lastError`。
+- **分类（Label）与 Topic 筛选**：搜索表单把已加载的 Label 与 Topic 渲染成可多选的筛选
+  chip；选中项以 id 数组存在表单状态里，提交时拼成 `search` 的 `labelIds`/`topicIds`
+  逗号串。它不新增合同，只是把既有 search 过滤条件接出编辑入口。
+- **Story 时间线**：由 `StoryDetail.entries` 的全部 Revision 与 Observation 展平成按时间
+  倒序的事件流（来源名、事件类型、标题、时间），纯客户端投影，不新增读合同。
+- **Story 相关内容**：与本 Story 共享分类或共享 Entity 的其它 Story，纯读组合
+  `search`/`entity`/`story` 三个既有端点，最多 5 条；只用于“相关但不同事件”的浏览提示，
+  不改变 Story 的权威关系。
 
 ## 外部行为
 首次挂载时页面将 `loading=true`，并行调用 `client.feed()`（或 active search）和
@@ -97,12 +106,16 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 5. **手动运行**：对 enabled Source 点击按钮，调用 `triggerSource(source.id)`；queued/
    running 显示 Run 已排队，随后 refresh；其它 status 显示当前状态。disabled Source
    的运行按钮不可点击。
-6. **搜索**：输入 text/source/date，日期转换为 UTC 当日开始/结束 ISO，调用 search，
-   保存 `activeSearch` 和第一页结果。无条件搜索清除 active search 语义并恢复 Feed。
+6. **搜索**：输入 text/source/date，或点选分类（Label）与 Topic 筛选 chip（多选，条件以
+   逗号串提交），日期转换为 UTC 当日开始/结束 ISO，调用 search，保存 `activeSearch` 和
+   第一页结果；筛选 chip 回显为“分类：<名称>”/“Topic：<标题>”。无条件搜索清除 active
+   search 语义并恢复 Feed。
 7. **加载更多**：有 `nextCursor` 时按当前搜索或 Feed query 追加下一页 items；没有 cursor
    不发请求。
 8. **Story 展开**：点击卡片的“打开 Story”调用 `client.story(storyId)`，在页面下方显示
-   Story title、来源成员（`entries` 全部成员，含来源名/标题/Entry id）、最新正文、
+   Story title、来源成员（`entries` 全部成员，含来源名/标题/Entry id）、时间线（成员
+   Revision 与 Observation 按时间倒序，来源名与事件类型分开表达）、相关内容（共享分类或
+   共享 Entity 的其它 Story，先渲染面板再后台补齐，读取失败只留空列表）、最新正文、
    Entry id、Revision badges 与 Observation badges。
 9. **Story 编排**：面板“Story 操作”区可编辑标题（`updateStoryRevision`，携带当前
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
@@ -139,9 +152,10 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     作者与时间，支持新建（`createAnnotation`）、编辑（`updateAnnotation`）与删除
     （`deleteAnnotation`）；写命令成功后重读该目标的批注列表。
 16. **Saved View**：搜索卡内的“已保存视图”区块由 `client.listSavedViews` 加载；点击视图名
-    把其条件回填搜索表单并以 `client.search` 套用（label/topic id 以逗号串传参，
-    `activeSearch` 同步更新，因此分页与刷新沿用同一筛选），输入名称 + “保存当前条件”调用
-    `client.createSavedView`，删除调用 `client.deleteSavedView`。保存的是查询条件而非结果快照。
+    把其条件回填搜索表单（含分类与 Topic 多选）并以 `client.search` 套用（label/topic id
+    以逗号串传参，`activeSearch` 同步更新，因此分页与刷新沿用同一筛选），输入名称 +
+    “保存当前条件”调用 `client.createSavedView`（保存表单里的全部条件，包括分类与 Topic），
+    删除调用 `client.deleteSavedView`。保存的是查询条件而非结果快照。
 17. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 18. **看板渲染（Board）**：首次挂载先 `client.ensureDefaultBoard()` 再 `client.listBoards()`（串行，避免 seed 前的空列表），把 `BoardDetail` 交给
@@ -185,6 +199,7 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
   且不含 enabled；创建后保持停用。测试配置发送
   `{sourceDefinitionRef, operationId, config}` 到 probe 端点，轮询间隔 1.5s、上限 30s。
 - Search form：text trim/max 500，sourceId、publishedAfter、publishedBefore 可为空；
+  `labelIds`/`topicIds` 为多选数组（默认空，提交时 join 成逗号串，未选中不发送该字段）；
   search command 固定 `limit: 20`。非空 date 变成 `YYYY-MM-DDT00:00:00.000Z` 或
   `YYYY-MM-DDT23:59:59.999Z`。
 - Source run：无 idempotency key 参数，transport 不发送该 header。
@@ -207,9 +222,11 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 - Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；
   ready 时按 manifest 渲染字段，测试结果区显示 running/成功统计/失败原因/超时四态。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
-  时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多。
-- Story panel：展示 title、source、revision 数、最新 revision contentText、Entry/source
-  信息、Revision/Observation badges。
+  时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多；
+  搜索表单在存在 Label/Topic 时渲染多选筛选 chip，命中条件回显为筛选 chip。
+- Story panel：展示 title、source、revision 数、来源成员、时间线（时间/事件类型/来源/标题）、
+  相关内容（标题 + 相关原因）、最新 revision contentText、Entry/source 信息、
+  Revision/Observation badges。
 
 页面使用共享 DTO 的 response shape，不在 UI 重新定义 API DTO；`readError` 对
 `CosmosTransportError` 显示 `服务请求失败（HTTP <status>）。`，其它 Error 显示 message，
@@ -355,14 +372,18 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
    来源健康行内文案跟随状态变化：停用且配置定时显示“已停用，定时抓取暂停”，启用后显示
    “每 30 分钟自动抓取”（与表单默认一致），无定时的启用来源显示“未配置定时，仅手动录入”。
 4. 输入 text/source/date 搜索，观察日期边界为 UTC 当日开始/结束、结果替换 Feed、保存
-   nextCursor；点击加载更多，观察新 items 追加而不是覆盖。
+   nextCursor；点击加载更多，观察新 items 追加而不是覆盖。点选一个分类 chip 后搜索，观察
+   请求带 `labelIds` 且筛选区回显“分类：<名称>”；把该条件保存为视图、清除筛选后套用视图，
+   观察分类条件与结果一起恢复。
 5. SSE 收到 `feed.updated.v1`、`run.queued.v1` 或 Run/Job 终态事件时观察 Feed 自动 refresh；
    收到 `run.failed.v1` 时观察失败 notice；收到
    `snapshot_required` 时只观察指定 notice、没有自动 refresh；触发 EventSource error 时观察
    “SSE 不可用”，且不发生自动重连。
-6. 点击 Story 后观察 Story title、来源成员列表、最新正文、Entry、Revision、Observation
-   展开；更新标题后标题与 Revision 变化、归并后来源成员数增加、旧 Story id 打开仍显示
-   canonical；Story 404/网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
+6. 点击 Story 后观察 Story title、来源成员列表、时间线事件（来源名 + 事件类型 + 时间）、
+   最新正文、Entry、Revision、Observation 展开；给两条 Story 打同一分类后重新打开，观察
+   “相关内容”列出对方并标注“共享分类：<名称>”，且不把当前 Story 列进自己；更新标题后标题
+   与 Revision 变化、归并后来源成员数增加、旧 Story id 打开仍显示 canonical；Story 404/
+   网络失败只显示 error，不显示空的 Story panel；点击关闭移除 panel。
 7. 点击检查服务，观察 health card 更新为 `service · workerStatus`，notice 包含
    `storageStatus`；让 health 请求非 2xx，观察 error 文本包含 HTTP status。
 8. 刷新浏览器或卸载页面，观察所有 React/SSE 状态重新初始化，且除主题偏好外没有
@@ -386,6 +407,11 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 - Web server instrumentation、logger cache、register/onRequestError：[`apps/web/src/instrumentation.ts`](../../../apps/web/src/instrumentation.ts)。
 - instrumentation lifecycle/redaction test：[`apps/web/src/instrumentation.test.ts`](../../../apps/web/src/instrumentation.test.ts)。
 - 全局 Tailwind/theme 样式：[`apps/web/src/app/globals.css`](../../../apps/web/src/app/globals.css)。
+- 时间线投影与相关内容组合：[`apps/web/src/lib/story-timeline.ts`](../../../apps/web/src/lib/story-timeline.ts)、
+  [`related-stories.ts`](../../../apps/web/src/lib/related-stories.ts) 与同目录
+  `story-timeline.test.ts`、`related-stories.test.ts`。
+- 分类/Topic 浏览、时间线与相关内容的浏览器回归：
+  [`e2e/browser/phase2-organization.spec.ts`](../../../e2e/browser/phase2-organization.spec.ts)。
 - class merge utility：[`apps/web/src/lib/utils.ts`](../../../apps/web/src/lib/utils.ts)。
 - Next rewrite/output/logging：[`apps/web/next.config.ts`](../../../apps/web/next.config.ts)。
 - Web scripts/dependencies：[`apps/web/package.json`](../../../apps/web/package.json)。
@@ -445,7 +471,7 @@ properties，不写 `:root`，因此实验室 chrome 与产品页面不受污染
 
 - 当前页面只开放 RSS 配置；不宣称浏览器端可配置 Bilibili/OpenCLI、Secret、
   Connection、Plugin、Workflow definition 或 arbitrary Action。
-- 不实现用户认证、授权、跨用户隔离、Saved View、interaction/read-state、文件上传、
+- 不实现用户认证、授权、跨用户隔离、interaction/read-state（含“未读”过滤）、文件上传、
   offline cache、service worker 或通知中心。
 - Schema 驱动表单只消费 manifest 中 string/integer 字段并按已知字段名渲染展示文案；
   其它类型的配置字段、多 operation 选择和 catalog 变更的实时刷新不在当前 UI。
