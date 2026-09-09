@@ -62,6 +62,32 @@ export const favoriteTargetTypes = [
 
 export type FavoriteTargetType = (typeof favoriteTargetTypes)[number];
 
+/**
+ * Widget types a BoardBlock can render (ADR-0010 decision 2). The list is
+ * additive only: readers degrade unknown types to a placeholder instead of
+ * failing the whole board.
+ */
+export const blockTypes = [
+    "feed",
+    "spotlight",
+    "source-health",
+    "topic-list",
+    "collection",
+] as const;
+
+export type BlockType = (typeof blockTypes)[number];
+
+/**
+ * Targets a manual spotlight placement can point at (ADR-0010 decision 3).
+ * Story and Topic exist today; Workspace/Artifact stay out until Phase 3.
+ */
+export const spotlightTargetTypes = [
+    "story",
+    "topic",
+] as const;
+
+export type SpotlightTargetType = (typeof spotlightTargetTypes)[number];
+
 export const contentKinds = [
     "post",
     "article",

@@ -47,6 +47,12 @@ import {
     type AnnotationList,
     type SavedView,
     type SavedViewList,
+    type BoardBlock,
+    type BoardDetail,
+    type BoardList,
+    type SpotlightPlacement,
+    type SpotlightPlacementList,
+    blockConfigSchemaFor,
 } from "@cosmos/contracts";
 import {
     deriveExternalKey,
@@ -58,10 +64,12 @@ import {
     fingerprintTopicRevision,
     projectEntryToStory,
     temporalProjection,
+    type BlockType,
     type EntityRelationType,
     type EntityType,
     type FavoriteTargetType,
     type NormalizedIngestItem,
+    type SpotlightTargetType,
     type TargetType,
     type TopicMemberRole,
 } from "@cosmos/domain";
@@ -74,6 +82,11 @@ import {
     AnnotationNotFoundError,
     SavedViewNotFoundError,
     CollectionNotFoundError,
+    BoardBlockNotFoundError,
+    BoardNameConflictError,
+    BoardNotFoundError,
+    BoardSectionNotFoundError,
+    SpotlightPlacementNotFoundError,
     LabelConflictError,
     LabelNotFoundError,
     SourceNotFoundError,
@@ -2158,6 +2171,44 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         data: { targetId: canonicalStoryId },
                     });
                 }
+                // Spotlight placements are keyed by (board, targetType, targetId):
+                // move them to the canonical Story, dropping a placement that
+                // would collide on the same board (ADR-0010 decision 3).
+                const obsoletePlacements = await tx.spotlightPlacement.findMany({
+                    where: { targetType: "story", targetId: obsoleteStoryId },
+                });
+                for (const placement of obsoletePlacements) {
+                    const existing = await tx.spotlightPlacement.findUnique({
+                        where: {
+                            boardId_targetType_targetId: {
+                                boardId: placement.boardId,
+                                targetType: "story",
+                                targetId: canonicalStoryId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.spotlightPlacement.update({
+                            where: { id: placement.id },
+                            data: { targetId: canonicalStoryId },
+                        });
+                    } else {
+                        await tx.spotlightPlacement.delete({ where: { id: placement.id } });
+                        await appendDomainEvent(tx, {
+                            type: "spotlight.placement_merged.v1",
+                            aggregateType: "Story",
+                            aggregateId: canonicalStoryId,
+                            payload: {
+                                placementId: placement.id,
+                                boardId: placement.boardId,
+                                obsoleteStoryId,
+                                canonicalStoryId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
                 await tx.storyAlias.create({
                     data: { id: obsoleteStoryId, canonicalStoryId },
                 });
@@ -2578,6 +2629,43 @@ export class PrismaCosmosRepository implements CosmosRepository {
                                 obsoleteTopicId,
                                 canonicalTopicId,
                                 storyId: membership.storyId,
+                                actor: input.actor ?? null,
+                                reason: input.reason ?? null,
+                            },
+                        });
+                    }
+                }
+                // Spotlight placements keyed by Topic id follow the merge and
+                // collapse on a same-board collision (ADR-0010 decision 3).
+                const obsoletePlacements = await tx.spotlightPlacement.findMany({
+                    where: { targetType: "topic", targetId: obsoleteTopicId },
+                });
+                for (const placement of obsoletePlacements) {
+                    const existing = await tx.spotlightPlacement.findUnique({
+                        where: {
+                            boardId_targetType_targetId: {
+                                boardId: placement.boardId,
+                                targetType: "topic",
+                                targetId: canonicalTopicId,
+                            },
+                        },
+                    });
+                    if (!existing) {
+                        await tx.spotlightPlacement.update({
+                            where: { id: placement.id },
+                            data: { targetId: canonicalTopicId },
+                        });
+                    } else {
+                        await tx.spotlightPlacement.delete({ where: { id: placement.id } });
+                        await appendDomainEvent(tx, {
+                            type: "spotlight.placement_merged.v1",
+                            aggregateType: "Topic",
+                            aggregateId: canonicalTopicId,
+                            payload: {
+                                placementId: placement.id,
+                                boardId: placement.boardId,
+                                obsoleteTopicId,
+                                canonicalTopicId,
                                 actor: input.actor ?? null,
                                 reason: input.reason ?? null,
                             },
@@ -4151,6 +4239,710 @@ export class PrismaCosmosRepository implements CosmosRepository {
         return { items: rows.map((row) => toSavedView(row)) };
     }
 
+    // ------------------------------------------------------------------
+    // Configurable dashboard (ADR-0010). Block config is validated against
+    // the contracts whitelist at this boundary too: the API already rejects
+    // mismatches as 400s, so a ZodError escaping from here means a bug.
+    // ------------------------------------------------------------------
+
+    async listBoards(): Promise<BoardList> {
+        const boards = await this.prisma.board.findMany({
+            orderBy: { createdAt: "asc" },
+            include: { _count: { select: { sections: true } } },
+        });
+        return {
+            items: boards.map((board) => ({
+                id: board.id,
+                name: board.name,
+                description: board.description,
+                sectionCount: board._count.sections,
+                createdAt: board.createdAt.toISOString(),
+                updatedAt: board.updatedAt.toISOString(),
+            })),
+        };
+    }
+
+    async getBoard(boardId: string): Promise<BoardDetail | null> {
+        return this.loadBoardDetail(boardId);
+    }
+
+    async createBoard(input: {
+        name: string;
+        description?: string | null;
+    }): Promise<BoardDetail> {
+        const created = await this.prisma.$transaction(async (tx) => {
+            const row = await tx.board.create({
+                data: { name: input.name, description: input.description ?? null },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.created.v1",
+                aggregateType: "Board",
+                aggregateId: row.id,
+                payload: { boardId: row.id, name: row.name },
+            });
+            return row;
+        }).catch((error) => {
+            if (isUniqueConstraintError(error)) {
+                throw new BoardNameConflictError(input.name);
+            }
+            throw error;
+        });
+        return this.requireBoardDetail(created.id);
+    }
+
+    async updateBoard(input: {
+        boardId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<BoardDetail> {
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.board.findUnique({
+                where: { id: input.boardId },
+                select: { id: true },
+            });
+            if (!existing) {
+                throw new BoardNotFoundError(input.boardId);
+            }
+            await tx.board.update({
+                where: { id: input.boardId },
+                data: { name: input.name, description: input.description ?? null },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.updated.v1",
+                aggregateType: "Board",
+                aggregateId: input.boardId,
+                payload: { boardId: input.boardId, name: input.name },
+            });
+        }).catch((error) => {
+            if (isUniqueConstraintError(error)) {
+                throw new BoardNameConflictError(input.name);
+            }
+            throw error;
+        });
+        return this.requireBoardDetail(input.boardId);
+    }
+
+    async deleteBoard(boardId: string): Promise<void> {
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.board.findUnique({
+                where: { id: boardId },
+                select: { id: true },
+            });
+            if (!existing) {
+                throw new BoardNotFoundError(boardId);
+            }
+            // Cascade removes sections and blocks; content objects are not
+            // referenced by FK, so nothing user-owned is deleted (ADR-0010).
+            await tx.board.delete({ where: { id: boardId } });
+            await appendDomainEvent(tx, {
+                type: "board.deleted.v1",
+                aggregateType: "Board",
+                aggregateId: boardId,
+                payload: { boardId },
+            });
+        });
+    }
+
+    async createSection(input: {
+        boardId: string;
+        title: string;
+        position?: number | null;
+    }): Promise<BoardDetail> {
+        await this.prisma.$transaction(async (tx) => {
+            const board = await tx.board.findUnique({
+                where: { id: input.boardId },
+                select: { id: true },
+            });
+            if (!board) {
+                throw new BoardNotFoundError(input.boardId);
+            }
+            const last = await tx.boardSection.aggregate({
+                where: { boardId: input.boardId },
+                _max: { position: true },
+            });
+            const position = input.position ?? (last._max.position ?? -1) + 1;
+            await tx.boardSection.updateMany({
+                where: { boardId: input.boardId, position: { gte: position } },
+                data: { position: { increment: 1 } },
+            });
+            const row = await tx.boardSection.create({
+                data: { boardId: input.boardId, title: input.title, position },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.section.created.v1",
+                aggregateType: "BoardSection",
+                aggregateId: row.id,
+                payload: { boardId: input.boardId, sectionId: row.id, title: row.title },
+            });
+        });
+        return this.requireBoardDetail(input.boardId);
+    }
+
+    async updateSection(input: {
+        sectionId: string;
+        title: string;
+        position?: number | null;
+    }): Promise<BoardDetail> {
+        const boardId = await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.boardSection.findUnique({
+                where: { id: input.sectionId },
+                select: { boardId: true, position: true },
+            });
+            if (!existing) {
+                throw new BoardSectionNotFoundError(input.sectionId);
+            }
+            if (input.position != null && input.position !== existing.position) {
+                // Re-sequence the board in memory and write back only changed
+                // rows, same shape as moveBlock.
+                const sections = await tx.boardSection.findMany({
+                    where: { boardId: existing.boardId },
+                    orderBy: { position: "asc" },
+                });
+                const others = sections.filter((section) => section.id !== input.sectionId);
+                const insertAt = Math.min(Math.max(input.position, 0), others.length);
+                const positionById = new Map(others.map((section) => [section.id, section.position]));
+                const orderedIds = others.map((section) => section.id);
+                orderedIds.splice(insertAt, 0, input.sectionId);
+                for (const [index, id] of orderedIds.entries()) {
+                    if (id === input.sectionId) {
+                        await tx.boardSection.update({
+                            where: { id },
+                            data: { position: index },
+                        });
+                        continue;
+                    }
+                    if (positionById.get(id) !== index) {
+                        await tx.boardSection.update({
+                            where: { id },
+                            data: { position: index },
+                        });
+                    }
+                }
+            }
+            await tx.boardSection.update({
+                where: { id: input.sectionId },
+                data: { title: input.title },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.section.updated.v1",
+                aggregateType: "BoardSection",
+                aggregateId: input.sectionId,
+                payload: { sectionId: input.sectionId, title: input.title },
+            });
+            return existing.boardId;
+        });
+        return this.requireBoardDetail(boardId);
+    }
+
+    async deleteSection(sectionId: string): Promise<void> {
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.boardSection.findUnique({
+                where: { id: sectionId },
+                select: { id: true },
+            });
+            if (!existing) {
+                throw new BoardSectionNotFoundError(sectionId);
+            }
+            await tx.boardSection.delete({ where: { id: sectionId } });
+            await appendDomainEvent(tx, {
+                type: "board.section.deleted.v1",
+                aggregateType: "BoardSection",
+                aggregateId: sectionId,
+                payload: { sectionId },
+            });
+        });
+    }
+
+    async createBlock(input: {
+        sectionId: string;
+        type: BlockType;
+        config: Record<string, unknown>;
+        position?: number | null;
+    }): Promise<BoardDetail> {
+        const configJson = stringifyBlockConfig(input.type, input.config);
+        const boardId = await this.prisma.$transaction(async (tx) => {
+            const section = await tx.boardSection.findUnique({
+                where: { id: input.sectionId },
+                select: { boardId: true },
+            });
+            if (!section) {
+                throw new BoardSectionNotFoundError(input.sectionId);
+            }
+            const last = await tx.boardBlock.aggregate({
+                where: { sectionId: input.sectionId },
+                _max: { position: true },
+            });
+            const position = input.position ?? (last._max.position ?? -1) + 1;
+            await tx.boardBlock.updateMany({
+                where: { sectionId: input.sectionId, position: { gte: position } },
+                data: { position: { increment: 1 } },
+            });
+            const row = await tx.boardBlock.create({
+                data: {
+                    sectionId: input.sectionId,
+                    type: input.type,
+                    configJson,
+                    position,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.block.created.v1",
+                aggregateType: "BoardBlock",
+                aggregateId: row.id,
+                payload: {
+                    sectionId: input.sectionId,
+                    blockId: row.id,
+                    blockType: input.type,
+                },
+            });
+            return section.boardId;
+        });
+        return this.requireBoardDetail(boardId);
+    }
+
+    async updateBlockConfig(input: {
+        blockId: string;
+        config: Record<string, unknown>;
+    }): Promise<BoardDetail> {
+        const boardId = await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.boardBlock.findUnique({
+                where: { id: input.blockId },
+                select: { type: true, section: { select: { boardId: true } } },
+            });
+            if (!existing) {
+                throw new BoardBlockNotFoundError(input.blockId);
+            }
+            const configJson = stringifyBlockConfig(existing.type, input.config);
+            await tx.boardBlock.update({
+                where: { id: input.blockId },
+                data: { configJson },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.block.config_updated.v1",
+                aggregateType: "BoardBlock",
+                aggregateId: input.blockId,
+                payload: { blockId: input.blockId, blockType: existing.type },
+            });
+            return existing.section.boardId;
+        });
+        return this.requireBoardDetail(boardId);
+    }
+
+    async moveBlock(input: {
+        blockId: string;
+        sectionId?: string | null;
+        position: number;
+    }): Promise<BoardDetail> {
+        const boardId = await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.boardBlock.findUnique({
+                where: { id: input.blockId },
+                select: { sectionId: true, section: { select: { boardId: true } } },
+            });
+            if (!existing) {
+                throw new BoardBlockNotFoundError(input.blockId);
+            }
+            const targetSectionId = input.sectionId ?? existing.sectionId;
+            if (input.sectionId != null && input.sectionId !== existing.sectionId) {
+                const targetSection = await tx.boardSection.findUnique({
+                    where: { id: input.sectionId },
+                    select: { id: true },
+                });
+                if (!targetSection) {
+                    throw new BoardSectionNotFoundError(input.sectionId);
+                }
+            }
+            // Re-sequence the target section in memory (boards are small) and
+            // write back only changed positions.
+            const targetBlocks = await tx.boardBlock.findMany({
+                where: { sectionId: targetSectionId },
+                orderBy: { position: "asc" },
+            });
+            const others = targetBlocks.filter((block) => block.id !== input.blockId);
+            const insertAt = Math.min(Math.max(input.position, 0), others.length);
+            const positionById = new Map(others.map((block) => [block.id, block.position]));
+            const orderedIds = others.map((block) => block.id);
+            orderedIds.splice(insertAt, 0, input.blockId);
+            for (const [index, id] of orderedIds.entries()) {
+                if (id === input.blockId) {
+                    await tx.boardBlock.update({
+                        where: { id },
+                        data: { sectionId: targetSectionId, position: index },
+                    });
+                    continue;
+                }
+                if (positionById.get(id) !== index) {
+                    await tx.boardBlock.update({
+                        where: { id },
+                        data: { position: index },
+                    });
+                }
+            }
+            if (existing.sectionId !== targetSectionId) {
+                const remaining = await tx.boardBlock.findMany({
+                    where: { sectionId: existing.sectionId },
+                    orderBy: { position: "asc" },
+                });
+                for (const [index, block] of remaining.entries()) {
+                    if (block.position !== index) {
+                        await tx.boardBlock.update({
+                            where: { id: block.id },
+                            data: { position: index },
+                        });
+                    }
+                }
+            }
+            await appendDomainEvent(tx, {
+                type: "board.block.moved.v1",
+                aggregateType: "BoardBlock",
+                aggregateId: input.blockId,
+                payload: {
+                    blockId: input.blockId,
+                    sectionId: targetSectionId,
+                    position: insertAt,
+                },
+            });
+            return existing.section.boardId;
+        });
+        return this.requireBoardDetail(boardId);
+    }
+
+    async setBlockVisibility(input: {
+        blockId: string;
+        visible: boolean;
+    }): Promise<BoardDetail> {
+        const boardId = await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.boardBlock.findUnique({
+                where: { id: input.blockId },
+                select: { section: { select: { boardId: true } } },
+            });
+            if (!existing) {
+                throw new BoardBlockNotFoundError(input.blockId);
+            }
+            // Hidden ≠ deleted: the row stays so the block can be restored.
+            await tx.boardBlock.update({
+                where: { id: input.blockId },
+                data: { visible: input.visible },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.block.visibility_updated.v1",
+                aggregateType: "BoardBlock",
+                aggregateId: input.blockId,
+                payload: { blockId: input.blockId, visible: input.visible },
+            });
+            return existing.section.boardId;
+        });
+        return this.requireBoardDetail(boardId);
+    }
+
+    async duplicateBlock(blockId: string): Promise<BoardDetail> {
+        const boardId = await this.prisma.$transaction(async (tx) => {
+            const original = await tx.boardBlock.findUnique({
+                where: { id: blockId },
+                select: {
+                    position: true,
+                    sectionId: true,
+                    type: true,
+                    configJson: true,
+                    section: { select: { boardId: true } },
+                },
+            });
+            if (!original) {
+                throw new BoardBlockNotFoundError(blockId);
+            }
+            // Free the slot right after the original, then copy into it.
+            await tx.boardBlock.updateMany({
+                where: { sectionId: original.sectionId, position: { gte: original.position + 1 } },
+                data: { position: { increment: 1 } },
+            });
+            const row = await tx.boardBlock.create({
+                data: {
+                    sectionId: original.sectionId,
+                    type: original.type,
+                    configJson: original.configJson,
+                    position: original.position + 1,
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.block.duplicated.v1",
+                aggregateType: "BoardBlock",
+                aggregateId: row.id,
+                payload: {
+                    sourceBlockId: blockId,
+                    blockId: row.id,
+                    blockType: original.type,
+                },
+            });
+            return original.section.boardId;
+        });
+        return this.requireBoardDetail(boardId);
+    }
+
+    async deleteBlock(blockId: string): Promise<void> {
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.boardBlock.findUnique({
+                where: { id: blockId },
+                select: { id: true },
+            });
+            if (!existing) {
+                throw new BoardBlockNotFoundError(blockId);
+            }
+            await tx.boardBlock.delete({ where: { id: blockId } });
+            await appendDomainEvent(tx, {
+                type: "board.block.deleted.v1",
+                aggregateType: "BoardBlock",
+                aggregateId: blockId,
+                payload: { blockId },
+            });
+        });
+    }
+
+    async listSpotlightPlacements(query: {
+        boardId?: string | null;
+    } = {}): Promise<SpotlightPlacementList> {
+        const rows = await this.prisma.spotlightPlacement.findMany({
+            where: query.boardId ? { boardId: query.boardId } : undefined,
+            orderBy: { createdAt: "asc" },
+        });
+        const storyIds = rows
+            .filter((row) => row.targetType === "story")
+            .map((row) => row.targetId);
+        const topicIds = rows
+            .filter((row) => row.targetType === "topic")
+            .map((row) => row.targetId);
+        const [stories, topics] = await Promise.all([
+            this.prisma.story.findMany({
+                where: { id: { in: storyIds } },
+                include: { currentRevision: { select: { title: true } } },
+            }),
+            this.prisma.topic.findMany({
+                where: { id: { in: topicIds } },
+                include: { currentRevision: { select: { title: true } } },
+            }),
+        ]);
+        const storyTitles = new Map(
+            stories.map((story) => [story.id, story.currentRevision?.title ?? null]),
+        );
+        const topicTitles = new Map(
+            topics.map((topic) => [topic.id, topic.currentRevision?.title ?? null]),
+        );
+        return {
+            items: rows.map((row) => toSpotlightPlacement(row, row.targetType === "story"
+                ? storyTitles.get(row.targetId) ?? null
+                : row.targetType === "topic"
+                    ? topicTitles.get(row.targetId) ?? null
+                    : null)),
+        };
+    }
+
+    async createSpotlightPlacement(input: {
+        boardId: string;
+        targetType: SpotlightTargetType;
+        targetId: string;
+        reason?: string | null;
+        actor?: string | null;
+    }): Promise<SpotlightPlacement> {
+        const canonicalTargetId = input.targetType === "story"
+            ? await this.resolveCanonicalStoryId(input.targetId)
+            : await this.resolveCanonicalTopicId(input.targetId);
+        if (!canonicalTargetId) {
+            throw input.targetType === "story"
+                ? new StoryNotFoundError(input.targetId)
+                : new TopicNotFoundError(input.targetId);
+        }
+        const row = await this.prisma.$transaction(async (tx) => {
+            const board = await tx.board.findUnique({
+                where: { id: input.boardId },
+                select: { id: true },
+            });
+            if (!board) {
+                throw new BoardNotFoundError(input.boardId);
+            }
+            const existing = await tx.spotlightPlacement.findUnique({
+                where: {
+                    boardId_targetType_targetId: {
+                        boardId: input.boardId,
+                        targetType: input.targetType,
+                        targetId: canonicalTargetId,
+                    },
+                },
+            });
+            // Pinning the same target on the same board is an idempotent no-op.
+            if (existing) {
+                return existing;
+            }
+            const created = await tx.spotlightPlacement.create({
+                data: {
+                    boardId: input.boardId,
+                    targetType: input.targetType,
+                    targetId: canonicalTargetId,
+                    source: "manual",
+                    reason: input.reason ?? null,
+                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
+                },
+            });
+            await appendDomainEvent(tx, {
+                type: "spotlight.placement_created.v1",
+                aggregateType: "SpotlightPlacement",
+                aggregateId: created.id,
+                payload: {
+                    placementId: created.id,
+                    boardId: created.boardId,
+                    targetType: created.targetType,
+                    targetId: created.targetId,
+                },
+            });
+            return created;
+        });
+        const targetTitle = await this.loadSpotlightTargetTitle(
+            row.targetType,
+            row.targetId,
+        );
+        return toSpotlightPlacement(row, targetTitle);
+    }
+
+    async deleteSpotlightPlacement(placementId: string): Promise<void> {
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.spotlightPlacement.findUnique({
+                where: { id: placementId },
+                select: { id: true },
+            });
+            if (!existing) {
+                throw new SpotlightPlacementNotFoundError(placementId);
+            }
+            await tx.spotlightPlacement.delete({ where: { id: placementId } });
+            await appendDomainEvent(tx, {
+                type: "spotlight.placement_deleted.v1",
+                aggregateType: "SpotlightPlacement",
+                aggregateId: placementId,
+                payload: { placementId },
+            });
+        });
+    }
+
+    private async loadSpotlightTargetTitle(
+        targetType: string,
+        targetId: string,
+    ): Promise<string | null> {
+        if (targetType === "story") {
+            const story = await this.prisma.story.findUnique({
+                where: { id: targetId },
+                include: { currentRevision: { select: { title: true } } },
+            });
+            return story?.currentRevision?.title ?? null;
+        }
+        if (targetType === "topic") {
+            const topic = await this.prisma.topic.findUnique({
+                where: { id: targetId },
+                include: { currentRevision: { select: { title: true } } },
+            });
+            return topic?.currentRevision?.title ?? null;
+        }
+        return null;
+    }
+
+    async ensureDefaultBoard(): Promise<BoardDetail> {
+        const existing = await this.prisma.board.findFirst({
+            orderBy: { createdAt: "asc" },
+            select: { id: true },
+        });
+        if (existing) {
+            return this.requireBoardDetail(existing.id);
+        }
+        const created = await this.prisma.$transaction(async (tx) => {
+            const board = await tx.board.create({
+                data: {
+                    name: "默认看板",
+                    description: "预置看板：热点、精华、信息流",
+                },
+            });
+            const hotSection = await tx.boardSection.create({
+                data: { boardId: board.id, title: "热点", position: 0 },
+            });
+            await tx.boardBlock.create({
+                data: { sectionId: hotSection.id, type: "spotlight", configJson: "{}", position: 0 },
+            });
+            const curationSection = await tx.boardSection.create({
+                data: { boardId: board.id, title: "精华", position: 1 },
+            });
+            await tx.boardBlock.create({
+                data: { sectionId: curationSection.id, type: "topic-list", configJson: "{}", position: 0 },
+            });
+            const feedSection = await tx.boardSection.create({
+                data: { boardId: board.id, title: "信息流", position: 2 },
+            });
+            await tx.boardBlock.create({
+                data: { sectionId: feedSection.id, type: "feed", configJson: "{}", position: 0 },
+            });
+            // Source health stays visible after the sidebar moved into blocks:
+            // it is operational, not content, so it sits below the feed.
+            await tx.boardBlock.create({
+                data: { sectionId: feedSection.id, type: "source-health", configJson: "{}", position: 1 },
+            });
+            await appendDomainEvent(tx, {
+                type: "board.seeded.v1",
+                aggregateType: "Board",
+                aggregateId: board.id,
+                payload: { boardId: board.id, name: board.name },
+            });
+            return board;
+        }).catch(async (error) => {
+            // Concurrent seed: the unique board name resolves the race; fall
+            // back to whichever board won.
+            if (isUniqueConstraintError(error)) {
+                const winner = await this.prisma.board.findFirst({
+                    orderBy: { createdAt: "asc" },
+                    select: { id: true },
+                });
+                if (winner) {
+                    return winner;
+                }
+            }
+            throw error;
+        });
+        return this.requireBoardDetail(created.id);
+    }
+
+    private async loadBoardDetail(boardId: string): Promise<BoardDetail | null> {
+        const board = await this.prisma.board.findUnique({
+            where: { id: boardId },
+            include: {
+                sections: {
+                    orderBy: { position: "asc" },
+                    include: {
+                        blocks: { orderBy: { position: "asc" } },
+                    },
+                },
+            },
+        });
+        if (!board) {
+            return null;
+        }
+        return {
+            id: board.id,
+            name: board.name,
+            description: board.description,
+            sections: board.sections.map((section) => ({
+                id: section.id,
+                boardId: section.boardId,
+                title: section.title,
+                position: section.position,
+                blocks: section.blocks.map(toBoardBlock),
+                createdAt: section.createdAt.toISOString(),
+                updatedAt: section.updatedAt.toISOString(),
+            })),
+            createdAt: board.createdAt.toISOString(),
+            updatedAt: board.updatedAt.toISOString(),
+        };
+    }
+
+    private async requireBoardDetail(boardId: string): Promise<BoardDetail> {
+        const detail = await this.loadBoardDetail(boardId);
+        if (!detail) {
+            throw new BoardNotFoundError(boardId);
+        }
+        return detail;
+    }
+
     private async loadCollectionSummary(collectionId: string): Promise<CollectionSummary | null> {        const row = await this.prisma.collection.findUnique({
             where: { id: collectionId },
             include: {
@@ -4942,6 +5734,73 @@ function toSavedView(row: {
         publishedBefore: row.publishedBefore,
         labelIds: parseJson<string[]>(row.labelIdsJson) ?? [],
         topicIds: parseJson<string[]>(row.topicIdsJson) ?? [],
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+    };
+}
+
+function toBoardBlock(row: {
+    id: string;
+    sectionId: string;
+    type: string;
+    configJson: string;
+    position: number;
+    visible: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}): BoardBlock {
+    const parsed = parseJson<unknown>(row.configJson);
+    const config = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {};
+    return {
+        id: row.id,
+        sectionId: row.sectionId,
+        type: row.type,
+        config,
+        position: row.position,
+        visible: row.visible,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+    };
+}
+
+/**
+ * Validate one block config against the contracts whitelist for its type and
+ * serialize it for storage. ZodError intentionally propagates: the API funnel
+ * maps it to a 400, and reaching here from storage means the API check was
+ * skipped (a bug, not a client condition).
+ */
+function stringifyBlockConfig(type: string, config: Record<string, unknown>): string {
+    const schema = blockConfigSchemaFor(type);
+    if (!schema) {
+        throw new Error(`Unknown board block type: ${type}`);
+    }
+    return JSON.stringify(schema.parse(config));
+}
+
+function toSpotlightPlacement(row: {
+    id: string;
+    boardId: string;
+    targetType: string;
+    targetId: string;
+    source: string;
+    reason: string | null;
+    actorJson: string | null;
+    expiresAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+}, targetTitle: string | null): SpotlightPlacement {
+    return {
+        id: row.id,
+        boardId: row.boardId,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        source: row.source,
+        reason: row.reason,
+        actor: row.actorJson == null ? null : parseJson<string>(row.actorJson),
+        expiresAt: row.expiresAt?.toISOString() ?? null,
+        targetTitle,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
     };

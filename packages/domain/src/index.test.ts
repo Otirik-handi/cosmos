@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    blockTypes,
     createTemporalValue,
     deriveExternalKey,
     entityRelationTypes,
@@ -81,6 +82,18 @@ describe("user organization domain semantics", () => {
         expect((favoriteTargetTypes as readonly string[]).every((value) => {
             return (targetTypes as readonly string[]).includes(value);
         })).toBe(true);
+    });
+});
+
+describe("board domain semantics", () => {
+    it("keeps the managed block type enum stable and readonly", () => {
+        expect(blockTypes).toEqual([
+            "feed",
+            "spotlight",
+            "source-health",
+            "topic-list",
+            "collection",
+        ]);
     });
 });
 

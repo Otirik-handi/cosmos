@@ -39,6 +39,10 @@ import {
     type AnnotationList,
     type SavedView,
     type SavedViewList,
+    type BoardDetail,
+    type BoardList,
+    type SpotlightPlacement,
+    type SpotlightPlacementList,
 } from "@cosmos/contracts";
 import type {
     EntityRelationType,
@@ -48,6 +52,8 @@ import type {
     StoryKind,
     TargetType,
     TopicMemberRole,
+    BlockType,
+    SpotlightTargetType,
 } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
@@ -302,6 +308,51 @@ export class SavedViewNotFoundError extends Error {
     constructor(savedViewId: string) {
         super(`Saved view not found: ${savedViewId}`);
         this.name = "SavedViewNotFoundError";
+    }
+}
+
+export class BoardNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(boardId: string) {
+        super(`Board not found: ${boardId}`);
+        this.name = "BoardNotFoundError";
+    }
+}
+
+export class BoardNameConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(name: string) {
+        super(`Board name already in use: ${name}`);
+        this.name = "BoardNameConflictError";
+    }
+}
+
+export class BoardSectionNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(sectionId: string) {
+        super(`Board section not found: ${sectionId}`);
+        this.name = "BoardSectionNotFoundError";
+    }
+}
+
+export class BoardBlockNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(blockId: string) {
+        super(`Board block not found: ${blockId}`);
+        this.name = "BoardBlockNotFoundError";
+    }
+}
+
+export class SpotlightPlacementNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(placementId: string) {
+        super(`Spotlight placement not found: ${placementId}`);
+        this.name = "SpotlightPlacementNotFoundError";
     }
 }
 
@@ -659,6 +710,71 @@ export interface CosmosRepository {
     }): Promise<SavedView | null>;
     deleteSavedView(savedViewId: string): Promise<void>;
     listSavedViews(): Promise<SavedViewList>;
+    // Board/Section/Block writes return the full board tree so a client can
+    // refresh the dashboard from one response (ADR-0010: config rows are tiny).
+    listBoards(): Promise<BoardList>;
+    getBoard(boardId: string): Promise<BoardDetail | null>;
+    createBoard(input: {
+        name: string;
+        description?: string | null;
+    }): Promise<BoardDetail>;
+    updateBoard(input: {
+        boardId: string;
+        name: string;
+        description?: string | null;
+    }): Promise<BoardDetail>;
+    deleteBoard(boardId: string): Promise<void>;
+    createSection(input: {
+        boardId: string;
+        title: string;
+        position?: number | null;
+    }): Promise<BoardDetail>;
+    updateSection(input: {
+        sectionId: string;
+        title: string;
+        position?: number | null;
+    }): Promise<BoardDetail>;
+    deleteSection(sectionId: string): Promise<void>;
+    createBlock(input: {
+        sectionId: string;
+        type: BlockType;
+        config: Record<string, unknown>;
+        position?: number | null;
+    }): Promise<BoardDetail>;
+    updateBlockConfig(input: {
+        blockId: string;
+        config: Record<string, unknown>;
+    }): Promise<BoardDetail>;
+    moveBlock(input: {
+        blockId: string;
+        sectionId?: string | null;
+        position: number;
+    }): Promise<BoardDetail>;
+    setBlockVisibility(input: {
+        blockId: string;
+        visible: boolean;
+    }): Promise<BoardDetail>;
+    duplicateBlock(blockId: string): Promise<BoardDetail>;
+    deleteBlock(blockId: string): Promise<void>;
+    /**
+     * Idempotent application-side seed (ADR-0010 decision 4): creates the
+     * default board with hot/curation/feed sections when no board exists;
+     * returns the existing or newly created default board otherwise.
+     */
+    ensureDefaultBoard(): Promise<BoardDetail>;
+    // Manual spotlight placements (ADR-0010 decision 3): pin is idempotent on
+    // (boardId, targetType, targetId); unpin removes the row.
+    listSpotlightPlacements(query?: {
+        boardId?: string | null;
+    }): Promise<SpotlightPlacementList>;
+    createSpotlightPlacement(input: {
+        boardId: string;
+        targetType: SpotlightTargetType;
+        targetId: string;
+        reason?: string | null;
+        actor?: string | null;
+    }): Promise<SpotlightPlacement>;
+    deleteSpotlightPlacement(placementId: string): Promise<void>;
     entry(entryId: string): Promise<EntryDetail | null>;
     revision(revisionId: string): Promise<RevisionDetail | null>;
     events(input: {

@@ -516,6 +516,72 @@ model SavedView {
     updatedAt         DateTime @updatedAt
 }
 
+// Configurable dashboard root. Multi-board entity with one application-seeded
+// default; editing a board never touches the content objects it displays
+// (ADR-0010 decisions 1 and 4).
+model Board {
+    id          String              @id @default(cuid())
+    name        String              @unique
+    description String?
+    createdAt   DateTime            @default(now())
+    updatedAt   DateTime            @updatedAt
+    sections    BoardSection[]
+    placements  SpotlightPlacement[]
+}
+
+// Titled block container inside a board. No kind field: the hot/curation/feed
+// difference is carried by the block types inside, not by the section.
+model BoardSection {
+    id        String       @id @default(cuid())
+    boardId   String
+    title     String
+    position  Int
+    createdAt DateTime     @default(now())
+    updatedAt DateTime     @updatedAt
+    board     Board        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+    blocks    BoardBlock[]
+
+    @@index([boardId])
+}
+
+// Typed widget inside a section. configJson is a whitelist validated per type
+// (contracts blockConfig union); unknown types degrade to a placeholder on
+// read instead of breaking the board (ADR-0010 decision 2).
+model BoardBlock {
+    id         String       @id @default(cuid())
+    sectionId  String
+    type       String
+    configJson String
+    position   Int
+    visible    Boolean      @default(true)
+    createdAt  DateTime     @default(now())
+    updatedAt  DateTime     @updatedAt
+    section    BoardSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+    @@index([sectionId])
+}
+
+// Manual spotlight pin, bound to one board (ADR-0010 decision 3). Shares the
+// placement contract with the future automatic policy: v1 only writes
+// source=manual and expiresAt=null, and unpin removes the row.
+model SpotlightPlacement {
+    id         String   @id @default(cuid())
+    boardId    String
+    targetType String
+    targetId   String
+    source     String   @default("manual")
+    reason     String?
+    actorJson  String?
+    expiresAt  DateTime?
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+    board      Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+    @@unique([boardId, targetType, targetId])
+    @@index([boardId])
+    @@index([targetType, targetId])
+}
+
 model WorkflowRun {
     id                 String                @id
     stateJson          String
