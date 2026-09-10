@@ -16,7 +16,7 @@
 
 ## Current State
 
-提案 accepted(2026-09-11);门禁已接入 CI(`size-governance.py --check`,基线 16 条);等待开始切片。
+提案 accepted(2026-09-11);门禁已接入 CI;**切片 1 已完成**(2026-09-11,未提交,待维护者审阅),基线缩减至 15 条;下一片:切片 2(Task 04 README 拆分)。
 
 ## Decisions and Deviations
 
@@ -28,7 +28,7 @@
 
 | # | 切片 | 验收(≤3 条/片) | 状态 |
 |---|---|---|---|
-| 1 | walkthrough.md:分析 Round 分布 → 历史整段移入 `walkthrough/rounds-*.md` 分册 → 主文档留当前状态 + 有效决定 + 预算内最近记录 + 索引 | 主文档 ≤30 KB;每分册 ≤30 KB;标题集合比对零丢失 | todo |
+| 1 | walkthrough.md:分析 Round 分布 → 历史整段移入 `walkthrough/rounds-*.md` 分册 → 主文档留当前状态 + 有效决定 + 预算内最近记录 + 索引 | 主文档 ≤30 KB;每分册 ≤30 KB;标题集合比对零丢失 | done(2026-09-11) |
 | 2 | README.md(04):Spike 详情按阶段拆分册,主文档留背景/目标/范围/最小合同/当前状态 | 同上 | todo |
 | 3 | PROJECT-STATUS.md:历史切片按月移入 `PROJECT-STATUS/history-*.md`,主文档留快照/风险/边界/索引,消除重复章节 | 同上;主文档开头为当前快照 | todo |
 | 4 | 架构 0001:按领域拆 `0001-cosmos-foundation/` 分册,主文档留索引 + 不变量 + 决定 | 同上;交叉引用与锚点全部修复 | todo |
@@ -41,3 +41,12 @@
 ## Follow-ups
 
 索引自动生成脚本(按分册 front matter);`lychee` 死链检查评估;基线清空后豁免清单复审。
+
+## 过程记录(append-only)
+
+### 2026-09-11 切片 1:walkthrough.md 拆分
+
+- 原 349 KB / 9055 行 / 109 节 → 主文档 337 行 / 16.4 KB(估算 4979 token,健康区)+ 16 个分册 `walkthrough/rounds-*.md`(每册正文 15.7~23.2 KB,tokens_est ≤7028,全部健康区)。
+- 主文档保留 Round 107–108(文件顺序上最新的两轮)+ 历史分册索引表;分册按大小切(23 KB 字节预算,为 9k token 红线留余量)。非单调 Round 编号(89–91 插在 11 与 14 之间)按文件内实际顺序切分:分册名编码 min–max Round 号,front matter `range` 记录精确区段(如 `Round 11–14、Round 89–91`)。
+- 验证:节标题多重集守恒(109/109);行级多重集守恒(原文零丢失,新增 152 行 = 各分册 front matter + 主文档索引节);全仓无 `walkthrough.md#` 锚点引用,外部链接不受影响;门禁 `--check --fail-on-new` PASS,基线移除 walkthrough 条目(16 → 15,只减不增)。
+- 工具:`.agent/tmp/split-walkthrough.py`(一次性切分脚本,临时目录不入库;切片 2–4 可复用其分组与守恒校验逻辑)。

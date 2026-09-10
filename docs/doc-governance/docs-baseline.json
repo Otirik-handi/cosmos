@@ -1,11 +1,10 @@
 {
   "version": 1,
   "generated": "2026-09-11",
-  "note": "存量超标登记，只减不增：条目只允许移除，bytes 只允许下调",
+  "note": "存量超标登记,只减不增:条目只允许移除,bytes 只允许下调",
   "files": {
     ".agents/tasks/02-rss-ingestion/README.md": 58746,
     ".agents/tasks/04-workflow-runtime/README.md": 158466,
-    ".agents/tasks/04-workflow-runtime/walkthrough.md": 357762,
     ".agents/tasks/07-deferred-workflow-host/walkthrough.md": 41123,
     "CONTEXT.md": 38133,
     "PROJECT-STATUS.md": 112029,
