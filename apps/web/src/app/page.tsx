@@ -102,15 +102,17 @@ const PROBE_POLL_INTERVAL_MS = 1_500;
 const PROBE_POLL_TIMEOUT_MS = 30_000;
 
 /**
- * 表单里的定时以“分钟”输入，保存为 canonical 合同的 scheduleIntervalMs；
- * 清空表示关闭定时，与 schema 的 union("") 分支一致。
+ * 表单里的定时以“分钟”输入，保存为 canonical 合同的 scheduleIntervalMs
+ * （ADR-0018：定时是 TriggerBinding，不再写进 config）；清空表示关闭定时。
  */
 function toSourceConfig(values: SourceFormValues): Record<string, unknown> {
-    const config: Record<string, unknown> = { feedUrl: values.feedUrl.trim() };
-    if (values.scheduleIntervalMinutes !== "") {
-        config.scheduleIntervalMs = Number(values.scheduleIntervalMinutes) * 60_000;
-    }
-    return config;
+    return { feedUrl: values.feedUrl.trim() };
+}
+
+function toScheduleIntervalMs(values: SourceFormValues): number | undefined {
+    return values.scheduleIntervalMinutes !== ""
+        ? Number(values.scheduleIntervalMinutes) * 60_000
+        : undefined;
 }
 
 function delay(ms: number): Promise<void> {
@@ -480,6 +482,7 @@ export default function Home() {
                 sourceDefinitionRef: RSS_SOURCE_DEFINITION_REF,
                 operationId: RSS_OPERATION_ID,
                 config: toSourceConfig(values),
+                scheduleIntervalMs: toScheduleIntervalMs(values),
             }));
             setNotice("来源已保存，当前为停用状态；在“来源健康”列表中启用后开始抓取。");
             setShowSourceForm(false);

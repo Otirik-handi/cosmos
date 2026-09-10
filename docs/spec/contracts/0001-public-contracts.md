@@ -50,7 +50,8 @@
 - 各 Source definition 的 canonical 配置校验由 `getSourceConfigurationSchema(ref)` 返回的 strict Zod schema 负责：RSS 要求 http(s) 的 `feedUrl` 并接受可选 `media`；fixture RSS 仅接受调度字段；Bilibili 要求 `mode` 且 `mode=feed` 时必须提供 profile；AI HOT 接受调度字段。manifest 的 JSON Schema 只是发布投影（`source.rss@1` 的描述里同步声明了 `media`）。
 - **revisionId** 形如 `<sourceId>:<revision>`；创建默认停用并从 revision 1 开始。**SourceActivationCommand** 为 `{ enabled, baseRevisionId }`，配合唯一 `Idempotency-Key` 使用：同 key 同请求重放返回首次记录的结果快照，同 key 不同请求或过期 baseRevision 返回冲突，无状态变化的 no-op 记录命令但不递增 revision。
 - **CreateSourceCommand**：strict 的 `name`（trim 后 1–200 字符）、`sourceDefinitionRef`、`operationId` 和 `config`，不接受 `enabled`。**UpdateSourceCommand**：必填 `baseRevisionId` 加可选 `name` 与完整替换的 `config`。
-- **SourceExecutionSnapshot** 冻结 `id`、`name`、`sourceDefinitionRef`、`operationId`、`connectorId`、迁移投影 `kind`、`config`、`enabled`、`revisionId`、`createdAt`、`updatedAt`。**SourceSnapshot** 在同一字段上增加可变诊断 `lastRunAt` 和 `lastError`，二者可空。
+- **SourceExecutionSnapshot** 冻结 `id`、`name`、`sourceDefinitionRef`、`operationId`、`connectorId`、迁移投影 `kind`、`config`、`enabled`、`revisionId`、`createdAt`、`updatedAt`。**SourceSnapshot** 在同一字段上增加可变诊断 `lastRunAt`、`lastError`、可选 `connectionId`（ADR-0017）与可选 `scheduleIntervalMs`（ADR-0018，来自 TriggerBinding）。
+- **TriggerBinding（ADR-0018）**：`id`、`sourceId`、`kind`（`schedule`/`manual`）、`config`（`{ intervalMs? }`）、`enabled`、`revisionId`、`createdAt`/`updatedAt`。`CreateSourceCommand`/`UpdateSourceCommand` 用顶层可选 `scheduleIntervalMs`（update 可 null 移除）。`SourceDefinitionManifest` 新增 `auth`（`none|oauth|cookie|secret_ref|external` + `secretRefRequired`）与 `operations`（operationId、input/output schema、external key、discovery context、media、stateStore 命名空间）。
 - **SourceProbeResult**：`sourceId`、`connectorId`、非负整数 `itemCount`、`nextCursorAvailable` 和 `checkedAt`。
 - **IngestCommand**：非空 `sourceId`、`triggerKind`（`manual`/`schedule`，默认 `manual`）和可选幂等键；幂等键 trim 后 1 至 300 个字符。
 

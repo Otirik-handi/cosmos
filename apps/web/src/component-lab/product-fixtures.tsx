@@ -120,12 +120,21 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
             type: "object",
             properties: {
                 feedUrl: {type: "string", format: "uri"},
-                scheduleIntervalMs: {type: "integer", minimum: 1000, maximum: 2678400000},
             },
             required: ["feedUrl"],
             additionalProperties: false,
         },
     },
+    auth: {kind: "none", label: null, secretRefRequired: false},
+    operations: [{
+        operationId: "fetch",
+        inputSchema: {id: "source.rss.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.input@1"}},
+        outputSchema: {id: "source.rss.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.output@1"}},
+        externalKey: "url",
+        discoveryContext: "",
+        media: "download",
+        stateStoreNamespace: "source:{id}",
+    }],
 };
 
 const labProbeResult: SourceConfigProbeResult = {
@@ -229,17 +238,17 @@ export function renderSourceActionsLab(props: LabProps) {
             operationId: "fetch",
             connectorId: "fixture-rss",
             kind: "fixture-rss",
-            config: state === "untimed"
-                ? {}
-                : state === "media-policy"
-                    ? { scheduleIntervalMs: 1_800_000, media: { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } }
-                    : { scheduleIntervalMs: 1_800_000 },
+            config: state === "media-policy"
+                ? { media: { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } }
+                : {},
             enabled: state !== "disabled" && booleanProp(props, "enabled", true),
             revisionId: "source-fixture:1",
             createdAt: fixtureTimestamp,
             updatedAt: fixtureTimestamp,
             lastRunAt: null,
             lastError: state === "disabled" ? "Fixture source disabled" : null,
+            connectionId: null,
+            scheduleIntervalMs: state === "untimed" ? null : 1_800_000,
         }];
     return (
         <SourceActions

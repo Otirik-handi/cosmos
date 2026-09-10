@@ -270,16 +270,30 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (!manifest || manifest.status !== "enabled" || !manifest.operationIds.includes(input.operationId)) {
             throw new Error(`Source definition is not available: ${input.sourceDefinitionRef}`);
         }
-        const source = await this.prisma.sourceInstance.create({
-            data: {
-                name: input.name,
-                kind: manifest.id,
-                sourceDefinitionRef: manifest.ref,
-                operationId: input.operationId,
-                configJson: JSON.stringify(input.config),
-                enabled: false,
-                revision: 1,
-            },
+        const source = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.sourceInstance.create({
+                data: {
+                    name: input.name,
+                    kind: manifest.id,
+                    sourceDefinitionRef: manifest.ref,
+                    operationId: input.operationId,
+                    configJson: JSON.stringify(input.config),
+                    enabled: false,
+                    revision: 1,
+                },
+            });
+            if (input.scheduleIntervalMs !== undefined) {
+                await tx.triggerBinding.create({
+                    data: {
+                        sourceId: created.id,
+                        kind: "schedule",
+                        configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
+                        enabled: true,
+                        revision: 1,
+                    },
+                });
+            }
+            return created;
         });
         return this.toSourceSnapshot(source);
     }
@@ -302,16 +316,38 @@ export class PrismaCosmosRepository implements CosmosRepository {
         const expectedRevision = parseSourceRevisionId(sourceId, input.baseRevisionId);
         const current = await this.prisma.sourceInstance.findUnique({ where: { id: sourceId } });
         if (!current) throw new SourceNotFoundError(sourceId);
-        const updated = await this.prisma.sourceInstance.updateMany({
-            where: { id: sourceId, revision: expectedRevision },
-            data: {
-                ...(input.name !== undefined ? { name: input.name } : {}),
-                ...(input.config !== undefined ? { configJson: JSON.stringify(input.config) } : {}),
-                ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
-                revision: { increment: 1 },
-            },
+        await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.sourceInstance.updateMany({
+                where: { id: sourceId, revision: expectedRevision },
+                data: {
+                    ...(input.name !== undefined ? { name: input.name } : {}),
+                    ...(input.config !== undefined ? { configJson: JSON.stringify(input.config) } : {}),
+                    ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
+                    revision: { increment: 1 },
+                },
+            });
+            if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
+            if (input.scheduleIntervalMs !== undefined) {
+                if (input.scheduleIntervalMs === null) {
+                    await tx.triggerBinding.deleteMany({ where: { sourceId } });
+                } else {
+                    await tx.triggerBinding.upsert({
+                        where: { sourceId },
+                        create: {
+                            sourceId,
+                            kind: "schedule",
+                            configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
+                            enabled: true,
+                            revision: 1,
+                        },
+                        update: {
+                            configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
+                            revision: { increment: 1 },
+                        },
+                    });
+                }
+            }
         });
-        if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
         return this.toSourceSnapshot(await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: sourceId } }));
     }
 
@@ -449,6 +485,34 @@ export class PrismaCosmosRepository implements CosmosRepository {
             await tx.connectionInstance.delete({ where: { id: connectionId } });
         });
         return true;
+    }
+
+    async listScheduleTriggers(): Promise<readonly {
+        sourceId: string;
+        intervalMs: number;
+        lastRunAt: string | null;
+    }[]> {
+        const bindings = await this.prisma.triggerBinding.findMany({
+            where: { kind: "schedule", enabled: true },
+            include: { source: { select: { id: true, enabled: true } } },
+        });
+        const result: { sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
+        for (const binding of bindings) {
+            if (!binding.source.enabled) continue;
+            const config = JSON.parse(binding.configJson) as { intervalMs?: number };
+            if (typeof config.intervalMs !== "number") continue;
+            const latest = await this.prisma.workflowRun.findFirst({
+                where: { sourceInstanceId: binding.sourceId },
+                orderBy: { createdAt: "desc" },
+                select: { finishedAt: true, createdAt: true },
+            });
+            result.push({
+                sourceId: binding.sourceId,
+                intervalMs: config.intervalMs,
+                lastRunAt: latest ? (latest.finishedAt ?? latest.createdAt).toISOString() : null,
+            });
+        }
+        return result;
     }
 
     async createRun(input: {
@@ -6207,6 +6271,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
         if (!manifest || manifest.id !== source.kind || !manifest.operationIds.includes(source.operationId)) {
             throw new Error(`Source definition mapping is invalid: ${source.sourceDefinitionRef}`);
         }
+        const trigger = await db.triggerBinding.findUnique({ where: { sourceId: source.id } });
+        const triggerConfig = trigger ? JSON.parse(trigger.configJson) as { intervalMs?: number } : null;
         return {
             id: source.id,
             name: source.name,
@@ -6222,6 +6288,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             lastRunAt: latest?.at.toISOString() ?? null,
             lastError: latest?.error ?? null,
             connectionId: source.connectionId,
+            scheduleIntervalMs: typeof triggerConfig?.intervalMs === "number" ? triggerConfig.intervalMs : null,
         };
     }
 

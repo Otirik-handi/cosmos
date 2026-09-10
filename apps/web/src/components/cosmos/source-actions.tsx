@@ -49,7 +49,7 @@ function formatLastRun(value: string | null): string {
  * 表单入口只允许整数分钟，秒/小时/天分支覆盖 API 直接创建的非整分钟配置。
  */
 function scheduleLine(source: SourceSnapshot): string {
-    const interval = source.config.scheduleIntervalMs;
+    const interval = source.scheduleIntervalMs ?? null;
     if (!source.enabled) {
         return interval ? "已停用，定时抓取暂停" : "已停用";
     }

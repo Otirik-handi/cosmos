@@ -808,6 +808,16 @@ describe("source definition catalog contracts", () => {
                 required: ["feedUrl"],
             },
         },
+        auth: { kind: "none", label: null, secretRefRequired: false },
+        operations: [{
+            operationId: "fetch",
+            inputSchema: { id: "source.rss.fetch.input@1", version: 1, hash: { algorithm: "builtin", value: "i" } },
+            outputSchema: { id: "source.rss.fetch.output@1", version: 1, hash: { algorithm: "builtin", value: "o" } },
+            externalKey: "url",
+            discoveryContext: "",
+            media: "download",
+            stateStoreNamespace: "source:{id}",
+        }],
     } as const;
 
     it("parses a source definition manifest with a descriptive configuration schema", () => {

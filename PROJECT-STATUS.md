@@ -1,6 +1,18 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-10。Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已在 `.worktree/connection-state-store` / `feat/t22-connection-state-store` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前 Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已合并 `master` 并推送（`1f879f4` + `da44743`）。Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20）已随 PR #3 合入；第九/八/七切片（Task 19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-10。Phase 2 第十三切片 Trigger/SDK v1（Task 23）已在 `.worktree/trigger-sdk` / `feat/t23-trigger-sdk` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前 Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并 `master` 并推送（`9c4cf72`）；第十一切片 Run 控制 v1（Task 21）已合并。第十/九/八/七切片（Task 20/19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-10：Trigger / SDK v1 实现（Phase 2 第十三切片，Task 23）
+
+Proposal [`trigger-sdk-v1`](docs/proposals/trigger-sdk-v1.md)（accepted，2026-09-10，用户确认三项默认）与 ADR-0018 的实现已在 `.worktree/trigger-sdk` / `feat/t23-trigger-sdk` 完成，**未 commit、未 push、未合并**：
+
+1. **TriggerBinding 实体**：`TriggerBinding` 表（单绑定 schedule/manual）+ migration 把 `SourceInstance.config.scheduleIntervalMs` 回填为 schedule TriggerBinding 并从 config 移除；调度循环改读 `listScheduleTriggers()`；`createSource`/`updateSource` 用顶层 `scheduleIntervalMs` 建/改/删绑定。
+2. **SourceDefinitionManifest 扩展**（EXT-006/007）：新增 `auth`（none/oauth/cookie/secret_ref/external + secretRefRequired）与 `operations`（input/output schema、稳定 external key、discovery context、media、stateStore 命名空间）；内置 rss/fixture/aihot/bilibili 补全声明。
+3. **EXT-003 保持现状** + Web：来源表单定时字段顶层化，来源行/投影回显 `scheduleIntervalMs`。
+
+验证（2026-09-10，实际运行）：`bun run typecheck` 全仓通过。聚焦测试：contracts `trigger.test.ts` 4/4、storage `trigger-binding.test.ts` 2/2、worker `scheduling.test.ts` 4/4、transport 17/17、web component-lab 27/27 全部通过；storage 串行 17 文件 / 125 用例（1 例「queued scheduled source」因 schedule 迁移到顶层后已修复复跑绿）。未运行：全量 `bun run test`、浏览器产品/组件实验室 E2E、Windows smoke、Docker、发布部署（既有后置边界）。
+
+过程、偏差与完整命令见 Task 23 walkthrough [`.agents/tasks/23-trigger-sdk/README.md`](.agents/tasks/23-trigger-sdk/README.md)。
 
 ## 2026-09-10：Connection/SecretStore/StateStore v1 实现（Phase 2 第十二切片，Task 22）
 
@@ -332,8 +344,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
 - Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；未合并 `master`（无 PR，单开发者仓库，待维护者合并）。
-- Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已在 `.worktree/connection-state-store` / `feat/t22-connection-state-store` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0017 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权）。
-- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面剩余（Trigger/SDK、OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
+- Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并 `master` 并推送（`9c4cf72`）；Proposal accepted + ADR-0017 + PRD 注记 + Task 已同步。
+- Phase 2 第十三切片 Trigger/SDK v1（Task 23）已在 `.worktree/trigger-sdk` / `feat/t23-trigger-sdk` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0018 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权）。
+- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面最后一块（OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。

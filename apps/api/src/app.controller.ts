@@ -1997,9 +1997,6 @@ function parsePositiveInteger(value: string): number {
 function toPublicSource(source: SourceSnapshot) {
     const config: Record<string, unknown> = {};
     if (typeof source.config.feedUrl === "string") config.feedUrl = source.config.feedUrl;
-    if (typeof source.config.scheduleIntervalMs === "number") {
-        config.scheduleIntervalMs = source.config.scheduleIntervalMs;
-    }
     // Per-source media policy (ADR-0014); absent means "follow the default".
     if (source.config.media !== undefined) {
         config.media = source.config.media;
@@ -2024,6 +2021,8 @@ function toPublicSource(source: SourceSnapshot) {
         updatedAt: source.updatedAt,
         lastRunAt: source.lastRunAt,
         lastError: source.lastError,
+        connectionId: source.connectionId ?? null,
+        scheduleIntervalMs: source.scheduleIntervalMs ?? null,
     };
 }
 

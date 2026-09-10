@@ -126,9 +126,10 @@ const httpFeedUrlSchema = z.string().url().refine((value) => {
     return protocol === "http:" || protocol === "https:";
 }, { message: "feedUrl must be an http or https URL." });
 
-const scheduleConfigShape = {
-    scheduleIntervalMs: z.coerce.number().int().min(1_000).max(31 * 24 * 60 * 60 * 1_000).optional(),
-};
+// Schedule is a first-class TriggerBinding now (ADR-0018); config no longer
+// carries scheduleIntervalMs. The anchor stays empty so the config schemas keep
+// a stable spread shape.
+const scheduleConfigShape = {};
 
 /**
  * Ceilings for the per-source media policy (ADR-0014 decision 2). They equal
@@ -270,11 +271,15 @@ export function getSourceConfigurationSchema(
     return sourceConfigurationSchemas[sourceDefinitionRef as keyof typeof sourceConfigurationSchemas] ?? null;
 }
 
+export const triggerIntervalSchema = z.coerce.number().int().min(1_000).max(31 * 24 * 60 * 60 * 1_000);
+
 export const createSourceCommandSchema = z.object({
     name: z.string().trim().min(1).max(200),
     sourceDefinitionRef: sourceDefinitionRefSchema,
     operationId: sourceOperationIdSchema,
     config: z.unknown(),
+    /** Optional schedule interval; creates a schedule TriggerBinding (ADR-0018). */
+    scheduleIntervalMs: triggerIntervalSchema.optional(),
 }).strict();
 export type CreateSourceCommand = z.infer<typeof createSourceCommandSchema>;
 
@@ -284,6 +289,8 @@ export const updateSourceCommandSchema = z.object({
     config: z.unknown().optional(),
     /** Optional reusable connection anchor (ADR-0017); null unlinks the source. */
     connectionId: z.string().trim().min(1).max(100).nullable().optional(),
+    /** Optional schedule interval (ADR-0018); null removes the schedule trigger. */
+    scheduleIntervalMs: triggerIntervalSchema.nullable().optional(),
 }).strict();
 export type UpdateSourceCommand = z.infer<typeof updateSourceCommandSchema>;
 
@@ -335,6 +342,8 @@ export const sourceSnapshotSchema = sourceExecutionSnapshotSchema.extend({
     lastError: z.string().nullable(),
     /** Optional reusable connection anchor; null/absent for unauthenticated sources (ADR-0017). */
     connectionId: z.string().nullable().optional(),
+    /** Current schedule interval from the source's TriggerBinding, if any (ADR-0018). */
+    scheduleIntervalMs: z.number().int().positive().nullable().optional(),
 });
 export type SourceSnapshot = z.infer<typeof sourceSnapshotSchema>;
 
@@ -376,3 +385,27 @@ export const updateConnectionCommandSchema = z.object({
     lastError: z.string().max(500).nullable().optional(),
 }).strict();
 export type UpdateConnectionCommand = z.infer<typeof updateConnectionCommandSchema>;
+
+/**
+ * First-class trigger (ADR-0018). v1 covers schedule + manual only; webhook,
+ * internal-event and upstream-workflow triggers are deferred.
+ */
+export const triggerKindSchema = z.enum(["schedule", "manual"]);
+export type TriggerKind = z.infer<typeof triggerKindSchema>;
+
+export const triggerConfigSchema = z.object({
+    intervalMs: triggerIntervalSchema.optional(),
+}).strict();
+export type TriggerConfig = z.infer<typeof triggerConfigSchema>;
+
+export const triggerBindingSchema = z.object({
+    id: z.string(),
+    sourceId: z.string(),
+    kind: triggerKindSchema,
+    config: triggerConfigSchema,
+    enabled: z.boolean(),
+    revisionId: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+}).strict();
+export type TriggerBinding = z.infer<typeof triggerBindingSchema>;

@@ -26,8 +26,24 @@ model SourceInstance {
     entries             Entry[]
     activationCommands  SourceActivationCommand[]
     connection          ConnectionInstance?     @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+    triggerBinding      TriggerBinding?         @relation("TriggerBindingSource")
 
     @@index([connectionId])
+}
+
+// First-class trigger (ADR-0018): when a source is started, expressed as a
+// schedule/manual binding. One current binding per source in v1; multi-plan and
+// overlap policy arrive with CollectionPlan.
+model TriggerBinding {
+    id         String         @id @default(cuid())
+    sourceId   String         @unique
+    kind       String         @default("schedule")
+    configJson String
+    enabled    Boolean        @default(true)
+    revision   Int            @default(1)
+    createdAt  DateTime       @default(now())
+    updatedAt  DateTime       @updatedAt
+    source     SourceInstance @relation("TriggerBindingSource", fields: [sourceId], references: [id], onDelete: Cascade)
 }
 
 // Reusable user login/authorization on an external platform (ADR-0017). A

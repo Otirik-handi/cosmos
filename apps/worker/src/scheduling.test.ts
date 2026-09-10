@@ -1,25 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { SourceSnapshot } from "@cosmos/contracts";
 import type { Logger } from "@cosmos/logging";
 
-import { createScheduleQueue, type ScheduledRunQueue } from "./scheduling.js";
+import {
+    createScheduleQueue,
+    type ScheduledRunQueue,
+    type ScheduleTrigger,
+} from "./scheduling.js";
 
-function makeSource(overrides: Partial<SourceSnapshot>): SourceSnapshot {
+function makeTrigger(overrides: Partial<ScheduleTrigger>): ScheduleTrigger {
     return {
-        id: "source-1",
-        name: "Fixture RSS",
-        sourceDefinitionRef: "source.fixture-rss@1",
-        operationId: "fetch",
-        connectorId: "fixture-rss",
-        kind: "fixture-rss",
-        config: {},
-        enabled: true,
-        revisionId: "source-1:1",
-        createdAt: "2026-09-01T00:00:00.000Z",
-        updatedAt: "2026-09-01T00:00:00.000Z",
+        sourceId: "source-1",
+        intervalMs: 60_000,
         lastRunAt: null,
-        lastError: null,
         ...overrides,
     };
 }
@@ -57,32 +50,19 @@ function makeQueue(
 const NOW = new Date("2026-09-03T12:00:00.000Z");
 
 describe("createScheduleQueue", () => {
-    it("queues only enabled sources whose schedule interval has elapsed", async () => {
+    it("queues only schedule triggers whose interval has elapsed", async () => {
         const queue = makeQueue(async () => ({ runId: "run-1", status: "queued" }));
         const logger = makeLogger();
         const tick = createScheduleQueue({
-            listSources: async () => [
+            listScheduleTriggers: async () => [
                 // Due: never ran.
-                makeSource({ id: "due", config: { scheduleIntervalMs: 60_000 } }),
+                makeTrigger({ sourceId: "due", intervalMs: 60_000 }),
                 // Not due: ran 10s ago with a 60s interval.
-                makeSource({
-                    id: "not-due",
-                    config: { scheduleIntervalMs: 60_000 },
+                makeTrigger({
+                    sourceId: "not-due",
+                    intervalMs: 60_000,
                     lastRunAt: new Date(NOW.getTime() - 10_000).toISOString(),
                 }),
-                // Disabled sources never participate, even when overdue.
-                makeSource({
-                    id: "disabled-scheduled",
-                    enabled: false,
-                    config: { scheduleIntervalMs: 60_000 },
-                }),
-                makeSource({
-                    id: "disabled-untimed",
-                    enabled: false,
-                    config: {},
-                }),
-                // Enabled but manual-only.
-                makeSource({ id: "untimed", config: {} }),
             ],
             queue,
             logger,
@@ -102,10 +82,10 @@ describe("createScheduleQueue", () => {
         const queue = makeQueue(async () => ({ runId: "run-1", status: "queued" }));
         const logger = makeLogger();
         const tick = createScheduleQueue({
-            listSources: async () => [
-                makeSource({
-                    id: "due-again",
-                    config: { scheduleIntervalMs: 60_000 },
+            listScheduleTriggers: async () => [
+                makeTrigger({
+                    sourceId: "due-again",
+                    intervalMs: 60_000,
                     lastRunAt: new Date(NOW.getTime() - 61_000).toISOString(),
                 }),
             ],
@@ -119,35 +99,13 @@ describe("createScheduleQueue", () => {
         expect(queue.calls[0]?.sourceId).toBe("due-again");
     });
 
-    it("queues due Bilibili and AI HOT sources for scheduled ingestion", async () => {
+    it("queues due Bilibili and AI HOT triggers for scheduled ingestion", async () => {
         const queue = makeQueue(async () => ({ runId: "run-1", status: "queued" }));
         const logger = makeLogger();
         const tick = createScheduleQueue({
-            listSources: async () => [
-                makeSource({
-                    id: "bilibili-hot",
-                    name: "Scheduled Bilibili Hot",
-                    sourceDefinitionRef: "source.bilibili@1",
-                    connectorId: "bilibili",
-                    kind: "bilibili",
-                    config: {
-                        schemaVersion: 1,
-                        mode: "hot",
-                        limit: 20,
-                        scheduleIntervalMs: 60_000,
-                    },
-                }),
-                makeSource({
-                    id: "aihot",
-                    name: "Scheduled AI HOT",
-                    sourceDefinitionRef: "source.aihot@1",
-                    connectorId: "aihot",
-                    kind: "aihot",
-                    config: {
-                        schemaVersion: 1,
-                        scheduleIntervalMs: 120_000,
-                    },
-                }),
+            listScheduleTriggers: async () => [
+                makeTrigger({ sourceId: "bilibili-hot", intervalMs: 60_000 }),
+                makeTrigger({ sourceId: "aihot", intervalMs: 120_000 }),
             ],
             queue,
             logger,
@@ -173,7 +131,7 @@ describe("createScheduleQueue", () => {
         ]);
     });
 
-    it("continues queuing later sources when one source fails to enqueue", async () => {
+    it("continues queuing later triggers when one source fails to enqueue", async () => {
         const queue = makeQueue(async (input) => {
             if (input.sourceId === "broken") {
                 throw new Error("idempotency conflict");
@@ -182,9 +140,9 @@ describe("createScheduleQueue", () => {
         });
         const logger = makeLogger();
         const tick = createScheduleQueue({
-            listSources: async () => [
-                makeSource({ id: "broken", config: { scheduleIntervalMs: 60_000 } }),
-                makeSource({ id: "healthy", config: { scheduleIntervalMs: 60_000 } }),
+            listScheduleTriggers: async () => [
+                makeTrigger({ sourceId: "broken", intervalMs: 60_000 }),
+                makeTrigger({ sourceId: "healthy", intervalMs: 60_000 }),
             ],
             queue,
             logger,

@@ -133,7 +133,7 @@ async function bootstrap(): Promise<void> {
             : null;
         const scheduleQueue = workflowControl
             ? createScheduleQueue({
-                listSources: () => repository.listSources(),
+                listScheduleTriggers: () => repository.listScheduleTriggers(),
                 queue: workflowControl,
                 logger,
             })

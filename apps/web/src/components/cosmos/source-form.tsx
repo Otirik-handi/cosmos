@@ -175,30 +175,6 @@ export function SourceForm({
                                 <FieldError errors={[form.formState.errors.name]} />
                             </Field>
                             {readManifestFields(definitionState.manifest).map((field) => {
-                                if (field.name === "scheduleIntervalMs") {
-                                    return (
-                                        <Field
-                                            key={field.name}
-                                            data-invalid={Boolean(form.formState.errors.scheduleIntervalMinutes)}
-                                        >
-                                            <FieldLabel htmlFor="source-schedule-interval">
-                                                {fieldPresentation.scheduleIntervalMs?.label ?? field.name}
-                                                {!field.required && <span className="text-muted-foreground">（可选）</span>}
-                                            </FieldLabel>
-                                            <Input
-                                                id="source-schedule-interval"
-                                                type={fieldPresentation.scheduleIntervalMs?.type ?? "text"}
-                                                placeholder={fieldPresentation.scheduleIntervalMs?.placeholder}
-                                                aria-invalid={Boolean(form.formState.errors.scheduleIntervalMinutes)}
-                                                {...form.register("scheduleIntervalMinutes")}
-                                            />
-                                            <FieldDescription>
-                                                {fieldPresentation.scheduleIntervalMs?.description}
-                                            </FieldDescription>
-                                            <FieldError errors={[form.formState.errors.scheduleIntervalMinutes]} />
-                                        </Field>
-                                    );
-                                }
                                 const presentation = fieldPresentation[field.name];
                                 return (
                                     <Field
@@ -220,6 +196,22 @@ export function SourceForm({
                                     </Field>
                                 );
                             })}
+                            <Field data-invalid={Boolean(form.formState.errors.scheduleIntervalMinutes)}>
+                                <FieldLabel htmlFor="source-schedule-interval">
+                                    定时抓取间隔（分钟）<span className="text-muted-foreground">（可选）</span>
+                                </FieldLabel>
+                                <Input
+                                    id="source-schedule-interval"
+                                    type="number"
+                                    placeholder="30"
+                                    aria-invalid={Boolean(form.formState.errors.scheduleIntervalMinutes)}
+                                    {...form.register("scheduleIntervalMinutes")}
+                                />
+                                <FieldDescription>
+                                    保存后按此间隔自动抓取；留空表示不自动抓取。
+                                </FieldDescription>
+                                <FieldError errors={[form.formState.errors.scheduleIntervalMinutes]} />
+                            </Field>
                             <ProbeFeedback probeState={probeState} />
                         </FieldGroup>
                     </CardContent>

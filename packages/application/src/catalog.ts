@@ -12,6 +12,22 @@ export interface JsonSchemaRef {
     schema?: Record<string, unknown>;
 }
 
+export interface SourceOperationManifest {
+    operationId: string;
+    inputSchema: JsonSchemaRef;
+    outputSchema: JsonSchemaRef;
+    externalKey: string;
+    discoveryContext: string;
+    media: "none" | "download" | "metadata_only";
+    stateStoreNamespace: string | null;
+}
+
+export interface SourceAuthManifest {
+    kind: "none" | "oauth" | "cookie" | "secret_ref" | "external";
+    label: string | null;
+    secretRefRequired: boolean;
+}
+
 export interface SourceDefinitionManifest {
     id: string;
     version: number;
@@ -25,6 +41,8 @@ export interface SourceDefinitionManifest {
     operationIds: readonly string[];
     capabilities: readonly string[];
     configurationSchema: JsonSchemaRef;
+    auth: SourceAuthManifest;
+    operations: readonly SourceOperationManifest[];
 }
 
 export interface WorkflowDefinitionManifest {
@@ -81,6 +99,8 @@ export class StaticCatalog implements CatalogPort {
             ...item,
             operationIds: [...item.operationIds],
             capabilities: [...item.capabilities],
+            operations: item.operations.map((operation) => ({ ...operation })),
+            auth: { ...item.auth },
         }));
         this.workflowDefinitions = input.workflowDefinitions.map((item) => ({
             ...item,
@@ -141,6 +161,24 @@ const builtinHash = (value: string): ManifestHash => ({
     value,
 });
 
+const sourceOperation = (
+    ref: string,
+    externalKey: string,
+    media: SourceOperationManifest["media"],
+    stateStoreNamespace: string | null = "source:{id}",
+): SourceOperationManifest => ({
+    operationId: "fetch",
+    inputSchema: builtinSchema(`${ref}.fetch.input@1`, { type: "object" }),
+    outputSchema: builtinSchema(`${ref}.fetch.output@1`, { type: "object" }),
+    externalKey,
+    discoveryContext: "",
+    media,
+    stateStoreNamespace,
+});
+
+const noAuth: SourceAuthManifest = { kind: "none", label: null, secretRefRequired: false };
+const externalAuth: SourceAuthManifest = { kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false };
+
 export function createBuiltinManifestCatalog(): StaticCatalog {
     const sourceDefinitions: readonly SourceDefinitionManifest[] = [
         {
@@ -159,7 +197,6 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
                 type: "object",
                 properties: {
                     feedUrl: { type: "string", format: "uri" },
-                    scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 },
                     // Descriptive only; the canonical Zod schema owns the
                     // tightening bounds (ADR-0014 decision 2).
                     media: {
@@ -175,6 +212,8 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
                 required: ["feedUrl"],
                 additionalProperties: false,
             }),
+            auth: noAuth,
+            operations: [sourceOperation("source.rss", "url", "download")],
         },
         {
             id: "fixture-rss",
@@ -190,9 +229,11 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor"],
             configurationSchema: builtinSchema("source.fixture-rss.config@1", {
                 type: "object",
-                properties: { scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
+                properties: {},
                 additionalProperties: false,
             }),
+            auth: noAuth,
+            operations: [sourceOperation("source.fixture-rss", "url", "metadata_only")],
         },
         {
             id: "bilibili",
@@ -208,10 +249,12 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor", "external:opencli"],
             configurationSchema: builtinSchema("source.bilibili.config@1", {
                 type: "object",
-                properties: { mode: { enum: ["hot", "feed"] }, profile: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 }, scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
+                properties: { mode: { enum: ["hot", "feed"] }, profile: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 } },
                 required: ["mode"],
                 additionalProperties: false,
             }),
+            auth: externalAuth,
+            operations: [sourceOperation("source.bilibili", "url", "metadata_only")],
         },
         {
             id: "aihot",
@@ -227,9 +270,11 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor"],
             configurationSchema: builtinSchema("source.aihot.config@1", {
                 type: "object",
-                properties: { scheduleIntervalMs: { type: "integer", minimum: 1000, maximum: 2678400000 } },
+                properties: {},
                 additionalProperties: false,
             }),
+            auth: noAuth,
+            operations: [sourceOperation("source.aihot", "url", "metadata_only")],
         },
     ];
 

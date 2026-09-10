@@ -447,6 +447,12 @@ export interface CosmosRepository {
     getConnection(connectionId: string): Promise<ConnectionInstance | null>;
     updateConnection(connectionId: string, input: UpdateConnectionCommand): Promise<ConnectionInstance>;
     deleteConnection(connectionId: string): Promise<boolean>;
+    /** Enabled schedule trigger bindings (ADR-0018) for the scheduler loop. */
+    listScheduleTriggers(): Promise<readonly {
+        sourceId: string;
+        intervalMs: number;
+        lastRunAt: string | null;
+    }[]>;
     createRun(input: {
         sourceId: string;
         triggerKind: "manual" | "schedule";
@@ -1794,14 +1800,11 @@ export class IngestionWorker {
 
     async queueScheduledSources(): Promise<void> {
         const now = this.now();
-        const sources = await this.repository.listSources();
-        for (const source of sources) {
-            if (!source.enabled || !source.config.scheduleIntervalMs) {
-                continue;
-            }
-            const interval = source.config.scheduleIntervalMs;
-            const lastRunAt = source.lastRunAt
-                ? Date.parse(source.lastRunAt)
+        const triggers = await this.repository.listScheduleTriggers();
+        for (const trigger of triggers) {
+            const interval = trigger.intervalMs;
+            const lastRunAt = trigger.lastRunAt
+                ? Date.parse(trigger.lastRunAt)
                 : Number.NEGATIVE_INFINITY;
             if (Number.isFinite(lastRunAt) && now.getTime() - lastRunAt < interval) {
                 continue;
@@ -1809,20 +1812,20 @@ export class IngestionWorker {
             const bucket = Math.floor(now.getTime() / interval);
             try {
                 const run = await this.repository.createQueuedRun({
-                    sourceId: source.id,
+                    sourceId: trigger.sourceId,
                     triggerKind: "schedule",
-                    idempotencyKey: `schedule:${source.id}:${bucket}`,
+                    idempotencyKey: `schedule:${trigger.sourceId}:${bucket}`,
                 });
                 this.logger.child({
                     runId: run.id,
-                    sourceId: source.id,
+                    sourceId: trigger.sourceId,
                 }).info("run.queued", {
                     triggerKind: "schedule",
                     status: run.status,
                 });
             } catch (error) {
                 this.logger.child({
-                    sourceId: source.id,
+                    sourceId: trigger.sourceId,
                 }).error("run.queue_failed", {
                     triggerKind: "schedule",
                 }, error);

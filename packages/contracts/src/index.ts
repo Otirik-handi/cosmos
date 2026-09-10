@@ -48,6 +48,29 @@ export const sourceDefinitionStatusSchema = z.enum([
 ]);
 export type SourceDefinitionStatus = z.infer<typeof sourceDefinitionStatusSchema>;
 
+export const sourceAuthSchema = z.object({
+    kind: z.enum(["none", "oauth", "cookie", "secret_ref", "external"]),
+    /** Human-readable label for the auth method; optional for none/external. */
+    label: z.string().nullable(),
+    secretRefRequired: z.boolean(),
+}).strict();
+export type SourceAuth = z.infer<typeof sourceAuthSchema>;
+
+export const sourceOperationManifestSchema = z.object({
+    operationId: sourceOperationIdSchema,
+    inputSchema: jsonSchemaRefSchema,
+    outputSchema: jsonSchemaRefSchema,
+    /** Stable external key the operation uses for dedup across runs (EXT-007). */
+    externalKey: z.string().trim().min(1),
+    /** Discovery context the operation reads; empty string means none. */
+    discoveryContext: z.string(),
+    /** Media state declared by the operation: download / metadata_only. */
+    media: z.enum(["none", "download", "metadata_only"]),
+    /** Namespace for this operation's ConnectorState (e.g. source:{id}); null = none. */
+    stateStoreNamespace: z.string().nullable(),
+}).strict();
+export type SourceOperationManifest = z.infer<typeof sourceOperationManifestSchema>;
+
 export const sourceDefinitionManifestSchema = z.object({
     id: z.string().trim().min(1),
     version: z.number().int().positive(),
@@ -61,8 +84,13 @@ export const sourceDefinitionManifestSchema = z.object({
     operationIds: sourceOperationIdSchema.array(),
     capabilities: z.string().array(),
     configurationSchema: jsonSchemaRefSchema,
+    /** Auth method declared by the adapter (ADR-0018/EXT-006/007); none for unauth sources. */
+    auth: sourceAuthSchema,
+    /** Per-operation declaration (input/output, external key, discovery, media, secret/state). */
+    operations: sourceOperationManifestSchema.array(),
 }).strict();
 export type SourceDefinitionManifest = z.infer<typeof sourceDefinitionManifestSchema>;
+
 
 export const sourceDefinitionPageSchema = z.object({
     items: sourceDefinitionManifestSchema.array(),

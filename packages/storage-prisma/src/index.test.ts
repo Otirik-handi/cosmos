@@ -1176,9 +1176,8 @@ describe("PrismaCosmosRepository", () => {
         try {
             const source = await createFixtureSource(repository, {
                 name: "Scheduled fixture",
-                config: {
-                    scheduleIntervalMs: 60_000,
-                },
+                config: {},
+                scheduleIntervalMs: 60_000,
             });
             const connector: IngestConnector = {
                 id: "schedule-test",
@@ -1342,13 +1341,14 @@ function prepareDatabase(root: string): void {
 
 async function createFixtureSource(
     repository: PrismaCosmosRepository,
-    input: { name: string; config: unknown },
+    input: { name: string; config: unknown; scheduleIntervalMs?: number },
 ): Promise<SourceSnapshot> {
     const created = await repository.createSource({
         name: input.name,
         sourceDefinitionRef: "source.fixture-rss@1",
         operationId: "fetch",
         config: input.config,
+        ...(input.scheduleIntervalMs !== undefined ? { scheduleIntervalMs: input.scheduleIntervalMs } : {}),
     });
     return repository.activateSource({
         sourceId: created.id,

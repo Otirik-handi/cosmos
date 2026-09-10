@@ -362,6 +362,8 @@ flowchart LR
 
 **Phase 2 第十二切片注记（2026-09-10，[`connection-state-store-v1` Proposal](../proposals/connection-state-store-v1.md) accepted）**：AUT-009/ING-012/OPS-009 的平台面基础设施 v1 按 Proposal 冻结——先交付 `ConnectionInstance` 实体（可复用连接身份，`SourceInstance.connectionId` 可空外键，无认证来源为 null，Bilibili OpenCLI profile 继续作为外部登录态例外）+ `SecretStore` 第一版（受限权限明文文件，不加密，公开合同只暴露不透明 `SecretRef`）+ `ConnectorStateStore`（命名空间化版本化 KV，version CAS，覆盖 ETag/分页 token/速率等非秘密状态，不迁移 `Checkpoint`）；Secret 不进 config/Job/Event/日志，Secret/State/Blob 所有权互不混写。CollectionPlan/多采集计划（AUT-010）、Checkpoint 迁移、加密-at-rest、真实认证 Adapter 后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第十三切片注记（2026-09-10，[`trigger-sdk-v1` Proposal](../proposals/trigger-sdk-v1.md) accepted）**：AUT-004/EXT-006/007 的平台面 v1 按 Proposal 冻结——先交付 `TriggerBinding` 实体（单绑定 schedule/manual，从 `SourceInstance.config.scheduleIntervalMs` 迁出，调度循环改读 `listScheduleTriggers`）+ `SourceDefinitionManifest` 扩展 `auth`（none/oauth/cookie/secret_ref/external + secretRefRequired）与 `operations`（input/output schema、稳定 external key、discovery context、media、stateStore 命名空间）；EXT-003 版本化合同保持现状。webhook/内部事件/上游结果触发（AUT-004 完整形态）、自定义 Trigger/Action 插件运行时（AUT-005）、多计划 overlap policy 后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
 | REC-001 | Phase 1 | Admission 决定是否录入，Ranking 决定当前是否展示。 | 一条未进入今日 Feed 的已录入信息仍可在信息库搜索。 |
