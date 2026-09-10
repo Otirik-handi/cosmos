@@ -42,6 +42,7 @@ Task 导航：
 - [`19-per-source-media-policy/`](19-per-source-media-policy/)：Phase 2 第九切片按来源的媒体策略 v1——`Source.config.media` 的图片下载开关与单文件/单次预算（只能收紧、缺省跟随全局默认）、fetch 时从来源快照解析、Web 来源行编辑；保留期/清理与失败重试后置。
 - [`20-media-retry-retention/`](20-media-retry-retention/)：Phase 2 第十切片媒体失败重试与保留期清理 v1（ING-009 剩余部分）——采集 Run 内的 `media.retry@1` 自动重试（机器可读 `errorCode` + 每来源尝试上限，只改写 Asset 行不产生新 Revision）、每来源保留期 + 显式清理命令（先预览再确认，只删字节并回退 `metadata_only`，删除前引用检查）与 durable 维护 Workflow；编号待维护者确认。
 - [`21-run-control/`](21-run-control/)：Phase 2 第十一切片 Run 控制 v1（RUN-004）——`POST /runs/:id/cancellations|recoveries|re-runs` 三个控制动作（取消 = 用户覆盖式终态化 + fence、重新运行 = 复用采集入队产生全新 Run、恢复 = 送回恢复队列由 Kernel `rerun()` 续跑），响应携带 `reuse`/`sideEffects` 说明，公共 Run 五态不变、零数据迁移；编号待维护者确认。
+- [`22-connection-state-store/`](22-connection-state-store/)：Phase 2 第十二切片 Connection/SecretStore/StateStore v1（AUT-009/ING-012/OPS-009）——`ConnectionInstance` 实体 + `SourceInstance.connectionId` 可空外键、SecretStore 第一版（受限权限明文文件 + 不透明 SecretRef）、`ConnectorStateStore`（命名空间化版本化 KV + version CAS，不迁 Checkpoint）与 Secret 脱敏/所有权边界；CollectionPlan/Checkpoint 迁移/加密后置；编号待维护者确认。
 
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 

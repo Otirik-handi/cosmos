@@ -29,6 +29,7 @@ import {
     createHealthSnapshot,
     WorkflowHostConflictError,
     WorkflowHostError,
+    ConnectionNotFoundError,
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
@@ -91,6 +92,8 @@ import {
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
     updateSourceCommandSchema,
+    createConnectionCommandSchema,
+    updateConnectionCommandSchema,
     cancelRunCommandSchema,
     recoverRunCommandSchema,
     rerunRunCommandSchema,
@@ -186,6 +189,18 @@ function runControlError(error: unknown): never {
                     retryable: false,
                 });
         }
+    }
+    throw error;
+}
+
+/**
+ * Error funnel for the Connection endpoints. ConnectionNotFoundError maps to
+ * 404; anything else reaching here is a server-side failure and stays a 500.
+ */
+function connectionError(error: unknown): never {
+    if (error instanceof ZodError) validationError(error);
+    if (error instanceof ConnectionNotFoundError) {
+        throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
     }
     throw error;
 }
@@ -487,6 +502,60 @@ export class AppController {
             });
         }
         return result;
+    }
+
+    // ---- Connections (ADR-0017): reusable login/authorization identity. ----
+
+    @Get("connections")
+    async listConnections() {
+        return this.repository.listConnections();
+    }
+
+    @Get("connections/:connectionId")
+    @Bind(Param("connectionId"))
+    async connection(connectionId: string) {
+        const result = await this.repository.getConnection(connectionId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Connection not found: ${connectionId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
+    @Post("connections")
+    @Bind(Body())
+    async createConnection(body: unknown) {
+        try {
+            const command = createConnectionCommandSchema.parse(body);
+            return await this.repository.createConnection(command);
+        } catch (error) {
+            connectionError(error);
+        }
+    }
+
+    @Patch("connections/:connectionId")
+    @Bind(Param("connectionId"), Body())
+    async updateConnection(connectionId: string, body: unknown) {
+        try {
+            const command = updateConnectionCommandSchema.parse(body);
+            return await this.repository.updateConnection(connectionId, command);
+        } catch (error) {
+            connectionError(error);
+        }
+    }
+
+    @Post("connections/:connectionId/removals")
+    @Bind(Param("connectionId"))
+    async deleteConnection(connectionId: string) {
+        try {
+            await this.repository.deleteConnection(connectionId);
+            return { ok: true, id: connectionId, action: "connection.deleted" };
+        } catch (error) {
+            connectionError(error);
+        }
     }
 
     @Post("sources/:sourceId/runs")

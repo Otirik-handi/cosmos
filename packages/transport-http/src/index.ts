@@ -20,6 +20,9 @@ import {
     sourceConfigProbeJobSnapshotSchema,
     sourceDefinitionPageSchema,
     sourceSnapshotSchema,
+    connectionInstanceSchema,
+    createConnectionCommandSchema,
+    updateConnectionCommandSchema,
     storyDetailSchema,
     storySubtypePageSchema,
     topicDetailSchema,
@@ -53,6 +56,9 @@ import {
     type SourceConfigProbeJobSnapshot,
     type SourceDefinitionManifest,
     type SourceSnapshot,
+    type ConnectionInstance,
+    type CreateConnectionCommand,
+    type UpdateConnectionCommand,
     type MediaCleanupCommand,
     type MediaCleanupRunSnapshot,
     type StoryDetail,
@@ -311,6 +317,46 @@ export class HttpCosmosClient {
             method: "PATCH",
             body: input,
             schema: sourceSnapshotSchema,
+        });
+    }
+
+    async listConnections(): Promise<readonly ConnectionInstance[]> {
+        return this.request("/api/v1/connections", {
+            schema: connectionInstanceSchema.array(),
+        });
+    }
+
+    async getConnection(connectionId: string): Promise<ConnectionInstance> {
+        return this.request(`/api/v1/connections/${encodeURIComponent(connectionId)}`, {
+            schema: connectionInstanceSchema,
+        });
+    }
+
+    async createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance> {
+        const payload = createConnectionCommandSchema.parse(input);
+        return this.request("/api/v1/connections", {
+            method: "POST",
+            body: payload,
+            schema: connectionInstanceSchema,
+        });
+    }
+
+    async updateConnection(
+        connectionId: string,
+        input: UpdateConnectionCommand,
+    ): Promise<ConnectionInstance> {
+        const payload = updateConnectionCommandSchema.parse(input);
+        return this.request(`/api/v1/connections/${encodeURIComponent(connectionId)}`, {
+            method: "PATCH",
+            body: payload,
+            schema: connectionInstanceSchema,
+        });
+    }
+
+    async deleteConnection(connectionId: string): Promise<UserOrganizationAck> {
+        return this.request(`/api/v1/connections/${encodeURIComponent(connectionId)}/removals`, {
+            method: "POST",
+            schema: userOrganizationAckSchema,
         });
     }
 

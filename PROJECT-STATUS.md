@@ -1,6 +1,19 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-10。Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`），未合并 `master`（无 PR，单开发者仓库）。此前 Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已随 PR #3 合入并推送 `master`（merge commit `0ad4d2b`）。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-10。Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已在 `.worktree/connection-state-store` / `feat/t22-connection-state-store` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前 Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已合并 `master` 并推送（`1f879f4` + `da44743`）。Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20）已随 PR #3 合入；第九/八/七切片（Task 19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-10：Connection/SecretStore/StateStore v1 实现（Phase 2 第十二切片，Task 22）
+
+Proposal [`connection-state-store-v1`](docs/proposals/connection-state-store-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0017 的实现已在 `.worktree/connection-state-store` / `feat/t22-connection-state-store` 完成，**未 commit、未 push、未合并**：
+
+1. **ConnectionInstance**：可复用连接身份（name/connectorId/account/scope/status/secretRef），`SourceInstance.connectionId` 可空外键（无认证来源 null）；CRUD 端点 `GET/POST /connections`、`GET/PATCH /connections/:id`、`POST /connections/:id/removals`；删除连接显式把来源 `connectionId` 置空、不删来源。
+2. **SecretStore 第一版**（待决定 16）：受限权限明文文件 `FileSecretStore`（`secretRoot`，`mode 0o600`，路径逃逸校验）；公开合同 `SecretStorePort`（put/read/delete by 不透明 ref），凭证不进 config/Job/Event/日志。
+3. **ConnectorStateStore**：`ConnectorState` 表 + `PrismaConnectorStateStore`（命名空间化 + version CAS）；覆盖 ETag/分页 token/速率等非秘密状态，v1 不迁移 `Checkpoint`。
+4. **Web**：`ConnectionPanel`（列表 + 新建 + 删除）+ 组件实验室登记 + 产品页侧栏「连接」区；Secret 只显示不透明 `secretRef`。
+
+验证（2026-09-10，实际运行）：`bun run typecheck` 全仓通过；`git diff --check` 干净；`bun run docs:check` 402 文件 failures=[]。聚焦测试：contracts `connection.test.ts` 3/3、storage `secret-store.test.ts` 2/2 + `connection-state-store.test.ts` 3/3、api `app.controller.connection.test.ts` 3/3、transport-http 17/17、web component-lab 27/27 全部通过。storage 串行（`--no-file-parallelism packages/storage-prisma`）16 文件 / 123 用例全部通过（含新增 5 例 + 全部既有用例，migration 与 source 投影改动无回归）。未运行：全量 `bun run test`、浏览器产品/组件实验室 E2E、Windows smoke、Docker、发布部署（既有后置边界）。
+
+过程、偏差与完整命令见 Task 22 walkthrough [`.agents/tasks/22-connection-state-store/README.md`](.agents/tasks/22-connection-state-store/README.md)。
 
 ## 2026-09-10：Run 控制 v1 实现（Phase 2 第十一切片，Task 21）
 
@@ -319,7 +332,8 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
 - Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；未合并 `master`（无 PR，单开发者仓库，待维护者合并）。
-- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面剩余（Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
+- Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已在 `.worktree/connection-state-store` / `feat/t22-connection-state-store` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0017 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权）。
+- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面剩余（Trigger/SDK、OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。

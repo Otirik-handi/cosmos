@@ -54,6 +54,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BoardView, type BoardCommands } from "@/components/cosmos/board-view";
+import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {RunHistory} from "@/components/cosmos/run-history";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
@@ -1528,6 +1529,10 @@ export default function Home() {
                                 ))}
                             </ul>
                         )}
+                    </section>
+                    <section aria-label="连接" className="grid gap-2">
+                        <h2 className="font-display text-lg font-semibold">连接</h2>
+                        <ConnectionPanel client={client} />
                     </section>
                     {showSourceForm && (
                         <SourceForm

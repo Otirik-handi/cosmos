@@ -19,6 +19,7 @@ import {Label} from "@/components/ui/label";
 import {Separator} from "@/components/ui/separator";
 import {Textarea} from "@/components/ui/textarea";
 import {
+    renderConnectionPanelLab,
     renderFeedBrowserLab,
     renderRunControlLab,
     renderRunHistoryLab,
@@ -279,6 +280,10 @@ const runHistoryControls = [
     control("state", "State", "select", "populated", ["populated", "empty"]),
 ] as const satisfies readonly LabControlDefinition[];
 
+const connectionPanelControls = [
+    control("state", "State", "select", "populated", ["populated", "empty"]),
+] as const satisfies readonly LabControlDefinition[];
+
 const feedBrowserControls = [
     control("title", "Story title", "text", "Cosmos fixture story"),
     control("state", "State", "select", "populated", ["loading", "empty", "populated"]),
@@ -482,6 +487,20 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderRunHistoryLab,
+    },
+    {
+        id: "connection-panel",
+        label: "ConnectionPanel",
+        category: "Cosmos",
+        modulePath: "components/cosmos/connection-panel.tsx",
+        defaultSceneId: "populated",
+        controls: connectionPanelControls,
+        scenes: [
+            {id: "populated", label: "Populated", props: {state: "populated"}},
+            {id: "empty", label: "Empty", props: {state: "empty"}},
+        ],
+        tokens: sharedTokens,
+        render: renderConnectionPanelLab,
     },
     {
         id: "source-form",

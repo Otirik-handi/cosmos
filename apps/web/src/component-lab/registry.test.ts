@@ -18,6 +18,7 @@ const expectedPublicModules = [
     "components/ui/label.tsx",
     "components/ui/separator.tsx",
     "components/ui/textarea.tsx",
+    "components/cosmos/connection-panel.tsx",
     "components/cosmos/feed-browser.tsx",
     "components/cosmos/run-control.tsx",
     "components/cosmos/run-history.tsx",

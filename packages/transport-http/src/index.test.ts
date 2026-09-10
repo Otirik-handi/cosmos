@@ -916,4 +916,39 @@ describe("HttpCosmosClient", () => {
         expect(list[0]).toMatchObject({ id: "run-1", status: "failed" });
         expect(requests[0]).toBe("http://localhost:4310/api/v1/runs?sourceId=source-a&limit=10");
     });
+
+    it("creates and lists connections through the versioned endpoint", async () => {
+        const requests: string[] = [];
+        const connection = {
+            id: "c1",
+            name: "主账号",
+            connectorId: "bilibili",
+            account: null,
+            scopeJson: null,
+            status: "active",
+            secretRef: "secret:c1",
+            lastError: null,
+            createdAt: "2026-09-10T08:00:00.000Z",
+            updatedAt: "2026-09-10T08:00:00.000Z",
+        };
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push(String(input));
+                const isPost = (init as RequestInit | undefined)?.method === "POST";
+                return new Response(JSON.stringify(isPost ? connection : [connection]), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const created = await client.createConnection({ name: "主账号", connectorId: "bilibili" });
+        expect(created).toMatchObject({ id: "c1", status: "active" });
+        expect(requests[0]).toBe("http://localhost:4310/api/v1/connections");
+
+        const listed = await client.listConnections();
+        expect(listed).toHaveLength(1);
+        expect(requests[1]).toBe("http://localhost:4310/api/v1/connections");
+    });
 });

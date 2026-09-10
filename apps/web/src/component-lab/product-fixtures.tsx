@@ -5,6 +5,7 @@ import {useForm} from "react-hook-form";
 import type {
     BoardBlock,
     BoardDetail,
+    ConnectionInstance,
     EntityDetail,
     EntitySummary,
     EntryDetail,
@@ -22,6 +23,7 @@ import type {
 import { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { BoardView } from "@/components/cosmos/board-view";
+import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {RunControl} from "@/components/cosmos/run-control";
 import {RunHistory} from "@/components/cosmos/run-history";
@@ -320,6 +322,35 @@ export function renderRunHistoryLab(props: LabProps) {
         ? ({ listRuns: async () => [] } as unknown as HttpCosmosClient)
         : runHistoryLabClient;
     return <RunHistory client={client} />;
+}
+
+const connectionLabConnections: readonly ConnectionInstance[] = [
+    {
+        id: "connection-bilibili",
+        name: "我的 Bilibili 主账号",
+        connectorId: "bilibili",
+        account: "example",
+        scopeJson: null,
+        status: "active",
+        secretRef: "secret:connection-bilibili",
+        lastError: null,
+        createdAt: "2026-09-10T08:00:00.000Z",
+        updatedAt: "2026-09-10T08:00:00.000Z",
+    },
+];
+
+const connectionLabClient = {
+    listConnections: async () => connectionLabConnections,
+    createConnection: async () => connectionLabConnections[0],
+    deleteConnection: async () => ({ ok: true, id: "connection-bilibili", action: "connection.deleted" }),
+} as unknown as HttpCosmosClient;
+
+export function renderConnectionPanelLab(props: LabProps) {
+    const state = optionProp(props, "state", "populated", ["populated", "empty"] as const);
+    const client = state === "empty"
+        ? ({ listConnections: async () => [] } as unknown as HttpCosmosClient)
+        : connectionLabClient;
+    return <ConnectionPanel client={client} />;
 }
 
 export function renderFeedBrowserLab(props: LabProps) {

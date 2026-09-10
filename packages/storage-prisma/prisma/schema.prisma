@@ -16,6 +16,7 @@ model SourceInstance {
     configJson          String
     enabled             Boolean                 @default(false)
     revision            Int                     @default(1)
+    connectionId        String?
     createdAt           DateTime                @default(now())
     updatedAt           DateTime                @updatedAt
     observations        Observation[]
@@ -24,6 +25,40 @@ model SourceInstance {
     checkpoint          Checkpoint?
     entries             Entry[]
     activationCommands  SourceActivationCommand[]
+    connection          ConnectionInstance?     @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+    @@index([connectionId])
+}
+
+// Reusable user login/authorization on an external platform (ADR-0017). A
+// Connection keeps only identity, scope, status and an opaque SecretRef;
+// credentials live in the SecretStore, never in config/Job/Event/log.
+model ConnectionInstance {
+    id          String           @id @default(cuid())
+    name        String
+    connectorId String
+    account     String?
+    scopeJson   String?
+    status      String           @default("active")
+    secretRef   String?
+    lastError   String?
+    createdAt   DateTime         @default(now())
+    updatedAt   DateTime         @updatedAt
+    sources     SourceInstance[]
+}
+
+// Namespaced + versioned non-secret connector state (ADR-0017): cursor/ETag/
+// pagination token/rate state. The version is a monotonically increasing CAS
+// token; writes that pass a stale version are rejected.
+model ConnectorState {
+    id        String   @id @default(cuid())
+    namespace String
+    key       String
+    valueJson String
+    version   Int      @default(1)
+    updatedAt DateTime @updatedAt
+
+    @@unique([namespace, key])
 }
 
 model SourceActivationCommand {

@@ -3,6 +3,9 @@ import {
     sourceConfigProbeJobPayloadSchema,
     protocolVersion,
     type CreateSourceCommand,
+    type ConnectionInstance,
+    type CreateConnectionCommand,
+    type UpdateConnectionCommand,
     type ConnectorDescriptor,
     type FeedPage,
     type HealthResponse,
@@ -74,6 +77,8 @@ export * from "./catalog.js";
 export * from "./media-acquisition.js";
 export * from "./workflow-host.js";
 export * from "./workflow-host-runtime.js";
+export * from "./secret-store.js";
+export * from "./connector-state-store.js";
 
 export interface PersistIngestItemResult {
     createdEntry: boolean;
@@ -174,6 +179,15 @@ export class SourceRevisionConflictError extends Error {
     constructor(sourceId: string) {
         super(`Source revision conflict: ${sourceId}`);
         this.name = "SourceRevisionConflictError";
+    }
+}
+
+export class ConnectionNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(connectionId: string) {
+        super(`Connection not found: ${connectionId}`);
+        this.name = "ConnectionNotFoundError";
     }
 }
 
@@ -428,6 +442,11 @@ export interface CosmosRepository {
         sourceId: string;
         idempotencyKey: string;
     }): Promise<SourceSnapshot>;
+    createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance>;
+    listConnections(): Promise<readonly ConnectionInstance[]>;
+    getConnection(connectionId: string): Promise<ConnectionInstance | null>;
+    updateConnection(connectionId: string, input: UpdateConnectionCommand): Promise<ConnectionInstance>;
+    deleteConnection(connectionId: string): Promise<boolean>;
     createRun(input: {
         sourceId: string;
         triggerKind: "manual" | "schedule";

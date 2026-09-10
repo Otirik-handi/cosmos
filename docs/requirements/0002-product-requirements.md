@@ -360,6 +360,8 @@ flowchart LR
 
 **Phase 2 第十一切片注记（2026-09-10，[`run-control-v1` Proposal](../proposals/run-control-v1.md) accepted）**：RUN-004 的 v1 实施顺序按 Proposal 冻结——先交付 durable `WorkflowRun` 的三个控制动作：取消（`POST /runs/:id/cancellations`，用户覆盖式终态化为 `cancelled` 并 fence 掉 Worker 后续写入，不要求持有当前 lease，已入库内容不回滚）、重新运行（`POST /runs/:id/re-runs`，复用采集入队产生全新 Run，新幂等键 + `manual`，复用已入库结果、从来源当前 checkpoint 重新 fetch+ingest，只对终态 Run 开放）、恢复（`POST /runs/:id/recoveries`，把失去活动 lease 的非终态 Run 置 `resumeRequired` 送回恢复队列，由 Kernel `rerun()` 从最后安全步骤续跑）；三个响应都携带面向用户的 `reuse`/`sideEffects` 说明，公共 Run 五态与 Run 投影不变、零数据迁移。Step 级选择性重放、legacy Run 控制后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第十二切片注记（2026-09-10，[`connection-state-store-v1` Proposal](../proposals/connection-state-store-v1.md) accepted）**：AUT-009/ING-012/OPS-009 的平台面基础设施 v1 按 Proposal 冻结——先交付 `ConnectionInstance` 实体（可复用连接身份，`SourceInstance.connectionId` 可空外键，无认证来源为 null，Bilibili OpenCLI profile 继续作为外部登录态例外）+ `SecretStore` 第一版（受限权限明文文件，不加密，公开合同只暴露不透明 `SecretRef`）+ `ConnectorStateStore`（命名空间化版本化 KV，version CAS，覆盖 ETag/分页 token/速率等非秘密状态，不迁移 `Checkpoint`）；Secret 不进 config/Job/Event/日志，Secret/State/Blob 所有权互不混写。CollectionPlan/多采集计划（AUT-010）、Checkpoint 迁移、加密-at-rest、真实认证 Adapter 后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
 | REC-001 | Phase 1 | Admission 决定是否录入，Ranking 决定当前是否展示。 | 一条未进入今日 Feed 的已录入信息仍可在信息库搜索。 |

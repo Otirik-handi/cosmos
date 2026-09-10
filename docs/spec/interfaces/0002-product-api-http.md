@@ -141,6 +141,13 @@ the current code has not removed it or replaced it with a permanent redirect.
 | `POST /sources/:sourceId/runs` | 可选 `Idempotency-Key` header（≤300 字符） | HTTP 201 返回 Product Run；仅接受已启用 Source，未启用 409 `conflict`；Source 不存在 404；无 header 时生成随机 key。优先 Workflow Control 入队 `cosmos.ingest@1`，否则走 legacy queued Run。 |
 | `POST /media-cleanups` | 可选 `Idempotency-Key` header（≤300 字符）；body `MediaCleanupCommand`（可选 `sourceId`、可选 `dryRun`，缺省 `dryRun: true`） | HTTP 201 返回 `MediaCleanupRunSnapshot`；入队 `cosmos.media-cleanup@1`。durable host 未启用时 409 `conflict`；未知字段或非法 body 400 `validation_failed`；同 key 不同 `{sourceId, dryRun}` 409 `conflict`。无 header 时生成随机 key。 |
 | `GET /media-cleanups/:runId` | path `runId` | HTTP 200 返回 `MediaCleanupRunSnapshot`（`status` 为公开 Run 状态；`report` 在 Action 完成后由 `media.cleanup.completed.v1` 事件填充，未完成或未解析时为 `null`）；不存在 404。 |
+| `GET /connections` | 无 | HTTP 200 返回 `ConnectionInstance[]`（按 createdAt 升序）。 |
+| `GET /connections/:connectionId` | path `connectionId` | HTTP 200 返回 `ConnectionInstance`；不存在 404。 |
+| `POST /connections` | body `CreateConnectionCommand` | HTTP 201 返回 `ConnectionInstance`（status 缺省 `active`）；非法 body 400 `validation_failed`。 |
+| `PATCH /connections/:connectionId` | body `UpdateConnectionCommand`（全可选） | HTTP 200 返回更新后的 `ConnectionInstance`；不存在 404。 |
+| `POST /connections/:connectionId/removals` | path `connectionId` | HTTP 200 返回 ack；同事务把引用该连接的 Source `connectionId` 置空，不删除来源。 |
+
+Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。
 
 Catalog page 当前固定 `nextCursor: null`，`snapshotAt` 是响应生成时的 ISO 时间。Builtin
 catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions，Workflow

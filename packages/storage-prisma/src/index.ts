@@ -11,6 +11,9 @@ import {
     sourceKindSchema,
     sourceConfigSchema,
     type CreateSourceCommand,
+    type ConnectionInstance,
+    type CreateConnectionCommand,
+    type UpdateConnectionCommand,
     type ContentMetrics,
     type EntryDetail,
     type EntryPage,
@@ -93,6 +96,7 @@ import {
     AnnotationNotFoundError,
     SavedViewNotFoundError,
     CollectionNotFoundError,
+    ConnectionNotFoundError,
     BoardBlockNotFoundError,
     BoardNameConflictError,
     BoardNotFoundError,
@@ -303,6 +307,7 @@ export class PrismaCosmosRepository implements CosmosRepository {
             data: {
                 ...(input.name !== undefined ? { name: input.name } : {}),
                 ...(input.config !== undefined ? { configJson: JSON.stringify(input.config) } : {}),
+                ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
                 revision: { increment: 1 },
             },
         });
@@ -389,6 +394,61 @@ export class PrismaCosmosRepository implements CosmosRepository {
             source = await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
         }
         return this.toSourceSnapshot(source);
+    }
+
+    async createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance> {
+        const connection = await this.prisma.connectionInstance.create({
+            data: {
+                name: input.name,
+                connectorId: input.connectorId,
+                account: input.account ?? null,
+                scopeJson: input.scopeJson ?? null,
+                secretRef: input.secretRef ?? null,
+            },
+        });
+        return this.toConnectionSnapshot(connection);
+    }
+
+    async listConnections(): Promise<readonly ConnectionInstance[]> {
+        const connections = await this.prisma.connectionInstance.findMany({
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return connections.map((connection) => this.toConnectionSnapshot(connection));
+    }
+
+    async getConnection(connectionId: string): Promise<ConnectionInstance | null> {
+        const connection = await this.prisma.connectionInstance.findUnique({
+            where: { id: connectionId },
+        });
+        return connection ? this.toConnectionSnapshot(connection) : null;
+    }
+
+    async updateConnection(connectionId: string, input: UpdateConnectionCommand): Promise<ConnectionInstance> {
+        const current = await this.prisma.connectionInstance.findUnique({
+            where: { id: connectionId },
+        });
+        if (!current) throw new ConnectionNotFoundError(connectionId);
+        const updated = await this.prisma.connectionInstance.update({
+            where: { id: connectionId },
+            data: {
+                ...(input.name !== undefined ? { name: input.name } : {}),
+                ...(input.status !== undefined ? { status: input.status } : {}),
+                ...(input.secretRef !== undefined ? { secretRef: input.secretRef } : {}),
+                ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
+            },
+        });
+        return this.toConnectionSnapshot(updated);
+    }
+
+    async deleteConnection(connectionId: string): Promise<boolean> {
+        await this.prisma.$transaction(async (tx) => {
+            await tx.sourceInstance.updateMany({
+                where: { connectionId },
+                data: { connectionId: null },
+            });
+            await tx.connectionInstance.delete({ where: { id: connectionId } });
+        });
+        return true;
     }
 
     async createRun(input: {
@@ -6161,6 +6221,22 @@ export class PrismaCosmosRepository implements CosmosRepository {
             updatedAt: source.updatedAt.toISOString(),
             lastRunAt: latest?.at.toISOString() ?? null,
             lastError: latest?.error ?? null,
+            connectionId: source.connectionId,
+        };
+    }
+
+    private toConnectionSnapshot(connection: Prisma.ConnectionInstanceGetPayload<{}>): ConnectionInstance {
+        return {
+            id: connection.id,
+            name: connection.name,
+            connectorId: connection.connectorId,
+            account: connection.account,
+            scopeJson: connection.scopeJson,
+            status: connection.status as ConnectionInstance["status"],
+            secretRef: connection.secretRef,
+            lastError: connection.lastError,
+            createdAt: connection.createdAt.toISOString(),
+            updatedAt: connection.updatedAt.toISOString(),
         };
     }
 
@@ -6424,6 +6500,8 @@ function assertStorySubtype(kind: StoryKind, subtype: string | null): void {
 export { PrismaWorkflowBackend } from "./workflow-backend.js";
 export { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 export { PrismaWorkflowEventSink } from "./workflow-event-sink.js";
+export { FileSecretStore } from "./secret-store.js";
+export { PrismaConnectorStateStore } from "./connector-state-store.js";
 
 async function assertJobLease(
     tx: Prisma.TransactionClient,

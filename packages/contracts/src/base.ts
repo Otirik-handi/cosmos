@@ -282,6 +282,8 @@ export const updateSourceCommandSchema = z.object({
     baseRevisionId: sourceRevisionIdSchema,
     name: z.string().trim().min(1).max(200).optional(),
     config: z.unknown().optional(),
+    /** Optional reusable connection anchor (ADR-0017); null unlinks the source. */
+    connectionId: z.string().trim().min(1).max(100).nullable().optional(),
 }).strict();
 export type UpdateSourceCommand = z.infer<typeof updateSourceCommandSchema>;
 
@@ -331,5 +333,46 @@ export type SourceExecutionSnapshot = z.infer<typeof sourceExecutionSnapshotSche
 export const sourceSnapshotSchema = sourceExecutionSnapshotSchema.extend({
     lastRunAt: z.string().nullable(),
     lastError: z.string().nullable(),
+    /** Optional reusable connection anchor; null/absent for unauthenticated sources (ADR-0017). */
+    connectionId: z.string().nullable().optional(),
 });
 export type SourceSnapshot = z.infer<typeof sourceSnapshotSchema>;
+
+/**
+ * Reusable login/authorization on an external platform (ADR-0017). The DTO
+ * exposes identity, scope, status and an opaque `secretRef`; the credential
+ * body never appears here or in any config/Job/Event/log.
+ */
+export const connectionStatusSchema = z.enum(["active", "revoked", "expired", "error"]);
+export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
+
+export const connectionInstanceSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    connectorId: z.string(),
+    account: z.string().nullable(),
+    scopeJson: z.string().nullable(),
+    status: connectionStatusSchema,
+    secretRef: z.string().nullable(),
+    lastError: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+}).strict();
+export type ConnectionInstance = z.infer<typeof connectionInstanceSchema>;
+
+export const createConnectionCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    connectorId: z.string().trim().min(1).max(100),
+    account: z.string().trim().max(200).nullable().optional(),
+    scopeJson: z.string().max(4000).nullable().optional(),
+    secretRef: z.string().trim().min(1).max(300).nullable().optional(),
+}).strict();
+export type CreateConnectionCommand = z.infer<typeof createConnectionCommandSchema>;
+
+export const updateConnectionCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200).optional(),
+    status: connectionStatusSchema.optional(),
+    secretRef: z.string().trim().min(1).max(300).nullable().optional(),
+    lastError: z.string().max(500).nullable().optional(),
+}).strict();
+export type UpdateConnectionCommand = z.infer<typeof updateConnectionCommandSchema>;
