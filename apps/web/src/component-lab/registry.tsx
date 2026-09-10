@@ -23,6 +23,7 @@ import {
     renderFeedBrowserLab,
     renderRunControlLab,
     renderRunHistoryLab,
+    renderStoragePanelLab,
     renderSourceActionsLab,
     renderSourceFormLab,
     renderStatusSummaryLab,
@@ -501,6 +502,19 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderConnectionPanelLab,
+    },
+    {
+        id: "storage-panel",
+        label: "StoragePanel",
+        category: "Cosmos",
+        modulePath: "components/cosmos/storage-panel.tsx",
+        defaultSceneId: "default",
+        controls: [],
+        scenes: [
+            {id: "default", label: "Default", props: {}},
+        ],
+        tokens: sharedTokens,
+        render: renderStoragePanelLab,
     },
     {
         id: "source-form",

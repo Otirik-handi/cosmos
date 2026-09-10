@@ -27,6 +27,7 @@ import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {RunControl} from "@/components/cosmos/run-control";
 import {RunHistory} from "@/components/cosmos/run-history";
+import {StoragePanel} from "@/components/cosmos/storage-panel";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
@@ -360,6 +361,37 @@ export function renderConnectionPanelLab(props: LabProps) {
         ? ({ listConnections: async () => [] } as unknown as HttpCosmosClient)
         : connectionLabClient;
     return <ConnectionPanel client={client} />;
+}
+
+const storagePanelLabClient = {
+    storageStats: async () => ({
+        databaseBytes: 12_345_678,
+        blobBytes: 4_194_304,
+        blobFileCount: 12,
+        artifactBytes: 0,
+        cacheBytes: 1024,
+        logBytes: 2048,
+        secretBytes: 0,
+        categories: { raw: 16_539_982, user: 12_345_678, rebuildable: 3072, cleanable: 4_194_304 },
+        snapshotAt: "2026-09-10T08:00:00.000Z",
+    }),
+    listBackups: async () => [{
+        id: "backup-2026-09-10.sqlite",
+        name: "backup-2026-09-10.sqlite",
+        byteSize: 12_345_678,
+        createdAt: "2026-09-10T08:00:00.000Z",
+    }],
+    createBackup: async () => ({
+        id: "backup-new.sqlite",
+        name: "backup-new.sqlite",
+        byteSize: 12_345_678,
+        createdAt: "2026-09-10T08:00:00.000Z",
+    }),
+    restoreBackup: async () => ({ ok: true, id: "backup-new.sqlite", action: "backup.restored" }),
+} as unknown as HttpCosmosClient;
+
+export function renderStoragePanelLab() {
+    return <StoragePanel client={storagePanelLabClient} />;
 }
 
 export function renderFeedBrowserLab(props: LabProps) {

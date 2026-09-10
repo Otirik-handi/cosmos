@@ -56,6 +56,7 @@ import { Input } from "@/components/ui/input";
 import { BoardView, type BoardCommands } from "@/components/cosmos/board-view";
 import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {RunHistory} from "@/components/cosmos/run-history";
+import {StoragePanel} from "@/components/cosmos/storage-panel";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
@@ -1536,6 +1537,10 @@ export default function Home() {
                     <section aria-label="连接" className="grid gap-2">
                         <h2 className="font-display text-lg font-semibold">连接</h2>
                         <ConnectionPanel client={client} />
+                    </section>
+                    <section aria-label="存储" className="grid gap-2">
+                        <h2 className="font-display text-lg font-semibold">存储</h2>
+                        <StoragePanel client={client} />
                     </section>
                     {showSourceForm && (
                         <SourceForm

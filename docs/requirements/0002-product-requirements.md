@@ -364,6 +364,8 @@ flowchart LR
 
 **Phase 2 第十三切片注记（2026-09-10，[`trigger-sdk-v1` Proposal](../proposals/trigger-sdk-v1.md) accepted）**：AUT-004/EXT-006/007 的平台面 v1 按 Proposal 冻结——先交付 `TriggerBinding` 实体（单绑定 schedule/manual，从 `SourceInstance.config.scheduleIntervalMs` 迁出，调度循环改读 `listScheduleTriggers`）+ `SourceDefinitionManifest` 扩展 `auth`（none/oauth/cookie/secret_ref/external + secretRefRequired）与 `operations`（input/output schema、稳定 external key、discovery context、media、stateStore 命名空间）；EXT-003 版本化合同保持现状。webhook/内部事件/上游结果触发（AUT-004 完整形态）、自定义 Trigger/Action 插件运行时（AUT-005）、多计划 overlap policy 后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第十四切片注记（2026-09-10，[`ops-storage-v1` Proposal](../proposals/ops-storage-v1.md) accepted）**：OPS-003/004 的 v1 按 Proposal 冻结——先交付 `GET /storage-stats`（数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层 raw/user/rebuildable/cleanable，只读）+ `POST /backups`/`GET /backups`（`VACUUM INTO` 复制 SQLite 到数据根 `backups/`，不依赖源码 checkout）+ `POST /backups/:id/restores`（覆盖 SQLite + 恢复前保护备份，需重启生效）；清理沿用 media-cleanup「预览 → 确认」。导出、Artifact/Cache 清理（LIB-008 完整形态）、Blob 备份、增量/云端备份后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
 | REC-001 | Phase 1 | Admission 决定是否录入，Ranking 决定当前是否展示。 | 一条未进入今日 Feed 的已录入信息仍可在信息库搜索。 |

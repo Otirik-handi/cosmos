@@ -303,6 +303,39 @@ export const runControlResultSchema = z.object({
 }).strict();
 export type RunControlResult = z.infer<typeof runControlResultSchema>;
 
+/**
+ * Storage occupancy snapshot (ADR-0019 / OPS-003). Sizes are byte counts; the
+ * `categories` split raw data / user data / rebuildable cache / cleanable media
+ * so the UI never has to guess what is safe to delete.
+ */
+export const storageStatsSchema = z.object({
+    databaseBytes: z.number().int().nonnegative(),
+    blobBytes: z.number().int().nonnegative(),
+    blobFileCount: z.number().int().nonnegative(),
+    artifactBytes: z.number().int().nonnegative(),
+    cacheBytes: z.number().int().nonnegative(),
+    logBytes: z.number().int().nonnegative(),
+    secretBytes: z.number().int().nonnegative(),
+    categories: z.object({
+        raw: z.number().int().nonnegative(),
+        user: z.number().int().nonnegative(),
+        rebuildable: z.number().int().nonnegative(),
+        cleanable: z.number().int().nonnegative(),
+    }).strict(),
+    snapshotAt: z.string(),
+}).strict();
+export type StorageStats = z.infer<typeof storageStatsSchema>;
+
+/** A database backup file inside the data root (ADR-0019 / OPS-004). */
+export const backupSnapshotSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    byteSize: z.number().int().nonnegative(),
+    createdAt: z.string(),
+}).strict();
+export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
+
+
 export const healthResponseSchema = z.object({
     status: z.literal("ok"),
     service: z.string(),

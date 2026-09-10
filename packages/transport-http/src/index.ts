@@ -23,6 +23,8 @@ import {
     connectionInstanceSchema,
     createConnectionCommandSchema,
     updateConnectionCommandSchema,
+    storageStatsSchema,
+    backupSnapshotSchema,
     storyDetailSchema,
     storySubtypePageSchema,
     topicDetailSchema,
@@ -59,6 +61,8 @@ import {
     type ConnectionInstance,
     type CreateConnectionCommand,
     type UpdateConnectionCommand,
+    type StorageStats,
+    type BackupSnapshot,
     type MediaCleanupCommand,
     type MediaCleanupRunSnapshot,
     type StoryDetail,
@@ -355,6 +359,32 @@ export class HttpCosmosClient {
 
     async deleteConnection(connectionId: string): Promise<UserOrganizationAck> {
         return this.request(`/api/v1/connections/${encodeURIComponent(connectionId)}/removals`, {
+            method: "POST",
+            schema: userOrganizationAckSchema,
+        });
+    }
+
+    async storageStats(): Promise<StorageStats> {
+        return this.request("/api/v1/storage-stats", {
+            schema: storageStatsSchema,
+        });
+    }
+
+    async listBackups(): Promise<readonly BackupSnapshot[]> {
+        return this.request("/api/v1/backups", {
+            schema: backupSnapshotSchema.array(),
+        });
+    }
+
+    async createBackup(): Promise<BackupSnapshot> {
+        return this.request("/api/v1/backups", {
+            method: "POST",
+            schema: backupSnapshotSchema,
+        });
+    }
+
+    async restoreBackup(backupId: string): Promise<UserOrganizationAck> {
+        return this.request(`/api/v1/backups/${encodeURIComponent(backupId)}/restores`, {
             method: "POST",
             schema: userOrganizationAckSchema,
         });

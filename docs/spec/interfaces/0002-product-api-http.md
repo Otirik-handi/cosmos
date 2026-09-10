@@ -149,6 +149,11 @@ the current code has not removed it or replaced it with a permanent redirect.
 
 Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。
 
+| `GET /storage-stats` | 无 | HTTP 200 返回 `StorageStats`（数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层 `categories`）；只读。 |
+| `GET /backups` | 无 | HTTP 200 返回 `BackupSnapshot[]`（数据根 `backups/` 下的数据库备份，按时间升序）。 |
+| `POST /backups` | 无 | HTTP 201 返回 `BackupSnapshot`；用 `VACUUM INTO` 生成一致快照到 `backups/backup-<timestamp>.sqlite`（不依赖源码 checkout，Blob 不随备份）。 |
+| `POST /backups/:backupId/restores` | path `backupId` | HTTP 200 返回 ack；恢复前生成 `pre-restore-*.sqlite` 保护备份后覆盖当前 SQLite；不存在 404；需重启 API/Worker 生效。 |
+
 Catalog page 当前固定 `nextCursor: null`，`snapshotAt` 是响应生成时的 ISO 时间。Builtin
 catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions，Workflow
 `cosmos.ingest@1` 与 `cosmos.media-cleanup@1`，以及 `source.fetch@1`、`media.retry.fetch@1`、

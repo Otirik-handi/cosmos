@@ -4,6 +4,12 @@ import {
     relative,
     resolve,
 } from "node:path";
+import {
+    copyFile,
+    mkdir,
+    readdir,
+    stat,
+} from "node:fs/promises";
 
 import {
     contentKindSchema,
@@ -14,6 +20,8 @@ import {
     type ConnectionInstance,
     type CreateConnectionCommand,
     type UpdateConnectionCommand,
+    type StorageStats,
+    type BackupSnapshot,
     type ContentMetrics,
     type EntryDetail,
     type EntryPage,
@@ -189,6 +197,39 @@ export function resolveContainedPath(root: string, child: string): string {
     }
 
     return resolvedChild;
+}
+
+async function fileSize(path: string): Promise<number> {
+    const info = await stat(path).catch(() => null);
+    return info?.isFile() ? info.size : 0;
+}
+
+async function directorySize(root: string): Promise<{ bytes: number; fileCount: number }> {
+    const queue: string[] = [root];
+    let bytes = 0;
+    let fileCount = 0;
+    while (queue.length > 0) {
+        const current = queue.pop()!;
+        let entries: import("node:fs").Dirent[];
+        try {
+            entries = await readdir(current, { withFileTypes: true });
+        } catch {
+            continue;
+        }
+        for (const entry of entries) {
+            const full = join(current, entry.name);
+            if (entry.isDirectory()) {
+                queue.push(full);
+            } else if (entry.isFile()) {
+                const info = await stat(full).catch(() => null);
+                if (info) {
+                    bytes += info.size;
+                    fileCount += 1;
+                }
+            }
+        }
+    }
+    return { bytes, fileCount };
 }
 
 function parseSourceRevisionId(sourceId: string, revisionId: string): number {
@@ -513,6 +554,91 @@ export class PrismaCosmosRepository implements CosmosRepository {
             });
         }
         return result;
+    }
+
+    async getStorageStats(): Promise<StorageStats> {
+        const databaseBytes = await fileSize(this.roots.databasePath);
+        const blob = await directorySize(this.roots.blobRoot);
+        const artifact = await directorySize(this.roots.artifactRoot);
+        const cache = await directorySize(this.roots.cacheRoot);
+        const log = await directorySize(this.roots.logRoot);
+        const secret = await directorySize(this.roots.secretRoot);
+
+        const cleanable = await this.prisma.asset.aggregate({
+            _sum: { byteSize: true },
+            where: { status: "saved" },
+        });
+        const cleanableBytes = cleanable._sum.byteSize ?? 0;
+
+        return {
+            databaseBytes,
+            blobBytes: blob.bytes,
+            blobFileCount: blob.fileCount,
+            artifactBytes: artifact.bytes,
+            cacheBytes: cache.bytes,
+            logBytes: log.bytes,
+            secretBytes: secret.bytes,
+            categories: {
+                raw: blob.bytes + databaseBytes,
+                user: databaseBytes,
+                rebuildable: cache.bytes + log.bytes,
+                cleanable: cleanableBytes,
+            },
+            snapshotAt: new Date().toISOString(),
+        };
+    }
+
+    async listBackups(): Promise<readonly BackupSnapshot[]> {
+        const dir = join(this.roots.dataRoot, "backups");
+        let entries: string[] = [];
+        try {
+            entries = await readdir(dir);
+        } catch {
+            return [];
+        }
+        const snapshots: BackupSnapshot[] = [];
+        for (const name of entries) {
+            if (!name.endsWith(".sqlite")) continue;
+            const info = await stat(join(dir, name)).catch(() => null);
+            if (!info || !info.isFile()) continue;
+            snapshots.push({
+                id: name,
+                name,
+                byteSize: info.size,
+                createdAt: info.birthtime.toISOString(),
+            });
+        }
+        return snapshots.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    }
+
+    async createBackup(): Promise<BackupSnapshot> {
+        const now = new Date();
+        const name = `backup-${now.toISOString().replaceAll(":", "-").replaceAll(".", "-")}.sqlite`;
+        const dir = join(this.roots.dataRoot, "backups");
+        await mkdir(dir, { recursive: true });
+        const target = join(dir, name);
+        await this.prisma.$executeRawUnsafe(`VACUUM INTO '${target.replaceAll("\\", "/")}'`);
+        const info = await stat(target);
+        return {
+            id: name,
+            name,
+            byteSize: info.size,
+            createdAt: info.birthtime.toISOString(),
+        };
+    }
+
+    async restoreBackup(backupId: string): Promise<void> {
+        const dir = join(this.roots.dataRoot, "backups");
+        const source = join(dir, backupId);
+        const sourceInfo = await stat(source).catch(() => null);
+        if (!sourceInfo || !sourceInfo.isFile()) {
+            throw new Error(`Backup not found: ${backupId}`);
+        }
+        // Protect the current state before overwriting it.
+        const now = new Date();
+        const preRestore = join(dir, `pre-restore-${now.toISOString().replaceAll(":", "-").replaceAll(".", "-")}.sqlite`);
+        await this.prisma.$executeRawUnsafe(`VACUUM INTO '${preRestore.replaceAll("\\", "/")}'`);
+        await copyFile(source, this.roots.databasePath);
     }
 
     async createRun(input: {

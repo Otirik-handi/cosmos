@@ -6,6 +6,8 @@ import {
     type ConnectionInstance,
     type CreateConnectionCommand,
     type UpdateConnectionCommand,
+    type StorageStats,
+    type BackupSnapshot,
     type ConnectorDescriptor,
     type FeedPage,
     type HealthResponse,
@@ -453,6 +455,14 @@ export interface CosmosRepository {
         intervalMs: number;
         lastRunAt: string | null;
     }[]>;
+    /** Storage occupancy snapshot (ADR-0019 / OPS-003). */
+    getStorageStats(): Promise<StorageStats>;
+    /** List database backups inside the data root (ADR-0019 / OPS-004). */
+    listBackups(): Promise<readonly BackupSnapshot[]>;
+    /** Create a consistent SQLite backup and return its snapshot. */
+    createBackup(): Promise<BackupSnapshot>;
+    /** Restore a backup over the current database (creates a pre-restore backup). */
+    restoreBackup(backupId: string): Promise<void>;
     createRun(input: {
         sourceId: string;
         triggerKind: "manual" | "schedule";

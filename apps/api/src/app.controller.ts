@@ -558,6 +558,37 @@ export class AppController {
         }
     }
 
+    // ---- Storage occupancy + backup/restore (ADR-0019 / OPS-003/004). ----
+
+    @Get("storage-stats")
+    async storageStats() {
+        return this.repository.getStorageStats();
+    }
+
+    @Get("backups")
+    async listBackups() {
+        return this.repository.listBackups();
+    }
+
+    @Post("backups")
+    async createBackup() {
+        return this.repository.createBackup();
+    }
+
+    @Post("backups/:backupId/restores")
+    @Bind(Param("backupId"))
+    async restoreBackup(backupId: string) {
+        try {
+            await this.repository.restoreBackup(backupId);
+            return { ok: true, id: backupId, action: "backup.restored" };
+        } catch (error) {
+            if (error instanceof Error && error.message.startsWith("Backup not found")) {
+                throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
+            }
+            throw error;
+        }
+    }
+
     @Post("sources/:sourceId/runs")
     @Bind(Param("sourceId"), Headers("idempotency-key"))
     async runSource(sourceId: string, idempotencyKey?: string) {

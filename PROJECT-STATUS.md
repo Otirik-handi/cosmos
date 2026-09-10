@@ -1,6 +1,19 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-10。Phase 2 第十三切片 Trigger/SDK v1（Task 23）已在 `.worktree/trigger-sdk` / `feat/t23-trigger-sdk` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前 Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并 `master` 并推送（`9c4cf72`）；第十一切片 Run 控制 v1（Task 21）已合并。第十/九/八/七切片（Task 20/19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-10。Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已在 `.worktree/ops-storage` / `feat/t24-ops-storage` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前第十三切片 Trigger/SDK v1（Task 23）已合并 `master` 并推送（`e8c2f84`）；第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并（`9c4cf72`）；第十一切片 Run 控制 v1（Task 21）已合并。第十/九/八/七切片（Task 20/19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-10：存储占用统计与备份/恢复 v1 实现（Phase 2 第十四切片，Task 24）
+
+Proposal [`ops-storage-v1`](docs/proposals/ops-storage-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0019 的实现已在 `.worktree/ops-storage` / `feat/t24-ops-storage` 完成，**未 commit、未 push、未合并**：
+
+1. **占用统计**：`GET /api/v1/storage-stats` 返回数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层归类（raw = Blob+DB、user = DB、rebuildable = Cache+Log、cleanable = `saved` Asset 字节合计）；只读。
+2. **备份**：`POST /api/v1/backups`（`VACUUM INTO` 复制 SQLite 到数据根 `backups/`，不依赖源码 checkout）+ `GET /api/v1/backups`。
+3. **恢复**：`POST /api/v1/backups/:id/restores`（恢复前 `VACUUM INTO` 保护备份 + 覆盖 SQLite，需重启生效）。
+4. **Web**：`StoragePanel`（占用 + 备份列表 + 新建/恢复）+ 组件实验室登记 + 侧栏「存储」区；清理沿用 media-cleanup。
+
+验证（2026-09-10，实际运行）：`bun run typecheck` 全仓通过。聚焦测试：storage `storage-ops.test.ts` 2/2、transport-http 17/17、web component-lab 27/27 全部通过。未运行：全量 `bun run test`、浏览器产品/组件实验室 E2E、Windows smoke、Docker、发布部署（既有后置边界）。
+
+过程、偏差与完整命令见 Task 24 walkthrough [`.agents/tasks/24-ops-storage/README.md`](.agents/tasks/24-ops-storage/README.md)。
 
 ## 2026-09-10：Trigger / SDK v1 实现（Phase 2 第十三切片，Task 23）
 
@@ -345,8 +358,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
 - Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；未合并 `master`（无 PR，单开发者仓库，待维护者合并）。
 - Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并 `master` 并推送（`9c4cf72`）；Proposal accepted + ADR-0017 + PRD 注记 + Task 已同步。
-- Phase 2 第十三切片 Trigger/SDK v1（Task 23）已在 `.worktree/trigger-sdk` / `feat/t23-trigger-sdk` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0018 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权）。
-- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面最后一块（OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
+- Phase 2 第十三切片 Trigger/SDK v1（Task 23）已合并 `master` 并推送（`e8c2f84`）；Proposal accepted + ADR-0018 + PRD 注记 + Task 已同步。
+- Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已在 `.worktree/ops-storage` / `feat/t24-ops-storage` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0019 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权）。
+- Phase 2 平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）已全部落地；下一切片候选仅剩自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。
