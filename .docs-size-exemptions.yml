@@ -1,0 +1,9 @@
+# 文档大小豁免清单 —— 依据 docs/proposals/oversized-doc-splitting-v1.md §4.10
+# 字段:path / reason / owner / review_after / max_size(字节;null 表示不设上限)
+# CI 门禁(scripts/size-governance.py --check)跳过本清单内的文件;review_after 过期会输出 warning。
+exemptions:
+  - path: docs/requirements/0001-original-requirements.md
+    reason: append-only 用户原话真相源,按登记规则只增不减
+    owner: maintainer
+    review_after: "2026-12-31"
+    max_size: null

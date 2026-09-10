@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "generated": "2026-09-11",
+  "note": "存量超标登记，只减不增：条目只允许移除，bytes 只允许下调",
+  "files": {
+    ".agents/tasks/02-rss-ingestion/README.md": 58746,
+    ".agents/tasks/04-workflow-runtime/README.md": 158466,
+    ".agents/tasks/04-workflow-runtime/walkthrough.md": 357762,
+    ".agents/tasks/07-deferred-workflow-host/walkthrough.md": 41123,
+    "CONTEXT.md": 38133,
+    "PROJECT-STATUS.md": 112029,
+    "docs/api/0002-product-service-api.md": 35341,
+    "docs/api/0003-product-dtos.md": 55495,
+    "docs/api/0005-worker-gateway-api.md": 30732,
+    "docs/architecture/0001-cosmos-foundation.md": 150993,
+    "docs/architecture/0002-information-model.md": 62432,
+    "docs/requirements/0002-product-requirements.md": 101572,
+    "docs/spec/contracts/0001-public-contracts.md": 40427,
+    "docs/spec/interfaces/0002-product-api-http.md": 42765,
+    "docs/spec/interfaces/0005-web-client.md": 41785,
+    "docs/spec/storage/0001-prisma-repository.md": 45279
+  }
+}
