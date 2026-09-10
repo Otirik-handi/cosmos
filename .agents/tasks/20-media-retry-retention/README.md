@@ -64,7 +64,7 @@ Non-goals（见 Proposal / ADR-0015）：
 
 ## Current State
 
-- 生命周期阶段：切片 1（失败重试）与切片 2（保留期清理）均已实现并通过门禁；文档（Proposal accepted / ADR-0015 / PRD / 架构 / ADR Gate / spec / testing / Task）已同步。**未 commit、未 push、未合并**（等待维护者授权）。
+- 生命周期阶段：切片 1（失败重试）与切片 2（保留期清理）均已实现并通过门禁；文档（Proposal accepted / ADR-0015 / PRD / 架构 / ADR Gate / spec / testing / Task）已同步。已随 PR #3 合入 `master` 并推送（merge commit `0ad4d2b`）；worktree `.worktree/media-retry-retention` 与分支 `feat/t20-media-retry-retention` 已清理。
 - 连贯目标：让用户能补救降级媒体、按来源回收已保存媒体，且两者都不静默。
 - 可观察验收（≤3 条）：
   1. 一个因网络失败降级的图片，在来源下一次采集后变成 `saved`（图片可见），且条目没有新增 Revision；

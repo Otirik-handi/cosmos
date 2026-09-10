@@ -42,7 +42,7 @@ Non-goals（见 Proposal / ADR-0019）：
 
 ## Current State
 
-- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档已同步。**未 commit、未 push、未合并**（等待维护者授权）。
+- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档已同步。已合并 `master` 并推送（commit `27f249b`，无 PR，单开发者仓库）；worktree `.worktree/ops-storage` 与分支 `feat/t24-ops-storage` 已清理。
 - 连贯目标：用户能查看占用并做数据库备份/恢复。
 - 可观察验收（≤3 条）：
   1. `GET /storage-stats` 返回非负字节与分层归类（cleanable = `saved` Asset 字节合计）；

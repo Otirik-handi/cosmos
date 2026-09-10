@@ -1,10 +1,10 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-10。Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已在 `.worktree/ops-storage` / `feat/t24-ops-storage` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前第十三切片 Trigger/SDK v1（Task 23）已合并 `master` 并推送（`e8c2f84`）；第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并（`9c4cf72`）；第十一切片 Run 控制 v1（Task 21）已合并。第十/九/八/七切片（Task 20/19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-10。Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已合并 `master` 并推送（`27f249b`）。第十三切片 Trigger/SDK v1（Task 23）已合并（`e8c2f84`）；第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并（`9c4cf72`）；第十一切片 Run 控制 v1（Task 21，RUN-004）已合并（`1f879f4` + `da44743`）。第十切片媒体失败重试与保留期清理 v1（Task 20）已随 PR #3 合入（`0ad4d2b`）；第九/八/七切片（Task 19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 2 平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）全部落地，worktree 与分支均已清理。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 2026-09-10：存储占用统计与备份/恢复 v1 实现（Phase 2 第十四切片，Task 24）
 
-Proposal [`ops-storage-v1`](docs/proposals/ops-storage-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0019 的实现已在 `.worktree/ops-storage` / `feat/t24-ops-storage` 完成，**未 commit、未 push、未合并**：
+Proposal [`ops-storage-v1`](docs/proposals/ops-storage-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0019 的实现已完成并合并 `master` / 推送（commit `27f249b`，无 PR，单开发者仓库；worktree 与分支已清理）：
 
 1. **占用统计**：`GET /api/v1/storage-stats` 返回数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层归类（raw = Blob+DB、user = DB、rebuildable = Cache+Log、cleanable = `saved` Asset 字节合计）；只读。
 2. **备份**：`POST /api/v1/backups`（`VACUUM INTO` 复制 SQLite 到数据根 `backups/`，不依赖源码 checkout）+ `GET /api/v1/backups`。
@@ -17,7 +17,7 @@ Proposal [`ops-storage-v1`](docs/proposals/ops-storage-v1.md)（accepted，2026-
 
 ## 2026-09-10：Trigger / SDK v1 实现（Phase 2 第十三切片，Task 23）
 
-Proposal [`trigger-sdk-v1`](docs/proposals/trigger-sdk-v1.md)（accepted，2026-09-10，用户确认三项默认）与 ADR-0018 的实现已在 `.worktree/trigger-sdk` / `feat/t23-trigger-sdk` 完成，**未 commit、未 push、未合并**：
+Proposal [`trigger-sdk-v1`](docs/proposals/trigger-sdk-v1.md)（accepted，2026-09-10，用户确认三项默认）与 ADR-0018 的实现已完成并合并 `master` / 推送（commit `e8c2f84`，无 PR，单开发者仓库；worktree 与分支已清理）：
 
 1. **TriggerBinding 实体**：`TriggerBinding` 表（单绑定 schedule/manual）+ migration 把 `SourceInstance.config.scheduleIntervalMs` 回填为 schedule TriggerBinding 并从 config 移除；调度循环改读 `listScheduleTriggers()`；`createSource`/`updateSource` 用顶层 `scheduleIntervalMs` 建/改/删绑定。
 2. **SourceDefinitionManifest 扩展**（EXT-006/007）：新增 `auth`（none/oauth/cookie/secret_ref/external + secretRefRequired）与 `operations`（input/output schema、稳定 external key、discovery context、media、stateStore 命名空间）；内置 rss/fixture/aihot/bilibili 补全声明。
@@ -29,7 +29,7 @@ Proposal [`trigger-sdk-v1`](docs/proposals/trigger-sdk-v1.md)（accepted，2026-
 
 ## 2026-09-10：Connection/SecretStore/StateStore v1 实现（Phase 2 第十二切片，Task 22）
 
-Proposal [`connection-state-store-v1`](docs/proposals/connection-state-store-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0017 的实现已在 `.worktree/connection-state-store` / `feat/t22-connection-state-store` 完成，**未 commit、未 push、未合并**：
+Proposal [`connection-state-store-v1`](docs/proposals/connection-state-store-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0017 的实现已完成并合并 `master` / 推送（commit `9c4cf72`，无 PR，单开发者仓库；worktree 与分支已清理）：
 
 1. **ConnectionInstance**：可复用连接身份（name/connectorId/account/scope/status/secretRef），`SourceInstance.connectionId` 可空外键（无认证来源 null）；CRUD 端点 `GET/POST /connections`、`GET/PATCH /connections/:id`、`POST /connections/:id/removals`；删除连接显式把来源 `connectionId` 置空、不删来源。
 2. **SecretStore 第一版**（待决定 16）：受限权限明文文件 `FileSecretStore`（`secretRoot`，`mode 0o600`，路径逃逸校验）；公开合同 `SecretStorePort`（put/read/delete by 不透明 ref），凭证不进 config/Job/Event/日志。
@@ -42,7 +42,7 @@ Proposal [`connection-state-store-v1`](docs/proposals/connection-state-store-v1.
 
 ## 2026-09-10：Run 控制 v1 实现（Phase 2 第十一切片，Task 21）
 
-Proposal [`run-control-v1`](docs/proposals/run-control-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0016 的实现已完成并提交推送 `feat/t21-run-control`（commit `1f879f4`），未合并 `master`：
+Proposal [`run-control-v1`](docs/proposals/run-control-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0016 的实现已完成并合并 `master` / 推送（commits `1f879f4` + `da44743`，无 PR，单开发者仓库；worktree 与分支已清理）：
 
 1. **取消**：`POST /api/v1/runs/:id/cancellations` → host store `cancelWorkflowRun`（status CAS 终态化为 `cancelled` + 清 lease + `resumeRequired=false` + `run.cancelled.v1` 事件）。用户覆盖式、不要求持有当前 lease；Worker 后续 `heartbeatRun`/`completeActivity`/`releaseRun` 因 lease CAS 失败而拒绝写入，已入库 Observation/Entry/Revision 不回滚。
 2. **重新运行**：`POST /api/v1/runs/:id/re-runs` → `IngestWorkflowControlService.rerun`（读原 Run 的 `inputSnapshot.source.id`，复用 `enqueue` 用新幂等键入队全新 Run，`triggerKind=manual`）；只对终态 Run 开放，复用已入库结果、从来源当前 checkpoint 重新 fetch + ingest。
@@ -57,7 +57,7 @@ Proposal [`run-control-v1`](docs/proposals/run-control-v1.md)（accepted，2026-
 
 ## 2026-09-09：媒体失败重试与保留期清理 v1 实现（Phase 2 第十切片，Task 20）
 
-Proposal [`media-retry-retention-v1`](docs/proposals/media-retry-retention-v1.md)（accepted，2026-09-09，用户逐项确认四项裁决）与 ADR-0015 的实现已在 `.worktree/media-retry-retention` / `feat/t20-media-retry-retention` 完成（切片 1–2），**未 commit、未 push、未合并**：
+Proposal [`media-retry-retention-v1`](docs/proposals/media-retry-retention-v1.md)（accepted，2026-09-09，用户逐项确认四项裁决）与 ADR-0015 的实现已随 PR #3 合入 `master` / 推送（merge commit `0ad4d2b`；worktree 与分支已清理）：
 
 1. **失败重试**：`cosmos.ingest@1` 在 `source.fetch@1` 之后、`library.ingest@1` 之前增加 `media.retry.fetch@1`/`media.retry.apply@1`，只处理早先 Run 已存的降级 Asset；定时采集与既有「手动采集」走同一路径，不新增端点或 Run 类型。可重试性由机器可读 `Asset.errorCode` 决定（只重试 `timeout`/`network`/`http_error`/`budget_run`）；上限由每来源 `Source.config.media.retry.maxAttempts`（含首次，缺省 3，0 = 关闭，上界 10）与 `Asset.attemptCount` 共同约束；重试原地改写 Asset 行（`(assetId, attemptCount)` CAS）、不产生新 EntryRevision、与本次 Run 新内容共享单次预算。
 2. **保留期清理**：每来源 `Source.config.media.retentionDays`（1–3650，缺省永久保留）；清理是显式命令 `POST /api/v1/media-cleanups`（缺省 `dryRun: true` 预览，确认后执行）与 `GET /api/v1/media-cleanups/:runId`，由 durable 维护 Workflow `cosmos.media-cleanup@1` 在 Worker 内执行；只删 Blob 字节并把 Asset 回退为 `metadata_only` + 「已按保留期清理」原因（保留原文外链，公共 4 态不变），删除前做内容寻址去重的引用检查（最后一个引用者才删字节）。
@@ -356,10 +356,10 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
-- Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；未合并 `master`（无 PR，单开发者仓库，待维护者合并）。
+- Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已合并 `master` 并推送（`1f879f4` + `da44743`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；worktree 与分支已清理。
 - Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并 `master` 并推送（`9c4cf72`）；Proposal accepted + ADR-0017 + PRD 注记 + Task 已同步。
 - Phase 2 第十三切片 Trigger/SDK v1（Task 23）已合并 `master` 并推送（`e8c2f84`）；Proposal accepted + ADR-0018 + PRD 注记 + Task 已同步。
-- Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已在 `.worktree/ops-storage` / `feat/t24-ops-storage` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0019 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权）。
+- Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已合并 `master` 并推送（`27f249b`）；Proposal accepted + ADR-0019 + PRD 注记 + Task 已同步；worktree 与分支已清理。
 - Phase 2 平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）已全部落地；下一切片候选仅剩自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。

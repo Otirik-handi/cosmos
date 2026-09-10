@@ -44,7 +44,7 @@ Non-goals（见 Proposal / ADR-0017）：
 
 ## Current State
 
-- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档已同步。**未 commit、未 push、未合并**（等待维护者授权）。
+- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档已同步。已合并 `master` 并推送（commit `9c4cf72`，无 PR，单开发者仓库）；worktree `.worktree/connection-state-store` 与分支 `feat/t22-connection-state-store` 已清理。
 - 连贯目标：让连接身份、凭证、非秘密状态第一次有统一归属。
 - 可观察验收（≤3 条）：
   1. 创建、列出、读取、更新、删除一个 Connection，且其 `secretRef` 只以不透明字符串出现；

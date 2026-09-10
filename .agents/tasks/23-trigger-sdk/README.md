@@ -43,7 +43,7 @@ Non-goals（见 Proposal / ADR-0018）：
 
 ## Current State
 
-- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档已同步。**未 commit、未 push、未合并**（等待维护者授权）。
+- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档已同步。已合并 `master` 并推送（commit `e8c2f84`，无 PR，单开发者仓库）；worktree `.worktree/trigger-sdk` 与分支 `feat/t23-trigger-sdk` 已清理。
 - 连贯目标：定时触发成为一等实体，manifest 完整声明 Adapter 合同。
 - 可观察验收（≤3 条）：
   1. 创建带 `scheduleIntervalMs` 的来源会生成 schedule TriggerBinding，启用后 `listScheduleTriggers` 返回该绑定；
