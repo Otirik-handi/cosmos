@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已在分支 `feat/t20-media-retry-retention` 实现并通过门禁，**尚未 commit/合并**。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已随 PR #3 合入并推送 `master`（merge commit `0ad4d2b`）。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 2026-09-09：媒体失败重试与保留期清理 v1 实现（Phase 2 第十切片，Task 20）
 
@@ -295,9 +295,9 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：Phase 2 第十切片已在分支实现并通过门禁，等待 commit/合并授权。）
+（2026-09-09 更新：Phase 2 第十切片已随 PR #3 合入 `master`，见顶部记录。）
 
-- **待授权**：Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已在 `.worktree/media-retry-retention` / `feat/t20-media-retry-retention` 实现并通过门禁；commit、push、PR、合并与 worktree 清理均需维护者单独授权。
+- Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已随 PR #3 合入并推送 `master`（merge commit `0ad4d2b`）；worktree `.worktree/media-retry-retention` 与分支 `feat/t20-media-retry-retention`（本地与远端）已清理。
 - Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`；稳定文档（PRD/架构/ADR-0014/spec/testing）已同步。
 - Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0013/spec/testing）已同步。
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
