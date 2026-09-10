@@ -58,6 +58,12 @@ Leader 的阶段判断不等于外部操作授权。commit、push、创建 PR、
 - 影响数据、扩展协议、持久化、权限或外部副作用的决定，先更新架构设计；稳定后写 ADR。
 - 面向用户的文字写用户能做什么，解释必要术语、限制、回退和未验证部分，不暴露无上下文的内部实现名。
 
+## 文档大小治理
+
+依据 [`docs/proposals/oversized-doc-splitting-v1.md`](docs/proposals/oversized-doc-splitting-v1.md)（accepted）。阈值字节与 token 双轨、先到先触发：健康区 ≤30 KB 且 ≤9k token；红线 >50 KB 或 >15k token。新增文档与分册必须落在健康区，单个分册 ≤30 KB（硬上限 50 KB）；追加型文档按预算滚动归档，只切历史、不切当前状态和有效决定；分册封口后只读，勘误走主文档勘误节或同级 `ERRATA.md`。存量超标登记在 [`docs/doc-governance/`](docs/doc-governance/) 基线，只减不增；豁免见根目录 `.docs-size-exemptions.yml`；CI 以 `scripts/size-governance.py --check` 把关。
+
+全局读取协议：先读根 `AGENTS.md` 与目标文档的分册索引，再用 `rg` 定位关键词，只读命中分册的相关段落（offset/limit）；禁止无理由全量读 >30 KB 文件，确需全量读必须说明理由和 token 预算；Agent 不支持分段读取时，分册必须 ≤ 健康区。禁读 node_modules、dist、.next、.worktree、锁文件、生成物和 `.cosmos/` 运行数据。
+
 ## JS/TS
 
 - 当前初步技术基线是 Bun + TypeScript、React + Next.js App Router、NestJS、Prisma + SQLite；UI 使用 Tailwind、shadcn/ui、React Hook Form 和 Zod。开发使用 Bun、生产使用 Node；共享代码保持 Node-compatible。具体版本和可替换边界以架构与实现 Task 为准。
@@ -66,6 +72,7 @@ Leader 的阶段判断不等于外部操作授权。commit、push、创建 PR、
 - UI、Worker、Connector 和扩展通过版本化 Service Endpoint/Command/Query/Event/Transport 访问应用能力，不直接依赖 Prisma、SQLite、Data Root 或 Blob/Artifact Root。
 - 日志使用结构化字段和自然语言消息，不记录 Secret、完整私信/邮件正文或未经脱敏的外部 payload。
 - 公开合同、复杂逻辑和容易回归的路径补充行为测试；注释解释原因、合同和约束，不描述显然代码。
+- 代码文件大小治理依据 [`docs/proposals/code-size-governance-v1.md`](docs/proposals/code-size-governance-v1.md)（accepted）：源码/测试单文件红线 >800 行或 >50 KB、入口文件红线 >300 行、单函数红线 >100 行、圈复杂度红线 15；≤400 行且内聚不拆，产物 100~600 行为佳；拆分顺序固定为桶文件 → 测试 → 单体；行为等价底线 = 现有测试全绿 + 入口契约测试 + 导出签名 diff 为零。
 
 ## 验证
 
