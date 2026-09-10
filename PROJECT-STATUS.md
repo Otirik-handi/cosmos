@@ -1,10 +1,10 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-10。Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已在 `.worktree/run-control` / `feat/t21-run-control` 实现并通过聚焦测试与全仓类型检查，**未 commit、未 push、未合并**（等待维护者授权）。此前 Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已随 PR #3 合入并推送 `master`（merge commit `0ad4d2b`）。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-10。Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`），未合并 `master`（无 PR，单开发者仓库）。此前 Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已随 PR #3 合入并推送 `master`（merge commit `0ad4d2b`）。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 2026-09-10：Run 控制 v1 实现（Phase 2 第十一切片，Task 21）
 
-Proposal [`run-control-v1`](docs/proposals/run-control-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0016 的实现已在 `.worktree/run-control` / `feat/t21-run-control` 完成，**未 commit、未 push、未合并**：
+Proposal [`run-control-v1`](docs/proposals/run-control-v1.md)（accepted，2026-09-10，用户确认四项默认）与 ADR-0016 的实现已完成并提交推送 `feat/t21-run-control`（commit `1f879f4`），未合并 `master`：
 
 1. **取消**：`POST /api/v1/runs/:id/cancellations` → host store `cancelWorkflowRun`（status CAS 终态化为 `cancelled` + 清 lease + `resumeRequired=false` + `run.cancelled.v1` 事件）。用户覆盖式、不要求持有当前 lease；Worker 后续 `heartbeatRun`/`completeActivity`/`releaseRun` 因 lease CAS 失败而拒绝写入，已入库 Observation/Entry/Revision 不回滚。
 2. **重新运行**：`POST /api/v1/runs/:id/re-runs` → `IngestWorkflowControlService.rerun`（读原 Run 的 `inputSnapshot.source.id`，复用 `enqueue` 用新幂等键入队全新 Run，`triggerKind=manual`）；只对终态 Run 开放，复用已入库结果、从来源当前 checkpoint 重新 fetch + ingest。
@@ -318,7 +318,7 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
-- Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已在 `.worktree/run-control` / `feat/t21-run-control` 实现并通过聚焦测试与全仓类型检查；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；**未 commit、未 push、未合并**（等待维护者授权后走 PR）。
+- Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已提交并推送 `feat/t21-run-control`（commit `1f879f4`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；未合并 `master`（无 PR，单开发者仓库，待维护者合并）。
 - Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面剩余（Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。

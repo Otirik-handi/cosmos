@@ -43,7 +43,7 @@ Non-goals（见 Proposal / ADR-0016）：
 
 ## Current State
 
-- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档（Proposal accepted / ADR-0016 / PRD / ADR 索引 / Task）已同步。**未 commit、未 push、未合并**（等待维护者授权）。
+- 生命周期阶段：实现完成并通过聚焦测试 + 全仓类型检查；文档（Proposal accepted / ADR-0016 / PRD / ADR 索引 / Task）已同步。已提交并推送 `feat/t21-run-control`（commit `1f879f4`），未合并 `master`。
 - 连贯目标：让用户能取消、重跑、恢复一个 Run，并明确看到每个动作的后果。
 - 可观察验收（≤3 条）：
   1. 取消一个运行中的 Run 后，其状态变为 `cancelled`、旧 Worker 的心跳/写入被 fence 拒绝；
