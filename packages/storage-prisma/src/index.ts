@@ -53,7 +53,10 @@ import {
     type BoardList,
     type SpotlightPlacement,
     type SpotlightPlacementList,
+    type MediaCleanupReport,
     blockConfigSchemaFor,
+    mediaCleanupReportSchema,
+    retryableAssetErrorCodes,
 } from "@cosmos/contracts";
 import {
     checkStorySubtype,
@@ -113,6 +116,9 @@ import {
     type HostActionExecutionFence,
     type JobLease,
     type LoggerPort,
+    type MediaRetryCandidate,
+    type MediaRetryOutcome,
+    type MediaCleanupCandidate,
     type PersistIngestItemResult,
     type RepositoryHealth,
     type WorkflowAttemptSnapshot,
@@ -1021,8 +1027,324 @@ export class PrismaCosmosRepository implements CosmosRepository {
         ));
     }
 
-    async persistWorkflowIngestItem(input: {
+    async listRetryableMediaAssets(input: {
         sourceId: string;
+        maxAttempts: number;
+        limit?: number;
+    }): Promise<readonly MediaRetryCandidate[]> {
+        if (input.maxAttempts <= 0) {
+            return [];
+        }
+        const limit = input.limit ?? 50;
+        const entries = await this.prisma.entry.findMany({
+            where: {
+                sourceInstanceId: input.sourceId,
+                currentRevisionId: { not: null },
+            },
+            select: {
+                currentRevision: {
+                    select: {
+                        assets: {
+                            where: {
+                                status: { in: ["failed", "skipped"] },
+                                sourceUrl: { not: null },
+                                errorCode: { in: [...retryableAssetErrorCodes] },
+                                attemptCount: { lt: input.maxAttempts },
+                                OR: [
+                                    { kind: "image" },
+                                    {
+                                        kind: "enclosure",
+                                        mimeType: { startsWith: "image/" },
+                                    },
+                                ],
+                            },
+                            select: {
+                                id: true,
+                                sourceUrl: true,
+                                kind: true,
+                                mimeType: true,
+                                attemptCount: true,
+                            },
+                            orderBy: { createdAt: "asc" },
+                        },
+                    },
+                },
+            },
+        });
+        const candidates: MediaRetryCandidate[] = [];
+        for (const entry of entries) {
+            for (const asset of entry.currentRevision?.assets ?? []) {
+                if (!asset.sourceUrl) {
+                    continue;
+                }
+                candidates.push({
+                    assetId: asset.id,
+                    sourceUrl: asset.sourceUrl,
+                    kind: asset.kind,
+                    mimeType: asset.mimeType,
+                    attemptCount: asset.attemptCount,
+                });
+                if (candidates.length >= limit) {
+                    return candidates;
+                }
+            }
+        }
+        return candidates;
+    }
+
+    async applyMediaRetryOutcome(input: {
+        workflowRunId: string;
+        fence: HostActionExecutionFence;
+        outcome: MediaRetryOutcome;
+        expectedAttemptCount: number;
+    }): Promise<boolean> {
+        const { outcome } = input;
+        let stored: Awaited<ReturnType<FileBlobStore["put"]>> | null = null;
+        if (outcome.status === "saved") {
+            try {
+                stored = await this.blobs.put(outcome.content, {
+                    mimeType: outcome.mimeType,
+                });
+            } catch (error) {
+                this.logger?.error("storage.blob.put.failed", {
+                    workflowRunId: input.workflowRunId,
+                    kind: "media_retry",
+                    assetId: outcome.assetId,
+                    byteSize: outcome.content.byteLength,
+                }, error);
+                throw error;
+            }
+        }
+        return this.prisma.$transaction(async (tx) => {
+            await assertWorkflowActionFence(tx, input.fence, input.workflowRunId);
+            // `(id, attemptCount)` is the CAS: a concurrent retry of the same
+            // Asset (or a newer one that already incremented) makes this a no-op
+            // instead of a second write (ADR-0015 decision 4).
+            const updated = await tx.asset.updateMany({
+                where: { id: outcome.assetId, attemptCount: input.expectedAttemptCount },
+                data: outcome.status === "saved"
+                    ? {
+                        status: "saved",
+                        storageKey: stored?.key ?? null,
+                        byteSize: stored?.byteSize ?? null,
+                        mimeType: outcome.mimeType,
+                        errorMessage: null,
+                        errorCode: null,
+                        attemptCount: input.expectedAttemptCount + 1,
+                        lastAttemptAt: new Date(),
+                    }
+                    : {
+                        status: outcome.status,
+                        storageKey: null,
+                        byteSize: null,
+                        errorMessage: outcome.errorMessage,
+                        errorCode: outcome.errorCode,
+                        attemptCount: input.expectedAttemptCount + 1,
+                        lastAttemptAt: new Date(),
+                    },
+            });
+            if (updated.count === 0) {
+                return false;
+            }
+            await appendDomainEvent(tx, {
+                type: "media.retry.attempted.v1",
+                aggregateType: "Asset",
+                aggregateId: outcome.assetId,
+                workflowRunId: input.workflowRunId,
+                payload: {
+                    assetId: outcome.assetId,
+                    status: outcome.status,
+                    attemptCount: input.expectedAttemptCount + 1,
+                    ...(outcome.status === "saved"
+                        ? { byteSize: stored?.byteSize ?? 0 }
+                        : { errorCode: outcome.errorCode }),
+                },
+            });
+            return true;
+        });
+    }
+
+    async listRetentionCleanupCandidates(input: {
+        sourceId?: string | null;
+        now?: Date;
+        limit?: number;
+    }): Promise<readonly MediaCleanupCandidate[]> {
+        const now = input.now ?? new Date();
+        const limit = input.limit ?? 200;
+        const sources = await this.prisma.sourceInstance.findMany({
+            where: input.sourceId ? { id: input.sourceId } : {},
+            select: { id: true, name: true, configJson: true },
+        });
+        const candidates: MediaCleanupCandidate[] = [];
+        for (const source of sources) {
+            const config = sourceConfigSchema.safeParse(parseJson(source.configJson) ?? {});
+            const retentionDays = config.success ? config.data.media?.retentionDays ?? 0 : 0;
+            if (retentionDays <= 0) {
+                continue;
+            }
+            const windowMs = retentionDays * 24 * 60 * 60 * 1_000;
+            const cutoff = new Date(now.getTime() - windowMs);
+            const assets = await this.prisma.asset.findMany({
+                where: {
+                    status: "saved",
+                    storageKey: { not: null },
+                    createdAt: { lt: cutoff },
+                    entryRevision: { entry: { sourceInstanceId: source.id } },
+                },
+                select: {
+                    id: true,
+                    storageKey: true,
+                    byteSize: true,
+                    createdAt: true,
+                    entryRevision: { select: { title: true } },
+                },
+                orderBy: { createdAt: "asc" },
+                take: Math.max(0, limit - candidates.length),
+            });
+            for (const asset of assets) {
+                if (!asset.storageKey) {
+                    continue;
+                }
+                candidates.push({
+                    assetId: asset.id,
+                    storageKey: asset.storageKey,
+                    byteSize: asset.byteSize,
+                    sourceId: source.id,
+                    sourceName: source.name,
+                    title: asset.entryRevision.title,
+                    createdAt: asset.createdAt.toISOString(),
+                    expiredAt: new Date(asset.createdAt.getTime() + windowMs).toISOString(),
+                    retentionDays,
+                });
+                if (candidates.length >= limit) {
+                    break;
+                }
+            }
+            if (candidates.length >= limit) {
+                break;
+            }
+        }
+        return candidates;
+    }
+
+    async runMediaCleanup(input: {
+        workflowRunId: string;
+        fence: HostActionExecutionFence;
+        sourceId: string | null;
+        dryRun: boolean;
+    }): Promise<MediaCleanupReport> {
+        const startedAt = new Date();
+        const candidates = await this.listRetentionCleanupCandidates({
+            sourceId: input.sourceId,
+            now: startedAt,
+        });
+        let cleanedCount = 0;
+        let cleanedBytes = 0;
+        let sharedKeyCount = 0;
+        if (!input.dryRun) {
+            for (const candidate of candidates) {
+                const outcome = await this.prisma.$transaction(async (tx) => {
+                    await assertWorkflowActionFence(tx, input.fence, input.workflowRunId);
+                    const updated = await tx.asset.updateMany({
+                        where: {
+                            id: candidate.assetId,
+                            status: "saved",
+                            storageKey: candidate.storageKey,
+                        },
+                        data: {
+                            status: "metadata_only",
+                            storageKey: null,
+                            byteSize: null,
+                            errorCode: "retention_expired",
+                            errorMessage: `已按保留期清理（保留 ${candidate.retentionDays} 天）`,
+                        },
+                    });
+                    if (updated.count === 0) {
+                        return null;
+                    }
+                    // Content-addressed blobs are deduplicated; only the last
+                    // referencing Asset may remove the bytes (decision 9).
+                    const shared = await tx.asset.count({
+                        where: {
+                            storageKey: candidate.storageKey,
+                            id: { not: candidate.assetId },
+                        },
+                    });
+                    return { shared: shared > 0 };
+                });
+                if (!outcome) {
+                    continue;
+                }
+                cleanedCount += 1;
+                if (outcome.shared) {
+                    sharedKeyCount += 1;
+                    continue;
+                }
+                cleanedBytes += candidate.byteSize ?? 0;
+                try {
+                    await this.blobs.delete(candidate.storageKey);
+                } catch (error) {
+                    this.logger?.warn("storage.blob.delete.failed", {
+                        workflowRunId: input.workflowRunId,
+                        assetId: candidate.assetId,
+                        reason: error instanceof Error ? error.message : "unknown",
+                    });
+                }
+            }
+        }
+        const report: MediaCleanupReport = {
+            dryRun: input.dryRun,
+            sourceId: input.sourceId,
+            candidateCount: candidates.length,
+            candidateBytes: candidates.reduce(
+                (sum, candidate) => sum + (candidate.byteSize ?? 0),
+                0,
+            ),
+            cleanedCount,
+            cleanedBytes,
+            sharedKeyCount,
+            samples: candidates.slice(0, 20).map((candidate) => ({
+                assetId: candidate.assetId,
+                sourceId: candidate.sourceId,
+                sourceName: candidate.sourceName,
+                title: candidate.title,
+                byteSize: candidate.byteSize,
+                createdAt: candidate.createdAt,
+                expiredAt: candidate.expiredAt,
+            })),
+            startedAt: startedAt.toISOString(),
+            finishedAt: new Date().toISOString(),
+        };
+        await this.prisma.$transaction(async (tx) => {
+            await assertWorkflowActionFence(tx, input.fence, input.workflowRunId);
+            await appendDomainEvent(tx, {
+                type: "media.cleanup.completed.v1",
+                aggregateType: "WorkflowRun",
+                aggregateId: input.workflowRunId,
+                workflowRunId: input.workflowRunId,
+                payload: report,
+            });
+        });
+        return report;
+    }
+
+    async getMediaCleanupReport(runId: string): Promise<MediaCleanupReport | null> {
+        const event = await this.prisma.domainEvent.findFirst({
+            where: {
+                type: "media.cleanup.completed.v1",
+                aggregateType: "WorkflowRun",
+                aggregateId: runId,
+            },
+            orderBy: { sequence: "desc" },
+        });
+        if (!event) {
+            return null;
+        }
+        const parsed = mediaCleanupReportSchema.safeParse(parseJson(event.payloadJson));
+        return parsed.success ? parsed.data : null;
+    }
+
+    async persistWorkflowIngestItem(input: {        sourceId: string;
         workflowRunId: string;
         triggerKind: IngestTriggerKind;
         item: NormalizedIngestItem;
@@ -1378,6 +1700,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
                         mimeType: asset.mimeType,
                         byteSize: asset.byteSize,
                         errorMessage: asset.errorMessage ?? null,
+                        errorCode: asset.errorCode ?? null,
+                        attemptCount: asset.attemptCount ?? 0,
                     },
                 });
             }
@@ -5961,6 +6285,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
         mimeType: string | null;
         byteSize: number | null;
         errorMessage?: string | null;
+        errorCode?: string | null;
+        attemptCount?: number;
     }) {
         return {
             id: asset.id,
@@ -5971,6 +6297,8 @@ export class PrismaCosmosRepository implements CosmosRepository {
             mimeType: asset.mimeType,
             byteSize: asset.byteSize,
             errorMessage: asset.errorMessage ?? null,
+            errorCode: asset.errorCode ?? null,
+            attemptCount: asset.attemptCount ?? 0,
         };
     }
 }

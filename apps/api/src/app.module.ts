@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { createBuiltinManifestCatalog } from "@cosmos/application/catalog";
+import { MediaCleanupWorkflowControlService } from "@cosmos/application/media-cleanup";
 import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import { createLogger } from "@cosmos/logging";
 import {
@@ -30,6 +31,9 @@ export const cosmosIngestControl = new IngestWorkflowControlService({
     },
     getCheckpointSnapshot: (sourceId) => cosmosRepository.getCheckpointSnapshot(sourceId),
 });
+export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService({
+    store: cosmosWorkflowStore,
+});
 
 @Module({
     controllers: [AppController],
@@ -53,6 +57,10 @@ export const cosmosIngestControl = new IngestWorkflowControlService({
         {
             provide: "COSMOS_WORKFLOW_STORE",
             useValue: cosmosWorkflowStore,
+        },
+        {
+            provide: "COSMOS_MEDIA_CLEANUP_CONTROL",
+            useValue: cosmosMediaCleanupControl,
         },
         SourceProbeService,
     ],

@@ -67,6 +67,8 @@ API readiness 不要求 Worker 在线。`ServiceHealthSnapshot` 可以同时显�
 | Convergence | `GET` | `/action-definitions/{id}/versions/{version}` | `ActionDefinitionDetail` |
 | Planned | `GET` | `/trigger-definitions` | `Page<TriggerDefinitionSummary>` |
 | Current | `GET` | `/story-subtypes` | `Page<StorySubtype>`（受管理注册表目录，可选 `kind` 过滤） |
+| Current | `POST` | `/media-cleanups` | `MediaCleanupRunSnapshot`（显式保留期清理；缺省 `dryRun: true` 预览，`Idempotency-Key` 可选） |
+| Current | `GET` | `/media-cleanups/{runId}` | `MediaCleanupRunSnapshot`（`report` 在 Action 完成后填充，否则 `null`） |
 | Planned | `GET` | `/workspace-view-definitions` | `Page<WorkspaceViewDefinition>` |
 | Planned | `GET` | `/board-block-definitions` | `Page<BoardBlockDefinition>` |
 

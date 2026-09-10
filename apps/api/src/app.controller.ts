@@ -36,12 +36,15 @@ import {
     type WorkflowHostStore,
 } from "@cosmos/application";
 import type { CatalogPort } from "@cosmos/application/catalog";
+import type { MediaCleanupWorkflowControlService } from "@cosmos/application/media-cleanup";
 import type { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import {
     createSourceCommandSchema,
     entryListQuerySchema,
     searchQuerySchema,
     idempotencyKeySchema,
+    mediaCleanupCommandSchema,
+    mediaCleanupRunSnapshotSchema,
     mergeStoriesCommandSchema,
     moveEntryToStoryCommandSchema,
     splitStoryCommandSchema,
@@ -172,6 +175,9 @@ export class AppController {
         @Optional()
         @Inject("COSMOS_WORKFLOW_STORE")
         private readonly workflowStore?: WorkflowHostStore,
+        @Optional()
+        @Inject("COSMOS_MEDIA_CLEANUP_CONTROL")
+        private readonly mediaCleanupControl?: MediaCleanupWorkflowControlService,
     @Optional()
     @Inject("COSMOS_CATALOG")
     private readonly catalog?: CatalogPort,
@@ -510,6 +516,75 @@ export class AppController {
         return this.run(runId);
     }
 
+    /**
+     * Explicit retention cleanup (ADR-0015 decision 7). The Run always runs in
+     * the Worker; `dryRun` defaults to true so a preview never deletes anything.
+     */
+    @Post("media-cleanups")
+    @Bind(Body(), Headers("idempotency-key"))
+    async createMediaCleanup(body: unknown, idempotencyKey?: string) {
+        if (!this.mediaCleanupControl) {
+            throw new ConflictException({
+                code: "conflict",
+                message: "The durable workflow host is not enabled.",
+                retryable: false,
+            });
+        }
+        try {
+            const command = mediaCleanupCommandSchema.parse(body ?? {});
+            const providedKey = idempotencyKey === undefined
+                ? undefined
+                : requireIdempotencyKey(idempotencyKey);
+            const key = providedKey ?? `media-cleanup:${randomUUID()}`;
+            const envelope = await this.mediaCleanupControl.enqueue({
+                sourceId: command.sourceId ?? null,
+                dryRun: command.dryRun ?? true,
+                idempotencyKey: key,
+            });
+            return this.toMediaCleanupSnapshot(envelope);
+        } catch (error) {
+            if (error instanceof WorkflowHostConflictError) {
+                throw new ConflictException({
+                    code: "conflict",
+                    message: error.message,
+                    retryable: false,
+                });
+            }
+            if (error instanceof ZodError) {
+                throw new BadRequestException({
+                    code: "validation_failed",
+                    message: error.message,
+                    retryable: false,
+                });
+            }
+            throw error;
+        }
+    }
+
+    @Get("media-cleanups/:runId")
+    @Bind(Param("runId"))
+    async mediaCleanup(runId: string) {
+        const envelope = await this.workflowStore?.loadWorkflowEnvelope(runId);
+        if (!envelope) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Media cleanup run not found: ${runId}`,
+                retryable: false,
+            });
+        }
+        return this.toMediaCleanupSnapshot(envelope);
+    }
+
+    private async toMediaCleanupSnapshot(envelope: WorkflowEnvelope) {
+        const report = await this.repository.getMediaCleanupReport(envelope.runId);
+        const parsedProductRun = productRunSchema.safeParse(envelope.productRun);
+        return mediaCleanupRunSnapshotSchema.parse({
+            runId: envelope.runId,
+            status: toProductWorkflowRunStatus(envelope.status),
+            report,
+            error: parsedProductRun.success ? parsedProductRun.data.error ?? null : null,
+        });
+    }
 
 
     @Get("jobs/:jobId")

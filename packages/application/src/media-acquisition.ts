@@ -1,7 +1,12 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
-import { mediaPolicyCeilings, type SourceMediaPolicy } from "@cosmos/contracts";
+import {
+    mediaPolicyCeilings,
+    mediaRetryCeiling,
+    type AssetErrorCode,
+    type SourceMediaPolicy,
+} from "@cosmos/contracts";
 import type {
     NormalizedAssetInput,
     NormalizedIngestItem,
@@ -23,6 +28,11 @@ export const mediaAcquisitionDefaults = {
     perMediaTimeoutMs: 60_000,
 } as const;
 
+/** Retry attempt ceiling default; counts the first download too (ADR-0015). */
+export const mediaRetryDefaults = {
+    maxAttempts: 3,
+} as const;
+
 export interface MediaAcquisitionLimits {
     maxFileBytes: number;
     maxRunBytes: number;
@@ -34,6 +44,9 @@ export interface MediaPolicy {
     images: "download" | "metadata_only";
     maxFileBytes: number;
     maxRunBytes: number;
+    retry: {
+        maxAttempts: number;
+    };
 }
 
 /**
@@ -50,6 +63,12 @@ export function resolveMediaPolicy(
         images: policy?.images ?? "download",
         maxFileBytes: Math.min(policy?.maxFileBytes ?? limits.maxFileBytes, limits.maxFileBytes),
         maxRunBytes: Math.min(policy?.maxRunBytes ?? limits.maxRunBytes, limits.maxRunBytes),
+        retry: {
+            maxAttempts: Math.min(
+                policy?.retry?.maxAttempts ?? mediaRetryDefaults.maxAttempts,
+                mediaRetryCeiling,
+            ),
+        },
     };
 }
 
@@ -77,6 +96,42 @@ export interface MediaAcquirer {
         items: readonly NormalizedIngestItem[],
         context?: MediaAcquisitionContext,
     ): Promise<readonly NormalizedIngestItem[]>;
+}
+
+/** A stored degraded Asset the retry step may attempt again (ADR-0015 decision 1). */
+export interface MediaRetryCandidate {
+    assetId: string;
+    sourceUrl: string;
+    kind: string;
+    mimeType: string | null;
+    /** Attempts already recorded; the write path uses it as CAS (ADR-0015 decision 4). */
+    attemptCount: number;
+}
+
+export type MediaRetryOutcome =
+    | {
+        assetId: string;
+        status: "saved";
+        content: Uint8Array;
+        mimeType: string;
+    }
+    | {
+        assetId: string;
+        status: "failed" | "skipped";
+        errorCode: AssetErrorCode;
+        errorMessage: string;
+    };
+
+export interface MediaRetryContext extends MediaAcquisitionContext {
+    /** Remaining per-run budget after the page's own media (ADR-0015 decision 5). */
+    budgetBytes?: number;
+}
+
+export interface MediaRetrier {
+    retryAssets(
+        candidates: readonly MediaRetryCandidate[],
+        context?: MediaRetryContext,
+    ): Promise<readonly MediaRetryOutcome[]>;
 }
 
 /**
@@ -121,6 +176,8 @@ type SavedMedia = {
 type DegradedMedia = {
     status: "skipped" | "failed";
     errorMessage: string;
+    /** Machine-readable reason; retry decisions read only this (ADR-0015). */
+    errorCode: AssetErrorCode;
 };
 
 type MediaOutcome = SavedMedia | DegradedMedia;
@@ -137,7 +194,7 @@ export function parseAllowedHosts(value: string | undefined | null): string[] {
     )];
 }
 
-export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAcquirer {
+export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAcquirer & MediaRetrier {
     const fetchImpl = options.fetch ?? globalThis.fetch;
     const limits: MediaAcquisitionLimits = {
         ...mediaAcquisitionDefaults,
@@ -149,6 +206,18 @@ export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAc
         options.allowedHosts?.join(",") ?? "",
     ));
 
+    function effectiveLimitsFor(policy: MediaPolicy | undefined): MediaAcquisitionLimits {
+        return policy
+            ? {
+                ...limits,
+                // Clamp against this acquirer's own limits too, so a
+                // configured (or test) ceiling is never raised by a source.
+                maxFileBytes: Math.min(policy.maxFileBytes, limits.maxFileBytes),
+                maxRunBytes: Math.min(policy.maxRunBytes, limits.maxRunBytes),
+            }
+            : limits;
+    }
+
     return {
         async acquireItems(items, context) {
             const policy = context?.policy;
@@ -157,15 +226,7 @@ export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAc
                 // instead of rewriting status (ADR-0014 decision 3).
                 return items;
             }
-            const effectiveLimits: MediaAcquisitionLimits = policy
-                ? {
-                    ...limits,
-                    // Clamp against this acquirer's own limits too, so a
-                    // configured (or test) ceiling is never raised by a source.
-                    maxFileBytes: Math.min(policy.maxFileBytes, limits.maxFileBytes),
-                    maxRunBytes: Math.min(policy.maxRunBytes, limits.maxRunBytes),
-                }
-                : limits;
+            const effectiveLimits = effectiveLimitsFor(policy);
             const startedAt = Date.now();
             const state = {
                 runBytes: 0,
@@ -203,6 +264,87 @@ export function createMediaAcquirer(options: MediaAcquirerOptions = {}): MediaAc
             });
             return rewritten;
         },
+        async retryAssets(candidates, context) {
+            const policy = context?.policy;
+            if (policy?.images === "metadata_only" || candidates.length === 0) {
+                return [];
+            }
+            const effectiveLimits = effectiveLimitsFor(policy);
+            // Retries share the page's remaining budget instead of opening a
+            // second full one (ADR-0015 decision 5).
+            const budget = Math.max(
+                0,
+                Math.min(
+                    context?.budgetBytes ?? effectiveLimits.maxRunBytes,
+                    effectiveLimits.maxRunBytes,
+                ),
+            );
+            const startedAt = Date.now();
+            const state = {
+                runBytes: 0,
+                savedCount: 0,
+                skippedCount: 0,
+                failedCount: 0,
+            };
+            const memo = new Map<string, MediaOutcome>();
+            const outcomes: MediaRetryOutcome[] = [];
+            for (const candidate of candidates) {
+                const placeholder: NormalizedAssetInput = {
+                    kind: candidate.kind,
+                    sourceUrl: candidate.sourceUrl,
+                    status: "failed",
+                    mimeType: candidate.mimeType,
+                    byteSize: null,
+                    content: null,
+                };
+                const memoHit = memo.get(candidate.sourceUrl);
+                const outcome = memoHit ?? await acquireImageCandidate(placeholder, {
+                    fetch: fetchImpl,
+                    limits: { ...effectiveLimits, maxRunBytes: budget },
+                    resolveHost,
+                    allowed,
+                    maxRedirects,
+                    signal: context?.signal,
+                    logger: options.logger,
+                    state,
+                    memo,
+                });
+                if (!memoHit) {
+                    memo.set(candidate.sourceUrl, outcome);
+                    if (outcome.status === "saved") {
+                        state.savedCount += 1;
+                        state.runBytes += outcome.bytes.byteLength;
+                    } else if (outcome.status === "skipped") {
+                        state.skippedCount += 1;
+                    } else {
+                        state.failedCount += 1;
+                    }
+                }
+                outcomes.push(outcome.status === "saved"
+                    ? {
+                        assetId: candidate.assetId,
+                        status: "saved",
+                        content: outcome.bytes,
+                        mimeType: outcome.mimeType,
+                    }
+                    : {
+                        assetId: candidate.assetId,
+                        status: outcome.status,
+                        errorCode: outcome.errorCode,
+                        errorMessage: outcome.errorMessage,
+                    });
+            }
+            options.logger?.info("media.retry.completed", {
+                durationMs: Date.now() - startedAt,
+                candidateCount: candidates.length,
+                budgetBytes: budget,
+                runBytes: state.runBytes,
+                savedCount: state.savedCount,
+                skippedCount: state.skippedCount,
+                failedCount: state.failedCount,
+            });
+            return outcomes;
+        },
     };
 }
 
@@ -238,6 +380,8 @@ async function rewriteAssets(
                 mimeType: outcome.mimeType,
                 byteSize: outcome.bytes.byteLength,
                 errorMessage: null,
+                errorCode: null,
+                attemptCount: 1,
             });
             if (computed) {
                 deps.state.savedCount += 1;
@@ -249,6 +393,8 @@ async function rewriteAssets(
                 status: outcome.status,
                 content: null,
                 errorMessage: outcome.errorMessage,
+                errorCode: outcome.errorCode,
+                attemptCount: 1,
             });
             if (computed) {
                 if (outcome.status === "skipped") {
@@ -337,6 +483,7 @@ async function acquireImageCandidate(
         result = {
             status: "failed",
             errorMessage: timedOut ? "图片下载超时" : "图片下载失败",
+            errorCode: timedOut ? "timeout" : "network",
         };
     } finally {
         clearTimeout(timer);
@@ -349,7 +496,9 @@ async function acquireImageCandidate(
         kind: "image",
         host,
         status: result.status,
-        ...(result.status !== "saved" ? { errorMessage: result.errorMessage } : {}),
+        ...(result.status !== "saved"
+            ? { errorCode: result.errorCode, errorMessage: result.errorMessage }
+            : {}),
         ...(result.status === "saved" ? { byteSize: result.bytes.byteLength } : {}),
     });
     return result;
@@ -366,18 +515,21 @@ function checkUrl(
         return {
             status: "skipped",
             errorMessage: "图片地址无法解析",
+            errorCode: "invalid_url",
         };
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
         return {
             status: "skipped",
             errorMessage: "图片地址协议不允许",
+            errorCode: "security_blocked",
         };
     }
     if (parsed.username || parsed.password) {
         return {
             status: "skipped",
             errorMessage: "图片地址不允许包含账号信息",
+            errorCode: "security_blocked",
         };
     }
     return parsed;
@@ -398,12 +550,14 @@ async function checkHostAllowed(
         return {
             status: "failed",
             errorMessage: "无法解析图片服务器地址",
+            errorCode: "network",
         };
     }
     if (addresses.length === 0) {
         return {
             status: "failed",
             errorMessage: "无法解析图片服务器地址",
+            errorCode: "network",
         };
     }
     const blocked = addresses.find((address) => !isPublicAddress(address));
@@ -411,6 +565,7 @@ async function checkHostAllowed(
         return {
             status: "skipped",
             errorMessage: "图片服务器位于内网或本机地址，已拦截",
+            errorCode: "security_blocked",
         };
     }
     return { ok: true };
@@ -436,6 +591,7 @@ async function downloadWithRedirects(
                 return {
                     status: "failed",
                     errorMessage: "图片重定向次数过多或缺少目标",
+                    errorCode: "network",
                 };
             }
             const next = checkUrl(new URL(location, current).href, deps);
@@ -453,6 +609,7 @@ async function downloadWithRedirects(
             return {
                 status: "failed",
                 errorMessage: `图片下载失败（HTTP ${response.status}）`,
+                errorCode: "http_error",
             };
         }
         return consumeImageBody(response, deps, controller);
@@ -460,6 +617,7 @@ async function downloadWithRedirects(
     return {
         status: "failed",
         errorMessage: "图片重定向次数过多",
+        errorCode: "network",
     };
 }
 
@@ -473,6 +631,7 @@ async function consumeImageBody(
         return {
             status: "skipped",
             errorMessage: "单次运行媒体预算已用尽",
+            errorCode: "budget_run",
         };
     }
     const fileCap = Math.min(deps.limits.maxFileBytes, remaining);
@@ -486,6 +645,9 @@ async function consumeImageBody(
             errorMessage: declaredLength > deps.limits.maxFileBytes
                 ? "图片超过单文件大小上限（10MB）"
                 : "图片超出单次运行剩余预算",
+            errorCode: declaredLength > deps.limits.maxFileBytes
+                ? "budget_file"
+                : "budget_run",
         };
     }
 
@@ -495,6 +657,7 @@ async function consumeImageBody(
         return {
             status: "failed",
             errorMessage: "图片下载内容不是图片类型",
+            errorCode: "not_image",
         };
     }
 
@@ -502,6 +665,7 @@ async function consumeImageBody(
         return {
             status: "failed",
             errorMessage: "图片响应没有内容",
+            errorCode: "network",
         };
     }
     const reader = response.body.getReader();
@@ -520,6 +684,9 @@ async function consumeImageBody(
                 errorMessage: fileCap === deps.limits.maxFileBytes
                     ? "图片超过单文件大小上限（10MB）"
                     : "图片超出单次运行剩余预算",
+                errorCode: fileCap === deps.limits.maxFileBytes
+                    ? "budget_file"
+                    : "budget_run",
             };
         }
         chunks.push(value);
@@ -529,6 +696,7 @@ async function consumeImageBody(
         return {
             status: "failed",
             errorMessage: "图片响应没有内容",
+            errorCode: "network",
         };
     }
 
@@ -539,6 +707,7 @@ async function consumeImageBody(
             return {
                 status: "failed",
                 errorMessage: "图片下载内容不是图片类型",
+                errorCode: "not_image",
             };
         }
         storedMime = sniffed;

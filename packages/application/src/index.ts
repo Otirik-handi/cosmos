@@ -59,11 +59,14 @@ import type {
 } from "@cosmos/domain";
 import type { HostActionExecutionFence } from "./action.js";
 import type { CatalogPort } from "./catalog.js";
+import type { MediaCleanupReport } from "@cosmos/contracts";
 import {
     acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
     resolveMediaPolicy,
     type MediaAcquirer,
+    type MediaRetryCandidate,
+    type MediaRetryOutcome,
 } from "./media-acquisition.js";
 
 export * from "./action.js";
@@ -76,6 +79,19 @@ export interface PersistIngestItemResult {
     createdEntry: boolean;
     revisedEntry: boolean;
     duplicateObservation: boolean;
+}
+
+/** One saved Asset whose per-source retention window has expired. */
+export interface MediaCleanupCandidate {
+    assetId: string;
+    storageKey: string;
+    byteSize: number | null;
+    sourceId: string;
+    sourceName: string | null;
+    title: string | null;
+    createdAt: string;
+    expiredAt: string;
+    retentionDays: number;
 }
 
 export interface WorkflowAttemptSnapshot {
@@ -443,6 +459,45 @@ export interface CosmosRepository {
         sourceId: string;
         items: readonly NormalizedIngestItem[];
     }): Promise<readonly boolean[]>;
+    /**
+     * Degraded image Assets of a source that may be attempted again: still below
+     * the attempt ceiling and degraded for a retryable reason (ADR-0015).
+     */
+    listRetryableMediaAssets(input: {
+        sourceId: string;
+        maxAttempts: number;
+        limit?: number;
+    }): Promise<readonly MediaRetryCandidate[]>;
+    /**
+     * Apply one retry outcome in place. Rewrites only the Asset row (never the
+     * EntryRevision) and uses `(assetId, attemptCount)` as CAS so concurrent
+     * retries of the same Asset collapse into one write (ADR-0015 decision 4).
+     */
+    applyMediaRetryOutcome(input: {
+        workflowRunId: string;
+        fence: HostActionExecutionFence;
+        outcome: MediaRetryOutcome;
+        expectedAttemptCount: number;
+    }): Promise<boolean>;
+    /** Saved media of sources whose per-source retention window has expired. */
+    listRetentionCleanupCandidates(input: {
+        sourceId?: string | null;
+        now?: Date;
+        limit?: number;
+    }): Promise<readonly MediaCleanupCandidate[]>;
+    /**
+     * Delete expired media bytes and degrade the Asset rows (ADR-0015 decision
+     * 8). `dryRun` only reports; otherwise every row is updated and its blob is
+     * removed once proven unreferenced (decision 9).
+     */
+    runMediaCleanup(input: {
+        workflowRunId: string;
+        fence: HostActionExecutionFence;
+        sourceId: string | null;
+        dryRun: boolean;
+    }): Promise<MediaCleanupReport>;
+    /** Latest cleanup report recorded for a Run, if the Action already ran. */
+    getMediaCleanupReport(runId: string): Promise<MediaCleanupReport | null>;
     claimNextJob(input: {
         owner: string;
         leaseMs: number;

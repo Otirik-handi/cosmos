@@ -319,11 +319,13 @@ describe("per-source media policy (ADR-0014)", () => {
             images: "download",
             maxFileBytes: 10 * 1024 * 1024,
             maxRunBytes: 50 * 1024 * 1024,
+            retry: { maxAttempts: 3 },
         });
         expect(resolveMediaPolicy({ images: "metadata_only" })).toEqual({
             images: "metadata_only",
             maxFileBytes: 10 * 1024 * 1024,
             maxRunBytes: 50 * 1024 * 1024,
+            retry: { maxAttempts: 3 },
         });
     });
 
@@ -335,7 +337,13 @@ describe("per-source media policy (ADR-0014)", () => {
             images: "download",
             maxFileBytes: 1024 * 1024,
             maxRunBytes: 2 * 1024 * 1024,
+            retry: { maxAttempts: 3 },
         });
+    });
+
+    it("carries the per-source retry ceiling into the effective policy", () => {
+        expect(resolveMediaPolicy({ retry: { maxAttempts: 0 } }).retry).toEqual({ maxAttempts: 0 });
+        expect(resolveMediaPolicy({ retry: { maxAttempts: 7 } }).retry).toEqual({ maxAttempts: 7 });
     });
 
     it("keeps connector output untouched when images are disabled", async () => {
@@ -386,6 +394,7 @@ describe("per-source media policy (ADR-0014)", () => {
                     images: "download",
                     maxFileBytes: 10 * 1024 * 1024,
                     maxRunBytes: 50 * 1024 * 1024,
+                    retry: { maxAttempts: 3 },
                 },
             },
         );
@@ -403,11 +412,111 @@ describe("per-source media policy (ADR-0014)", () => {
                 asset({ sourceUrl: "https://media.example.test/a.png" }),
                 asset({ sourceUrl: "https://media.example.test/b.png" }),
             ])],
-            { policy: { images: "download", maxFileBytes: 10 * 1024 * 1024, maxRunBytes: 3 } },
+            {
+                policy: {
+                    images: "download",
+                    maxFileBytes: 10 * 1024 * 1024,
+                    maxRunBytes: 3,
+                    retry: { maxAttempts: 3 },
+                },
+            },
         );
         expect(out.assets[0].status).toBe("saved");
         expect(out.assets[1].status).toBe("skipped");
         expect(out.assets[1].errorMessage).toMatch(/预算/);
+    });
+});
+
+describe("media retry (ADR-0015)", () => {
+    function candidate(overrides: Partial<{
+        assetId: string;
+        sourceUrl: string;
+        kind: string;
+        mimeType: string | null;
+        attemptCount: number;
+    }> = {}) {
+        return {
+            assetId: "asset-1",
+            sourceUrl: "https://media.example.test/a.png",
+            kind: "image",
+            mimeType: null,
+            attemptCount: 1,
+            ...overrides,
+        };
+    }
+
+    it("re-downloads a degraded candidate and reports saved bytes", async () => {
+        const { fetchImpl } = fakeFetch({
+            "https://media.example.test/a.png": () => okImage(pngSignature, "image/png"),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const outcomes = await acquirer.retryAssets([candidate()], {
+            policy: resolveMediaPolicy({ retry: { maxAttempts: 3 } }),
+        });
+        expect(outcomes).toHaveLength(1);
+        expect(outcomes[0]).toMatchObject({
+            assetId: "asset-1",
+            status: "saved",
+            mimeType: "image/png",
+        });
+        if (outcomes[0].status === "saved") {
+            expect(outcomes[0].content.byteLength).toBe(pngSignature.byteLength);
+        }
+    });
+
+    it("reports a retryable errorCode when the retry still fails", async () => {
+        const { fetchImpl } = fakeFetch({});
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const outcomes = await acquirer.retryAssets([candidate()], {
+            policy: resolveMediaPolicy({}),
+        });
+        expect(outcomes[0]).toMatchObject({ status: "failed", errorCode: "network" });
+    });
+
+    it("spends only the shared remaining budget", async () => {
+        const { fetchImpl } = fakeFetch({
+            "https://media.example.test/a.png": () => okImage(pngSignature, "image/png"),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const outcomes = await acquirer.retryAssets([candidate()], {
+            policy: resolveMediaPolicy({}),
+            budgetBytes: 2,
+        });
+        expect(outcomes[0]).toMatchObject({ status: "skipped", errorCode: "budget_run" });
+    });
+
+    it("does nothing while the source turns images off", async () => {
+        const { fetchImpl, calls } = fakeFetch({
+            "https://media.example.test/a.png": () => okImage(pngSignature, "image/png"),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const outcomes = await acquirer.retryAssets([candidate()], {
+            policy: resolveMediaPolicy({ images: "metadata_only" }),
+        });
+        expect(outcomes).toEqual([]);
+        expect(calls).toEqual([]);
+    });
+});
+
+describe("media error codes", () => {
+    it("records a machine-readable code for every degraded outcome", async () => {
+        const { fetchImpl } = fakeFetch({
+            "https://media.example.test/plain.txt": () => new Response("nope", {
+                status: 200,
+                headers: { "content-type": "text/plain" },
+            }),
+            "https://media.example.test/broken.png": () => new Response("", { status: 503 }),
+        });
+        const acquirer = createMediaAcquirer({ fetch: fetchImpl, resolveHost: publicResolver });
+        const [out] = await acquirer.acquireItems([item([
+            asset({ sourceUrl: "https://media.example.test/plain.txt" }),
+            asset({ sourceUrl: "https://media.example.test/broken.png" }),
+            asset({ sourceUrl: "ftp://media.example.test/x.png" }),
+        ])]);
+        expect(out.assets[0]).toMatchObject({ status: "failed", errorCode: "not_image" });
+        expect(out.assets[1]).toMatchObject({ status: "failed", errorCode: "http_error" });
+        expect(out.assets[2]).toMatchObject({ status: "skipped", errorCode: "security_blocked" });
+        expect(out.assets.every((entry) => entry.attemptCount === 1)).toBe(true);
     });
 });
 

@@ -178,8 +178,54 @@ export const assetSnapshotSchema = z.object({
     byteSize: z.number().nullable(),
     /** 面向用户的降级原因；非 saved 状态可能携带（ADR-0005）。 */
     errorMessage: z.string().max(500).nullable().optional(),
+    /** 机器可读的降级原因（ADR-0015）；读取侧放宽，未知值降级展示。 */
+    errorCode: z.string().max(50).nullable().optional(),
+    /** 已完成的下载尝试次数，含首次（ADR-0015）。 */
+    attemptCount: z.number().int().nonnegative().optional(),
 });
 export type AssetSnapshot = z.infer<typeof assetSnapshotSchema>;
+
+/** Explicit retention cleanup command; `dryRun` defaults to true (ADR-0015 decision 7). */
+export const mediaCleanupCommandSchema = z.object({
+    sourceId: z.string().trim().min(1).optional(),
+    dryRun: z.boolean().optional(),
+}).strict();
+export type MediaCleanupCommand = z.infer<typeof mediaCleanupCommandSchema>;
+
+export const mediaCleanupEntrySchema = z.object({
+    assetId: z.string(),
+    sourceId: z.string().nullable(),
+    sourceName: z.string().nullable(),
+    title: z.string().nullable(),
+    byteSize: z.number().int().nonnegative().nullable(),
+    createdAt: z.string(),
+    expiredAt: z.string(),
+}).strict();
+export type MediaCleanupEntry = z.infer<typeof mediaCleanupEntrySchema>;
+
+export const mediaCleanupReportSchema = z.object({
+    dryRun: z.boolean(),
+    sourceId: z.string().nullable(),
+    candidateCount: z.number().int().nonnegative(),
+    /** Bytes held by all candidates; the preview number before anything is deleted. */
+    candidateBytes: z.number().int().nonnegative(),
+    cleanedCount: z.number().int().nonnegative(),
+    cleanedBytes: z.number().int().nonnegative(),
+    /** Rows whose Blob bytes are shared with another Asset and were kept. */
+    sharedKeyCount: z.number().int().nonnegative(),
+    samples: mediaCleanupEntrySchema.array(),
+    startedAt: z.string(),
+    finishedAt: z.string(),
+}).strict();
+export type MediaCleanupReport = z.infer<typeof mediaCleanupReportSchema>;
+
+export const mediaCleanupRunSnapshotSchema = z.object({
+    runId: z.string(),
+    status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+    report: mediaCleanupReportSchema.nullable(),
+    error: z.string().nullable(),
+});
+export type MediaCleanupRunSnapshot = z.infer<typeof mediaCleanupRunSnapshotSchema>;
 
 export const runSnapshotSchema = z.object({
     id: z.string(),

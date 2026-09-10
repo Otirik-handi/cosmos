@@ -241,15 +241,29 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
         type: "object",
         required: ["itemCount", "nextCursor", "checkpointRevision", "checkpointCommitted"],
     });
+    const cleanupInput = builtinSchema("cosmos.media-cleanup.input@1", {
+        type: "object",
+        required: ["sourceId", "dryRun"],
+    });
+    const cleanupOutput = builtinSchema("cosmos.media-cleanup.output@1", {
+        type: "object",
+        required: ["dryRun", "candidateCount", "cleanedCount"],
+    });
     const workflowDefinitions: readonly WorkflowDefinitionManifest[] = [{
         id: "cosmos.ingest",
         version: 1,
         ref: "cosmos.ingest@1",
         kind: "ingest",
         provider: "cosmos",
-        manifestHash: builtinHash("builtin:cosmos.ingest@1:source-snapshot-v1"),
+        manifestHash: builtinHash("builtin:cosmos.ingest@1:source-snapshot-v2"),
         status: "enabled",
-        requiredActionRefs: ["source.fetch@1", "library.ingest@1", "source.checkpoint@1"],
+        requiredActionRefs: [
+            "source.fetch@1",
+            "library.ingest@1",
+            "media.retry.fetch@1",
+            "media.retry.apply@1",
+            "source.checkpoint@1",
+        ],
         requiredBackendCapabilities: {
             processRestart: true,
             multiWorker: true,
@@ -259,6 +273,24 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
         },
         inputSchema: workflowInput,
         outputSchema: workflowOutput,
+    }, {
+        id: "cosmos.media-cleanup",
+        version: 1,
+        ref: "cosmos.media-cleanup@1",
+        kind: "maintenance",
+        provider: "cosmos",
+        manifestHash: builtinHash("builtin:cosmos.media-cleanup@1"),
+        status: "enabled",
+        requiredActionRefs: ["media.cleanup@1"],
+        requiredBackendCapabilities: {
+            processRestart: true,
+            multiWorker: true,
+            leases: true,
+            externalReceipts: true,
+            valueReferences: true,
+        },
+        inputSchema: cleanupInput,
+        outputSchema: cleanupOutput,
     }];
     const actionDefinitions: readonly ActionDefinitionManifest[] = [
         {
@@ -286,6 +318,32 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             status: "enabled",
             inputSchema: builtinSchema("library.ingest.input@1", { type: "object" }),
             outputSchema: builtinSchema("library.ingest.output@1", { type: "object" }),
+        },
+        {
+            id: "media.retry.fetch",
+            version: 1,
+            ref: "media.retry.fetch@1",
+            provider: "cosmos",
+            manifestHash: builtinHash("builtin:media.retry.fetch@1"),
+            effectMode: "external",
+            executionPlacement: "trusted_worker",
+            requiredCapabilities: ["source:read"],
+            status: "enabled",
+            inputSchema: builtinSchema("media.retry.fetch.input@1", { type: "object" }),
+            outputSchema: builtinSchema("media.retry.fetch.output@1", { type: "object" }),
+        },
+        {
+            id: "media.retry.apply",
+            version: 1,
+            ref: "media.retry.apply@1",
+            provider: "cosmos",
+            manifestHash: builtinHash("builtin:media.retry.apply@1"),
+            effectMode: "none",
+            executionPlacement: "host",
+            requiredCapabilities: ["library:write"],
+            status: "enabled",
+            inputSchema: builtinSchema("media.retry.apply.input@1", { type: "object" }),
+            outputSchema: builtinSchema("media.retry.apply.output@1", { type: "object" }),
         },
         {
             id: "source.checkpoint",

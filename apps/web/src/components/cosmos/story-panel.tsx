@@ -273,6 +273,12 @@ function RevisionAssets({ assets }: { assets: readonly AssetSnapshot[] }) {
                         <span className="text-muted-foreground">{label}</span>
                         <Badge variant="secondary">{STATUS_LABELS[asset.status]}</Badge>
                         <span className="text-muted-foreground">{reason}</span>
+                        {asset.status !== "metadata_only"
+                            && (asset.attemptCount ?? 0) > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                                已尝试 {asset.attemptCount} 次
+                            </span>
+                        )}
                         {asset.sourceUrl && (
                             <a
                                 href={asset.sourceUrl}

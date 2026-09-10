@@ -64,9 +64,13 @@ Asset download 中未被 client 封装的部分不由它承担。
   （启用+定时显示“每 N 自动抓取”；启用无定时显示“未配置定时，仅手动录入”；停用显示
   “已停用，定时抓取暂停”或“已停用”）、媒体策略摘要、上次运行时间与最近错误。它不新增
   读合同，投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/config.media/lastRunAt/lastError`。
-  行内“媒体策略”入口打开一个表单（图片下载开关 + 单文件/单次上限，留空表示跟随默认），
-  保存走 `PATCH /api/v1/sources/:id`（带 `baseRevisionId`），超默认值在本地就被拒绝，
-  409 提示版本冲突并刷新（ADR-0014）。
+  行内“媒体策略”入口打开一个表单（图片下载开关 + 单文件/单次上限 + 失败重试次数 + 保留天数，
+  留空表示跟随默认/永久保留），保存走 `PATCH /api/v1/sources/:id`（带 `baseRevisionId`），
+  超默认值在本地就被拒绝，409 提示版本冲突并刷新（ADR-0014/0015）。
+- **保留期清理**：来源健康区底部提供“预览过期媒体 → 确认清理”两步操作，走
+  `POST /api/v1/media-cleanups`（`dryRun: true` 预览、`false` 确认）并轮询
+  `GET /api/v1/media-cleanups/:runId` 到终态；预览展示候选条数/字节与最多 5 条样例，
+  确认后展示实际清理条数与释放字节。Web 不直接删除任何数据，也不新增读合同（ADR-0015）。
 - **分类（Label）与 Topic 筛选**：搜索表单把已加载的 Label 与 Topic 渲染成可多选的筛选
   chip；选中项以 id 数组存在表单状态里，提交时拼成 `search` 的 `labelIds`/`topicIds`
   逗号串。它不新增合同，只是把既有 search 过滤条件接出编辑入口。

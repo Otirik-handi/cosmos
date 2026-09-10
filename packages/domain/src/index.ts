@@ -300,6 +300,10 @@ export interface NormalizedAssetInput {
     content: Uint8Array | null;
     /** 面向用户的降级原因；仅非 saved 状态填写（ADR-0005）。 */
     errorMessage?: string | null;
+    /** 机器可读的降级原因；重试判定只读它（ADR-0015 决策 2）。 */
+    errorCode?: string | null;
+    /** 已完成的下载尝试次数，含首次；未尝试时为 0（ADR-0015 决策 3）。 */
+    attemptCount?: number;
 }
 
 export interface NormalizedIngestItem {

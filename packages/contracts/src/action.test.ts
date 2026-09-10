@@ -13,10 +13,13 @@ import {
     blobRefSchema,
     executionPlacementSchema,
     jobKindSchema,
+    mediaRetryFetchInputSchema,
+    mediaRetryOutcomeSchema,
     normalizedAssetInputSchema,
     parseActionRef,
     retryPolicySchema,
     sourceExecutionSnapshotSchema,
+    sourceFetchOutputSchema,
     sourceSnapshotSchema,
 } from "./index.js";
 
@@ -262,5 +265,99 @@ describe("asset errorMessage contract (ADR-0005)", () => {
             mimeType: "image/png",
             byteSize: 12,
         }).errorMessage).toBeUndefined();
+    });
+});
+
+describe("media retry contracts (ADR-0015)", () => {
+    it("carries the machine-readable errorCode and attempt count on asset rows", () => {
+        const asset = normalizedAssetInputSchema.parse({
+            kind: "image",
+            sourceUrl: "https://example.test/a.png",
+            status: "skipped",
+            mimeType: null,
+            byteSize: null,
+            blobRef: null,
+            errorMessage: "单次运行媒体预算已用尽",
+            errorCode: "budget_run",
+            attemptCount: 1,
+        });
+        expect(asset.errorCode).toBe("budget_run");
+        expect(asset.attemptCount).toBe(1);
+        expect(() => normalizedAssetInputSchema.parse({
+            kind: "image",
+            sourceUrl: "https://example.test/a.png",
+            status: "failed",
+            mimeType: null,
+            byteSize: null,
+            errorCode: "made_up_reason",
+        })).toThrow();
+    });
+
+    it("exposes errorCode and attemptCount on the public asset snapshot", () => {
+        const snapshot = assetSnapshotSchema.parse({
+            id: "asset-1",
+            kind: "image",
+            status: "metadata_only",
+            sourceUrl: "https://example.test/a.png",
+            storageKey: null,
+            mimeType: "image/png",
+            byteSize: null,
+            errorMessage: "已按保留期清理（保留 30 天）",
+            errorCode: "retention_expired",
+            attemptCount: 2,
+        });
+        expect(snapshot).toMatchObject({
+            errorCode: "retention_expired",
+            attemptCount: 2,
+        });
+    });
+
+    it("requires a BlobRef for saved retry outcomes and an errorCode otherwise", () => {
+        const base = {
+            assetId: "asset-1",
+            attemptCount: 1,
+            mimeType: null,
+            blobRef: null,
+            errorCode: null,
+            errorMessage: null,
+        };
+        expect(() => mediaRetryOutcomeSchema.parse({ ...base, status: "saved" })).toThrow();
+        expect(() => mediaRetryOutcomeSchema.parse({ ...base, status: "failed" })).toThrow();
+        expect(mediaRetryOutcomeSchema.parse({
+            ...base,
+            status: "failed",
+            errorCode: "network",
+            errorMessage: "图片下载失败",
+        })).toMatchObject({ status: "failed", errorCode: "network" });
+        expect(mediaRetryOutcomeSchema.parse({
+            ...base,
+            status: "saved",
+            mimeType: "image/png",
+            blobRef: {
+                key: "sha256/ab/123",
+                hash: "sha256:123",
+                byteSize: 12,
+                mediaType: "image/png",
+            },
+        })).toMatchObject({ status: "saved" });
+    });
+
+    it("keeps the retry fetch input strict and the fetch output additive", () => {
+        expect(() => mediaRetryFetchInputSchema.parse({
+            sourceId: "source-1",
+            maxAttempts: 3,
+            budgetBytes: 1024,
+            policy: { images: "download", maxFileBytes: 1024, maxRunBytes: 2048 },
+            unexpected: true,
+        })).toThrow();
+        expect(sourceFetchOutputSchema.parse({
+            items: [],
+            nextCursor: null,
+        }).mediaBytesUsed).toBeUndefined();
+        expect(sourceFetchOutputSchema.parse({
+            items: [],
+            nextCursor: null,
+            mediaBytesUsed: 7,
+        }).mediaBytesUsed).toBe(7);
     });
 });

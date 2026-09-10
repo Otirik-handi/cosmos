@@ -1,6 +1,7 @@
 import { z, type ZodType } from "zod";
 
 import {
+    assetErrorCodeSchema,
     contentKindSchema,
     contentMetricsSchema,
     publisherSchema,
@@ -197,6 +198,10 @@ export const normalizedAssetInputSchema = z.object({
     blobRef: blobRefSchema.nullable().optional(),
     /** 面向用户的降级原因；仅非 saved 状态填写（ADR-0005）。 */
     errorMessage: z.string().trim().max(500).nullable().optional(),
+    /** 机器可读的降级原因；重试判定只读它（ADR-0015 决策 2）。 */
+    errorCode: assetErrorCodeSchema.nullable().optional(),
+    /** 已完成的下载尝试次数，含首次（ADR-0015 决策 3）。 */
+    attemptCount: z.number().int().nonnegative().optional(),
 }).strict().superRefine((asset, context) => {
     if (asset.status !== "saved" && asset.blobRef !== undefined && asset.blobRef !== null) {
         context.addIssue({
@@ -250,11 +255,76 @@ export type SourceFetchInput = z.infer<typeof sourceFetchInputSchema>;
 export const sourceFetchOutputSchema = z.object({
     items: normalizedIngestItemSchema.array(),
     nextCursor: z.string().nullable(),
+    /**
+     * Media bytes downloaded for this page, so the retry step can share the
+     * same per-run budget (ADR-0015 decision 5). Absent means unknown.
+     */
+    mediaBytesUsed: z.number().int().nonnegative().optional(),
 }).strict();
 export type SourceFetchOutput = z.infer<typeof sourceFetchOutputSchema>;
 
 export const ingestTriggerKindSchema = z.enum(["manual", "schedule"]);
 export type IngestTriggerKind = z.infer<typeof ingestTriggerKindSchema>;
+
+/** Frozen media policy handed to the retry step from the Run's source snapshot. */
+export const mediaRetryPolicySnapshotSchema = z.object({
+    images: z.enum(["download", "metadata_only"]),
+    maxFileBytes: z.number().int().nonnegative(),
+    maxRunBytes: z.number().int().nonnegative(),
+}).strict();
+export type MediaRetryPolicySnapshot = z.infer<typeof mediaRetryPolicySnapshotSchema>;
+
+export const mediaRetryFetchInputSchema = z.object({
+    sourceId: z.string().trim().min(1),
+    maxAttempts: z.number().int().nonnegative(),
+    /** Remaining per-run budget after the page's own media (ADR-0015 decision 5). */
+    budgetBytes: z.number().int().nonnegative(),
+    policy: mediaRetryPolicySnapshotSchema,
+}).strict();
+export type MediaRetryFetchInput = z.infer<typeof mediaRetryFetchInputSchema>;
+
+export const mediaRetryOutcomeSchema = z.object({
+    assetId: z.string().trim().min(1),
+    attemptCount: z.number().int().nonnegative(),
+    status: z.enum(["saved", "skipped", "failed"]),
+    mimeType: z.string().nullable(),
+    blobRef: blobRefSchema.nullable(),
+    errorCode: assetErrorCodeSchema.nullable(),
+    errorMessage: z.string().trim().max(500).nullable(),
+}).strict().superRefine((outcome, context) => {
+    if (outcome.status === "saved" && !outcome.blobRef) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["blobRef"],
+            message: "A saved retry outcome requires a BlobRef.",
+        });
+    }
+    if (outcome.status !== "saved" && !outcome.errorCode) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["errorCode"],
+            message: "A degraded retry outcome requires an errorCode.",
+        });
+    }
+});
+export type MediaRetryOutcomeContract = z.infer<typeof mediaRetryOutcomeSchema>;
+
+export const mediaRetryFetchOutputSchema = z.object({
+    candidateCount: z.number().int().nonnegative(),
+    outcomes: mediaRetryOutcomeSchema.array(),
+}).strict();
+export type MediaRetryFetchOutput = z.infer<typeof mediaRetryFetchOutputSchema>;
+
+export const mediaRetryApplyInputSchema = z.object({
+    outcomes: mediaRetryOutcomeSchema.array(),
+}).strict();
+export type MediaRetryApplyInput = z.infer<typeof mediaRetryApplyInputSchema>;
+
+export const mediaRetryApplyOutputSchema = z.object({
+    appliedCount: z.number().int().nonnegative(),
+    skippedCount: z.number().int().nonnegative(),
+}).strict();
+export type MediaRetryApplyOutput = z.infer<typeof mediaRetryApplyOutputSchema>;
 
 export const libraryIngestInputSchema = z.object({
     sourceId: z.string().trim().min(1),

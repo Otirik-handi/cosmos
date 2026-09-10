@@ -7,11 +7,15 @@ import type { SourceMediaPolicy } from "@cosmos/contracts";
 export const MEDIA_POLICY_DEFAULTS = {
     maxFileBytes: 10 * 1024 * 1024,
     maxRunBytes: 50 * 1024 * 1024,
+    /** 重试次数含首次尝试（ADR-0015 决策 3）。 */
+    retryMaxAttempts: 3,
 } as const;
 
 const MEGABYTE = 1024 * 1024;
 const MIN_FILE_BYTES = 64 * 1024;
 const MIN_RUN_BYTES = MEGABYTE;
+const MAX_RETRY_ATTEMPTS = 10;
+const MAX_RETENTION_DAYS = 3650;
 
 export type MediaPolicyImages = "download" | "metadata_only";
 
@@ -20,6 +24,10 @@ export type MediaPolicyFormValues = {
     /** MB 文本；空串表示跟随默认。 */
     maxFileMb: string;
     maxRunMb: string;
+    /** 重试次数（含首次）；空串表示跟随默认。 */
+    retryMaxAttempts: string;
+    /** 保留天数；空串表示永久保留。 */
+    retentionDays: string;
 };
 
 export type MediaPolicyParseResult =
@@ -33,6 +41,12 @@ export function mediaPolicyFormValues(
         images: policy?.images ?? "download",
         maxFileMb: policy?.maxFileBytes === undefined ? "" : formatMb(policy.maxFileBytes),
         maxRunMb: policy?.maxRunBytes === undefined ? "" : formatMb(policy.maxRunBytes),
+        retryMaxAttempts: policy?.retry?.maxAttempts === undefined
+            ? ""
+            : String(policy.retry.maxAttempts),
+        retentionDays: policy?.retentionDays === undefined
+            ? ""
+            : String(policy.retentionDays),
     };
 }
 
@@ -73,6 +87,28 @@ export function parseMediaPolicyForm(values: MediaPolicyFormValues): MediaPolicy
         policy.maxRunBytes = bytes;
     }
 
+    const retryAttempts = parseCount(values.retryMaxAttempts);
+    if (retryAttempts === "invalid") {
+        return { ok: false, message: "重试次数请填写 0 到 10 的整数（含首次尝试）。" };
+    }
+    if (retryAttempts !== null) {
+        if (retryAttempts > MAX_RETRY_ATTEMPTS) {
+            return { ok: false, message: `重试次数最多 ${MAX_RETRY_ATTEMPTS} 次（含首次尝试）。` };
+        }
+        policy.retry = { maxAttempts: retryAttempts };
+    }
+
+    const retentionDays = parseCount(values.retentionDays);
+    if (retentionDays === "invalid") {
+        return { ok: false, message: "保留天数请填写 0 到 3650 的整数。" };
+    }
+    if (retentionDays !== null) {
+        if (retentionDays > MAX_RETENTION_DAYS) {
+            return { ok: false, message: `保留天数最多 ${MAX_RETENTION_DAYS} 天。` };
+        }
+        policy.retentionDays = retentionDays;
+    }
+
     return { ok: true, policy };
 }
 
@@ -88,10 +124,31 @@ export function describeMediaPolicy(policy: SourceMediaPolicy | undefined): stri
     if (policy?.maxRunBytes !== undefined) {
         parts.push(`单次 ≤ ${formatMb(policy.maxRunBytes)}`);
     }
+    if (policy?.retry?.maxAttempts !== undefined) {
+        parts.push(policy.retry.maxAttempts === 0
+            ? "不重试失败媒体"
+            : `重试 ${policy.retry.maxAttempts} 次`);
+    }
+    if (policy?.retentionDays !== undefined) {
+        parts.push(policy.retentionDays === 0
+            ? "永久保留媒体"
+            : `媒体保留 ${policy.retentionDays} 天`);
+    }
     if (parts.length === 0) {
-        return `跟随默认（${formatMb(MEDIA_POLICY_DEFAULTS.maxFileBytes)} / ${formatMb(MEDIA_POLICY_DEFAULTS.maxRunBytes)}）`;
+        return `跟随默认（${formatMb(MEDIA_POLICY_DEFAULTS.maxFileBytes)} / ${formatMb(MEDIA_POLICY_DEFAULTS.maxRunBytes)}，重试 ${MEDIA_POLICY_DEFAULTS.retryMaxAttempts} 次，永久保留）`;
     }
     return parts.join("；");
+}
+
+function parseCount(value: string): number | null | "invalid" {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+        return null;
+    }
+    if (!/^\d+$/.test(trimmed)) {
+        return "invalid";
+    }
+    return Number.parseInt(trimmed, 10);
 }
 
 function parseMb(value: string): number | null | "invalid" {

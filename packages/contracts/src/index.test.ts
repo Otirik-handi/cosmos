@@ -7,6 +7,7 @@ import {
     publisherSchema,
     rssSourceConfigSchema,
     mediaPolicyCeilings,
+    mediaRetryCeiling,
     sourceConfigSchema,
     sourceMediaPolicySchema,
     createSourceCommandSchema,
@@ -568,6 +569,21 @@ describe("source and job contracts", () => {
             maxFileBytes: 10 * 1024 * 1024,
             maxRunBytes: 50 * 1024 * 1024,
         });
+    });
+
+    it("accepts the per-source retry and retention policy within its bounds", () => {
+        expect(sourceMediaPolicySchema.parse({
+            retry: { maxAttempts: 0 },
+            retentionDays: 30,
+        })).toEqual({ retry: { maxAttempts: 0 }, retentionDays: 30 });
+        expect(sourceMediaPolicySchema.parse({ retry: {} })).toEqual({ retry: {} });
+        expect(() => sourceMediaPolicySchema.parse({
+            retry: { maxAttempts: mediaRetryCeiling + 1 },
+        })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ retry: { maxAttempts: -1 } })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ retry: { backoffMs: 1 } })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ retentionDays: 3651 })).toThrow();
+        expect(() => sourceMediaPolicySchema.parse({ retentionDays: -1 })).toThrow();
     });
 
     it("validates the public AI HOT configuration", () => {

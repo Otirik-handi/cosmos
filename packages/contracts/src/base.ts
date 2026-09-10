@@ -144,6 +144,46 @@ export const mediaPolicyCeilings = {
 export const mediaPolicyImagesSchema = z.enum(["download", "metadata_only"]);
 export type MediaPolicyImages = z.infer<typeof mediaPolicyImagesSchema>;
 
+/**
+ * Managed write-side reason codes for degraded assets (ADR-0015 decision 2).
+ * Read-side projections stay lenient so an unknown future value degrades instead
+ * of breaking the Asset snapshot.
+ */
+export const assetErrorCodes = [
+    "timeout",
+    "network",
+    "http_error",
+    "budget_run",
+    "budget_file",
+    "not_image",
+    "security_blocked",
+    "invalid_url",
+    "retention_expired",
+    "unknown",
+] as const;
+export const assetErrorCodeSchema = z.enum(assetErrorCodes);
+export type AssetErrorCode = z.infer<typeof assetErrorCodeSchema>;
+
+/** Degraded states the retry step may attempt again (ADR-0015 decision 2). */
+export const retryableAssetErrorCodes = [
+    "timeout",
+    "network",
+    "http_error",
+    "budget_run",
+] as const satisfies readonly AssetErrorCode[];
+
+/** Attempt ceiling shared by the schema bound and the application default (ADR-0015 decision 3). */
+export const mediaRetryCeiling = 10;
+
+/**
+ * Per-source retry policy. `maxAttempts` counts the first download too, so 1
+ * means "never retry" and 0 disables the candidate query entirely.
+ */
+export const mediaRetryPolicySchema = z.object({
+    maxAttempts: z.coerce.number().int().min(0).max(mediaRetryCeiling).optional(),
+}).strict();
+export type MediaRetryPolicy = z.infer<typeof mediaRetryPolicySchema>;
+
 /** Per-source media policy; every field is optional and falls back to the global default. */
 export const sourceMediaPolicySchema = z.object({
     images: mediaPolicyImagesSchema.optional(),
@@ -155,6 +195,9 @@ export const sourceMediaPolicySchema = z.object({
         .min(1024 * 1024)
         .max(mediaPolicyCeilings.maxRunBytes)
         .optional(),
+    retry: mediaRetryPolicySchema.optional(),
+    /** Saved-media retention; absent or 0 keeps media forever (ADR-0015 decision 6). */
+    retentionDays: z.coerce.number().int().min(0).max(3650).optional(),
 }).strict();
 export type SourceMediaPolicy = z.infer<typeof sourceMediaPolicySchema>;
 

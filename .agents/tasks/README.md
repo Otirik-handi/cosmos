@@ -40,6 +40,7 @@ Task 导航：
 - [`17-story-split/`](17-story-split/)：Phase 2 第七切片 Story split v1——`StoryReplacement` 历史壳 + `replaced_by[]` 投影、单命令显式迁移主成员/证据链接/Story↔Entity/Topic 成员、用户状态留在历史壳、壳写边界（编号待维护者确认）。
 - [`18-story-subtype-registry/`](18-story-subtype-registry/)：Phase 2 第八切片 Story subtype 受管注册表 v1——代码内静态注册表（kind/version/label/status/identityPolicy/owner）、写入侧只接受该 kind 下 `active` 注册项、既有未知值继续降级、只读目录接口与 Web 下拉。
 - [`19-per-source-media-policy/`](19-per-source-media-policy/)：Phase 2 第九切片按来源的媒体策略 v1——`Source.config.media` 的图片下载开关与单文件/单次预算（只能收紧、缺省跟随全局默认）、fetch 时从来源快照解析、Web 来源行编辑；保留期/清理与失败重试后置。
+- [`20-media-retry-retention/`](20-media-retry-retention/)：Phase 2 第十切片媒体失败重试与保留期清理 v1（ING-009 剩余部分）——采集 Run 内的 `media.retry@1` 自动重试（机器可读 `errorCode` + 每来源尝试上限，只改写 Asset 行不产生新 Revision）、每来源保留期 + 显式清理命令（先预览再确认，只删字节并回退 `metadata_only`，删除前引用检查）与 durable 维护 Workflow；编号待维护者确认。
 
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 

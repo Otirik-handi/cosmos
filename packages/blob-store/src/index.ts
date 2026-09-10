@@ -3,6 +3,7 @@ import {
     mkdir,
     readFile,
     stat,
+    unlink,
     writeFile,
 } from "node:fs/promises";
 import {
@@ -89,6 +90,22 @@ export class FileBlobStore {
         } catch (error) {
             if (error instanceof Error && "code" in error && error.code === "ENOENT") {
                 return false;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Remove one content-addressed blob. Callers must have already proved the
+     * key is unreferenced: the same key can back several Asset rows (ADR-0015
+     * decision 9). Missing keys are a no-op so retried cleanups stay idempotent.
+     */
+    async delete(key: string): Promise<void> {
+        try {
+            await unlink(resolveBlobKey(this.config, key));
+        } catch (error) {
+            if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+                return;
             }
             throw error;
         }

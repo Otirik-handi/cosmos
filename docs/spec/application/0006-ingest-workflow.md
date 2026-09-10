@@ -10,7 +10,7 @@
 
 ## 组件定位
 
-`packages/application/src/workflow-ingest.ts` 注册并实现一个工作流 Definition `cosmos.ingest@1`，以及三个 Action：`source.fetch@1`、`library.ingest@1`、`source.checkpoint@1`。
+`packages/application/src/workflow-ingest.ts` 注册并实现一个工作流 Definition `cosmos.ingest@1`，以及五个 Action：`source.fetch@1`、`media.retry.fetch@1`、`media.retry.apply@1`、`library.ingest@1`、`source.checkpoint@1`。
 
 该组件负责协调来源分页抓取、逐项入库和来源 checkpoint 提交。它不拥有领域模型或持久化 schema；相关 canonical 定义见[标准化内容模型](../domain/0001-normalized-content.md)、[公共合同](../contracts/0001-public-contracts.md)和[文件 Blob Store](../storage/0005-file-blob-store.md)。
 
@@ -34,6 +34,8 @@
 | --- | --- | --- | --- | --- |
 | `cosmos.ingest@1` | `builtin:cosmos.ingest@1:source-snapshot-v1` | Workflow Definition | durable host runtime | — |
 | `source.fetch@1` | `builtin:source.fetch@1:source-snapshot-v1` | `connector` | `trusted_worker` | external |
+| `media.retry.fetch@1` | `builtin:media.retry.fetch@1` | `connector` | `trusted_worker` | external |
+| `media.retry.apply@1` | `builtin:media.retry.apply@1` | `library` | `host` | none |
 | `library.ingest@1` | `builtin:library.ingest@1` | `library` | `host` | none |
 | `source.checkpoint@1` | `builtin:source.checkpoint@1:cas-v1` | `control` | `host` | none |
 
@@ -46,12 +48,14 @@
 工作流严格按以下顺序运行：
 
 1. 调用 `source.fetch@1`，输入 `{source, cursor}`，Activity key 为 `source.fetch`。
-2. 按 `page.items` 的索引顺序调用 `library.ingest@1`，输入 `{sourceId, triggerKind, item}`，Activity key 为 `library.ingest:${index}`。
-3. 根据每项结果累加 `createdEntry`、`revisedEntry`、`duplicateObservation` 三个布尔结果对应的计数；item 不并行处理。
-4. 调用 `source.checkpoint@1`，输入 `{sourceId, cursor: page.nextCursor, expectedRevision: input.checkpointRevision, itemCount: page.items.length}`。
-5. 写入 key 为 `ingest-page` 的 `workflow.checkpoint`。
-6. 发出 `ingest.page.persisted`、版本 `v1` 的 workflow event，payload 为 `sourceId`、`triggerKind`、`itemCount`、`nextCursor`、`checkpointRevision`、`checkpointCommitted`。
-7. 返回工作流输出。
+2. 当来源的 `media.retry.maxAttempts > 0` 时调用 `media.retry.fetch@1`，输入 `{sourceId, maxAttempts, budgetBytes, policy}`，Activity key 为 `media.retry.fetch`；`budgetBytes = maxRunBytes - page.mediaBytesUsed`（缺省按 0）。候选为空时跳过下一步。
+3. 有候选时调用 `media.retry.apply@1`，输入 `{outcomes}`，Activity key 为 `media.retry.apply`。
+4. 按 `page.items` 的索引顺序调用 `library.ingest@1`，输入 `{sourceId, triggerKind, item}`，Activity key 为 `library.ingest:${index}`。
+5. 根据每项结果累加 `createdEntry`、`revisedEntry`、`duplicateObservation` 三个布尔结果对应的计数；item 不并行处理。
+6. 调用 `source.checkpoint@1`，输入 `{sourceId, cursor: page.nextCursor, expectedRevision: input.checkpointRevision, itemCount: page.items.length}`。
+7. 写入 key 为 `ingest-page` 的 `workflow.checkpoint`。
+8. 发出 `ingest.page.persisted`、版本 `v1` 的 workflow event，payload 为 `sourceId`、`triggerKind`、`itemCount`、`nextCursor`、`checkpointRevision`、`checkpointCommitted`。
+9. 返回工作流输出（含 `mediaRetryCandidateCount`、`mediaRetryAppliedCount`）。
 
 ## 输入
 
@@ -187,15 +191,25 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 | Action | kind | placement | effect | idempotent | supportsCancellation | timeout | retry |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `source.fetch@1` | `connector` | `trusted_worker` | `external` | `true` | `false` | `null` | `maxAttempts: 3`，`backoff: 1000`，仅 `dependency_unavailable`、`timeout`、`rate_limited` 可重试 |
+| `media.retry.fetch@1` | `connector` | `trusted_worker` | `external` | `true` | `false` | `null` | `maxAttempts: 2`，`backoff: 1000`，仅 `dependency_unavailable`、`timeout`、`rate_limited` 可重试 |
+| `media.retry.apply@1` | `library` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
 | `library.ingest@1` | `library` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
 | `source.checkpoint@1` | `control` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
 
-三个 Action 的 idempotency key 均由 workflow runtime/context 提供；本组件不提供绕过 fence、CAS 或 ActionRegistry 的配置开关。
+五个 Action 的 idempotency key 均由 workflow runtime/context 提供；本组件不提供绕过 fence、CAS 或 ActionRegistry 的配置开关。
+
+## 媒体失败重试（ADR-0015）
+
+重试步骤排在持久化之前，所以它只看到**早先 Run 已存**的降级 Asset，而不是本次 Run 刚入库的字节。
+
+`media.retry.fetch@1` 是 `trusted_worker` 的只读+外部副作用 Action：它通过 `listRetryableMediaAssets({ sourceId, maxAttempts })` 取候选（状态 `failed`/`skipped`、`errorCode` 属于 `timeout`/`network`/`http_error`/`budget_run`、`attemptCount < maxAttempts`、属于该来源当前 Revision 的图片候选），用 `MediaRetrier.retryAssets` 重新下载，把成功结果写入 WorkflowBlobStore 并以 BlobRef 返回；未注入 retrier/候选端口时返回空结果。
+
+`media.retry.apply@1` 是 `host` Action：对每个 outcome 调 `applyMediaRetryOutcome({ workflowRunId, fence, outcome, expectedAttemptCount })`，在 `(assetId, attemptCount)` CAS 下原地改写 Asset 行（saved 时写 storageKey/byteSize/mimeType 并清空降级原因；否则只更新 `errorCode`/`errorMessage`/`attemptCount`/`lastAttemptAt`），并追加 `media.retry.attempted.v1` 事件。CAS 失败（另一个 Worker 已经重试过）计为 skipped，不重复写 Blob。重试不产生新 EntryRevision，也不改写 `contentFingerprint`。
 
 ## 重建验收
 
-- 注册的四个 refs、四个实现哈希以及 Definition capability requirements 与本文完全一致。
-- 相同输入下，Activity 调用顺序和 key 可观测为 `source.fetch`、`library.ingest:0..n-1`、`source.checkpoint`；不存在并行 item 调用。
+- 注册的五个 refs、五个实现哈希以及 Definition capability requirements 与本文完全一致。
+- 相同输入下，Activity 调用顺序和 key 可观测为 `source.fetch`、`media.retry.fetch`、可选的 `media.retry.apply`、`library.ingest:0..n-1`、`source.checkpoint`；不存在并行 item 调用。
 - raw `Uint8Array` 不出现在 workflow JSON；saved content 可由生成的 `BlobRef` 完整、逐字节校验读取。
 - 连续运行可产生预期的 Observation、Entry revision、Story/feed/search/events，重复 command 由 fence 和 idempotency 返回既有结果。
 - checkpoint revision 匹配时提交新 cursor；不匹配时不覆盖新状态，返回当前 cursor/revision、`checkpointCommitted: false`，并产生 superseded event。
