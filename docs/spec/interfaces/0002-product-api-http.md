@@ -166,8 +166,12 @@ contracts 的 `getSourceConfigurationSchema(ref)` strict Zod schema 校验——
 
 | Method/path | 输入 | 成功输出与错误 |
 | --- | --- | --- |
+| `GET /runs` | 可选 `sourceId`、`limit` | 运行记录：按创建时间倒序返回最近 durable `RunSnapshot[]`（缺省 20 条、上界 100）；只含 durable `WorkflowRun`，不含 legacy Run 泳道。 |
 | `GET /runs/:runId` | path `runId` | 先查 Workflow Host envelope，存在则返回 Product Run；否则查 legacy `RunSnapshot`；两者都不存在 404。 |
 | `GET /workflow-runs/:runId` | path `runId` | 当前实现别名，调用同一 `/runs/:runId` 查询和投影；不存在 404。 |
+| `POST /runs/:runId/cancellations` | body 可选 `reason` | Run 控制 v1：非终态 Run 终态化 `cancelled` + fence；不存在 404，终态/并发 409；返回 `RunControlResult`（`run` + `reuse`/`sideEffects`）。 |
+| `POST /runs/:runId/recoveries` | body 可选 `reason` | Run 控制 v1：无活动 lease 的非终态 Run 置 `resumeRequired` 送回恢复队列；活动 lease/终态 409，不存在 404。 |
+| `POST /runs/:runId/re-runs` | 可选 `Idempotency-Key` header | Run 控制 v1：终态 Run 复用采集入队产生全新 Run；非终态 409、不存在 404、非 ingest 400 `invalid_state`；返回新 Run 的 `RunControlResult`。 |
 | `GET /jobs/:jobId` | path `jobId` | `JobSnapshot`，不含 lease token；不存在 404。 |
 | `GET /jobs/:jobId/attempts` | path `jobId` | `AttemptPage`（`items`、`nextCursor: null`、`snapshotAt`），由持久 Domain Events 投影 Attempt；查询本身不 claim/renew/complete。 |
 | `GET /attempts/:attemptId` | path `attemptId` | 单个 `AttemptSnapshot`；无法解析或不存在 404；不含 lease token。 |

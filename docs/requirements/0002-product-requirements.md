@@ -358,6 +358,8 @@ flowchart LR
 
 **Phase 2 第十切片注记（2026-09-09，[`media-retry-retention-v1` Proposal](../proposals/media-retry-retention-v1.md) accepted）**：ING-009 的剩余两项（失败重试、保留期）按 Proposal 冻结——失败重试在来源的常规采集 Run 内自动发生（`cosmos.ingest@1` 在 fetch 之后、持久化之前增加 `media.retry.fetch@1`/`media.retry.apply@1`，只处理**早先 Run 已存**的降级 Asset，定时采集与既有「手动采集」走同一路径，不新增端点/Run 类型）；可重试性由机器可读 `Asset.errorCode` 决定，只重试 `timeout`/`network`/`http_error`/`budget_run`，不解析展示文案；每来源 `Source.config.media.retry.maxAttempts`（含首次尝试，缺省 3，0 = 关闭，上界 10）+ `Asset.attemptCount` 构成上限，重试只原地改写 Asset 行、不产生新 EntryRevision、与本次 Run 的新内容共享单次预算。保留期按来源 `Source.config.media.retentionDays`（1–3650，缺省永久保留）配置，清理是显式命令（`POST /api/v1/media-cleanups`，先 `dryRun` 预览再确认执行，不随采集自动删除），只删 Blob 字节并把 Asset 回退为 `metadata_only` + 「已按保留期清理」原因，保留原文外链，公共 4 态枚举不变；删除前做 Blob 引用检查（内容寻址去重，最后一个引用者才删字节）；清理由 durable 维护 Workflow `cosmos.media-cleanup@1` 承载。历史媒体回填、清理后自动重新下载、音频/视频下载实体、单条目媒体数量上限、全局默认值的 env 化后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 第十一切片注记（2026-09-10，[`run-control-v1` Proposal](../proposals/run-control-v1.md) accepted）**：RUN-004 的 v1 实施顺序按 Proposal 冻结——先交付 durable `WorkflowRun` 的三个控制动作：取消（`POST /runs/:id/cancellations`，用户覆盖式终态化为 `cancelled` 并 fence 掉 Worker 后续写入，不要求持有当前 lease，已入库内容不回滚）、重新运行（`POST /runs/:id/re-runs`，复用采集入队产生全新 Run，新幂等键 + `manual`，复用已入库结果、从来源当前 checkpoint 重新 fetch+ingest，只对终态 Run 开放）、恢复（`POST /runs/:id/recoveries`，把失去活动 lease 的非终态 Run 置 `resumeRequired` 送回恢复队列，由 Kernel `rerun()` 从最后安全步骤续跑）；三个响应都携带面向用户的 `reuse`/`sideEffects` 说明，公共 Run 五态与 Run 投影不变、零数据迁移。Step 级选择性重放、legacy Run 控制后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
 | REC-001 | Phase 1 | Admission 决定是否录入，Ranking 决定当前是否展示。 | 一条未进入今日 Feed 的已录入信息仍可在信息库搜索。 |

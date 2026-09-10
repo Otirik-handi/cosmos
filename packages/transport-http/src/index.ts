@@ -10,6 +10,10 @@ import {
     mediaCleanupCommandSchema,
     mediaCleanupRunSnapshotSchema,
     runSnapshotSchema,
+    cancelRunCommandSchema,
+    recoverRunCommandSchema,
+    rerunRunCommandSchema,
+    runControlResultSchema,
     searchPageSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
@@ -38,6 +42,10 @@ import {
     type HealthResponse,
     type JobSnapshot,
     type RunSnapshot,
+    type CancelRunCommand,
+    type RecoverRunCommand,
+    type RerunRunCommand,
+    type RunControlResult,
     type SearchPage,
     type SearchQuery,
     type SourceActivationCommand,
@@ -340,6 +348,49 @@ export class HttpCosmosClient {
                 ? { "idempotency-key": options.idempotencyKey }
                 : undefined,
             schema: runSnapshotSchema,
+        });
+    }
+
+    async cancelRun(runId: string, input: CancelRunCommand = {}): Promise<RunControlResult> {
+        const payload = cancelRunCommandSchema.parse(input);
+        return this.request(`/api/v1/runs/${encodeURIComponent(runId)}/cancellations`, {
+            method: "POST",
+            body: payload,
+            schema: runControlResultSchema,
+        });
+    }
+
+    async recoverRun(runId: string, input: RecoverRunCommand = {}): Promise<RunControlResult> {
+        const payload = recoverRunCommandSchema.parse(input);
+        return this.request(`/api/v1/runs/${encodeURIComponent(runId)}/recoveries`, {
+            method: "POST",
+            body: payload,
+            schema: runControlResultSchema,
+        });
+    }
+
+    async rerunRun(runId: string, options: { idempotencyKey?: string } = {}): Promise<RunControlResult> {
+        const payload = rerunRunCommandSchema.parse({});
+        return this.request(`/api/v1/runs/${encodeURIComponent(runId)}/re-runs`, {
+            method: "POST",
+            headers: options.idempotencyKey
+                ? { "idempotency-key": options.idempotencyKey }
+                : undefined,
+            body: payload,
+            schema: runControlResultSchema,
+        });
+    }
+
+    async listRuns(options: { sourceId?: string; limit?: number } = {}): Promise<readonly RunSnapshot[]> {
+        const params = new URLSearchParams();
+        if (options.sourceId) {
+            params.set("sourceId", options.sourceId);
+        }
+        if (options.limit) {
+            params.set("limit", String(options.limit));
+        }
+        return this.request(`/api/v1/runs${params.size > 0 ? `?${params.toString()}` : ""}`, {
+            schema: runSnapshotSchema.array(),
         });
     }
 

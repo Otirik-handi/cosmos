@@ -20,6 +20,7 @@ import {
     WorkflowHostError,
     type ActivityJobLease,
     type ActivityJobTerminalResult,
+    type CancelWorkflowRunInput,
     type ClaimActivityJobInput,
     type ClaimWorkflowCompletionInput,
     type ClaimWorkflowRunInput,
@@ -33,6 +34,8 @@ import {
     type HeartbeatWorkflowRunInput,
     type MarkResumeRequiredInput,
     type RecoveryRunsInput,
+    type RecoverWorkflowRunInput,
+    type ListWorkflowRunsInput,
     type ReleaseActivityJobInput,
     type ReleaseWorkflowRunInput,
     type RequeueWorkflowCompletionInput,
@@ -1201,6 +1204,101 @@ export class PrismaWorkflowHostStore implements WorkflowHostStore {
     }
 
 
+    async cancelWorkflowRun(input: CancelWorkflowRunInput): Promise<WorkflowEnvelope> {
+        const now = input.now ?? new Date();
+        assertValidDate(now, "now");
+        const runId = requireNonEmptyString(input.runId, "runId");
+        const reason = input.reason ?? "用户取消";
+        return this.prisma.$transaction(async (tx) => {
+            const run = await tx.workflowRun.findUnique({ where: { id: runId } });
+            if (!run) {
+                throw new WorkflowHostError(
+                    "not_found",
+                    `Workflow run ${runId} was not found.`,
+                );
+            }
+            if (isTerminalRunStatus(run.status)) {
+                throw new WorkflowHostConflictError(
+                    `Cannot cancel terminal Workflow run ${runId} (${run.status}).`,
+                );
+            }
+            // User override: the CAS on `status` fences out a concurrent Worker
+            // terminalization, and clearing the lease stops in-flight writes.
+            const updated = await tx.workflowRun.updateMany({
+                where: {
+                    id: runId,
+                    status: run.status,
+                },
+                data: {
+                    status: "cancelled",
+                    errorMessage: reason,
+                    finishedAt: now,
+                    updatedAt: now,
+                    runLeaseOwner: null,
+                    runLeaseToken: null,
+                    runLeaseExpiresAt: null,
+                    resumeRequired: false,
+                },
+            });
+            if (updated.count !== 1) {
+                throw new WorkflowHostConflictError(
+                    `Workflow run ${runId} changed state and was not cancelled.`,
+                );
+            }
+            await appendWorkflowRunCancelledEvent(tx, {
+                workflowRunId: runId,
+                reason,
+            });
+            const row = await tx.workflowRun.findUnique({ where: { id: runId } });
+            return toEnvelope(row as WorkflowRunRow);
+        });
+    }
+
+    async recoverWorkflowRun(input: RecoverWorkflowRunInput): Promise<WorkflowEnvelope> {
+        const now = input.now ?? new Date();
+        assertValidDate(now, "now");
+        const runId = requireNonEmptyString(input.runId, "runId");
+        return this.prisma.$transaction(async (tx) => {
+            const run = await tx.workflowRun.findUnique({ where: { id: runId } });
+            if (!run) {
+                throw new WorkflowHostError(
+                    "not_found",
+                    `Workflow run ${runId} was not found.`,
+                );
+            }
+            if (isTerminalRunStatus(run.status)) {
+                throw new WorkflowHostConflictError(
+                    `Cannot recover terminal Workflow run ${runId} (${run.status}).`,
+                );
+            }
+            if (run.runLeaseExpiresAt !== null && run.runLeaseExpiresAt.getTime() > now.getTime()) {
+                throw new WorkflowHostConflictError(
+                    `Workflow run ${runId} is actively executing; there is nothing to recover.`,
+                );
+            }
+            const updated = await tx.workflowRun.updateMany({
+                where: {
+                    id: runId,
+                    status: run.status,
+                },
+                data: {
+                    resumeRequired: true,
+                    runLeaseOwner: null,
+                    runLeaseToken: null,
+                    runLeaseExpiresAt: null,
+                    updatedAt: now,
+                },
+            });
+            if (updated.count !== 1) {
+                throw new WorkflowHostConflictError(
+                    `Workflow run ${runId} changed state and was not recovered.`,
+                );
+            }
+            const row = await tx.workflowRun.findUnique({ where: { id: runId } });
+            return toEnvelope(row as WorkflowRunRow);
+        });
+    }
+
     async markResumeRequired(input: MarkResumeRequiredInput): Promise<boolean> {
         const now = input.now ?? new Date();
         assertValidDate(now, "now");
@@ -1269,6 +1367,19 @@ export class PrismaWorkflowHostStore implements WorkflowHostStore {
             }
         }
         return recovered;
+    }
+
+    async listWorkflowRuns(input: ListWorkflowRunsInput = {}): Promise<readonly WorkflowEnvelope[]> {
+        const limit = input.limit === undefined ? 20 : input.limit;
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+            throw invalidState("Run list limit must be an integer between 1 and 100.");
+        }
+        const rows = await this.prisma.workflowRun.findMany({
+            where: input.sourceId ? { sourceInstanceId: input.sourceId } : {},
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            take: limit,
+        });
+        return rows.map((row) => toEnvelope(row as WorkflowRunRow));
     }
 }
 
@@ -2197,6 +2308,42 @@ async function appendWorkflowRunFailedEvent(
             data: {
                 eventId: randomUUID(),
                 type: "run.failed.v1",
+                version: "v1",
+                payloadJson,
+                aggregateType: "WorkflowRun",
+                aggregateId: input.workflowRunId,
+                runId: null,
+                workflowRunId: input.workflowRunId,
+                idempotencyKey,
+            },
+        });
+    } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+    }
+}
+
+async function appendWorkflowRunCancelledEvent(
+    tx: Prisma.TransactionClient,
+    input: { workflowRunId: string; reason: string },
+): Promise<void> {
+    const idempotencyKey = `workflow-run:${input.workflowRunId}:cancelled`;
+    const payloadJson = canonicalJson({
+        runId: input.workflowRunId,
+        status: "cancelled",
+        reason: input.reason,
+    });
+    const existing = await tx.domainEvent.findFirst({
+        where: {
+            workflowRunId: input.workflowRunId,
+            idempotencyKey,
+        },
+    });
+    if (existing) return;
+    try {
+        await tx.domainEvent.create({
+            data: {
+                eventId: randomUUID(),
+                type: "run.cancelled.v1",
                 version: "v1",
                 payloadJson,
                 aggregateType: "WorkflowRun",

@@ -71,6 +71,14 @@
 
 公共 `ingestCommandSchema`（仅在调用方显式使用该 schema 时）把幂等键限制为 trim 后 1–300 字符；但 `IngestWorkflowControlService.enqueue` 的实际端口只执行 trim 与非空检查，没有 `.max(300)`，而当前 API header 也直接传入该端口。因此直接调用 control/API header 可接受超过 300 字符的键并由 Store 持久化；不得在本组件规格中声称 control 自身拒绝超长键。若入口先 parse `ingestCommandSchema`，则超长键在该入口被拒绝。两条边界分别属于 schema 与 control，不能混写成同一运行时校验。
 
+`rerun({ runId, idempotencyKey })` 是 Run 控制 v1（RUN-004 / ADR-0016 决策 2）的重跑入口：
+
+1. trim `runId` 与 `idempotencyKey`，任一为空抛 `Workflow rerun requires runId and Idempotency-Key.`。
+2. `store.loadWorkflowEnvelope(runId)` 返回 `null` 时抛 `not_found`。
+3. Run 非终态（非 completed/failed/cancelled）时抛 `conflict`（先取消再重跑）。
+4. `inputSnapshot` 无法按 `ingestWorkflowInputSnapshotSchema` 解析时抛 `invalid_state`（非 ingest Run 不可重跑）。
+5. 复用 `enqueue({ sourceId: inputSnapshot.source.id, triggerKind: "manual", idempotencyKey })` 入队全新 Run——复用已入库结果（externalKey 幂等去重），从来源**当前** checkpoint 重新 fetch + ingest。
+
 ## 输入
 
 服务构造选项为：

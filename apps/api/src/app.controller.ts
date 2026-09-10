@@ -28,6 +28,7 @@ import { z, ZodError } from "zod";
 import {
     createHealthSnapshot,
     WorkflowHostConflictError,
+    WorkflowHostError,
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
@@ -90,8 +91,13 @@ import {
     sourceConfigProbeCommandSchema,
     updateStoryRevisionCommandSchema,
     updateSourceCommandSchema,
+    cancelRunCommandSchema,
+    recoverRunCommandSchema,
+    rerunRunCommandSchema,
+    runControlResultSchema,
     type CreateSourceCommand,
     type HealthResponse,
+    type RunControlAction,
     type RunStatus,
     type SourceSnapshot,
 } from "@cosmos/contracts";
@@ -159,6 +165,31 @@ function sourceCommandError(error: unknown): never {
     });
 }
 
+/**
+ * Error funnel for the Run control endpoints. `WorkflowHostError` codes map to
+ * their HTTP contracts; anything else is a server-side failure and stays a 500.
+ */
+function runControlError(error: unknown): never {
+    if (error instanceof ZodError) validationError(error);
+    if (error instanceof WorkflowHostError) {
+        switch (error.code) {
+            case "not_found":
+                throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
+            case "conflict":
+                throw new ConflictException({ code: "conflict", message: error.message, retryable: false });
+            case "invalid_state":
+                throw new BadRequestException({ code: "invalid_state", message: error.message, retryable: false });
+            default:
+                throw new InternalServerErrorException({
+                    code: "internal_error",
+                    message: error.message,
+                    retryable: false,
+                });
+        }
+    }
+    throw error;
+}
+
 @Controller()
 export class AppController {
     constructor(
@@ -199,6 +230,30 @@ export class AppController {
                 retryable: false,
             });
         }
+    }
+
+    private requireWorkflowStore(): WorkflowHostStore {
+        if (!this.workflowStore) {
+            throw new ConflictException({
+                code: "conflict",
+                message: "The durable workflow host is not enabled.",
+                retryable: false,
+            });
+        }
+        return this.workflowStore;
+    }
+
+    private toRunControlResult(
+        action: RunControlAction,
+        envelope: WorkflowEnvelope,
+        explanation: { reuse: string; sideEffects: string },
+    ) {
+        return runControlResultSchema.parse({
+            action,
+            run: toPublicWorkflowRun(envelope),
+            reuse: explanation.reuse,
+            sideEffects: explanation.sideEffects,
+        });
     }
 
     @Get("health")
@@ -494,6 +549,16 @@ export class AppController {
         return run;
     }
 
+    @Get("runs")
+    @Bind(Query("sourceId"), Query("limit"))
+    async listRuns(sourceId?: string, limit?: string) {
+        const envelopes = await this.requireWorkflowStore().listWorkflowRuns({
+            sourceId: sourceId ?? null,
+            limit: clampLimit(limit),
+        });
+        return envelopes.map(toPublicWorkflowRun);
+    }
+
     @Get("runs/:runId")
     @Bind(Param("runId"))
     async run(runId: string) {
@@ -514,6 +579,68 @@ export class AppController {
     @Bind(Param("runId"))
     async workflowRun(runId: string) {
         return this.run(runId);
+    }
+
+    /**
+     * Run control v1 (RUN-004 / ADR-0016). Cancel and recover operate on the
+     * durable WorkflowRun through the Host store; re-run enqueues a fresh ingest
+     * Run. Each result explains what is reused and what new side effects follow.
+     */
+    @Post("runs/:runId/cancellations")
+    @Bind(Param("runId"), Body())
+    async cancelRun(runId: string, body: unknown) {
+        try {
+            const parsed = cancelRunCommandSchema.parse(body ?? {});
+            const envelope = await this.requireWorkflowStore().cancelWorkflowRun({
+                runId,
+                reason: parsed.reason ?? null,
+            });
+            return this.toRunControlResult("cancelled", envelope, {
+                reuse: "已入库的 Observation/Entry/Revision 保留不回滚；幂等去重保证重跑不会重复。",
+                sideEffects: "取消是终态：后续 Worker 写入被拒绝，不再产生新副作用。",
+            });
+        } catch (error) {
+            runControlError(error);
+        }
+    }
+
+    @Post("runs/:runId/recoveries")
+    @Bind(Param("runId"), Body())
+    async recoverRun(runId: string, body: unknown) {
+        try {
+            recoverRunCommandSchema.parse(body ?? {});
+            const envelope = await this.requireWorkflowStore().recoverWorkflowRun({ runId });
+            return this.toRunControlResult("recovered", envelope, {
+                reuse: "复用已持久化的进度：从最后一个安全步骤续跑，不从头重来。",
+                sideEffects: "恢复后 Worker 重新认领并继续执行后续步骤（Kernel rerun）。",
+            });
+        } catch (error) {
+            runControlError(error);
+        }
+    }
+
+    @Post("runs/:runId/re-runs")
+    @Bind(Param("runId"), Body(), Headers("idempotency-key"))
+    async rerunRun(runId: string, body: unknown, idempotencyKey?: string) {
+        try {
+            rerunRunCommandSchema.parse(body ?? {});
+            if (!this.workflowControl) {
+                throw new ConflictException({
+                    code: "conflict",
+                    message: "The durable workflow host is not enabled.",
+                    retryable: false,
+                });
+            }
+            const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
+            const key = providedKey ?? `rerun:${runId}:${randomUUID()}`;
+            const envelope = await this.workflowControl.rerun({ runId, idempotencyKey: key });
+            return this.toRunControlResult("rerun", envelope, {
+                reuse: "复用已入库内容（按 external key 幂等去重），不重复写 Observation/Entry。",
+                sideEffects: "从来源当前 checkpoint 重新 fetch + ingest，产生一个全新的 Run。",
+            });
+        } catch (error) {
+            runControlError(error);
+        }
     }
 
     /**

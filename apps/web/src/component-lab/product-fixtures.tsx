@@ -10,6 +10,8 @@ import type {
     EntryDetail,
     FeedItem,
     HealthResponse,
+    RunControlResult,
+    RunSnapshot,
     SourceConfigProbeResult,
     SourceDefinitionManifest,
     SourceSnapshot,
@@ -21,6 +23,8 @@ import { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { BoardView } from "@/components/cosmos/board-view";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
+import {RunControl} from "@/components/cosmos/run-control";
+import {RunHistory} from "@/components/cosmos/run-history";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
@@ -243,6 +247,79 @@ export function renderSourceActionsLab(props: LabProps) {
             sources={sources}
         />
     );
+}
+
+export function renderRunControlLab(props: LabProps) {
+    const status = optionProp(props, "status", "failed", ["queued", "running", "succeeded", "failed", "cancelled"] as const);
+    const run: RunSnapshot = {
+        id: "run-fixture",
+        sourceId: "source-fixture",
+        triggerKind: "manual",
+        status,
+        createdAt: fixtureTimestamp,
+        startedAt: status === "queued" ? null : fixtureTimestamp,
+        finishedAt: status === "succeeded" || status === "failed" || status === "cancelled" ? fixtureTimestamp : null,
+        itemCount: 0,
+        createdEntryCount: 0,
+        revisedEntryCount: 0,
+        error: status === "failed" ? "Fixture failure" : null,
+    };
+    const result: RunControlResult | null = status === "cancelled"
+        ? { action: "cancelled", run, reuse: "已入库内容保留不回滚。", sideEffects: "取消是终态，不再产生新副作用。" }
+        : null;
+    return (
+        <RunControl
+            run={run}
+            result={result}
+            onCancel={async () => undefined}
+            onRecover={async () => undefined}
+            onRerun={async () => undefined}
+        />
+    );
+}
+
+const runHistoryLabRuns: readonly RunSnapshot[] = [
+    {
+        id: "run-failed",
+        sourceId: "source-a",
+        triggerKind: "manual",
+        status: "failed",
+        createdAt: "2026-09-10T08:00:00.000Z",
+        startedAt: "2026-09-10T08:00:01.000Z",
+        finishedAt: "2026-09-10T08:00:02.000Z",
+        itemCount: 0,
+        createdEntryCount: 0,
+        revisedEntryCount: 0,
+        error: "Fixture failure",
+    },
+    {
+        id: "run-running",
+        sourceId: "source-b",
+        triggerKind: "schedule",
+        status: "running",
+        createdAt: "2026-09-10T09:00:00.000Z",
+        startedAt: "2026-09-10T09:00:01.000Z",
+        finishedAt: null,
+        itemCount: 3,
+        createdEntryCount: 3,
+        revisedEntryCount: 0,
+        error: null,
+    },
+];
+
+const runHistoryLabClient = {
+    listRuns: async () => runHistoryLabRuns,
+    cancelRun: async () => ({ action: "cancelled", run: runHistoryLabRuns[1], reuse: "已入库内容保留。", sideEffects: "取消是终态。" }),
+    recoverRun: async () => ({ action: "recovered", run: runHistoryLabRuns[1], reuse: "复用已持久化进度。", sideEffects: "从安全步骤续跑。" }),
+    rerunRun: async () => ({ action: "rerun", run: runHistoryLabRuns[0], reuse: "复用已入库内容。", sideEffects: "从当前 checkpoint 重新抓取。" }),
+} as unknown as HttpCosmosClient;
+
+export function renderRunHistoryLab(props: LabProps) {
+    const state = optionProp(props, "state", "populated", ["populated", "empty"] as const);
+    const client = state === "empty"
+        ? ({ listRuns: async () => [] } as unknown as HttpCosmosClient)
+        : runHistoryLabClient;
+    return <RunHistory client={client} />;
 }
 
 export function renderFeedBrowserLab(props: LabProps) {

@@ -12,6 +12,7 @@ import {
 } from "@notnotype/nb-workflow";
 import {
     WorkflowHostConflictError,
+    WorkflowHostError,
     type WorkflowEnvelope,
     type WorkflowHostStore,
 } from "./workflow-host.js";
@@ -94,6 +95,42 @@ export class IngestWorkflowControlService {
             }),
             sourceId,
         });
+    }
+
+    /**
+     * Re-run a terminal ingest Run (RUN-004 / ADR-0016 decision 2): enqueue a
+     * fresh Run for the same source with a new idempotency key. Reused results
+     * are the already-committed library rows (idempotency dedup by external
+     * key); the new side effect is a fetch + ingest from the source's *current*
+     * checkpoint, never the failed Run's stale cursor.
+     */
+    async rerun(input: { runId: string; idempotencyKey: string }): Promise<WorkflowEnvelope> {
+        const runId = input.runId.trim();
+        const idempotencyKey = input.idempotencyKey.trim();
+        if (!runId || !idempotencyKey) {
+            throw new Error("Workflow rerun requires runId and Idempotency-Key.");
+        }
+        const envelope = await this.options.store.loadWorkflowEnvelope(runId);
+        if (!envelope) {
+            throw new WorkflowHostError("not_found", `Run not found: ${runId}`);
+        }
+        if (["completed", "failed", "cancelled"].includes(envelope.status)) {
+            const parsed = ingestWorkflowInputSnapshotSchema.safeParse(envelope.inputSnapshot);
+            if (!parsed.success) {
+                throw new WorkflowHostError(
+                    "invalid_state",
+                    `Run ${runId} is not an ingest run and cannot be re-run.`,
+                );
+            }
+            return this.enqueue({
+                sourceId: parsed.data.source.id,
+                triggerKind: "manual",
+                idempotencyKey,
+            });
+        }
+        throw new WorkflowHostConflictError(
+            `Run ${runId} is not terminal (${envelope.status}); cancel it before re-running.`,
+        );
     }
 }
 

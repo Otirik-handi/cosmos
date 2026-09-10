@@ -216,12 +216,12 @@ Webhook payload 先存受控引用和触发证据，再创建 Run；不能把未
 
 | 成熟度 | Method | Path | 结果 |
 | --- | --- | --- | --- |
-| Convergence | `GET` | `/workflow-runs` | 按 kind/status/ref/correlation/time 分页 |
+| Convergence | `GET` | `/workflow-runs` | 按 kind/status/ref/correlation/time 分页；当前仅 `GET /runs?sourceId=&limit=`（最近 durable Run 倒序，缺省 20、上界 100） |
 | Convergence | `POST` | `/workflow-runs` | `202 WorkflowRunSnapshot` |
 | Current | `GET` | `/workflow-runs/{id}` | 通用 Run Snapshot；当前路径为 `/runs/{id}` |
-| Convergence | `POST` | `/workflow-runs/{id}/cancellations` | 级联取消 Command |
-| Planned | `POST` | `/workflow-runs/{id}/reruns` | 新 Run，声明重用/失效策略 |
-| Planned | `POST` | `/workflow-runs/{id}/resumptions` | 从安全等待/恢复点创建恢复 Command |
+| Current | `POST` | `/workflow-runs/{id}/cancellations` | 取消 Command（RUN-004 v1；当前路径为 `/runs/{id}/cancellations`，单 Run 终态化 `cancelled`，非级联） |
+| Current | `POST` | `/workflow-runs/{id}/re-runs` | 重新运行（RUN-004 v1；当前路径为 `/runs/{id}/re-runs`，复用采集入队产生新 Run，声明 `reuse`/`sideEffects`） |
+| Current | `POST` | `/workflow-runs/{id}/recoveries` | 从安全等待/恢复点恢复（RUN-004 v1；当前路径为 `/runs/{id}/recoveries`） |
 | Convergence | `POST` | `/workflow-runs/{id}/signals` | 写入版本化 Signal |
 | Convergence | `GET` | `/workflow-runs/{id}/activities` | `Page<ActivitySnapshot>` |
 | Convergence | `GET` | `/workflow-runs/{id}/steps` | 可选 UI projection |

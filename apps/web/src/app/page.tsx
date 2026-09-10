@@ -54,6 +54,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BoardView, type BoardCommands } from "@/components/cosmos/board-view";
+import {RunHistory} from "@/components/cosmos/run-history";
 import {SourceActions} from "@/components/cosmos/source-actions";
 import {
     SourceForm,
@@ -154,6 +155,7 @@ export default function Home() {
     const [openingStoryId, setOpeningStoryId] = useState<string | null>(null);
     const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
     const [activatingSourceId, setActivatingSourceId] = useState<string | null>(null);
+    const [runRefreshToken, setRunRefreshToken] = useState(0);
     const [checkingService, setCheckingService] = useState(false);
     const [showSourceForm, setShowSourceForm] = useState(false);
     const [eventStreamState, setEventStreamState] = useState<EventStreamState>("connecting");
@@ -1299,6 +1301,7 @@ export default function Home() {
                     ? `录入任务已排队（Run ${result.id}），Worker 完成后 Feed 会自动刷新。`
                     : `录入任务状态：${result.status}。`,
             );
+            setRunRefreshToken((value) => value + 1);
             await refresh();
         } catch (caught) {
             setError(readError(caught));
@@ -1557,6 +1560,13 @@ export default function Home() {
                     feedBrowser
                 )}
             </div>
+
+            <section aria-label="运行记录" className="flex flex-col gap-3">
+                <div className="border-b pb-2">
+                    <h2 className="font-display text-xl font-semibold tracking-tight">运行记录</h2>
+                </div>
+                <RunHistory client={client} refreshToken={runRefreshToken} />
+            </section>
 
             {story && (
                 <StoryPanel

@@ -66,6 +66,15 @@ Host runtime 通过这些 port 按“claim → 在 lease 内执行 → renew 或
 `WorkflowRunLease` 的 fencing 身份由 `runId`、`leaseToken`、`owner` 三元组构成，并可带 `leaseExpiresAt`。仅持有 `runId` 或仅匹配 `owner` 不构成有效租约。
 
 `WorkflowHostStore` 还提供 `failWorkflowRun({ runLease, error, now? })`：仅在当前 Run lease owner/token 未过期且 Run 非终态时，以 CAS 将 Run 置为 `failed`，写 `finishedAt`、清除 lease 并追加幂等 `run.failed.v1`；失败的 stale lease/CAS 返回 `false`，不改变其它 owner 状态。
+
+Run 控制 v1（RUN-004 / ADR-0016）新增两个方法：
+
+- `cancelWorkflowRun({ runId, reason?, now? })`：用户覆盖式终态化。对非终态 Run 以 `status` 为 CAS 置为 `cancelled`、清 lease、`resumeRequired=false`、写 `finishedAt`/`errorMessage`，并追加幂等 `run.cancelled.v1`；**不要求调用方持有当前 lease**（fence 效果来自 status→cancelled + 清 lease，Worker 后续 heartbeat/complete/release 均失败）。Run 不存在抛 `not_found`，终态抛 `conflict`，并发状态变更抛 `conflict`。
+- `recoverWorkflowRun({ runId, now? })`：把**非终态且无活动 lease**（lease 为空或已过期）的 Run 以 `status` 为 CAS 置 `resumeRequired=true` 并清 lease，使其可被 execution claim 重新领取、由 Kernel `rerun()`/`begin()` 从安全步骤续跑。存在活动 lease 抛 `conflict`，终态抛 `conflict`，不存在抛 `not_found`。
+
+两者都返回更新后的 `WorkflowEnvelope`；都不新增 Run 状态、不产生迁移。
+
+`listWorkflowRuns({ sourceId?, limit? })` 提供产品运行记录查询：按 `createdAt desc, id desc` 返回最近 durable Run 的 `WorkflowEnvelope[]`，可选 `sourceId` 过滤（匹配 `sourceInstanceId`）、`limit` 缺省 20、上界 100。只返回 durable `WorkflowRun`，不含 legacy SQL Run 泳道。
 ## 输出
 
 Run claim 成功时返回带 `runId`、`owner`、`leaseToken` 和可选 `leaseExpiresAt` 的租约；没有可领取 Run 时返回无候选结果。
@@ -149,3 +158,5 @@ Host 错误码限定为：`conflict`、`not_found`、`lease_lost`、`invalid_sta
 11. Worker Activity Attempt register/finish 成对，公开字段不含 lease token。
 12. 所有公开 payload 均不包含 lease token、fence 或可执行 schema。
 13. 不以任何行为暗示 exactly-once。
+14. `cancelWorkflowRun` 对终态/不存在 Run 分别返回 `conflict`/`not_found`；取消后的旧 lease 心跳/写入被 fence 拒绝；取消不要求持有当前 lease。
+15. `recoverWorkflowRun` 只作用于无活动 lease 的非终态 Run，置 `resumeRequired=true`；对活动 lease 返回 `conflict`。

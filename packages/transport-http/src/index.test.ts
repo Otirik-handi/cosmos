@@ -886,4 +886,34 @@ describe("HttpCosmosClient", () => {
         const unpinned = await client.unpinSpotlight("placement-a");
         expect(unpinned.action).toBe("spotlight_placement.deleted");
     });
+
+    it("lists the durable Run history with source and limit query params", async () => {
+        const requests: string[] = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input) => {
+                requests.push(String(input));
+                return new Response(JSON.stringify([{
+                    id: "run-1",
+                    sourceId: "source-a",
+                    triggerKind: "manual",
+                    status: "failed",
+                    createdAt: "2026-09-10T00:00:00.000Z",
+                    startedAt: "2026-09-10T00:00:01.000Z",
+                    finishedAt: "2026-09-10T00:00:02.000Z",
+                    itemCount: 0,
+                    createdEntryCount: 0,
+                    revisedEntryCount: 0,
+                    error: null,
+                }]), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const list = await client.listRuns({ sourceId: "source-a", limit: 10 });
+        expect(list[0]).toMatchObject({ id: "run-1", status: "failed" });
+        expect(requests[0]).toBe("http://localhost:4310/api/v1/runs?sourceId=source-a&limit=10");
+    });
 });

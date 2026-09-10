@@ -19,6 +19,8 @@ const expectedPublicModules = [
     "components/ui/separator.tsx",
     "components/ui/textarea.tsx",
     "components/cosmos/feed-browser.tsx",
+    "components/cosmos/run-control.tsx",
+    "components/cosmos/run-history.tsx",
     "components/cosmos/source-actions.tsx",
     "components/cosmos/source-form.tsx",
     "components/cosmos/status-summary.tsx",

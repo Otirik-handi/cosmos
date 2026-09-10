@@ -343,7 +343,33 @@ export interface FailWorkflowRunInput {
     now?: Date;
 }
 
+/**
+ * User-initiated cancel (RUN-004 / ADR-0016). Unlike `failWorkflowRun` this is
+ * a user override: it does not require the caller to hold the current lease,
+ * and it fences the Worker out by terminalizing the Run and clearing the lease.
+ */
+export interface CancelWorkflowRunInput {
+    runId: string;
+    reason?: string | null;
+    now?: Date;
+}
+
+/**
+ * User-initiated recover (RUN-004 / ADR-0016). It only touches a Run whose
+ * lease is absent or expired; a Run that is actively executing is a conflict.
+ */
+export interface RecoverWorkflowRunInput {
+    runId: string;
+    now?: Date;
+}
+
 export interface RecoveryRunsInput {
+    limit?: number;
+}
+
+/** Product Run history query (RUN-004 UI): recent envelopes, optional source filter. */
+export interface ListWorkflowRunsInput {
+    sourceId?: string | null;
     limit?: number;
 }
 
@@ -381,9 +407,20 @@ export interface WorkflowHostStore
     /** Terminalize a non-terminal Run through the current Run lease. */
     failWorkflowRun(input: FailWorkflowRunInput): Promise<boolean>;
 
+    /** User override: terminalize a non-terminal Run to `cancelled`, fencing out the Worker. */
+    cancelWorkflowRun(input: CancelWorkflowRunInput): Promise<WorkflowEnvelope>;
+
+    /** Return a lease-less non-terminal Run to the recovery queue via `resumeRequired`. */
+    recoverWorkflowRun(input: RecoverWorkflowRunInput): Promise<WorkflowEnvelope>;
+
     /** Returns envelope-only or Kernel-running Runs needing `rerun()`. */
     listRunsForRecovery(
         input?: RecoveryRunsInput,
+    ): Promise<readonly WorkflowEnvelope[]>;
+
+    /** Recent durable Runs for the product Run history, newest first. */
+    listWorkflowRuns(
+        input?: ListWorkflowRunsInput,
     ): Promise<readonly WorkflowEnvelope[]>;
 }
 

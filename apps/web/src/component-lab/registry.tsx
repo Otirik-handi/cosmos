@@ -20,6 +20,8 @@ import {Separator} from "@/components/ui/separator";
 import {Textarea} from "@/components/ui/textarea";
 import {
     renderFeedBrowserLab,
+    renderRunControlLab,
+    renderRunHistoryLab,
     renderSourceActionsLab,
     renderSourceFormLab,
     renderStatusSummaryLab,
@@ -269,6 +271,14 @@ const sourceActionsControls = [
     control("enabled", "Enabled", "boolean", true),
 ] as const satisfies readonly LabControlDefinition[];
 
+const runControlControls = [
+    control("status", "Run status", "select", "failed", ["queued", "running", "succeeded", "failed", "cancelled"]),
+] as const satisfies readonly LabControlDefinition[];
+
+const runHistoryControls = [
+    control("state", "State", "select", "populated", ["populated", "empty"]),
+] as const satisfies readonly LabControlDefinition[];
+
 const feedBrowserControls = [
     control("title", "Story title", "text", "Cosmos fixture story"),
     control("state", "State", "select", "populated", ["loading", "empty", "populated"]),
@@ -441,6 +451,37 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderSourceActionsLab,
+    },
+    {
+        id: "run-control",
+        label: "RunControl",
+        category: "Cosmos",
+        modulePath: "components/cosmos/run-control.tsx",
+        defaultSceneId: "failed",
+        controls: runControlControls,
+        scenes: [
+            {id: "queued", label: "Queued", props: {status: "queued"}},
+            {id: "running", label: "Running", props: {status: "running"}},
+            {id: "succeeded", label: "Succeeded", props: {status: "succeeded"}},
+            {id: "failed", label: "Failed", props: {status: "failed"}},
+            {id: "cancelled", label: "Cancelled", props: {status: "cancelled"}},
+        ],
+        tokens: sharedTokens,
+        render: renderRunControlLab,
+    },
+    {
+        id: "run-history",
+        label: "RunHistory",
+        category: "Cosmos",
+        modulePath: "components/cosmos/run-history.tsx",
+        defaultSceneId: "populated",
+        controls: runHistoryControls,
+        scenes: [
+            {id: "populated", label: "Populated", props: {state: "populated"}},
+            {id: "empty", label: "Empty", props: {state: "empty"}},
+        ],
+        tokens: sharedTokens,
+        render: renderRunHistoryLab,
     },
     {
         id: "source-form",
