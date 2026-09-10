@@ -1,7 +1,11 @@
 import { Play, Power, PowerOff, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
-import type { SourceMediaPolicy, SourceSnapshot } from "@cosmos/contracts";
+import type {
+    MediaCleanupReport,
+    SourceMediaPolicy,
+    SourceSnapshot,
+} from "@cosmos/contracts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +22,9 @@ type SourceActionsProps = {
     onToggleActivation: (source: SourceSnapshot, enabled: boolean) => Promise<void>;
     /** 保存来源级媒体策略（ADR-0014）：只影响之后入队的采集。 */
     onSaveMediaPolicy: (source: SourceSnapshot, policy: SourceMediaPolicy) => Promise<void>;
+    /** 保留期清理：预览（dryRun）与确认执行（ADR-0015 决策 7）。 */
+    onPreviewMediaCleanup?: () => Promise<MediaCleanupReport>;
+    onConfirmMediaCleanup?: () => Promise<MediaCleanupReport>;
     activatingSourceId?: string | null;
     runningSourceId?: string | null;
     sources: readonly SourceSnapshot[];
@@ -70,6 +77,8 @@ export function SourceActions({
     onRun,
     onToggleActivation,
     onSaveMediaPolicy,
+    onPreviewMediaCleanup,
+    onConfirmMediaCleanup,
     activatingSourceId = null,
     runningSourceId = null,
     sources,
@@ -79,8 +88,42 @@ export function SourceActions({
         images: "download",
         maxFileMb: "",
         maxRunMb: "",
+        retryMaxAttempts: "",
+        retentionDays: "",
     });
     const [policyError, setPolicyError] = useState<string | null>(null);
+    const [cleanupPreview, setCleanupPreview] = useState<MediaCleanupReport | null>(null);
+    const [cleanupResult, setCleanupResult] = useState<MediaCleanupReport | null>(null);
+    const [cleanupBusy, setCleanupBusy] = useState(false);
+    const [cleanupError, setCleanupError] = useState<string | null>(null);
+
+    const previewCleanup = async (): Promise<void> => {
+        if (!onPreviewMediaCleanup) return;
+        setCleanupBusy(true);
+        setCleanupError(null);
+        setCleanupResult(null);
+        try {
+            setCleanupPreview(await onPreviewMediaCleanup());
+        } catch (error) {
+            setCleanupError(error instanceof Error ? error.message : "预览过期媒体失败。");
+        } finally {
+            setCleanupBusy(false);
+        }
+    };
+
+    const confirmCleanup = async (): Promise<void> => {
+        if (!onConfirmMediaCleanup) return;
+        setCleanupBusy(true);
+        setCleanupError(null);
+        try {
+            setCleanupResult(await onConfirmMediaCleanup());
+            setCleanupPreview(null);
+        } catch (error) {
+            setCleanupError(error instanceof Error ? error.message : "清理过期媒体失败。");
+        } finally {
+            setCleanupBusy(false);
+        }
+    };
 
     const startEditingPolicy = (source: SourceSnapshot): void => {
         setEditingPolicyId(source.id);
@@ -266,6 +309,42 @@ export function SourceActions({
                                                     }));
                                                 }}
                                             />
+                                            <label
+                                                htmlFor={`media-policy-retry-${source.id}`}
+                                                className="text-sm"
+                                            >
+                                                失败重试次数
+                                            </label>
+                                            <Input
+                                                id={`media-policy-retry-${source.id}`}
+                                                value={policyForm.retryMaxAttempts}
+                                                placeholder="3"
+                                                className="w-20"
+                                                onChange={(event) => {
+                                                    setPolicyForm((current) => ({
+                                                        ...current,
+                                                        retryMaxAttempts: event.target.value,
+                                                    }));
+                                                }}
+                                            />
+                                            <label
+                                                htmlFor={`media-policy-retention-${source.id}`}
+                                                className="text-sm"
+                                            >
+                                                保留天数
+                                            </label>
+                                            <Input
+                                                id={`media-policy-retention-${source.id}`}
+                                                value={policyForm.retentionDays}
+                                                placeholder="永久"
+                                                className="w-20"
+                                                onChange={(event) => {
+                                                    setPolicyForm((current) => ({
+                                                        ...current,
+                                                        retentionDays: event.target.value,
+                                                    }));
+                                                }}
+                                            />
                                         </div>
                                         {policyError && (
                                             <p
@@ -296,6 +375,80 @@ export function SourceActions({
                     })}
                 </ul>
             )}
+            {(onPreviewMediaCleanup || onConfirmMediaCleanup) && (
+                <div
+                    className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-dashed p-3"
+                    data-media-cleanup="true"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="max-w-xl text-xs text-muted-foreground">
+                            按来源保留期清理过期媒体：先预览，确认后才会删除字节；条目、元数据与原文外链保留。
+                        </p>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={cleanupBusy || !onPreviewMediaCleanup}
+                            onClick={() => void previewCleanup()}
+                        >
+                            预览过期媒体
+                        </Button>
+                    </div>
+                    {cleanupPreview && (
+                        <div
+                            className="flex flex-col gap-1 text-xs"
+                            data-media-cleanup-preview="true"
+                        >
+                            <span>
+                                可清理 {cleanupPreview.candidateCount} 项，约
+                                {" "}{formatBytes(cleanupPreview.candidateBytes)}
+                                {cleanupPreview.sharedKeyCount > 0
+                                    && `（其中 ${cleanupPreview.sharedKeyCount} 项字节与其它条目共用，只解除引用）`}
+                            </span>
+                            {cleanupPreview.samples.slice(0, 5).map((sample) => (
+                                <span key={sample.assetId} className="truncate text-muted-foreground">
+                                    {sample.title ?? sample.assetId}
+                                    {" · "}
+                                    {sample.sourceName ?? sample.sourceId ?? "未知来源"}
+                                    {" · "}
+                                    {formatBytes(sample.byteSize ?? 0)}
+                                </span>
+                            ))}
+                            {cleanupPreview.candidateCount > 0 && onConfirmMediaCleanup && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-fit"
+                                    disabled={cleanupBusy}
+                                    onClick={() => void confirmCleanup()}
+                                >
+                                    确认清理 {cleanupPreview.candidateCount} 项
+                                </Button>
+                            )}
+                        </div>
+                    )}
+                    {cleanupResult && (
+                        <p className="text-xs" data-media-cleanup-result="true">
+                            已清理 {cleanupResult.cleanedCount} 项，释放 {formatBytes(cleanupResult.cleanedBytes)}；
+                            条目与原文外链保留。
+                        </p>
+                    )}
+                    {cleanupError && (
+                        <p role="alert" className="text-xs text-destructive">{cleanupError}</p>
+                    )}
+                </div>
+            )}
         </section>
     );
+}
+
+function formatBytes(value: number): string {
+    if (value >= 1024 * 1024) {
+        return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    if (value >= 1024) {
+        return `${Math.max(1, Math.round(value / 1024))} KB`;
+    }
+    return `${value} B`;
 }

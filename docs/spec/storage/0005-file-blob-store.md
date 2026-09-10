@@ -39,14 +39,14 @@
 
 `put(content, {mimeType?})` 对传入 `Uint8Array` 计算 SHA-256，生成内容寻址 key，创建 `sha256/<prefix>` 目录并用 `writeFile(...,{flag:"wx"})` 写入。文件已存在时只吞掉 `EEXIST`，不覆盖、不比较现有 bytes；其它 mkdir/write 错误向上抛出。成功返回派生 key/hash、当前 bytes 的 byteSize 和 mimeType（未提供时 null）。
 
-`read(key)` 解析 containment 后直接 `readFile`，返回 `Uint8Array`；缺失、权限、目录或其它文件系统错误沿用 Node 异常。`exists(key)` 同样先做 containment；ENOENT 返回 false，其它错误向上抛出。
+`read(key)` 解析 containment 后直接 `readFile`，返回 `Uint8Array`；缺失、权限、目录或其它文件系统错误沿用 Node 异常。`exists(key)` 同样先做 containment；ENOENT 返回 false，其它错误向上抛出。`delete(key)` 先做同一 containment 再 `unlink`；目标不存在是 no-op，其它错误向上抛出。它不做引用检查：同一 key 可能被多条 Asset 行共享，调用方必须先证明没有其它引用（ADR-0015 决策 9）。
 
 `readVerifiedBlob(blobs, reference)` 调用 `blobs.read(reference.key)`。ENOENT 被包装成 `BlobRefNotFoundError(key)`；其它读取异常不改写。成功读到 bytes 后重新计算 SHA-256，并同时检查：reference.hash、reference.key、reference.byteSize 分别等于计算出的 hash、规范 key、实际 byteLength。任一不符抛 `BlobIntegrityError`，全部相符才返回原始 bytes。该函数不检查 `reference.mediaType` 与文件内容，也不做 JSON 解码；mediaType 只是 BlobRefLike 兼容字段，不能据此声称 MIME 或内容类型已验证。
 
 ## 输入
 
 - `FileBlobStore.put` 接受 `Uint8Array` 和可选 `{mimeType?: string|null}`；不自行校验 mime 类型格式或 byteSize 声明。
-- `read`/`exists`/`resolveBlobKey` 接受 key 字符串；key 不被额外限制为空字符串，但最终路径仍须通过 containment，空 key 的文件系统行为由 Node 产生。
+- `read`/`exists`/`delete`/`resolveBlobKey` 接受 key 字符串；key 不被额外限制为空字符串，但最终路径仍须通过 containment，空 key 的文件系统行为由 Node 产生。
 - `readVerifiedBlob` 接受实现 `read(key): Promise<Uint8Array>` 的最小 Blob port 和 `BlobRefLike`。校验只使用 key/hash/byteSize；mediaType 作为引用字段传入但不参与 digest 检查。
 - 任何外部字符串路径必须先经过 `resolveBlobKey`，不得直接拼接绝对路径。
 

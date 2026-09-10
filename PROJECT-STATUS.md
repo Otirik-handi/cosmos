@@ -1,6 +1,20 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-09。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-09。Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已在分支 `feat/t20-media-retry-retention` 实现并通过门禁，**尚未 commit/合并**。Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`。Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`。Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`。此前的 Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）随 `961e942` 合入；Phase 2 验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 1 后置债仍按 2026-09-07 划线保留。
+
+## 2026-09-09：媒体失败重试与保留期清理 v1 实现（Phase 2 第十切片，Task 20）
+
+Proposal [`media-retry-retention-v1`](docs/proposals/media-retry-retention-v1.md)（accepted，2026-09-09，用户逐项确认四项裁决）与 ADR-0015 的实现已在 `.worktree/media-retry-retention` / `feat/t20-media-retry-retention` 完成（切片 1–2），**未 commit、未 push、未合并**：
+
+1. **失败重试**：`cosmos.ingest@1` 在 `source.fetch@1` 之后、`library.ingest@1` 之前增加 `media.retry.fetch@1`/`media.retry.apply@1`，只处理早先 Run 已存的降级 Asset；定时采集与既有「手动采集」走同一路径，不新增端点或 Run 类型。可重试性由机器可读 `Asset.errorCode` 决定（只重试 `timeout`/`network`/`http_error`/`budget_run`）；上限由每来源 `Source.config.media.retry.maxAttempts`（含首次，缺省 3，0 = 关闭，上界 10）与 `Asset.attemptCount` 共同约束；重试原地改写 Asset 行（`(assetId, attemptCount)` CAS）、不产生新 EntryRevision、与本次 Run 新内容共享单次预算。
+2. **保留期清理**：每来源 `Source.config.media.retentionDays`（1–3650，缺省永久保留）；清理是显式命令 `POST /api/v1/media-cleanups`（缺省 `dryRun: true` 预览，确认后执行）与 `GET /api/v1/media-cleanups/:runId`，由 durable 维护 Workflow `cosmos.media-cleanup@1` 在 Worker 内执行；只删 Blob 字节并把 Asset 回退为 `metadata_only` + 「已按保留期清理」原因（保留原文外链，公共 4 态不变），删除前做内容寻址去重的引用检查（最后一个引用者才删字节）。
+3. **持久化**：migration `20260909200000_media_retry_retention_v1` 给 `Asset` 增加 `errorCode`/`attemptCount`/`lastAttemptAt` 与索引；forward-only、无回填（历史降级 Asset 不自动重试）。
+4. **Web**：媒体策略表单新增「失败重试次数」「保留天数」；来源健康区新增「预览过期媒体 → 确认清理」两步面板；Story 面板降级媒体显示「已尝试 N 次」。
+5. **偏差**：重试步骤从「持久化之后」前移到「持久化之前」，否则「下一次采集重试」会退化成同一次 Run 内立刻重试（测试先红后绿暴露）。
+
+验证（2026-09-09，实际运行）：`bun run typecheck` 全仓通过；`bun run lint:web` 0 error（2 个既有 warning）；`bun run build`（含 Next standalone）通过；`bun run docs:check` 381 文件 failures=[]；`git diff --check` 干净。聚焦测试：contracts 52、application media-acquisition 30、worker 组合 4、api controller 42、web media-policy 7、component-lab registry 12 全部通过；storage 串行 14 文件 / 113 用例全部通过（含新增 media-retry 5 例）。全量 `bun run test` 51 文件 / 468 用例，412 通过；56 例失败全部是既有 Windows SQLite 并行负载抖动（`migrate deploy` 5s 超时 + EBUSY），串行复跑 113/113 通过。浏览器产品 E2E 17/17（新增清理预览用例）；组件实验室浏览器 13/13；Node 进程 E2E 4/4。未运行：Windows Node smoke、Docker/Compose、发布部署（既有后置边界）。
+
+过程、偏差与完整命令见 Task 20 walkthrough [`.agents/tasks/20-media-retry-retention/README.md`](.agents/tasks/20-media-retry-retention/README.md)。
 
 ## 2026-09-09：按来源的媒体策略 v1 实现合入（Phase 2 第九切片，Task 19）
 
@@ -281,14 +295,15 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 
 ## 当前下一步
 
-（2026-09-09 更新：Phase 2 第九切片实现已合入，见顶部记录。）
+（2026-09-09 更新：Phase 2 第十切片已在分支实现并通过门禁，等待 commit/合并授权。）
 
+- **待授权**：Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已在 `.worktree/media-retry-retention` / `feat/t20-media-retry-retention` 实现并通过门禁；commit、push、PR、合并与 worktree 清理均需维护者单独授权。
 - Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`；稳定文档（PRD/架构/ADR-0014/spec/testing）已同步。
 - Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0013/spec/testing）已同步。
 - Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
 - Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
 - Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
-- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（ING-009 per-source 媒体策略、RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。
+- Phase 2 下一切片候选：自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）；平台面（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）仍按前次分析排序。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
 - 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
 - Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。

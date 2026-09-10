@@ -30,6 +30,7 @@ import {
     type FeedItem,
     type HealthResponse,
     type LabelList,
+    type MediaCleanupReport,
     type SavedView,
     type SearchQuery,
     type SourceMediaPolicy,
@@ -508,8 +509,30 @@ export default function Home() {
         }
     };
 
-    const toggleActivation = async (source: SourceSnapshot, enabled: boolean): Promise<void> => {
-        setActivatingSourceId(source.id);
+    /**
+     * 保留期清理是显式的维护 Run（ADR-0015）：预览用 dryRun，确认才删除字节。
+     * Worker 异步执行，这里轮询到终态再回报结果。
+     */
+    const runMediaCleanup = async (dryRun: boolean): Promise<MediaCleanupReport> => {
+        let snapshot = await client.createMediaCleanup(
+            { dryRun },
+            `web-media-cleanup:${dryRun ? "preview" : "confirm"}:${crypto.randomUUID()}`,
+        );
+        const deadline = Date.now() + 30_000;
+        while (snapshot.status === "queued" || snapshot.status === "running") {
+            if (Date.now() > deadline) {
+                throw new Error("清理任务超时，请稍后在运行记录中查看。");
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1_000));
+            snapshot = await client.getMediaCleanup(snapshot.runId);
+        }
+        if (snapshot.status !== "succeeded" || !snapshot.report) {
+            throw new Error(snapshot.error ?? "清理任务失败。");
+        }
+        return snapshot.report;
+    };
+
+    const toggleActivation = async (source: SourceSnapshot, enabled: boolean): Promise<void> => {        setActivatingSourceId(source.id);
         setError(null);
         try {
             await client.activateSource(source.id, {
@@ -1365,6 +1388,8 @@ export default function Home() {
             onRun={runSource}
             onToggleActivation={toggleActivation}
             onSaveMediaPolicy={saveMediaPolicy}
+            onPreviewMediaCleanup={() => runMediaCleanup(true)}
+            onConfirmMediaCleanup={() => runMediaCleanup(false)}
             activatingSourceId={activatingSourceId}
             runningSourceId={runningSourceId}
             sources={sources}

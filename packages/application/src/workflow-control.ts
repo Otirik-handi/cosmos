@@ -17,7 +17,11 @@ import {
 } from "./workflow-host.js";
 
 export const ingestWorkflowDefinitionReference = "cosmos.ingest@1" as const;
-export const ingestWorkflowManifestHash = "builtin:cosmos.ingest@1:source-snapshot-v1";
+/**
+ * Bumped to v2 when the media retry step joined the ingest body: a Run created
+ * under v1 must not resume into a different definition (ADR-0015 decision 1).
+ */
+export const ingestWorkflowManifestHash = "builtin:cosmos.ingest@1:source-snapshot-v2";
 
 export const ingestWorkflowInputSnapshotSchema = z.object({
     source: sourceExecutionSnapshotSchema,

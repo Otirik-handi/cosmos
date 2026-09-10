@@ -145,7 +145,7 @@
 
 这些约束是当前实现中重建时不能遗漏的语义；字段和完整错误分类仍由组件 owner spec 负责。
 
-- **固定 Workflow：** 入队创建 `cosmos.ingest@1` 的 Definition、Source execution snapshot、checkpoint cursor/revision、`triggerKind` 和 idempotency key；执行顺序是 `source.fetch@1 → library.ingest@1[] → source.checkpoint@1`。排队后修改 Source 不改变既有 Run 的 fetch 输入；相同 idempotency key 必须复用相同快照，冲突必须拒绝。
+- **固定 Workflow：** 入队创建 `cosmos.ingest@1` 的 Definition、Source execution snapshot、checkpoint cursor/revision、`triggerKind` 和 idempotency key；执行顺序是 `source.fetch@1 → media.retry.fetch@1 → [media.retry.apply@1] → library.ingest@1[] → source.checkpoint@1`（重试两步只在来源 `media.retry.maxAttempts > 0` 且存在早先 Run 已存的降级媒体时出现）。排队后修改 Source 不改变既有 Run 的 fetch 输入；相同 idempotency key 必须复用相同快照，冲突必须拒绝。保留期清理是独立维护 Workflow `cosmos.media-cleanup@1`（单 Action `media.cleanup@1`），只由显式命令入队。
 - **Host 权威：** Kernel 只拥有脚本/journal 语义；SQL TaskStore 拥有 Run/Job/lease/retry/Completion 状态。Wakeup、HTTP 连接、内存 Registry、SSE 和日志都不能另立终态。
 - **双 fencing：** 写领域数据或 Domain Event 前同时验证 Workflow Run lease、Activity Job lease 和所需 kernel revision；token 仅用于内部校验，不能进入 Job payload、Kernel state、Manifest、Product API 或 Worker Admin 投影。旧 owner 的 heartbeat/complete/write 必须 fail closed。
 - **幂等与 at-least-once：** Envelope、Activity、Completion、Observation、Domain Event 和外部 Action 都以显式 idempotency key/receipt 或 CAS 处理重复；不能宣称 exactly-once。

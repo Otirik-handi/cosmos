@@ -13,6 +13,10 @@ import {
     createIngestActions,
     createIngestWorkflowDefinition,
 } from "@cosmos/application/workflow-ingest";
+import {
+    createMediaCleanupActions,
+    createMediaCleanupWorkflowDefinition,
+} from "@cosmos/application/media-cleanup";
 import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import { createLogger } from "@cosmos/logging";
 import { createBuiltInConnectorRegistry } from "@cosmos/plugin-collectors";
@@ -89,15 +93,23 @@ async function bootstrap(): Promise<void> {
             ? createWorkflowHost({
                 prisma: repository.prisma,
                 blobs: repository.blobs,
-                definitions: [createIngestWorkflowDefinition()],
-                actions: createIngestActions({
-                    resolveConnector: (source) => connectors.resolve(source),
-                    blobs: repository.blobs,
-                    domain: repository,
-                    unchangedItems: repository,
-                    mediaAcquirer,
-                    logger,
-                }),
+                definitions: [
+                    createIngestWorkflowDefinition(),
+                    createMediaCleanupWorkflowDefinition(),
+                ],
+                actions: [
+                    ...createIngestActions({
+                        resolveConnector: (source) => connectors.resolve(source),
+                        blobs: repository.blobs,
+                        domain: repository,
+                        unchangedItems: repository,
+                        mediaAcquirer,
+                        mediaRetrier: mediaAcquirer,
+                        retryCandidates: repository,
+                        logger,
+                    }),
+                    ...createMediaCleanupActions({ domain: repository, logger }),
+                ],
                 owner: instanceId,
                 workerId: config.workerId,
                 leaseMs: config.leaseMs,

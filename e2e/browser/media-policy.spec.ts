@@ -26,7 +26,7 @@ test("edits a source's media policy, rejects values above the default and keeps 
 
     const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
     const row = healthSection.locator("li").filter({ hasText: sourceName });
-    await expect(row.getByText("媒体策略：跟随默认（10 / 50）")).toBeVisible();
+    await expect(row.getByText("媒体策略：跟随默认（10 / 50，重试 3 次，永久保留）")).toBeVisible();
 
     await row.getByRole("button", { name: `媒体策略 ${sourceName}` }).click();
     const form = row.locator(`form[aria-label="媒体策略 ${sourceName}"]`);
@@ -53,6 +53,35 @@ test("edits a source's media policy, rejects values above the default and keeps 
         .locator("li")
         .filter({ hasText: sourceName });
     await expect(reloadedRow.getByText("媒体策略：仅记录元数据；单文件 ≤ 2")).toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+});
+
+test("previews retention cleanup through the maintenance run without deleting anything", async ({ page }) => {
+    test.setTimeout(120_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    const sourceName = `保留期-${randomUUID().slice(0, 8)}`;
+    await createSource(page, sourceName);
+
+    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const row = healthSection.locator("li").filter({ hasText: sourceName });
+    await row.getByRole("button", { name: `媒体策略 ${sourceName}` }).click();
+    const form = row.locator(`form[aria-label="媒体策略 ${sourceName}"]`);
+    await form.getByLabel("保留天数").fill("1");
+    await form.getByRole("button", { name: "保存媒体策略" }).click();
+    await expect(row.getByText("媒体策略：媒体保留 1 天")).toBeVisible();
+
+    // 预览走 durable 维护 Run：没有到期媒体时报告 0 项，且不提供确认入口。
+    const cleanup = healthSection.locator("[data-media-cleanup=true]");
+    await cleanup.getByRole("button", { name: "预览过期媒体" }).click();
+    await expect(cleanup.locator("[data-media-cleanup-preview=true]")).toContainText("可清理 0 项", {
+        timeout: 30_000,
+    });
+    await expect(cleanup.getByRole("button", { name: /确认清理/ })).toHaveCount(0);
 
     expect(consoleErrors).toEqual([]);
 });

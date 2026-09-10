@@ -356,7 +356,7 @@ flowchart LR
 
 **Phase 2 第九切片注记（2026-09-09，[`per-source-media-policy-v1` Proposal](../proposals/per-source-media-policy-v1.md) accepted）**：ING-009 的 v1 实施顺序按 Proposal 冻结——先交付「按来源的图片下载开关 + 单文件/单次预算」，策略写在 `Source.config.media`（`images`/`maxFileBytes`/`maxRunBytes`，全部可选，缺省跟随全局默认 10MB/50MB），v1 只对声明 `media-download` 的 `source.rss@1` 开放；来源只能收紧全局默认、不能放宽（schema 上界即全局默认）；有效策略在 fetch 时从 Run 的 `SourceExecutionSnapshot` 解析，因此改动只影响之后入队的采集，已存 Asset 不改写、不删除；Web 在来源行提供媒体策略编辑（`PATCH /sources/:id` + `baseRevisionId` CAS）。保留期与清理任务、失败重试与历史回填、音频/视频下载实体、单条目媒体数量上限、全局默认值的 env 化后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
-### 7.6 采集相关性与推荐
+**Phase 2 第十切片注记（2026-09-09，[`media-retry-retention-v1` Proposal](../proposals/media-retry-retention-v1.md) accepted）**：ING-009 的剩余两项（失败重试、保留期）按 Proposal 冻结——失败重试在来源的常规采集 Run 内自动发生（`cosmos.ingest@1` 在 fetch 之后、持久化之前增加 `media.retry.fetch@1`/`media.retry.apply@1`，只处理**早先 Run 已存**的降级 Asset，定时采集与既有「手动采集」走同一路径，不新增端点/Run 类型）；可重试性由机器可读 `Asset.errorCode` 决定，只重试 `timeout`/`network`/`http_error`/`budget_run`，不解析展示文案；每来源 `Source.config.media.retry.maxAttempts`（含首次尝试，缺省 3，0 = 关闭，上界 10）+ `Asset.attemptCount` 构成上限，重试只原地改写 Asset 行、不产生新 EntryRevision、与本次 Run 的新内容共享单次预算。保留期按来源 `Source.config.media.retentionDays`（1–3650，缺省永久保留）配置，清理是显式命令（`POST /api/v1/media-cleanups`，先 `dryRun` 预览再确认执行，不随采集自动删除），只删 Blob 字节并把 Asset 回退为 `metadata_only` + 「已按保留期清理」原因，保留原文外链，公共 4 态枚举不变；删除前做 Blob 引用检查（内容寻址去重，最后一个引用者才删字节）；清理由 durable 维护 Workflow `cosmos.media-cleanup@1` 承载。历史媒体回填、清理后自动重新下载、音频/视频下载实体、单条目媒体数量上限、全局默认值的 env 化后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |

@@ -243,8 +243,15 @@ model Asset {
     mimeType        String?
     byteSize        Int?
     errorMessage    String?
+    /// Machine-readable degradation reason (ADR-0015 decision 2); retry decisions never parse errorMessage.
+    errorCode       String?
+    /// Completed download attempts for this Asset row, including the first (ADR-0015 decision 3).
+    attemptCount    Int           @default(0)
+    lastAttemptAt   DateTime?
     createdAt       DateTime      @default(now())
     entryRevision   EntryRevision @relation(fields: [entryRevisionId], references: [id], onDelete: Cascade)
+
+    @@index([entryRevisionId])
 }
 
 model Story {

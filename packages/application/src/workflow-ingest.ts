@@ -4,6 +4,10 @@ import {
     ingestTriggerKindSchema,
     libraryIngestInputSchema,
     libraryIngestOutputSchema,
+    mediaRetryApplyInputSchema,
+    mediaRetryApplyOutputSchema,
+    mediaRetryFetchInputSchema,
+    mediaRetryFetchOutputSchema,
     normalizedIngestItemSchema,
     sourceCheckpointInputSchema,
     sourceCheckpointOutputSchema,
@@ -13,6 +17,8 @@ import {
     type ActionDefinition,
     type IngestTriggerKind,
     type LibraryIngestOutput,
+    type MediaRetryApplyOutput,
+    type MediaRetryFetchOutput,
     type NormalizedIngestItemContract,
     type SourceCheckpointOutput,
     type SourceFetchOutput,
@@ -35,6 +41,8 @@ import {
     mediaDownloadCapability,
     resolveMediaPolicy,
     type MediaAcquirer,
+    type MediaRetrier,
+    type MediaRetryOutcome,
 } from "./media-acquisition.js";
 import type {
     ConnectorResolver,
@@ -48,12 +56,16 @@ export const ingestWorkflowReference = "cosmos.ingest@1" as const;
 export const ingestFetchActionReference = "source.fetch@1" as const;
 export const ingestPersistActionReference = "library.ingest@1" as const;
 export const ingestCheckpointActionReference = "source.checkpoint@1" as const;
+export const ingestMediaRetryFetchActionReference = "media.retry.fetch@1" as const;
+export const ingestMediaRetryApplyActionReference = "media.retry.apply@1" as const;
 
 export { ingestWorkflowManifestHash } from "./workflow-control.js";
 import { ingestWorkflowManifestHash } from "./workflow-control.js";
 export const ingestFetchActionManifestHash = "builtin:source.fetch@1:source-snapshot-v1";
 export const ingestPersistActionManifestHash = "builtin:library.ingest@1";
 export const ingestCheckpointActionManifestHash = "builtin:source.checkpoint@1:cas-v1";
+export const ingestMediaRetryFetchActionManifestHash = "builtin:media.retry.fetch@1";
+export const ingestMediaRetryApplyActionManifestHash = "builtin:media.retry.apply@1";
 
 export const ingestWorkflowInputSchema = z.object({
     source: sourceExecutionSnapshotSchema,
@@ -68,6 +80,8 @@ export interface IngestWorkflowOutput {
     createdEntryCount: number;
     revisedEntryCount: number;
     duplicateObservationCount: number;
+    mediaRetryCandidateCount: number;
+    mediaRetryAppliedCount: number;
     nextCursor: string | null;
     checkpointRevision: number;
     checkpointCommitted: boolean;
@@ -104,6 +118,13 @@ export interface WorkflowIngestDomainPort {
         fence: HostActionExecutionFence;
         idempotencyKey: string;
     }): Promise<SourceCheckpointOutput>;
+    /** Apply one retry outcome to a stored Asset row (ADR-0015 decision 4). */
+    applyMediaRetryOutcome(input: {
+        workflowRunId: string;
+        fence: HostActionExecutionFence;
+        outcome: MediaRetryOutcome;
+        expectedAttemptCount: number;
+    }): Promise<boolean>;
 }
 
 export interface IngestActionOptions {
@@ -112,12 +133,17 @@ export interface IngestActionOptions {
     domain: WorkflowIngestDomainPort;
     unchangedItems: Pick<CosmosRepository, "listContentUnchangedItems">;
     mediaAcquirer?: MediaAcquirer;
+    /** Retry pass over already-stored degraded Assets (ADR-0015). */
+    mediaRetrier?: MediaRetrier;
+    retryCandidates?: Pick<CosmosRepository, "listRetryableMediaAssets">;
     logger?: LoggerPort;
 }
 
 export const ingestRequiredActionReferences = [
     ingestFetchActionReference,
     ingestPersistActionReference,
+    ingestMediaRetryFetchActionReference,
+    ingestMediaRetryApplyActionReference,
     ingestCheckpointActionReference,
 ] as const;
 
@@ -149,6 +175,41 @@ export function createIngestWorkflowDefinition(): IngestWorkflowDefinition {
                 asJson({ source: input.source, cursor: input.cursor }),
                 { key: "source.fetch" },
             );
+            // Retry degraded media stored by earlier runs. This runs before the
+            // page is persisted so "retry" means "next collection of this
+            // source", never an immediate second attempt on the same bytes
+            // (ADR-0015 decisions 1 and 5).
+            const retryPolicy = resolveMediaPolicy(input.source.config.media);
+            let mediaRetryCandidateCount = 0;
+            let mediaRetryAppliedCount = 0;
+            if (retryPolicy.retry.maxAttempts > 0) {
+                const retryPage = await workflow.callAction<MediaRetryFetchOutput>(
+                    ingestMediaRetryFetchActionReference,
+                    asJson({
+                        sourceId: input.source.id,
+                        maxAttempts: retryPolicy.retry.maxAttempts,
+                        budgetBytes: Math.max(
+                            0,
+                            retryPolicy.maxRunBytes - (page.mediaBytesUsed ?? 0),
+                        ),
+                        policy: {
+                            images: retryPolicy.images,
+                            maxFileBytes: retryPolicy.maxFileBytes,
+                            maxRunBytes: retryPolicy.maxRunBytes,
+                        },
+                    }),
+                    { key: "media.retry.fetch" },
+                );
+                mediaRetryCandidateCount = retryPage.candidateCount;
+                if (retryPage.outcomes.length > 0) {
+                    const applied = await workflow.callAction<MediaRetryApplyOutput>(
+                        ingestMediaRetryApplyActionReference,
+                        asJson({ outcomes: retryPage.outcomes }),
+                        { key: "media.retry.apply" },
+                    );
+                    mediaRetryAppliedCount = applied.appliedCount;
+                }
+            }
             let createdEntryCount = 0;
             let revisedEntryCount = 0;
             let duplicateObservationCount = 0;
@@ -200,6 +261,8 @@ export function createIngestWorkflowDefinition(): IngestWorkflowDefinition {
                 createdEntryCount,
                 revisedEntryCount,
                 duplicateObservationCount,
+                mediaRetryCandidateCount,
+                mediaRetryAppliedCount,
                 nextCursor: checkpoint.cursor,
                 checkpointRevision: checkpoint.revision,
                 checkpointCommitted: checkpoint.committed,
@@ -267,6 +330,45 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
             },
         },
     };
+    const mediaRetryFetch: ActionDefinition = {
+        ref: ingestMediaRetryFetchActionReference,
+        manifestHash: ingestMediaRetryFetchActionManifestHash,
+        kind: "connector",
+        description: "Re-download retryable degraded media of one source.",
+        capabilities: ["source:read"],
+        executionPlacement: "trusted_worker",
+        inputSchema: mediaRetryFetchInputSchema,
+        outputSchema: mediaRetryFetchOutputSchema,
+        execution: {
+            idempotent: true,
+            supportsCancellation: false,
+            timeoutMs: null,
+            retryPolicy: {
+                maxAttempts: 2,
+                backoffMs: 1_000,
+                retryableErrors: ["dependency_unavailable", "timeout", "rate_limited"],
+            },
+        },
+    };
+    const mediaRetryApply: ActionDefinition = {
+        ref: ingestMediaRetryApplyActionReference,
+        manifestHash: ingestMediaRetryApplyActionManifestHash,
+        kind: "library",
+        description: "Apply retry outcomes to stored Asset rows under the host fence.",
+        capabilities: ["library:write"],
+        executionPlacement: "host",
+        inputSchema: mediaRetryApplyInputSchema,
+        outputSchema: mediaRetryApplyOutputSchema,
+        execution: {
+            idempotent: true,
+            supportsCancellation: true,
+            timeoutMs: null,
+            retryPolicy: {
+                maxAttempts: 3,
+                backoffMs: 1_000,
+            },
+        },
+    };
     return [
         {
             definition: sourceFetch,
@@ -323,9 +425,21 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                 }
                 try {
                     const items = await Promise.all(acquiredItems.map((item) => toJsonItem(item, options.blobs)));
+                    // Sum of saved bytes; page-level URL memo means this can
+                    // over-count a repeated URL, which only shrinks the retry
+                    // budget and never exceeds the frozen per-run ceiling.
+                    const mediaBytesUsed = items.reduce(
+                        (sum, item) => sum + item.assets.reduce(
+                            (assetSum, asset) => assetSum
+                                + (asset.status === "saved" ? asset.byteSize ?? 0 : 0),
+                            0,
+                        ),
+                        0,
+                    );
                     return sourceFetchOutputSchema.parse({
                         items,
                         nextCursor: page.nextCursor,
+                        mediaBytesUsed,
                     });
                 } catch (error) {
                     throw mapConnectorError(error, connector.id, "payload");
@@ -364,6 +478,85 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                 }));
             },
         },
+        {
+            definition: mediaRetryFetch,
+            handler: async (input: unknown, context: ActionExecutionContext) => {
+                const parsed = mediaRetryFetchInputSchema.parse(input);
+                if (!options.mediaRetrier || !options.retryCandidates) {
+                    return mediaRetryFetchOutputSchema.parse({
+                        candidateCount: 0,
+                        outcomes: [],
+                    });
+                }
+                const candidates = await options.retryCandidates.listRetryableMediaAssets({
+                    sourceId: parsed.sourceId,
+                    maxAttempts: parsed.maxAttempts,
+                });
+                const outcomes = await options.mediaRetrier.retryAssets(candidates, {
+                    signal: context.signal,
+                    policy: {
+                        images: parsed.policy.images,
+                        maxFileBytes: parsed.policy.maxFileBytes,
+                        maxRunBytes: parsed.policy.maxRunBytes,
+                        retry: { maxAttempts: parsed.maxAttempts },
+                    },
+                    budgetBytes: parsed.budgetBytes,
+                });
+                const attemptCountByAsset = new Map(
+                    candidates.map((candidate) => [candidate.assetId, candidate.attemptCount]),
+                );
+                const payload = await Promise.all(outcomes.map(async (outcome) => ({
+                    assetId: outcome.assetId,
+                    attemptCount: attemptCountByAsset.get(outcome.assetId) ?? 0,
+                    status: outcome.status,
+                    mimeType: outcome.status === "saved" ? outcome.mimeType : null,
+                    blobRef: outcome.status === "saved"
+                        ? await toBlobRef(outcome.content, outcome.mimeType, options.blobs)
+                        : null,
+                    errorCode: outcome.status === "saved" ? null : outcome.errorCode,
+                    errorMessage: outcome.status === "saved" ? null : outcome.errorMessage,
+                })));
+                return mediaRetryFetchOutputSchema.parse({
+                    candidateCount: candidates.length,
+                    outcomes: payload,
+                });
+            },
+        },
+        {
+            definition: mediaRetryApply,
+            handler: async (input: unknown, context: ActionExecutionContext) => {
+                const parsed = mediaRetryApplyInputSchema.parse(input);
+                const hostContext = requireHostContext(context);
+                let appliedCount = 0;
+                let skippedCount = 0;
+                for (const outcome of parsed.outcomes) {
+                    const applied = await options.domain.applyMediaRetryOutcome({
+                        workflowRunId: hostContext.fence.workflowRunId,
+                        fence: hostContext.fence,
+                        expectedAttemptCount: outcome.attemptCount,
+                        outcome: outcome.status === "saved"
+                            ? {
+                                assetId: outcome.assetId,
+                                status: "saved",
+                                content: await readVerifiedBlobAsActionError(options.blobs, outcome.blobRef!),
+                                mimeType: outcome.mimeType ?? "application/octet-stream",
+                            }
+                            : {
+                                assetId: outcome.assetId,
+                                status: outcome.status,
+                                errorCode: outcome.errorCode!,
+                                errorMessage: outcome.errorMessage ?? "媒体重试失败",
+                            },
+                    });
+                    if (applied) {
+                        appliedCount += 1;
+                    } else {
+                        skippedCount += 1;
+                    }
+                }
+                return mediaRetryApplyOutputSchema.parse({ appliedCount, skippedCount });
+            },
+        },
     ];
 }
 
@@ -377,6 +570,27 @@ function requireHostContext(context: ActionExecutionContext): HostActionExecutio
         );
     }
     return context as HostActionExecutionContext;
+}
+
+async function toBlobRef(
+    content: Uint8Array,
+    mimeType: string | null,
+    blobs: WorkflowBlobStore,
+): Promise<{
+    key: string;
+    hash: string;
+    byteSize: number;
+    mediaType: string;
+}> {
+    const stored = await blobs.put(content, {
+        mimeType: mimeType ?? "application/octet-stream",
+    });
+    return {
+        key: stored.key,
+        hash: stored.hash,
+        byteSize: stored.byteSize,
+        mediaType: stored.mimeType ?? mimeType ?? "application/octet-stream",
+    };
 }
 
 async function toJsonItem(
@@ -393,6 +607,8 @@ async function toJsonItem(
                 byteSize: asset.byteSize,
                 blobRef: null,
                 errorMessage: asset.errorMessage ?? null,
+                errorCode: asset.errorCode ?? null,
+                attemptCount: asset.attemptCount ?? 0,
             };
         }
         const stored = await blobs.put(asset.content, {
@@ -411,6 +627,8 @@ async function toJsonItem(
                 mediaType: stored.mimeType ?? asset.mimeType ?? "application/octet-stream",
             },
             errorMessage: null,
+            errorCode: null,
+            attemptCount: asset.attemptCount ?? 0,
         };
     }));
     return normalizedIngestItemSchema.parse({
@@ -444,6 +662,8 @@ async function fromJsonItem(
             mimeType: asset.mimeType,
             byteSize: asset.byteSize,
             errorMessage: asset.errorMessage ?? null,
+            errorCode: asset.errorCode ?? null,
+            attemptCount: asset.attemptCount ?? 0,
             content: asset.blobRef
                 ? await readVerifiedBlobAsActionError(blobs, asset.blobRef)
                 : null,

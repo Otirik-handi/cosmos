@@ -50,6 +50,7 @@ function actionsWith(fetchItems: () => Promise<never>, validate: () => void = ()
                 revision: 0,
                 committed: true,
             }),
+            applyMediaRetryOutcome: async () => true,
         },
         unchangedItems: {
             listContentUnchangedItems: async () => [],
@@ -168,6 +169,7 @@ function actionsWithMedia(options: {
                 revision: 0,
                 committed: true,
             }),
+            applyMediaRetryOutcome: async () => true,
         },
         unchangedItems: {
             listContentUnchangedItems: async () => items.map(() => false),

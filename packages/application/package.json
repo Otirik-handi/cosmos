@@ -27,6 +27,12 @@
             "bun": "./src/workflow-ingest.ts",
             "import": "./dist/workflow-ingest.js",
             "default": "./dist/workflow-ingest.js"
+        },
+        "./media-cleanup": {
+            "types": "./src/media-cleanup.ts",
+            "bun": "./src/media-cleanup.ts",
+            "import": "./dist/media-cleanup.js",
+            "default": "./dist/media-cleanup.js"
         }
     },
     "scripts": {

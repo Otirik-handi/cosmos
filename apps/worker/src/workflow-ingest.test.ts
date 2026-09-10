@@ -532,13 +532,15 @@ describe("Worker Ingest Workflow composition", () => {
                 triggerKind: "manual",
                 idempotencyKey: "media-skip-run-1",
             });
+            await expect(drainWorkflow(composition, firstRun.runId)).resolves.toMatchObject({
+                status: "completed",
+            });
+            // Enqueue only after the first Run finished: the point of the case is
+            // a later Run observing persisted content, not two racing Runs.
             const secondRun = await control.enqueue({
                 sourceId: source.id,
                 triggerKind: "manual",
                 idempotencyKey: "media-skip-run-2",
-            });
-            await expect(drainWorkflow(composition, firstRun.runId)).resolves.toMatchObject({
-                status: "completed",
             });
             await expect(drainWorkflow(composition, secondRun.runId)).resolves.toMatchObject({
                 status: "completed",
@@ -667,6 +669,142 @@ describe("Worker Ingest Workflow composition", () => {
             await repository.close();
         }
     }, 15_000);
+
+    it("retries degraded media on the next run without creating a new revision", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-retry-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const created = await repository.createSource({
+                name: "Media retry workflow",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            const source = await repository.activateSource({
+                sourceId: created.id,
+                idempotencyKey: `test-activation:${created.id}`,
+                enabled: true,
+                baseRevisionId: created.revisionId,
+            });
+            const item: NormalizedIngestItem = {
+                externalId: "media-retry-1",
+                title: "Media retry item",
+                summary: null,
+                contentText: "Body with one flaky image candidate",
+                webUrl: "https://example.test/media-retry",
+                kind: "article",
+                publisher: null,
+                metrics: null,
+                publishedAt: null,
+                updatedAt: null,
+                sourceLocator: { provider: "fixture", item: "media-retry-1" },
+                rawPayload: "<item>media-retry</item>",
+                assets: [{
+                    kind: "image",
+                    sourceUrl: "https://media.example.test/flaky.png",
+                    status: "metadata_only",
+                    mimeType: null,
+                    byteSize: null,
+                    content: null,
+                }],
+            };
+            const connector: IngestConnector = {
+                id: "rss",
+                description: "Media retry workflow connector",
+                configVersion: "v1",
+                capabilities: [mediaDownloadCapability],
+                validate: () => undefined,
+                fetchItems: async () => ({ items: [item], nextCursor: null }),
+            };
+            let downloads = 0;
+            const mediaAcquirer = createMediaAcquirer({
+                fetch: async () => {
+                    downloads += 1;
+                    if (downloads === 1) {
+                        throw new Error("temporary network failure");
+                    }
+                    return new Response(
+                        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+                        { status: 200, headers: { "content-type": "image/png" } },
+                    );
+                },
+                resolveHost: async () => ["93.184.216.34"],
+            });
+            const composition = createWorkflowHost({
+                prisma: repository.prisma,
+                blobs: repository.blobs,
+                definitions: [createIngestWorkflowDefinition()],
+                actions: createIngestActions({
+                    resolveConnector: () => connector,
+                    blobs: repository.blobs,
+                    domain: repository,
+                    unchangedItems: repository,
+                    mediaAcquirer,
+                    mediaRetrier: mediaAcquirer,
+                    retryCandidates: repository,
+                }),
+                owner: "media-retry-worker",
+                leaseMs: 60_000,
+            });
+            const control = new IngestWorkflowControlService({
+                store: composition.store,
+                getSourceExecutionSnapshot: async (sourceId) => (
+                    await repository.getSource(sourceId) ?? null
+                ),
+                getCheckpointSnapshot: (sourceId) => repository.getCheckpointSnapshot(sourceId),
+            });
+
+            const firstRun = await control.enqueue({
+                sourceId: source.id,
+                triggerKind: "manual",
+                idempotencyKey: "media-retry-run-1",
+            });
+            await expect(drainWorkflow(composition, firstRun.runId)).resolves.toMatchObject({
+                status: "completed",
+            });
+            const degraded = await repository.prisma.asset.findFirstOrThrow({
+                where: { entryRevision: { entry: { sourceInstanceId: source.id } } },
+            });
+            expect(degraded).toMatchObject({
+                status: "failed",
+                errorCode: "network",
+                attemptCount: 1,
+            });
+
+            // Second run: the item is unchanged, so only the retry step touches it.
+            const secondRun = await control.enqueue({
+                sourceId: source.id,
+                triggerKind: "manual",
+                idempotencyKey: "media-retry-run-2",
+            });
+            await expect(drainWorkflow(composition, secondRun.runId)).resolves.toMatchObject({
+                status: "completed",
+            });
+            const recovered = await repository.prisma.asset.findUniqueOrThrow({
+                where: { id: degraded.id },
+            });
+            expect(recovered).toMatchObject({
+                status: "saved",
+                errorCode: null,
+                errorMessage: null,
+                attemptCount: 2,
+            });
+            expect(recovered.storageKey).toMatch(/^sha256\//);
+            expect(downloads).toBe(2);
+            expect(await repository.prisma.entryRevision.count({
+                where: { entry: { sourceInstanceId: source.id } },
+            })).toBe(1);
+            expect(await repository.prisma.domainEvent.count({
+                where: { type: "media.retry.attempted.v1" },
+            })).toBe(1);
+        } finally {
+            await repository.close();
+        }
+    }, 20_000);
 });
 
 async function drainWorkflow(

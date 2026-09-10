@@ -7,6 +7,8 @@ import {
     mergeStoriesCommandSchema,
     moveEntryToStoryCommandSchema,
     splitStoryCommandSchema,
+    mediaCleanupCommandSchema,
+    mediaCleanupRunSnapshotSchema,
     runSnapshotSchema,
     searchPageSchema,
     sourceActivationCommandSchema,
@@ -43,6 +45,8 @@ import {
     type SourceConfigProbeJobSnapshot,
     type SourceDefinitionManifest,
     type SourceSnapshot,
+    type MediaCleanupCommand,
+    type MediaCleanupRunSnapshot,
     type StoryDetail,
     type StorySubtype,
     type SseEvent,
@@ -252,12 +256,30 @@ export class HttpCosmosClient {
         });
     }
 
+    async createMediaCleanup(
+        input: MediaCleanupCommand,
+        idempotencyKey: string,
+    ): Promise<MediaCleanupRunSnapshot> {
+        const payload = mediaCleanupCommandSchema.parse(input);
+        return this.request("/api/v1/media-cleanups", {
+            method: "POST",
+            headers: { "idempotency-key": idempotencyKey },
+            body: payload,
+            schema: mediaCleanupRunSnapshotSchema,
+        });
+    }
+
+    async getMediaCleanup(runId: string): Promise<MediaCleanupRunSnapshot> {
+        return this.request(`/api/v1/media-cleanups/${encodeURIComponent(runId)}`, {
+            schema: mediaCleanupRunSnapshotSchema,
+        });
+    }
+
     async listSources(): Promise<readonly SourceSnapshot[]> {
         return this.request("/api/v1/sources", {
             schema: sourceSnapshotSchema.array(),
         });
     }
-
     async getSource(sourceId: string): Promise<SourceSnapshot> {
         return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}`, {
             schema: sourceSnapshotSchema,

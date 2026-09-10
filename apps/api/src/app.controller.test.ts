@@ -69,8 +69,100 @@ describe("AppController workflow conflicts", () => {
     });
 });
 
-describe("AppController source run gating", () => {
-    function sourceFixture(enabled: boolean) {
+describe("AppController media cleanup (ADR-0015)", () => {
+    function controllerWith(input: {
+        report?: unknown;
+        enqueue?: (command: unknown) => Promise<unknown>;
+    }): { controller: AppController; enqueue: ReturnType<typeof vi.fn> } {
+        const enqueue = vi.fn(input.enqueue ?? (async () => ({
+            runId: "run-cleanup",
+            status: "queued",
+            productRun: { status: "queued" },
+        })));
+        const repository = {
+            getMediaCleanupReport: vi.fn().mockResolvedValue(input.report ?? null),
+        };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            undefined,
+            undefined,
+            { enqueue } as never,
+        );
+        return { controller, enqueue };
+    }
+
+    it("previews by default and never deletes on an implicit dry run", async () => {
+        const { controller, enqueue } = controllerWith({});
+        const snapshot = await controller.createMediaCleanup({}, undefined);
+        expect(enqueue).toHaveBeenCalledWith({
+            sourceId: null,
+            dryRun: true,
+            idempotencyKey: expect.stringContaining("media-cleanup:"),
+        });
+        expect(snapshot).toMatchObject({ runId: "run-cleanup", status: "queued", report: null });
+    });
+
+    it("passes an explicit confirm command and surfaces the report", async () => {
+        const report = {
+            dryRun: false,
+            sourceId: "source-1",
+            candidateCount: 2,
+            candidateBytes: 2048,
+            cleanedCount: 2,
+            cleanedBytes: 2048,
+            sharedKeyCount: 0,
+            samples: [],
+            startedAt: "2026-09-09T00:00:00.000Z",
+            finishedAt: "2026-09-09T00:00:01.000Z",
+        };
+        const { controller, enqueue } = controllerWith({
+            report,
+            enqueue: async () => ({
+                runId: "run-cleanup",
+                status: "completed",
+                productRun: { status: "completed" },
+            }),
+        });
+        const snapshot = await controller.createMediaCleanup(
+            { sourceId: "source-1", dryRun: false },
+            "cleanup-key",
+        );
+        expect(enqueue).toHaveBeenCalledWith({
+            sourceId: "source-1",
+            dryRun: false,
+            idempotencyKey: "cleanup-key",
+        });
+        expect(snapshot).toMatchObject({
+            runId: "run-cleanup",
+            status: "succeeded",
+            report: { cleanedCount: 2 },
+        });
+    });
+
+    it("rejects an unknown command field before touching the workflow store", async () => {
+        const { controller, enqueue } = controllerWith({});
+        await expect(controller.createMediaCleanup({ unexpected: true }, undefined))
+            .rejects.toBeInstanceOf(BadRequestException);
+        expect(enqueue).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 for an unknown cleanup run", async () => {
+        const controller = new AppController(
+            {} as never,
+            {} as never,
+            undefined,
+            undefined,
+            { loadWorkflowEnvelope: async () => null } as never,
+            {} as never,
+        );
+        await expect(controller.mediaCleanup("missing"))
+            .rejects.toBeInstanceOf(NotFoundException);
+    });
+});
+
+describe("AppController source run gating", () => {    function sourceFixture(enabled: boolean) {
         return {
             id: "source-1",
             name: "Fixture",

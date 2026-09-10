@@ -139,10 +139,13 @@ the current code has not removed it or replaced it with a permanent redirect.
 | `POST /sources/:sourceId/activation-commands` | 必需非空且 ≤300 字符的 `Idempotency-Key` header；body `SourceActivationCommand` | HTTP 201 返回更新后投影。启用前按 canonical schema 校验已保存配置；同 key 同请求重放返回首次记录的结果快照；同 key 不同请求或过期 `baseRevisionId` 409；no-op 不递增 revision。 |
 | `POST /sources/:sourceId/test` | 可选 `Idempotency-Key` header（≤300 字符） | 不变：HTTP 202 返回 `JobSnapshot`，创建 `source-probe` Job；未提供 key 时生成随机 probe key；Source 不存在 404。 |
 | `POST /sources/:sourceId/runs` | 可选 `Idempotency-Key` header（≤300 字符） | HTTP 201 返回 Product Run；仅接受已启用 Source，未启用 409 `conflict`；Source 不存在 404；无 header 时生成随机 key。优先 Workflow Control 入队 `cosmos.ingest@1`，否则走 legacy queued Run。 |
+| `POST /media-cleanups` | 可选 `Idempotency-Key` header（≤300 字符）；body `MediaCleanupCommand`（可选 `sourceId`、可选 `dryRun`，缺省 `dryRun: true`） | HTTP 201 返回 `MediaCleanupRunSnapshot`；入队 `cosmos.media-cleanup@1`。durable host 未启用时 409 `conflict`；未知字段或非法 body 400 `validation_failed`；同 key 不同 `{sourceId, dryRun}` 409 `conflict`。无 header 时生成随机 key。 |
+| `GET /media-cleanups/:runId` | path `runId` | HTTP 200 返回 `MediaCleanupRunSnapshot`（`status` 为公开 Run 状态；`report` 在 Action 完成后由 `media.cleanup.completed.v1` 事件填充，未完成或未解析时为 `null`）；不存在 404。 |
 
 Catalog page 当前固定 `nextCursor: null`，`snapshotAt` 是响应生成时的 ISO 时间。Builtin
 catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions，Workflow
-`cosmos.ingest@1`，以及 `source.fetch@1`、`library.ingest@1`、`source.checkpoint@1`
+`cosmos.ingest@1` 与 `cosmos.media-cleanup@1`，以及 `source.fetch@1`、`media.retry.fetch@1`、
+`media.retry.apply@1`、`library.ingest@1`、`source.checkpoint@1`、`media.cleanup@1`
 Action manifests；这些是当前实现锚点，不是允许客户端执行的命令列表。
 
 
