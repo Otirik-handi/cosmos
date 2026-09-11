@@ -20,6 +20,11 @@ token 估算口径（见 estimate_tokens）对中文密集文档偏保守（宁�
   python scripts/size-governance.py -c docs --write-baseline docs/doc-governance/docs-baseline.json
   python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new
   # 退出码：0 通过（可有 warning）；1 违规；2 参数或文件错误
+
+包地图（代码治理，docs/proposals/code-size-governance-v1.md §4.5）：
+  python scripts/size-governance.py --map [--path <仓库根>]   # 生成 repo-map.json 后退出
+  # 默认扫 code+tests 类别，按 packages/apps/plugins/<name> 聚合；
+  # CI 重新生成后须与提交版本 diff 为零。
 """
 
 from __future__ import annotations
@@ -279,6 +284,52 @@ def write_baseline(args: argparse.Namespace, files: list[dict], exemptions: list
     return 0
 
 
+def write_repo_map(args: argparse.Namespace, root: Path, files: list[dict], cats: set[str]) -> int:
+    """生成机器可读包地图：包名、入口、MODULE.md、文件数、红线/警戒清单（提案 §4.5）。"""
+    groups: dict[str, list[dict]] = {}
+    for item in files:
+        parts = item["path"].split("/")
+        # packages/apps/plugins 按二级目录聚合；其余按一级目录聚合
+        key = "/".join(parts[:2]) if len(parts) >= 3 and parts[0] in ("packages", "apps", "plugins") else parts[0]
+        groups.setdefault(key, []).append(item)
+
+    def zone_of(item: dict) -> str:
+        return over_thresholds(item, args.warn, args.fail, args.warn_tokens, args.fail_tokens) or "ok"
+
+    packages = []
+    for key in sorted(groups):
+        members = groups[key]
+        entry = None
+        entry_path = f"{key}/src/index.ts"
+        hit = next((m for m in members if m["path"] == entry_path), None)
+        if hit is not None:
+            entry = {"path": entry_path, "bytes": hit["bytes"], "lines": hit["lines"], "zone": zone_of(hit)}
+        module_doc = root / key / "MODULE.md"
+        packages.append({
+            "dir": key,
+            "moduleDoc": f"{key}/MODULE.md" if module_doc.is_file() else None,
+            "moduleDocBytes": module_doc.stat().st_size if module_doc.is_file() else None,
+            "entry": entry,
+            "files": len(members),
+            "bytes": sum(m["bytes"] for m in members),
+            "red": sorted(m["path"] for m in members if zone_of(m) == "red"),
+            "warn": sorted(m["path"] for m in members if zone_of(m) == "warn"),
+        })
+
+    payload = {
+        "version": 1,
+        "generated": datetime.date.today().isoformat(),
+        "note": "脚本生成（size-governance.py --map），代码结构变化后重新生成提交，CI 校验与提交版本 diff 为零",
+        "categories": sorted(cats),
+        "packages": packages,
+    }
+    target = args.map
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"已写入包地图 {target}（{len(packages)} 个包/应用目录）")
+    return 0
+
+
 def main() -> int:
     if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -299,6 +350,8 @@ def main() -> int:
     parser.add_argument("--baseline", type=Path, default=None, help="基线文件（JSON）")
     parser.add_argument("--fail-on-new", action="store_true", help="新增文件进入警戒区即 fail（默认仅 warning）")
     parser.add_argument("--write-baseline", type=Path, default=None, help="把当前超标文件写入基线文件后退出")
+    parser.add_argument("--map", type=Path, nargs="?", const=Path("docs/doc-governance/repo-map.json"), default=None,
+                        help="生成机器可读包地图 JSON 后退出（默认 docs/doc-governance/repo-map.json，类别缺省 code+tests）")
     parser.add_argument("--exemptions", type=Path, default=None, help="豁免清单（默认根目录 .docs-size-exemptions.yml）")
     args = parser.parse_args()
 
@@ -330,6 +383,9 @@ def main() -> int:
     for item in files:
         item["_root"] = str(root)
         item["tokens"] = estimate_tokens(item)
+
+    if args.map:
+        return write_repo_map(args, root, files, cats)
 
     if args.check or args.write_baseline:
         exemptions = load_exemptions(root, args.exemptions)
