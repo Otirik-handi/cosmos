@@ -67,3 +67,14 @@
 
 - typecheck 零错误;unit 68 文件 / 510 测试全绿;property 4/4;e2e 4/4;契约测试绿(9 值导出零 diff);madge 零循环。
 - 工具:`.agent/tmp/split-whs.py`(行号分段 + 导入自动生成,含 type 标记保留);迭代中两次因源文件被门面覆写需 git 恢复后重跑。
+
+## 2026-09-11 切片 5(收口基建:MODULE.md + repo-map + 基线缩减)
+
+按维护者指示先行,不依赖切片 4;MODULE.md 与 repo-map 在切片 4 落地后按「与代码同 PR 更新」规则再各更新一次。
+
+- 新增 `packages/storage-prisma/MODULE.md`(2449 B ≤ 3 KB):职责一句话、入口契约清单、子模块地图、阅读顺序、禁区、更新日期;当前版本反映切片 3 后结构(index.ts 仍为单体,已如实标注拆分中)。
+- `scripts/size-governance.py` 新增 `--map`:生成 `docs/doc-governance/repo-map.json`(38 个包/应用目录;每条含入口路径/字节/行数/zone、MODULE.md 路径与字节、red/warn 文件清单;类别缺省 code+tests,`--path` 可换扫描根)。
+- 基线缩减:`code-baseline.json` 24 → 21 条,仅移除切片 2/3 后已不存在的 3 条(`index.test.ts` / `workflow-host-store.test.ts` / `workflow-host-store.ts`);对「已回到健康区但仍存在」的 6 条(info 提示)不动——提前移除会使文件回升时被计为新增。
+- 门禁:`python scripts/size-governance.py -c code tests --check --baseline docs/doc-governance/code-baseline.json` → PASS(21 条基线,豁免 1 条)。
+- repo-map 的 CI diff 校验属 Follow-ups(README「repo-map CI 校验接入」),本切片只交付生成能力。
+- 指标回写(典型任务读取量 9 万 → ≤1.5 万)在切片 4 收口后于本文件补终值与测算口径。
