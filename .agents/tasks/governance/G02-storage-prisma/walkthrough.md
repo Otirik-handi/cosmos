@@ -78,3 +78,43 @@
 - 门禁:`python scripts/size-governance.py -c code tests --check --baseline docs/doc-governance/code-baseline.json` → PASS(21 条基线,豁免 1 条)。
 - repo-map 的 CI diff 校验属 Follow-ups(README「repo-map CI 校验接入」),本切片只交付生成能力。
 - 指标回写(典型任务读取量 9 万 → ≤1.5 万)在切片 4 收口后于本文件补终值与测算口径。
+
+## 2026-09-11 切片 4(单体按聚合拆:继承链 + 门面 ≤100 行)
+
+### 拆分
+
+- `index.ts`(267.9 KB / 7018 行 / 146 方法)→ 门面 12 行 / 700 B(9 值导出 + StorageRoots 类型零 diff)+ `storage-root.ts`(3.4 KB,StorageRoots/根解析/createPrismaClient/resolveContainedPath,fileSize 等内部 helper 不再从入口导出)+ `repository/`:
+  - `base.ts`(2.3 KB):类声明去 implements,5 字段(roots/prisma/blobs 本就公有;logger/catalog private→protected)与 constructor/initialize/close;
+  - `helpers-1..4.ts`(8.7~22.7 KB):38 个跨调 helper 按 Tarjan SCC 缩点后拓扑排序,**SCC 原子装册**(≤22 KB/册,最大环 9 方法不跨册);
+  - 15 个领域分册(sources/runs/job-claims/media/search/stories/story-merge/topics/entities/entity-links/labels/collections/annotations/views/board-content,4.7~21.2 KB):105 个领域方法按聚合分组(领域方法互不调用,册序仅影响阅读);
+  - `repository-internals.ts`(14.4 KB):原类尾模块级 helper 17 个,加 export 供分册导入。
+- 继承链:base → helpers-1..4 → sources → … → board-content;门面 `PrismaCosmosRepository extends PrismaCosmosRepositoryBoardContent implements CosmosRepository {}`(类型级端口断言,参考切片 3 门面写法)。
+
+### 方法体改写(全部声明,见校验)
+
+- 跨册经 `this` 调用的 helper 声明行 `private` → `protected`(25 处,仅行首修饰符);
+- L6493 类型位置类名 `ReturnType<PrismaCosmosRepository["entryInclude"]>` → 当前分册类名(本类经继承链拥有 entryInclude,索引访问类型等价;避免 import 门面成环)。
+
+### 工具与迭代(`.agent/tmp/split-index5.py`,基于上会话 split-index3.py)
+
+- 上会话卡点「机械移动后约 27 个类型错误」定性:实际仅 4 个真实错误——3 个 `Property 'toAssetSnapshot/requireBoardDetail' does not exist` 源于 v4 脚本 **SCC 拓扑依赖方向接反**(`scc_deps[被调].add(调用)` 而 visit 是"先依赖后自身",跨册拆开后调用方排到被调方之前);1 个 `StorageRoots` 缺 inline `type` 标记(verbatimModuleSyntax)。其余疑似为 v4 遗留路径错误(`./base.ts` 后缀、internals/storage-root 相对层级)级联。v5 修复:翻转依赖方向、SCC 原子装册、父类导入 `.js` 后缀、internals/repository-internals 同层导入、storage-root `../` 层级、门面 storage-root 路径、类型名 inline `type` 标记。
+- BOOKS 守卫:领域方法全集覆盖、无重叠、无遗漏(latestEventSequence 归入 runs 册)。
+
+### 校验(逐字节移动证据)
+
+- `.agent/tmp/verify-move2.py`:按方法粒度,146 个方法的分册文本 vs 原始行区间——**实质差异 0**;唯一差异为 base/sources 书界 1 个空行(L308);改写仅上述两类声明。`.agent/tmp/verify-move.py`(行多重集)交叉复核:internals 424↔424 残差 0。
+
+### 验证(全绿)
+
+- 包级 + 根级 typecheck 零错误;build:packages 通过(declaration 发射无错)。
+- unit:68 文件 / **510 测试全绿**(`--maxWorkers=2`,256.02s)。偏差记录:首次全量 3 失败(backend/deferred Activity conformance 等),单跑该文件 24/24 绿,复跑全量全绿——定性为 Windows SQLite 负载争用 flaky(与切片 1b 同模式),以复跑全量为准。
+- property 3 文件 / 4 测试绿;e2e 4 文件 / 4 测试绿(`BUN_BINARY=<bun.exe>`)。
+- 契约测试绿;**导出签名双确认**:契约测试(9 值导出集合)+ 脚本比对(旧/新入口 export 解析,值/类型集合 diff 均为空)。
+- madge 46 files 零循环;代码门禁 `-c code tests --check` PASS(基线 20 条)。
+
+### 核心指标(验收三件套之「典型任务读取量」)
+
+- 测算口径(提案 §4.8 场景:改单聚合的重试/写路径):MODULE.md + 定位命中的领域分册全读 + 对应测试分册全读,token 用 `size-governance.py` 保守估算口径。
+- 拆前:`index.ts` 267.9 KB ≈ 68.6k token + 对应测试分册(约 13.6k)≈ **8.2 万~9 万 token**(提案记 9 万)。
+- 拆后(以媒体重试为例):MODULE.md 741 + `repository/media.ts` 5,529 + `media-retry.test.ts` 4,403 ≈ **1.07 万 token**(helper 若在 helpers-1 再 +982,约 1.17 万)——**≤1.5 万达成,降幅约 87%**。
+- `repo-map.json`:storage-prisma 入口 700 B / 12 行 zone=ok,红线清单清零;MODULE.md 2940 B ≤ 3 KB。

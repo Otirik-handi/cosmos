@@ -16,7 +16,7 @@
 
 ## Current State
 
-提案 accepted(2026-09-11);文档治理门禁已上线;**切片 1、1b、2、3、5 已完成**(2026-09-11):前置基线就绪、入口契约测试绿、三配置全绿、两个超大测试文件按行为拆分、workflow-host-store.ts 拆为继承链分册、MODULE.md + repo-map + 基线缩减(细节见 `walkthrough.md`);下一片:切片 4(index.ts 按聚合拆,专项攻坚)。发现并处置的偏差:master 上存在 Task 23 遗留测试债与 Windows 本地并行争用,已对齐修复并记录。
+提案 accepted(2026-09-11);文档治理门禁已上线;**切片 1~5 全部完成**(2026-09-11):入口契约测试绿、三配置全绿、两个超大测试文件按行为拆分、workflow-host-store.ts 与 index.ts 均拆为继承链分册(门面 12 行)、MODULE.md + repo-map 就绪、典型任务读取量 9 万 → 约 1.1 万 token(细节见 `walkthrough.md`);待维护者验收后 push/合并。发现并处置的偏差:master 上存在 Task 23 遗留测试债与 Windows 本地并行争用,已对齐修复并记录。
 
 ## Decisions and Deviations
 
@@ -31,7 +31,7 @@
 | 1 | 前置:worktree + 依赖 + 基线(代码类 --write-baseline)+ 入口契约测试(断言 index.ts 导出符号集合)+ 基线记录(大小/行数/导出清单/三配置测试/构建字节数) | 契约测试绿;vitest 三配置全绿;基线入库 | done(2026-09-11,含 1b 测试债对齐) |
 | 2 | 测试按行为拆:`index.test.ts`(51 KB)、`workflow-host-store.test.ts`(55 KB)按 describe 拆到对应目录 | 单文件 ≤30 KB;覆盖率不降;三配置全绿 | done(2026-09-11,覆盖率待阶段③复核) |
 | 3 | 单体按聚合拆:workflow-host-store.ts → `workflow-host-store/` 按聚合分册(门面 re-export) | 导出零 diff;门禁过;循环依赖零新增 | done(2026-09-11) |
-| 4 | 单体按聚合拆:index.ts → storage-roots / workflow-host-store/ / value-store / blob-store / event-sink / state-store 等分册,门面 ≤100 行 | 门面 ≤100 行;导出零 diff;三配置全绿 | todo |
+| 4 | 单体按聚合拆:index.ts → storage-roots / workflow-host-store/ / value-store / blob-store / event-sink / state-store 等分册,门面 ≤100 行 | 门面 ≤100 行;导出零 diff;三配置全绿 | done(2026-09-11,门面 12 行;分册按继承链聚合,未见 value-store/blob-store 等独立端口类需求) |
 | 5 | 收口:`MODULE.md`(≤3 KB)+ repo-map 生成 + 指标回写(读取量 9 万 → ≤1.5 万)+ 基线缩减 | 验收三件套全过;walkthrough 回写 | done(2026-09-11,指标回写随切片 4 收口补终值) |
 
 ## Verification
