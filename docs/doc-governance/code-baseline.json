@@ -18,7 +18,6 @@
     "packages/application/src/workflow-ingest.ts": 29314,
     "packages/contracts/src/index.test.ts": 36369,
     "packages/contracts/src/index.ts": 54827,
-    "packages/storage-prisma/src/index.ts": 274319,
     "packages/storage-prisma/src/workflow-backend.ts": 32164,
     "packages/transport-http/src/index.test.ts": 39598,
     "packages/transport-http/src/index.ts": 42368,

@@ -17,7 +17,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 59,
-      "bytes": 909559,
+      "bytes": 911126,
       "red": [
         ".agents/tasks/02-rss-ingestion/README.md"
       ],
@@ -192,8 +192,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 113,
-      "bytes": 1725740,
+      "files": 114,
+      "bytes": 1736414,
       "red": [
         "docs/api/0003-product-dtos.md",
         "docs/architecture/0002-information-model.md",
@@ -325,18 +325,16 @@
     {
       "dir": "packages/storage-prisma",
       "moduleDoc": "packages/storage-prisma/MODULE.md",
-      "moduleDocBytes": 2449,
+      "moduleDocBytes": 2940,
       "entry": {
         "path": "packages/storage-prisma/src/index.ts",
-        "bytes": 274319,
-        "lines": 7018,
-        "zone": "red"
+        "bytes": 700,
+        "lines": 12,
+        "zone": "ok"
       },
-      "files": 73,
-      "bytes": 801156,
-      "red": [
-        "packages/storage-prisma/src/index.ts"
-      ],
+      "files": 95,
+      "bytes": 809897,
+      "red": [],
       "warn": [
         "packages/storage-prisma/src/workflow-backend.ts"
       ]
