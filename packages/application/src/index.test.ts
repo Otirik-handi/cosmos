@@ -222,7 +222,7 @@ describe("SourceConfigProbeService", () => {
     const probeCommand = {
         sourceDefinitionRef: "source.rss@1",
         operationId: "fetch",
-        config: { feedUrl: "https://example.test/feed.xml", scheduleIntervalMs: 1_000 },
+        config: { feedUrl: "https://example.test/feed.xml" },
     } as const;
 
     function rssConnectorFixture(items: Array<{ title: string }>): {
@@ -387,6 +387,7 @@ describe("SourceConfigProbeService worker dispatch", () => {
         };
         const repository = {
             listSources: async () => [],
+            listScheduleTriggers: async () => [],
             claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
                 expect(acceptedKinds).toEqual(["source-ingest", "source-probe", "source-config-probe"]);
                 return {
@@ -430,6 +431,7 @@ describe("SourceConfigProbeService worker dispatch", () => {
         const capture = captureLogger();
         const repository = {
             listSources: async () => [],
+            listScheduleTriggers: async () => [],
             claimNextJob: async () => ({
                 id: "job-4",
                 runId: null,
@@ -521,6 +523,7 @@ describe("runtime logging context", () => {
         const rejectedCapture = captureLogger();
         const rejectedRepository = {
             listSources: async () => [],
+            listScheduleTriggers: async () => [],
             claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
                 expect(acceptedKinds).toEqual(["source-ingest", "source-probe", "source-config-probe"]);
                 return {
@@ -562,6 +565,7 @@ describe("runtime logging context", () => {
         const failedCapture = captureLogger();
         const failedRepository = {
             listSources: async () => [],
+            listScheduleTriggers: async () => [],
             claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
                 expect(acceptedKinds).toEqual(["source-ingest", "source-probe", "source-config-probe"]);
                 return {

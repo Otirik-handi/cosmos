@@ -393,9 +393,10 @@ export async function createRssSource(options: {
         name: options.name,
         sourceDefinitionRef: "source.rss@1",
         operationId: "fetch",
+        // ADR-0018: scheduleIntervalMs 自 Source config 迁出,create 命令接受顶层字段
+        ...(options.scheduleIntervalMs === undefined ? {} : { scheduleIntervalMs: options.scheduleIntervalMs }),
         config: {
             feedUrl: options.feedUrl,
-            ...(options.scheduleIntervalMs === undefined ? {} : { scheduleIntervalMs: options.scheduleIntervalMs }),
         },
     });
     const sourceId = created.id;
