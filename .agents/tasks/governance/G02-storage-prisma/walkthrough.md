@@ -53,3 +53,17 @@
 - unit:68 文件 / **510 测试全绿**(与拆分前 510 完全一致,零丢失;`--maxWorkers=2`,254s)。
 - property 4/4 绿;e2e 4/4 绿;契约测试绿;typecheck 零错误;madge 零循环(35 files)。
 - 覆盖率:未运行(工具在阶段③引入);测试内容零丢失,覆盖率按构造不变,阶段③引入后复核。
+
+## 2026-09-11 切片 3(单体按聚合拆:继承链 + 门面)
+
+### 拆分
+
+- `workflow-host-store.ts`(93.5 KB / 2470 行)→ 门面(277 B,6 行,路径与 `PrismaWorkflowHostStore` 导出不变)+ 继承链分册 `workflow-host-store/`:
+  - `base.ts`(1.1 KB):三字段(prisma 公有 readonly;logger/actionRetryPolicies private→protected)与构造器重载;方法体间零横向调用、this 引用仅三类字段,继承链因此安全。
+  - `envelope-store.ts`(6.7 KB)→ `run-lease-store.ts`(7.7 KB)→ `activity-store.ts`(24.1 KB)→ `completion-delivery-store.ts`(10.4 KB)→ `run-lifecycle-store.ts`(9.7 KB):26 个方法按聚合分组、逐字节移动。
+- 45 个模块级 helper/类型/常量分三层(依赖单向,madge 验证零循环):`internals-core`(常量+行类型+JSON/日期/错误原语,5.8 KB)← `internals-activity`(envelope/activity/completion 归一化与校验,26.5 KB)← `internals-events-lease`(事件追加与租约卫兵,7.0 KB)。
+
+### 验证
+
+- typecheck 零错误;unit 68 文件 / 510 测试全绿;property 4/4;e2e 4/4;契约测试绿(9 值导出零 diff);madge 零循环。
+- 工具:`.agent/tmp/split-whs.py`(行号分段 + 导入自动生成,含 type 标记保留);迭代中两次因源文件被门面覆写需 git 恢复后重跑。
