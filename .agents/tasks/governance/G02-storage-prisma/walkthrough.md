@@ -34,3 +34,22 @@
 - e2e:4 文件 / 4 测试绿(`BUN_BINARY=<bun.exe>` + `bun run test:e2e`)。
 - 契约测试:绿。
 - madge:零循环。
+
+## 2026-09-11 切片 2(测试按行为拆分)
+
+### 拆分
+
+- `index.test.ts`(52 KB / 1359 行 / 18 it)→ `index.fixtures.ts`(2.8 KB,状态 + afterEach + captureLogger + prepareDatabase)+ 4 册:`repository-ingest`(12.0 KB)、`source-activation`(12.6 KB)、`job-claims`(8.8 KB)、`worker-pipeline`(17.3 KB)。
+- `workflow-host-store.test.ts`(56 KB / 1271 行 / 30 it + 1 嵌套 describe)→ `workflow-host-store.fixtures.ts`(7.6 KB,roots/clients/databasePaths 状态 + afterEach + createStore 等 7 个 helper + 3 个 fixture 常量)+ 4 册:`store-migrations-fencing`(10.4 KB)、`store-idempotency-activity`(8.5 KB)、`store-completion-delivery`(25.6 KB)、`run-control`(5.7 KB)。
+- 外层 describe 壳有意消解(2 个);测试本体逐字节移动,调用点零改动(helper 经具名导入)。
+
+### 工具与迭代
+
+- 一次性脚本 `.agent/tmp/split-tests3.py`:按行号切分、fixtures 导出注入、各分册导入按实际引用自动生成(保留 `type` 标记)、it/describe 标题守恒断言。v2 迭代教训:fixtures 导入重复(原 prelude 自带导入 + 生成导入叠加)与 `type` 标记丢失(verbatimModuleSyntax),v3/v4 修复。
+- typecheck 一次通过(v4);发现并导出书内直接引用的模块级状态:`temporaryRoots`、`roots`、`clients`、`databasePaths` 与尾部 helper `createFixtureSource`。
+
+### 终态
+
+- unit:68 文件 / **510 测试全绿**(与拆分前 510 完全一致,零丢失;`--maxWorkers=2`,254s)。
+- property 4/4 绿;e2e 4/4 绿;契约测试绿;typecheck 零错误;madge 零循环(35 files)。
+- 覆盖率:未运行(工具在阶段③引入);测试内容零丢失,覆盖率按构造不变,阶段③引入后复核。
