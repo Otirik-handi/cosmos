@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "generated": "2026-09-11",
+  "note": "存量超标登记，只减不增：条目只允许移除，bytes 只允许下调",
+  "files": {
+    "apps/api/src/app.controller.test.ts": 58037,
+    "apps/api/src/app.controller.ts": 71509,
+    "apps/web/src/app/page.tsx": 63657,
+    "apps/web/src/component-lab/product-fixtures.tsx": 28225,
+    "apps/web/src/component-lab/registry.tsx": 25896,
+    "apps/web/src/components/cosmos/board-view.tsx": 31352,
+    "apps/web/src/components/cosmos/story-panel.tsx": 94609,
+    "apps/worker/src/workflow-ingest.test.ts": 38271,
+    "packages/application/src/index.ts": 68937,
+    "packages/application/src/media-acquisition.ts": 29481,
+    "packages/application/src/workflow-host-runtime.test.ts": 28245,
+    "packages/application/src/workflow-host-runtime.ts": 44825,
+    "packages/application/src/workflow-ingest.ts": 29314,
+    "packages/contracts/src/index.test.ts": 36369,
+    "packages/contracts/src/index.ts": 54827,
+    "packages/storage-prisma/src/index.test.ts": 52228,
+    "packages/storage-prisma/src/index.ts": 274319,
+    "packages/storage-prisma/src/workflow-backend.ts": 32164,
+    "packages/storage-prisma/src/workflow-host-store.test.ts": 56452,
+    "packages/storage-prisma/src/workflow-host-store.ts": 95711,
+    "packages/transport-http/src/index.test.ts": 39598,
+    "packages/transport-http/src/index.ts": 42368,
+    "packages/worker-admin/src/index.ts": 38914,
+    "plugins/collectors/src/index.ts": 25979
+  }
+}
