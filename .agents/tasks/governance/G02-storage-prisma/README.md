@@ -16,7 +16,7 @@
 
 ## Current State
 
-提案 accepted(2026-09-11);文档治理门禁已上线;代码基线未建(本 Task 前置步骤)。
+提案 accepted(2026-09-11);文档治理门禁已上线;**切片 1 与 1b 已完成**(2026-09-11):前置基线就绪、入口契约测试绿、三配置全绿(细节见 `walkthrough.md`);下一片:切片 2(测试按行为拆)。发现并处置的偏差:master 上存在 Task 23 遗留测试债与 Windows 本地并行争用,已对齐修复并记录。
 
 ## Decisions and Deviations
 
@@ -28,7 +28,7 @@
 
 | # | 切片 | 验收(≤3 条/片) | 状态 |
 |---|---|---|---|
-| 1 | 前置:worktree + 依赖 + 基线(代码类 --write-baseline)+ 入口契约测试(断言 index.ts 导出符号集合)+ 基线记录(大小/行数/导出清单/三配置测试/构建字节数) | 契约测试绿;vitest 三配置全绿;基线入库 | todo |
+| 1 | 前置:worktree + 依赖 + 基线(代码类 --write-baseline)+ 入口契约测试(断言 index.ts 导出符号集合)+ 基线记录(大小/行数/导出清单/三配置测试/构建字节数) | 契约测试绿;vitest 三配置全绿;基线入库 | done(2026-09-11,含 1b 测试债对齐) |
 | 2 | 测试按行为拆:`index.test.ts`(51 KB)、`workflow-host-store.test.ts`(55 KB)按 describe 拆到对应目录 | 单文件 ≤30 KB;覆盖率不降;三配置全绿 | todo |
 | 3 | 单体按聚合拆:workflow-host-store.ts → `workflow-host-store/` 按聚合分册(门面 re-export) | 导出零 diff;门禁过;循环依赖零新增 | todo |
 | 4 | 单体按聚合拆:index.ts → storage-roots / workflow-host-store/ / value-store / blob-store / event-sink / state-store 等分册,门面 ≤100 行 | 门面 ≤100 行;导出零 diff;三配置全绿 | todo |
