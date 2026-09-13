@@ -108,3 +108,47 @@
 - 全量 unit:`71 passed (71)` 文件 / `510 passed (510)` 测试,269.46s(文件数 68→71 为拆分结果,用例总数不变)。
 - property:3 文件 / 4 测试绿,4.91s。e2e:4 文件 / 4 测试绿,32.25s(`BUN_BINARY` 指向真实 bun.exe)。
 - 体积门禁:`PASS`(扫描 224 文件、基线 20 条、豁免 1 条)。4 个新文件均 8.3~19.8 KB、远低于 800 行/50 KB 红线。
+
+## 2026-09-13 切片 3+4(实现按资源拆,方案 B:继承链)
+
+### 前置实测:NestJS 能否路由扫描继承方法
+
+方案 B 的全部前提。临时 spike 定义三层继承的 `@Controller` 类(leaf extends middle extends base),用 `MetadataScanner.getAllMethodNames` 枚举——**三级路由全被扫到**,顺序为子类→父类。结论:Nest 的扫描器走原型链,方案 B 成立。因此路由表守卫测试采用**顺序无关的集合比对**(拆分后枚举顺序必然改变)。
+
+### 新增常驻护栏:路由表零变化
+
+- `apps/api/src/app.controller.route-table.test.ts`:按 Nest 自身的扫描方式(`MetadataScanner` + `PATH/METHOD/SSE` 元数据)枚举 `AppController` 注册的路由,与入库快照 `route-snapshot-app.controller.txt` 比对 —— ① method+path 集合一致 ② handler 名集合一致 ③ 无重复 method+path。
+- **护栏口径变更**:静态脚本 `route-snapshot.py` 从单文件文本解析路由;拆分后 `app.controller.ts` 只剩门面,静态脚本不再适用每次切片复核。改为**元数据测试作为常驻护栏**(读同一份快照作期望值),静态脚本保留为基线生成工具。这条变更同时是 e2e 之外对 114 条路由的全量覆盖。
+
+### 拆分结果
+
+| 文件 | 内容 | 行数 | 大小 |
+|---|---|---|---|
+| `app.controller/internals.ts` | 12 个模块级 helper + `productRunSchema`,改为导出 | 211 | 7.7 KB |
+| `app.controller/base.ts` | 7 个注入字段 + constructor + 原 4 个 private helper(改 protected) | 92 | 3.6 KB |
+| `app.controller/sources.ts` | 27 handler:health / definitions / capabilities / sources / probes / connections / storage / backups | 406 | 13.9 KB |
+| `app.controller/runs.ts` | 12 handler:runs / workflow-runs / media-cleanups / jobs / attempts / events | 316 | 11.1 KB |
+| `app.controller/content.ts` | 33 handler:stories / entries / topics / entities / relations / evidence / subtypes / revisions / assets / feed / search | 577 | 18.5 KB |
+| `app.controller/organization.ts` | 42 handler:labels / collections / favorites / annotations / saved-views / boards / sections / blocks / spotlight | 545 | 16.8 KB |
+| `app.controller.ts`(门面) | `@Controller() export class AppController extends AppControllerOrganization {}` | 8 | 0.2 KB |
+
+- 继承链:`AppControllerBase` → `Sources` → `Runs` → `Content` → `Organization` → 门面。**25 处 `new AppController(...)` 与 `app.module.ts` 注册零改动**——门面类名与构造签名不变,这是选 B 的主要收益。
+- 方法块逐字节搬运。仅改:构造字段 `private readonly` → `protected readonly`、4 个 helper `private` → `protected`、下沉一层的相对导入上跳一级、每文件按自身用到的标识符裁剪导入(保留 `import type` 语句与具名列表里的逐项 `type ` 前缀,适配 `verbatimModuleSyntax`)。
+- 零丢失校验(归一化后类体行多重集):**缺失 0 / 多余 0**。
+
+### 偏差与修复
+
+1. 头部声明边界把类的 `@Controller()` 一并收进 `internals.ts` → `TS1206: Decorators are not valid here`;改为向前跳过类的装饰器块。
+2. 文件下沉一层后 `./source-probe.service.js` 相对路径失效;下沉文件的相对导入统一上跳一级。
+3. 守卫测试的 `@nestjs/common/constants` 深路径在类型层不可解析 → 加 `@ts-expect-error`(运行时可用;键名实测为 `path` / `method` / `__sse__`)。
+4. **原计划切片 3/4 分两步**(先 definitions/sources/connections,再其余),实际按资源一次性分成 4 组完成:分组由脚本按路由一级路径段判定,整体零丢失校验通过;分两步只会增加中间态风险。
+5. 分组与 README 初稿的「两半」不同:改为 sources / runs / content / organization 四组,原因是要按行数均衡——初版把 domains 合成一组会到 1200+ 行、直接越过 800 行红线。
+
+### 验证(全绿)
+
+- 路由表守卫:3 项通过 —— 114 条 method+path 与 handler 名集合同快照一致。
+- 全量 `bun run typecheck`:通过(packages 全部 + apps/api、worker、web)。
+- unit:`72 passed (72)` 文件 / `513 passed (513)` 测试,264.56s(较拆分前 +1 文件 +3 测试,即新增守卫)。
+- property:4 测试绿;e2e:4 文件 / 4 测试绿 —— e2e 真实启动服务且 `build:api` 先行通过,**证明继承来的 constructor 与 `@Inject` 元数据在 Nest 依赖注入下正常解析**(方案 B 最大风险点)。
+- `madge --circular`:门面链上 8 文件零循环依赖。
+- 体积门禁:`PASS`(231 文件、基线 20 条、豁免 1 条)。
