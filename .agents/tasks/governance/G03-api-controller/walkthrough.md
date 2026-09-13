@@ -214,4 +214,13 @@
 ### 合并后复核(全绿)
 
 - 路由表守卫:3 项通过;代码门禁 `PASS`(232 文件、基线 18 条、豁免 1 条);`bun run docs:check` → `failures: []`(516 文件)。
-- 全量 unit / property / e2e 在合并前于内容相同的代码树上跑过(unit 72/513、property 4、e2e 4 真实启服务),未在合并后重复;浏览器验收(browser e2e)本地未跑,由 CI 的 `browser-e2e` 作业覆盖。
+- 全量 unit / property / e2e 在合并前于内容相同的代码树上跑过(unit 72/513、property 4、e2e 4 真实启服务)。
+- **浏览器验收(2026-09-14 本地补跑)**:`bun run test:browser` → **17 passed (41.3s)**,含 `ingest` / `media-policy` / `offline` / `phase2-organization`(标签、视图、证据、Story 拆分、子类型、Topic/Entity/收藏/集合/批注)/ `theme`。G03 改的是 HTTP 接口层,这一类别此前完全没跑过,现已补上。
+
+### 环境发现:CI 未在运行(2026-09-14)
+
+`gh run list` 显示**最近一次 CI 运行是 2026-09-09**,G01/G02/G03 的全部提交与 2026-09-13/14 的推送都没有触发运行(`gh run list --commit <sha>` 为空);而 `gh workflow list` 显示 CI workflow 状态为 `active`。因此此前"浏览器验收由 CI 的 `browser-e2e` 作业覆盖"的表述**不成立**——本次改为本地补跑(见上)。需维护者检查仓库的 Actions 设置与额度。
+
+### 环境偏差:Prisma 生成产物被 `bun install` 冲掉(本次复现)
+
+在主工作区跑 `bun install` 后,`bun run build:storage` 报数百条 `Module '"@prisma/client"' has no exported member 'PrismaClient'`——即切片 1 记录过的同一坑(改依赖后必须重跑 `bun run db:generate`)。重跑 `db:generate` 后构建通过。此前该注意事项只记为"改依赖后"需重跑,本次确认**在任何工作区执行依赖安装后都必须重跑**,否则该工作区的构建与浏览器验收无法启动。
