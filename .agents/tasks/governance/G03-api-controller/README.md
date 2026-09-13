@@ -53,7 +53,7 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 1. **UI 对象的 V 测不出来,不能当 0 用。** `page.tsx` / `story-panel.tsx` / `board-view.tsx` 的单元覆盖率为 0,是因为它们是 React 组件、由 Playwright 浏览器用例覆盖(`e2e/browser/`、component-lab),而覆盖数据源只跑单元配置。把它们按 V=0 处理会让「未测」的假信号把它们顶到榜首。
 2. **公式在 V+R=0 处除零。** 提案写「低分触发'先补测试'前置,不降优先级」,但 V 在分母——V=0 且 R=0 时 P 未定义。本轮按 `V+R` 下限 1 计算并标注退化。
 
-**裁定**:维护者 2026-09-13 决定「继续治理 `app.controller.ts`」,即采用「V 可测对象中居首」的读法;上述两条转为提案维护项,不阻塞本 Task。**已处理(2026-09-14)**:两条口径已并入提案 [`code-size-governance-v1.md`](../../../../docs/proposals/code-size-governance-v1.md) §4.2 并记档于其 §8——分母改为 `max(V + R, 1)`;V 绑定单元覆盖率数据源;`V = 0` 为「补测试前置」门禁而非代入数值;V 未测者不得按 0 代入、不参与 P 排序。
+**裁定**:维护者 2026-09-13 决定「继续治理 `app.controller.ts`」,即采用「V 可测对象中居首」的读法;上述两条转为提案维护项,不阻塞本 Task。**已处理(2026-09-14)**:两条口径已并入提案 [`code-size-governance-v1.md`](../../../../docs/proposals/code-size-governance-v1.md) §4.2 并记档于其 §8——分母改为 `max(V + R, 1)`;V 绑定单元覆盖率数据源;`V = 0` 为「补测试前置」门禁而非代入数值;V 未测者不得按 0 代入、不参与 P 排序;UI 组件与 component-lab fixture 即使单元报告非零低覆盖也记未测(否则 `product-fixtures.tsx` V=2 会反超)。按修订口径回算:本对象 `app.controller.ts` P=2.96 仍居首。
 
 - 另一处口径偏差:提案 R 只计「包入口 / contracts 或 Prisma schema / 公开 DTO」,未把「HTTP 路由表」算作合同风险。`app.controller.ts` 的 114 条路由实际是公开接口;若按 +1 计,R=1、P=2.59,仍居 V 可测对象首位。
 - 复现:`python .agent/tmp/score-governance.py`(N 值)+ `python .agent/tmp/v-score.py <coverage-summary.json>`(V 与 P),均为临时脚本未入库;建议按 Follow-ups 并入 `scripts/size-governance.py`。
