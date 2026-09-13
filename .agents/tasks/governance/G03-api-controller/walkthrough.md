@@ -152,3 +152,37 @@
 - property:4 测试绿;e2e:4 文件 / 4 测试绿 —— e2e 真实启动服务且 `build:api` 先行通过,**证明继承来的 constructor 与 `@Inject` 元数据在 Nest 依赖注入下正常解析**(方案 B 最大风险点)。
 - `madge --circular`:门面链上 8 文件零循环依赖。
 - 体积门禁:`PASS`(231 文件、基线 20 条、豁免 1 条)。
+
+## 2026-09-13 切片 5(收口)
+
+### 产出
+
+- **`apps/api/MODULE.md`(3054 B ≤ 3 KB)**:职责一句话、入口与启动、路由入口契约(冻结)、子模块地图(文件→职责→token)、阅读顺序、禁区。
+- **`docs/doc-governance/repo-map.json` 重新生成**:`apps/api` 条目 `moduleDoc` 就位(3054 B)、**红线清单从 2 条清零**(原 `app.controller.ts` + `app.controller.test.ts`)、files 12→23、bytes 172,550→181,870。
+- **验收三件套对账**:
+  - 现有测试全绿:unit 72 文件 / 513 测试、property 4、e2e 4(真实启服务);
+  - 公共入口契约测试:`app.controller.route-table.test.ts` 承担本对象的入口契约(114 条路由 method+path 冻结),通过;
+  - 导出签名零 diff:`app.module.ts` 注册与 25 处 `new AppController(...)` 零改动,且全量 `bun run typecheck` 通过——签名若有任何变化,这些调用点会直接报错。
+
+### 指标回写(口径:`size-governance.py` 的 token 估算 = ascii/4 + nonAscii/3 × 1.1,可复现)
+
+场景:改单个资源的接口行为(以 sources / runs 为例),需读「源码 + 对应测试」。
+
+| | 文件 | token |
+|---|---|---|
+| 拆前(`4a29060`) | `app.controller.ts` 17,922 + `app.controller.test.ts` 14,532 | **32,454** |
+| 拆后(sources) | MODULE.md ≈ 800 + `sources.ts` 3,564 + `app.controller.sources.test.ts` 3,307 + `base.ts` 930 | **约 8.6k** |
+| 拆后(runs) | MODULE.md ≈ 800 + `runs.ts` 2,959 + `app.controller.runs.test.ts` 2,114 + `base.ts` 930 | **约 6.8k** |
+
+降幅约 **73%**;单文件上限从 2093 行降到 577 行(max),门面 8 行。
+
+### 偏差与修复
+
+1. `apps/api/MODULE.md` 首版 3081 B,超 3 KB 硬上限 9 字节;裁剪两处措辞后 3054 B。
+2. `repo-map.json` 由脚本在 Windows 上写出为 CRLF,与仓库 LF 不一致(485 处 `\r`);按字节替换 `\r\n`→`\n` 后提交。
+
+### 验证
+
+- 代码门禁 `-c code tests --check --baseline docs/doc-governance/code-baseline.json` → `PASS`(231 文件、基线 20 条、豁免 1 条)。
+- `bun run docs:check` → `failures: []`(504 文件)。
+- repo-map 与 MODULE.md 一致:`moduleDoc: apps/api/MODULE.md` / `moduleDocBytes: 3054`。
