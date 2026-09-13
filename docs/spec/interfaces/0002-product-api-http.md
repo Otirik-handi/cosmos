@@ -467,14 +467,14 @@ Repository、catalog、SSE polling 或 Blob 读取异常上抛到全局 filter�
 
 ## 实现与测试锚点
 
-- 全部路由、投影、SSE poll/keepalive/replay：[`apps/api/src/app.controller.ts`](../../../apps/api/src/app.controller.ts)。
+- 全部路由、投影、SSE poll/keepalive/replay：[`apps/api/src/app.controller.ts`](../../../apps/api/src/app.controller.ts) 门面与 [`apps/api/src/app.controller/`](../../../apps/api/src/app.controller) 下的资源分册（继承链）。
 - Source catalog 校验：[`apps/api/src/source-probe.service.ts`](../../../apps/api/src/source-probe.service.ts)。
 - Nest prefix/CORS/filter 安装：[`apps/api/src/main.ts`](../../../apps/api/src/main.ts)。
 - Product DTO schemas：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts) 与 [`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)。
 - Catalog manifest port/builtin entries：[`packages/application/src/catalog.ts`](../../../packages/application/src/catalog.ts)。
 - Workflow enqueue and `cosmos.ingest@1` snapshot：[`packages/application/src/workflow-control.ts`](../../../packages/application/src/workflow-control.ts)。
 - Domain query/projection/event sequence：[`packages/storage-prisma/src/index.ts`](../../../packages/storage-prisma/src/index.ts)。
-- SSE snapshot fallback、probe queue、Run mapping、Attempt projection：[`apps/api/src/app.controller.test.ts`](../../../apps/api/src/app.controller.test.ts)。
+- SSE snapshot fallback、probe queue、Run mapping、Attempt projection：[`apps/api/src/app.controller.runs.test.ts`](../../../apps/api/src/app.controller.runs.test.ts)、[`apps/api/src/app.controller.sources.test.ts`](../../../apps/api/src/app.controller.sources.test.ts)。
 
 ## 非目标/边界
 

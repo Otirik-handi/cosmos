@@ -3,8 +3,6 @@
   "generated": "2026-09-11",
   "note": "存量超标登记，只减不增：条目只允许移除，bytes 只允许下调",
   "files": {
-    "apps/api/src/app.controller.test.ts": 58037,
-    "apps/api/src/app.controller.ts": 71509,
     "apps/web/src/app/page.tsx": 63657,
     "apps/web/src/component-lab/product-fixtures.tsx": 28225,
     "apps/web/src/component-lab/registry.tsx": 25896,

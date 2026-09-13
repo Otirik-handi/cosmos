@@ -186,3 +186,32 @@
 - 代码门禁 `-c code tests --check --baseline docs/doc-governance/code-baseline.json` → `PASS`(231 文件、基线 20 条、豁免 1 条)。
 - `bun run docs:check` → `failures: []`(504 文件)。
 - repo-map 与 MODULE.md 一致:`moduleDoc: apps/api/MODULE.md` / `moduleDocBytes: 3054`。
+
+## 2026-09-14 验收、合并与收尾
+
+### 合并
+
+- 维护者验收通过。分支 `refactor/g03-api-controller` rebase 到 master(`254ec92`)后**快进合并**;rebase 前后代码内容**逐字节零变化**(对 `apps`、`vitest.config.ts`、`package.json`、`bun.lock`、`repo-map.json` 的 `git diff` 为空),故切片 1~5 的验证结论对合并结果继续有效。
+- master 已推送;G03 worktree 与本地分支已清理,远端从未创建该分支。清理时 Windows 再次留下 0 文件的 `node_modules` 目录骨架,用 `rmdir /s /q` 在确认目标内清除(同 G02)。
+
+### 收尾修正:被拆分移动的文档锚点
+
+切片 2 删除了 `apps/api/src/app.controller.test.ts`,导致 **4 份 `docs/spec/` 的相对链接断链**,另有 **8 处 `docs/testing/README.md` 的行内引用**指向该文件(行内引用不是链接,文档门禁不报)。已全部改为对应的 G03 资源分册:
+
+- `docs/spec/application/0004-manifest-catalog.md` → `app.controller/sources.ts` + `app.controller.sources.test.ts`;
+- `docs/spec/interfaces/0001-product-api-runtime.md` → `app.controller/sources.ts` + `app.controller.runs.test.ts` + `app.controller.sources.test.ts`;
+- `docs/spec/interfaces/0002-product-api-http.md` → 门面 + `app.controller/` 分册目录 + 两个测试分册;
+- `docs/spec/interfaces/0003-api-observability.md` → `app.controller.runs.test.ts` + `request-logging.test.ts`;
+- `docs/testing/README.md` 8 处按资源归属分别指向 `story-domain` / `user-organization` / `runs` 三个测试分册。
+- 体积基线 `code-baseline.json` 移除两个条目(`app.controller.test.ts` 已不存在、`app.controller.ts` 已回健康区),**20 → 18 条**,门禁 PASS。
+
+### 验证缺口(方法论教训)
+
+上述 4 条断链直到**合并进 master 后**才暴露。原因:切片 2/3 期间我在**主工作区**跑 `docs:check`,而拆分发生在**分支工作区**——旧文件在主工作区仍然存在,主工作区的链接校验因此是绿的;分支工作区没跑过文档门禁。
+
+**教训:文档链接校验必须在改动所在的工作区执行**;跨 worktree 的工作里"在主工作区跑文档检查"会给出假绿灯。建议同步进 `AGENTS.md` 的验证小节。
+
+### 合并后复核(全绿)
+
+- 路由表守卫:3 项通过;代码门禁 `PASS`(232 文件、基线 18 条、豁免 1 条);`bun run docs:check` → `failures: []`(516 文件)。
+- 全量 unit / property / e2e 在合并前于内容相同的代码树上跑过(unit 72/513、property 4、e2e 4 真实启服务),未在合并后重复;浏览器验收(browser e2e)本地未跑,由 CI 的 `browser-e2e` 作业覆盖。

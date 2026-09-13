@@ -187,8 +187,8 @@ TypeScript 的 `readonly` 不构成运行时不可变保证。由于没有递归
 ## 实现与测试锚点
 
 - [`packages/application/src/catalog.ts` 第 1-295 行](../../../packages/application/src/catalog.ts#L1-L295)：`StaticCatalog`、内置 manifest 和 `createBuiltinManifestCatalog` 的实现。
-- [`apps/api/src/app.controller.ts`](../../../apps/api/src/app.controller.ts)：当前 API controller 对 catalog 的读取调用。
-- [`apps/api/src/app.controller.test.ts`](../../../apps/api/src/app.controller.test.ts)：catalog 读取相关 API 场景。
+- [`apps/api/src/app.controller/sources.ts`](../../../apps/api/src/app.controller/sources.ts)：当前 API controller 对 catalog 的读取调用（capabilities / definitions 路由）。
+- [`apps/api/src/app.controller.sources.test.ts`](../../../apps/api/src/app.controller.sources.test.ts)：catalog 读取相关 API 场景。
 
 当前没有独立的 `StaticCatalog` 单元测试；现有覆盖主要来自 API controller 相关场景。
 

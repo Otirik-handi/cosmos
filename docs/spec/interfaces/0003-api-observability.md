@@ -211,7 +211,7 @@ middleware。
 - Error/DTO schema：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)。
 - Sanitization、log.v1、level/filter/rotation：[`packages/logging/src/index.ts`](../../../packages/logging/src/index.ts)。
 - Logging behavior tests including redaction, truncation, level filtering and fallback：[`packages/logging/src/index.test.ts`](../../../packages/logging/src/index.test.ts)。
-- Controller/SSE error paths and request id bridge are exercised by the API behavior test and smoke script: [`apps/api/src/app.controller.test.ts`](../../../apps/api/src/app.controller.test.ts)、[`scripts/smoke-node.ps1`](../../../scripts/smoke-node.ps1)。
+- Controller/SSE error paths and request id bridge are exercised by the API behavior tests and smoke script: [`apps/api/src/app.controller.runs.test.ts`](../../../apps/api/src/app.controller.runs.test.ts)、[`apps/api/src/request-logging.test.ts`](../../../apps/api/src/request-logging.test.ts)、[`scripts/smoke-node.ps1`](../../../scripts/smoke-node.ps1)。
 
 ## 非目标/边界
 

@@ -152,9 +152,9 @@ API 默认绑定 `127.0.0.1:4310`，适合本地/loopback 使用。改变 host �
 
 - 启动、prefix、CORS、探针、信号关闭：[`apps/api/src/main.ts`](../../../apps/api/src/main.ts)。
 - Nest provider 组合：[`apps/api/src/app.module.ts`](../../../apps/api/src/app.module.ts)。
-- health Product DTO：[`apps/api/src/app.controller.ts`](../../../apps/api/src/app.controller.ts)、[`packages/application/src/index.ts`](../../../packages/application/src/index.ts)。
+- health Product DTO：[`apps/api/src/app.controller/sources.ts`](../../../apps/api/src/app.controller/sources.ts)、[`packages/application/src/index.ts`](../../../packages/application/src/index.ts)。
 - repository health 与 Worker heartbeat 投影：[`packages/storage-prisma/src/index.ts`](../../../packages/storage-prisma/src/index.ts)。
-- API Controller 行为测试（SSE、probe、run projection）：[`apps/api/src/app.controller.test.ts`](../../../apps/api/src/app.controller.test.ts)。
+- API Controller 行为测试（SSE、probe、run projection）：[`apps/api/src/app.controller.runs.test.ts`](../../../apps/api/src/app.controller.runs.test.ts)、[`apps/api/src/app.controller.sources.test.ts`](../../../apps/api/src/app.controller.sources.test.ts)。
 - 相关共享字段与 Zod schema：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)。
 
 ## 非目标/边界
