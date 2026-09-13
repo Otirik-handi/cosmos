@@ -78,3 +78,33 @@
   2. `V + R = 0` 时 `P = N/(V+R)` 除零;本轮按 `V+R` 下限 1 计算并标注退化。提案只说「低分触发先补测试前置,不降优先级」,未定义数值口径。
 - 结论:V 可测对象中 `app.controller.ts` 仍居首(P=2.96);若维护者按「未测即最优先」判定 UI 对象,首选应改为 `page.tsx`。
 - 工具:`.agent/tmp/v-score.py`(读 coverage-summary.json,输出 V 与 P),临时脚本未入库;`.agent/tmp/score-governance.py` 出 N 值。建议按 README Follow-ups 并入 `scripts/size-governance.py`。
+
+## 2026-09-13 切片 2(测试按行为拆)
+
+### 拆分
+
+`apps/api/src/app.controller.test.ts`(56.7 KB / 1519 行 / 13 个 describe / 42 用例)→ 4 个同级文件,按资源分组:
+
+| 文件 | 含 describe | 原行数 | 输出 |
+|---|---|---|---|
+| `app.controller.runs.test.ts` | workflow conflicts、media cleanup(ADR-0015)、SSE、WorkflowRun projection | 227 | 8.3 KB |
+| `app.controller.sources.test.ts` | source run gating、source media policy projection、source probe、source config probes | 349 | 12.9 KB |
+| `app.controller.story-domain.test.ts` | story orchestration、topic orchestration、entity orchestration、entry↔story evidence | 540 | 19.3 KB |
+| `app.controller.user-organization.test.ts` | user organization orchestration | 362 | 17.0 KB |
+
+- 方式:按 describe 块**逐字节移动**,不重写用例;每文件只保留自己用到的导入(`noUnusedLocals` 未开,但按干净代码裁剪)。
+- **零丢失校验**(`.agent/tmp/split-controller-tests.py`):原文件非头部、非空行的**行多重集** vs 新文件正文行多重集 → 缺失 0、多余 0。
+- **偏差**:README 切片 2 原写「拆到 `app.controller/` 下」,实际改为**同级平铺**文件——与既有 `app.controller.run-control.test.ts`、`app.controller.connection.test.ts` 一致,且避免改动 `./app.controller.js` 的相对导入路径。
+
+### 偏差与修复(首版脚本缺陷)
+
+首版脚本的导入解析同时从头部抓到了 `AppController` 又无条件追加一次,4 个文件都出现重复导入。**单跑 4 文件仍 42 用例全绿**(esbuild 不做类型检查),是 `bun run --cwd apps/api typecheck` 报 `TS2300: Duplicate identifier 'AppController'` 才暴露。处置:`git checkout HEAD --` 还原原文件、删掉误产物、修脚本(导入解析跳过 `./app.controller.js`,由追加逻辑统一负责)后重跑。
+
+### 验证
+
+- 4 个新文件:`42 tests passed`(与拆分前用例数一致)。
+- `bun run --cwd apps/api typecheck`:通过(无 error)。
+- 路由表快照复核:sha256 仍为 `8d134026…435193`,零变化。
+- 全量 unit:`71 passed (71)` 文件 / `510 passed (510)` 测试,269.46s(文件数 68→71 为拆分结果,用例总数不变)。
+- property:3 文件 / 4 测试绿,4.91s。e2e:4 文件 / 4 测试绿,32.25s(`BUN_BINARY` 指向真实 bun.exe)。
+- 体积门禁:`PASS`(扫描 224 文件、基线 20 条、豁免 1 条)。4 个新文件均 8.3~19.8 KB、远低于 800 行/50 KB 红线。
