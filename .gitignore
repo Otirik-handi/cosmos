@@ -11,6 +11,7 @@ test-results/
 # Local runtime data
 .cosmos/
 .agent/
+.zcode/
 /.local/*
 !/.local/README.md
 var/
