@@ -14,7 +14,7 @@ tokens_est: 4442
   `@notnotype/nb-workflow@0.2.0` Durable Host、manifest-only Product API catalog 和
   direct Worker Admin loopback host 已存在并有源码/测试锚点。
 - 保留完整 parity、跨进程 recovery、Docker/browser/真实来源、Gateway/Redis/多主机和
-  独立 Migrator 的未实现或未验证边界；实现规格统一从 [`../spec/README.md`](../spec/README.md) 进入。
+  独立 Migrator 的未实现或未验证边界；实现规格统一从 [`../spec/README.md`](../../spec/README.md) 进入。
 
 ### v0.22 - 2026-08-11
 
@@ -47,8 +47,8 @@ tokens_est: 4442
   placement，保持领域写入和远程执行边界。
 - 明确 API readiness 与 Worker availability 分离，Worker 下线时已保存内容仍可
   读取。
-- 增加独立 [`docs/api/`](../api/README.md) API/DTO/场景草案和
-  [`ADR-0003`](../adr/0003-service-worker-api-boundaries.md)。
+- 增加独立 [`docs/api/`](../../api/README.md) API/DTO/场景草案和
+  [`ADR-0003`](../../adr/0003-service-worker-api-boundaries.md)。
 - 本轮仍只定义合同，不代表 Worker Admin/Gateway、远程 Secret、PostgreSQL/S3 或
   manifest-only API 已实现。
 
@@ -229,7 +229,7 @@ tokens_est: 4442
 - 用 Topic 替代 Subject，强调目的驱动、可持续且主观的内容范围。
 - 用 Workspace 替代 Feature，Artifact 继续表示版本化输出。
 - 明确 Timeline 是视图，热点是 Spotlight 决定，精华是 Board 策展角色。
-- 将详细判定规则拆分到 [`0002-information-model.md`](0002-information-model.md)。
+- 将详细判定规则拆分到 [`0002-information-model.md`](../0002-information-model.md)。
 
 ### v0.1 - 2026-08-06
 

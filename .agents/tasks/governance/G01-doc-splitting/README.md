@@ -70,3 +70,12 @@
 - 原 147 KB / 2506 行 / 22 章 → 主文档 22.4 KB(est 7179 token,保留 §19 当前决定 + §21 架构不变量)+ 7 个领域分册 `part-*.md`(14.3~21.6 KB)。
 - §20(核心边界结论与后置决定,11 KB)因主文档预算归档为 `part-18-20.md`,经索引可达;§22 变更记录归档,后续变更条目追加于主文档「变更记录(续)」(索引节已注明)。
 - 验证:22 章标题守恒、行级零丢失(新增 71 行);全仓无该文档锚点引用;门禁 PASS,基线 13 → 12。
+
+### 2026-09-13 验收补齐:切片 4 遗留的 28 条相对链接断链修复
+
+- 背景:收口后主工作区 `bun run docs:check` 报 28 条「相对链接目标不存在」,全部位于 `docs/architecture/0001-cosmos-foundation/part-*.md`。
+- 原因:切片 4 把 22 章移入子目录后,正文里原按 `docs/architecture/` 层级书写的 `../spec/…` 一类链接未同步升一级,从新目录解析成 `docs/architecture/spec/…`(不存在)。共 6 类:`../spec/` 13 条、`../proposals/` 5 条、`../adr/` 5 条、`../api/` 2 条、`../../.agents/` 1 条、同级 `0002-information-model.md` 2 条。这些目标都在 `docs/` 顶层(另有 2 条在 `docs/architecture/` 顶层),所以统一升一级即正确。
+- 修复:6 个分册(part-01-03/05-06/07-12/13-17/18-20/22,part-04 未受影响)共 28 处,只改链接深度,正文零改动;文件各增约 3 字节/处,大小门禁仍 PASS。
+- 验证:`bun run docs:check` 由 28 失败转为 0 失败(退出码 1 → 0);`git diff --check` 干净;去掉链接目标后新旧正文逐字节相同,行数与代码围栏数量守恒;`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` PASS。
+- 偏差自省:切片 4 的验收写「交叉引用与锚点全部修复」,Verification 也写了「相对链接存在性」,但当时只按「无锚点引用需修复」判定,未跑全仓 `docs:check`,导致 28 条断链随收口合入 master。结论:以全仓 `docs:check` 通过作为链接验收条件,不以「无锚点引用」代替;「锚点不存在」与「相对路径深度错」是两类检查。
+- 范围:在独立 worktree `.worktree/fix-arch-part-links`(分支 `docs/no-ref-fix-arch-part-links`,基于 origin/master 4a29060)完成;按准入决策表「拼写、断链或不改变含义的小型文档修正」不需要 Task,故沿用本记录而不新建 Task。
