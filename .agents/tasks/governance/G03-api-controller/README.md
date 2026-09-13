@@ -6,7 +6,7 @@
 
 ## Goal
 
-`apps/api/src/app.controller.ts`(69.8 KB / 2093 行,单个 `@Controller()` 类含 114 条路由、118 个方法)按资源拆为多个控制器(必要时下沉 service),**HTTP 路由表零变化**。对象含同族 4 个测试文件,合计 138.0 KB / 3930 行。
+`apps/api/src/app.controller.ts`(69.8 KB / 2093 行,单个 `@Controller()` 类含 114 条路由、118 个方法)按资源拆为多个实现文件——**方案 B:继承链拆文件 + 门面**,类仍是单个 `@Controller()`,**HTTP 路由表零变化**。对象含同族 4 个测试文件,合计 138.0 KB / 3930 行。
 
 ## Scope / Non-goals
 
@@ -60,7 +60,7 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 
 ## Current State
 
-对象已定并获维护者确认(2026-09-13):`apps/api/src/app.controller.ts`。编号按序列顺延 G03。worktree `.worktree/g03-api-controller` 与分支 `refactor/g03-api-controller`(已 rebase 至 `a47aa20`)就绪;**切片 1 完成**:typecheck 绿、unit 68/510 绿、property 3/4 绿、e2e 4/4 绿、build 通过、体积门禁 PASS、路由表快照入库、coverage 已装并回填 V(细节见 `walkthrough.md`);**切片 2 完成**(测试按行为拆为 4 个同级文件,42 用例、三配置与门禁全绿);下一步切片 3:实现按资源拆(测试护栏已就位)。
+对象已定并获维护者确认(2026-09-13):`apps/api/src/app.controller.ts`。编号按序列顺延 G03。worktree `.worktree/g03-api-controller` 与分支 `refactor/g03-api-controller`(已 rebase 至 `a47aa20`)就绪;**切片 1 完成**:typecheck 绿、unit 68/510 绿、property 3/4 绿、e2e 4/4 绿、build 通过、体积门禁 PASS、路由表快照入库、coverage 已装并回填 V(细节见 `walkthrough.md`);**切片 3+4 完成**(实现按资源拆,继承链方案 B:2093 行 → 门面 8 行 + base 92 + internals 211 + 4 个资源分册 316~577 行;路由表守卫 114 条、三配置与门禁全绿);下一步切片 5:收口(`apps/api/MODULE.md` + repo-map 回写 + 指标回写)。
 
 **记录位置(维护者 2026-09-13 裁定)**:README 与路由表快照落 master(本次提交);`walkthrough.md` 随切片提交到分支 `refactor/g03-api-controller`。故 master 上本目录暂无 walkthrough,分支上暂无 README,合并后补齐。
 
@@ -68,7 +68,8 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 
 - 对象含 **5 个测试文件**,不只同名的 1 个:`app.controller.run-control.test.ts`、`app.controller.connection.test.ts`、`source-lifecycle.test.ts` 也 import `AppController`,拆分时同步处理。
 - 拆分顺序按提案固定序:本对象是单体而非桶文件,桶文件步骤跳过 → 测试按行为拆 → 实现按资源拆。
-- 路由表零变化用「method + path + handler 清单快照 diff」看守,不靠人工核对。快照 `route-snapshot-app.controller.txt`(114 条,sha256 `8d13402622819a9b413bc60939e7c0194cf924ebfa62171e699b001a1b435193`)由 `.agent/tmp/route-snapshot.py` 生成;每切片重跑同一脚本并 diff,差异非空即回退。
+- 路由表零变化用「method + path + handler 清单快照 diff」看守,不靠人工核对。快照 `route-snapshot-app.controller.txt`(114 条,sha256 `8d13402622819a9b413bc60939e7c0194cf924ebfa62171e699b001a1b435193`)由 `.agent/tmp/route-snapshot.py` 生成;**切片 3+4 后护栏切换**:常驻护栏改为 `apps/api/src/app.controller.route-table.test.ts`——按 Nest 元数据枚举 `AppController` 并与该快照比对(顺序无关),e2e 之外对 114 条路由全量覆盖;静态脚本保留为基线生成工具(拆分后门面文件已无路由文本可解析)。
+- 拆分方案选 **B(继承链拆文件)**,维护者 2026-09-13 裁定「先做 B」。前置实测 Nest `MetadataScanner` 走原型链可扫到父类路由,e2e 真实启动服务验证继承构造函数与 `@Inject` 元数据在依赖注入下正常解析;代价是仍为单类,收益是 `app.module.ts` 与 25 处 `new AppController(...)` 零改动。
 
 ## Implementation Walkthrough
 
@@ -76,8 +77,7 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 |---|---|---|---|
 | 1 | 前置:worktree + 依赖 + 基线 + 路由表快照(114 条 method+path+handler)+ 安装 coverage 回填 V | 快照入库;三配置全绿;门禁过 | done(2026-09-13;unit 需带 `--testTimeout=30000` 才稳定全绿,见 walkthrough 定性;coverage 已装并回填 V,暴露两个口径问题待裁定) |
 | 2 | 测试按行为拆:`app.controller.test.ts`(1519 行 / 13 describe)按资源拆为 4 个**同级**文件(runs / sources / story-domain / user-organization) | 单文件 ≤800 行且 ≤50 KB;三配置全绿 | done(2026-09-13;42 用例与三配置全绿;实际未建 `app.controller/` 目录,理由见 walkthrough 偏差) |
-| 3 | 实现按资源拆(一):definitions / health / capabilities / sources / connections | 路由表 diff 空;e2e 全绿 | pending |
-| 4 | 实现按资源拆(二):runs / jobs / attempts / media / backups / 其余 | 路由表 diff 空;单文件落回红线内 | pending |
+| 3+4 | 实现按资源拆(方案 B,继承链):`AppControllerBase` → `sources` → `runs` → `content` → `organization` → 门面;12 个模块级 helper + schema 抽到 `internals.ts` | 路由表 diff 空;单文件落回红线内;三配置全绿 | done(2026-09-13;合并为一次完成,见 walkthrough 偏差 4;最大分册 577 行/18.5 KB,门面 8 行) |
 | 5 | 收口:`apps/api/MODULE.md`(≤3 KB)+ repo-map 回写 + 指标回写 | 验收三件套全过;walkthrough 回写 | pending |
 
 ## Verification
