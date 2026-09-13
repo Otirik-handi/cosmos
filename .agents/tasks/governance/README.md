@@ -13,4 +13,5 @@
 ## 任务索引
 
 - [`G01-doc-splitting/`](G01-doc-splitting/):文档治理落地——四个存量超标文档拆分(文档治理提案 §2 目标 3)。**已完成收口**(2026-09-11,维护者验收确认)。
-- [`G02-storage-prisma/`](G02-storage-prisma/):代码治理首对象——storage-prisma 拆分(代码治理提案 §2 目标 3)。
+- [`G02-storage-prisma/`](G02-storage-prisma/):代码治理首对象——storage-prisma 拆分(代码治理提案 §2 目标 3)。**已完成收口**(2026-09-13,维护者验收确认)。
+- [`G03-api-controller/`](G03-api-controller/):代码治理第二对象——`apps/api/src/app.controller.ts` 按资源拆分(按提案 §4.2 模型重排后居首,见该 Task README)。**编号按序列顺延 G03,报维护者确认;worktree 未建**。

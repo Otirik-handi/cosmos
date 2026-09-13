@@ -16,7 +16,7 @@
 
 ## Current State
 
-提案 accepted(2026-09-11);文档治理门禁已上线;**切片 1~5 全部完成**(2026-09-11):入口契约测试绿、三配置全绿、两个超大测试文件按行为拆分、workflow-host-store.ts 与 index.ts 均拆为继承链分册(门面 12 行)、MODULE.md + repo-map 就绪、典型任务读取量 9 万 → 约 1.1 万 token(细节见 `walkthrough.md`);待维护者验收后 push/合并。发现并处置的偏差:master 上存在 Task 23 遗留测试债与 Windows 本地并行争用,已对齐修复并记录。
+提案 accepted(2026-09-11);文档治理门禁已上线;**切片 1~5 全部完成**(2026-09-11):入口契约测试绿、三配置全绿、两个超大测试文件按行为拆分、workflow-host-store.ts 与 index.ts 均拆为继承链分册(门面 12 行)、MODULE.md + repo-map 就绪、典型任务读取量 9 万 → 约 1.1 万 token(细节见 `walkthrough.md`);**维护者 2026-09-13 验收确认,正式收口**,代码已在 `master` 与 `origin/master`(`4a29060`)。发现并处置的偏差:master 上存在 Task 23 遗留测试债与 Windows 本地并行争用,已对齐修复并记录。
 
 ## Decisions and Deviations
 
@@ -40,4 +40,4 @@
 
 ## Follow-ups
 
-application/contracts/transport-http 桶文件治理(评分表后续对象);eslint 门禁(阶段②);repo-map CI 校验接入。
+application/contracts/transport-http 桶文件治理(评分表后续对象);eslint 门禁(阶段②);repo-map CI 校验接入;代码大小门禁接入 CI(2026-09-13 复核发现 `.github/workflows/ci.yml` 只跑文档门禁,`-c code tests --check --baseline docs/doc-governance/code-baseline.json` 未接线;且脚本只校验 KB/token 双轨,行数、入口 300 行、函数 100 行、复杂度 15 四条阈值当前无工具执行);`.worktree/g02-storage-prisma` 清理(待维护者授权)。

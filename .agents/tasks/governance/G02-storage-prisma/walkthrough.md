@@ -118,3 +118,12 @@
 - 拆前:`index.ts` 267.9 KB ≈ 68.6k token + 对应测试分册(约 13.6k)≈ **8.2 万~9 万 token**(提案记 9 万)。
 - 拆后(以媒体重试为例):MODULE.md 741 + `repository/media.ts` 5,529 + `media-retry.test.ts` 4,403 ≈ **1.07 万 token**(helper 若在 helpers-1 再 +982,约 1.17 万)——**≤1.5 万达成,降幅约 87%**。
 - `repo-map.json`:storage-prisma 入口 700 B / 12 行 zone=ok,红线清单清零;MODULE.md 2940 B ≤ 3 KB。
+
+## 2026-09-13 正式收口
+
+- 维护者确认 G02 正式收口;切片 1~5 的代码已在 `master` 与 `origin/master`(`4a29060`)。`.worktree/g02-storage-prisma` 尚未清理,删除需维护者授权。
+- 收口复核(只读,2026-09-13):
+  - `python scripts/size-governance.py -c code tests --check --baseline docs/doc-governance/code-baseline.json` → **PASS**(基线 20 条,豁免 1 条)。注意该命令必须显式带 `--baseline`,否则脚本直接报错;G02 切片记录里的 `--check` PASS 均带基线参数。
+  - `packages/storage-prisma/src/index.ts` 700 B / 12 行,红线清单清零,与切片 4 记录一致。
+  - 6 条基线条目已回健康区、可移除:`apps/web/src/component-lab/product-fixtures.tsx`、`registry.tsx`、`packages/application/src/media-acquisition.ts`、`workflow-host-runtime.test.ts`、`workflow-ingest.ts`、`plugins/collectors/src/index.ts`(脚本提示口径为 30 KB 警戒线;其中 media-acquisition/workflow-ingest 等仍超 800 行红线,是否移出基线取决于按字节还是按行判定,留待维护者裁决)。
+- 复核发现的残留缺口(并入 README Follow-ups):`.github/workflows/ci.yml` 只接线文档门禁(`-c docs --check`),代码门禁未接线;`size-governance.py --check` 只判定 KB/token 双轨,提案 §4.1 的行数(800)、入口(300)、函数(100)、复杂度(15)四条阈值当前无工具执行(依赖阶段② typescript-eslint)。
