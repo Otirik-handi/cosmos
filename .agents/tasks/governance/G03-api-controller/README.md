@@ -60,7 +60,7 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 
 ## Current State
 
-对象已定并获维护者确认(2026-09-13):`apps/api/src/app.controller.ts`。编号按序列顺延 G03。worktree `.worktree/g03-api-controller` 与分支 `refactor/g03-api-controller`(已 rebase 至 `a47aa20`)就绪;**切片 1 完成**:typecheck 绿、unit 68/510 绿、property 3/4 绿、e2e 4/4 绿、build 通过、体积门禁 PASS、路由表快照入库、coverage 已装并回填 V(细节见 `walkthrough.md`);**切片 3+4 完成**(实现按资源拆,继承链方案 B:2093 行 → 门面 8 行 + base 92 + internals 211 + 4 个资源分册 316~577 行;路由表守卫 114 条、三配置与门禁全绿);下一步切片 5:收口(`apps/api/MODULE.md` + repo-map 回写 + 指标回写)。
+对象已定并获维护者确认(2026-09-13):`apps/api/src/app.controller.ts`。编号按序列顺延 G03。worktree `.worktree/g03-api-controller` 与分支 `refactor/g03-api-controller`(已 rebase 至 `a47aa20`)就绪;**切片 1 完成**:typecheck 绿、unit 68/510 绿、property 3/4 绿、e2e 4/4 绿、build 通过、体积门禁 PASS、路由表快照入库、coverage 已装并回填 V(细节见 `walkthrough.md`);**切片 1~5 全部完成**(2026-09-13),验收三件套对账:现有测试全绿(unit 72/513、property 4、e2e 4 真实启服务)+ 入口契约测试通过(`app.controller.route-table.test.ts` 冻结 114 条路由)+ 导出签名零 diff(`app.module.ts` 与 25 处实例化零改动且全量 typecheck 通过)。**待维护者验收后**决定分支合并与 worktree 清理(分支 `refactor/g03-api-controller` 目前只在本地,尚未推送)。
 
 **记录位置(维护者 2026-09-13 裁定)**:README 与路由表快照落 master(本次提交);`walkthrough.md` 随切片提交到分支 `refactor/g03-api-controller`。故 master 上本目录暂无 walkthrough,分支上暂无 README,合并后补齐。
 
@@ -78,7 +78,7 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 | 1 | 前置:worktree + 依赖 + 基线 + 路由表快照(114 条 method+path+handler)+ 安装 coverage 回填 V | 快照入库;三配置全绿;门禁过 | done(2026-09-13;unit 需带 `--testTimeout=30000` 才稳定全绿,见 walkthrough 定性;coverage 已装并回填 V,暴露两个口径问题待裁定) |
 | 2 | 测试按行为拆:`app.controller.test.ts`(1519 行 / 13 describe)按资源拆为 4 个**同级**文件(runs / sources / story-domain / user-organization) | 单文件 ≤800 行且 ≤50 KB;三配置全绿 | done(2026-09-13;42 用例与三配置全绿;实际未建 `app.controller/` 目录,理由见 walkthrough 偏差) |
 | 3+4 | 实现按资源拆(方案 B,继承链):`AppControllerBase` → `sources` → `runs` → `content` → `organization` → 门面;12 个模块级 helper + schema 抽到 `internals.ts` | 路由表 diff 空;单文件落回红线内;三配置全绿 | done(2026-09-13;合并为一次完成,见 walkthrough 偏差 4;最大分册 577 行/18.5 KB,门面 8 行) |
-| 5 | 收口:`apps/api/MODULE.md`(≤3 KB)+ repo-map 回写 + 指标回写 | 验收三件套全过;walkthrough 回写 | pending |
+| 5 | 收口:`apps/api/MODULE.md`(≤3 KB)+ repo-map 回写 + 指标回写 | 验收三件套全过;walkthrough 回写 | done(2026-09-13;MODULE.md 3054 B;repo-map 红线清零;读取量 32,454 → 约 8.6k token,降幅约 73%) |
 
 ## Verification
 
