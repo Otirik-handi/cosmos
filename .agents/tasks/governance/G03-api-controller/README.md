@@ -48,19 +48,19 @@ V 口径:`V = round(源文件单元覆盖率 lines% / 10)`,数据源为本分支
 | 7 | `packages/application/src/index.ts` | 80.72% | 8 | 2 | 18.40 | 1.84 | |
 | 8 | `packages/contracts/src/index.ts` | 100.00% | 10 | 4 | 17.82 | 1.27 | |
 
-### 待维护者裁定的两个模型口径问题(本次 V 回填暴露)
+### 模型口径问题(维护者 2026-09-13 已裁定)
 
-1. **UI 对象的 V 测不出来,不能当 0 用。** `page.tsx` / `story-panel.tsx` / `board-view.tsx` 的单元覆盖率为 0,是因为它们是 React 组件、由 Playwright 浏览器用例覆盖(`e2e/browser/`、component-lab),而覆盖数据源只跑单元配置。把它们按 V=0 处理会让「未测」的假信号把它们顶到榜首。要么给 UI 接入浏览器侧覆盖率,要么在模型里明确「UI 对象不参与 V 排序」并记录规则。
-2. **公式在 V+R=0 处除零。** 提案写「低分触发'先补测试'前置,不降优先级」,但 V 在分母——V=0 且 R=0 时 P 未定义。本轮按 `V+R` 下限 1 计算并标注退化。建议提案补一条:V=0 视为门禁(先补测试),而非参与除法的数值。
+1. **UI 对象的 V 测不出来,不能当 0 用。** `page.tsx` / `story-panel.tsx` / `board-view.tsx` 的单元覆盖率为 0,是因为它们是 React 组件、由 Playwright 浏览器用例覆盖(`e2e/browser/`、component-lab),而覆盖数据源只跑单元配置。把它们按 V=0 处理会让「未测」的假信号把它们顶到榜首。
+2. **公式在 V+R=0 处除零。** 提案写「低分触发'先补测试'前置,不降优先级」,但 V 在分母——V=0 且 R=0 时 P 未定义。本轮按 `V+R` 下限 1 计算并标注退化。
 
-**当前处置**:G03 对象仍为 `app.controller.ts`——它是 V 可测对象中的第一,且结构缺陷明确(单类 114 路由)、有既有测试护栏(单元 74.55% + e2e 全绿)、拆分模式已在提案 §4.4 写明。若维护者按「未测即最优先」判定 UI 对象,则首选应改为 `page.tsx`,需先裁定上述第 1 条。
+**裁定**:维护者 2026-09-13 决定「继续治理 `app.controller.ts`」,即采用「V 可测对象中居首」的读法;上述两条转为提案维护项(需给 UI 接入浏览器侧覆盖率、或明确 UI 对象不参与 V 排序;公式需定义 V=0 的数值口径),不阻塞本 Task。
 
 - 另一处口径偏差:提案 R 只计「包入口 / contracts 或 Prisma schema / 公开 DTO」,未把「HTTP 路由表」算作合同风险。`app.controller.ts` 的 114 条路由实际是公开接口;若按 +1 计,R=1、P=2.59,仍居 V 可测对象首位。
 - 复现:`python .agent/tmp/score-governance.py`(N 值)+ `python .agent/tmp/v-score.py <coverage-summary.json>`(V 与 P),均为临时脚本未入库;建议按 Follow-ups 并入 `scripts/size-governance.py`。
 
 ## Current State
 
-对象已定(2026-09-13);编号按序列顺延 G03,维护者已确认。worktree `.worktree/g03-api-controller` 与分支 `refactor/g03-api-controller`(自 `origin/master` `4a29060`)已创建;**切片 1 完成**:typecheck 绿、unit 68/510 绿、property 3/4 绿、e2e 4/4 绿、build 通过、体积门禁 PASS、路由表快照入库、coverage 已装并回填 V(细节见 `walkthrough.md`)。**待维护者裁定**:上节两个模型口径问题(UI 对象 V 测不出、V+R=0 除零);裁定前切片 2 不启动。
+对象已定并获维护者确认(2026-09-13):`apps/api/src/app.controller.ts`。编号按序列顺延 G03。worktree `.worktree/g03-api-controller` 与分支 `refactor/g03-api-controller`(已 rebase 至 `a47aa20`)就绪;**切片 1 完成**:typecheck 绿、unit 68/510 绿、property 3/4 绿、e2e 4/4 绿、build 通过、体积门禁 PASS、路由表快照入库、coverage 已装并回填 V(细节见 `walkthrough.md`);**切片 2 进行中**(测试按行为拆)。
 
 **记录位置(维护者 2026-09-13 裁定)**:README 与路由表快照落 master(本次提交);`walkthrough.md` 随切片提交到分支 `refactor/g03-api-controller`。故 master 上本目录暂无 walkthrough,分支上暂无 README,合并后补齐。
 
