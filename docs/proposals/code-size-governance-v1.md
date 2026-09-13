@@ -63,14 +63,22 @@
 ### 4.2 优先级评分模型(全部可自动采集)
 
 ```
-P = (T + L + H + D) / (V + R)
+P = (T + L + H + D) / max(V + R, 1)
   T = token 成本分(全量读入 token/7.5k,上限 10)   L = 规模分(行数/700,上限 10)
   H = 变更热度分(近30天提交/2.5,上限 10)          D = 被耦合分(被 import 次数/4,上限 10)
-  V = 测试覆盖分(0~10;低分触发"先补测试"前置,不降优先级)
-  R = 合同风险分(包入口 +2 / 牵连 contracts 或 Prisma schema +1 / 公开 DTO +1)
+  V = 测试覆盖分(0~10;口径与缺失处置见下)          R = 合同风险分(包入口 +2 / 牵连 contracts 或 Prisma schema +1 / 公开 DTO +1)
 ```
 
-实测初排 Top 6:storage-prisma/index.ts > app.controller.ts(+test)> page.tsx > application/index.ts > contracts/index.ts(+test)> workflow-host-store.ts(+test)。
+**V 的口径与缺失处置**(2026-09-14 补充,依据 G03 实测):
+
+- **数据源即口径**:`V = round(对象单元覆盖率 lines% / 10)`,数据源为 `@vitest/coverage-v8` 的 unit 配置输出(已于 G03 切片 1 落地)。换数据源即换口径,必须在排名记录里写明。
+- **分母下限**:`max(V + R, 1)`,消除 `V = 0` 且 `R = 0` 时公式除零。
+- **`V = 0` 是门禁,不是数值**:在数据源口径下确有覆盖数据且为 0 的对象,进入**补测试前置**——先补行为测试、只锁当前行为,再测 V 参与排序,不得直接开工拆分。这与原文「低分触发"先补测试"前置,不降优先级」一致。
+- **`V` 未测 ≠ `V = 0`**:当对象的执行路径不由该数据源覆盖(典型:React 组件由 Playwright 浏览器用例覆盖,单元口径测不到),`V` 记为**未测**,**不得按 0 代入公式**。未测对象不参与 `P` 排序,单独按 `N = T + L + H + D` 排序并标注「V 未测」,由维护者决定是否先接入对应覆盖口径。
+- **为什么需要这条**:G03 重排时 `page.tsx`、`story-panel.tsx`、`board-view.tsx` 的单元覆盖率为 0(V 未测),按 0 代入使 `V + R = 0` 且 `P` 趋于无穷,把三个 UI 对象误顶到榜首;它们的真实覆盖来自浏览器用例,不在该数据源内。
+- **可选演进**:接入浏览器侧覆盖率后,UI 对象可回填 V 并回到主排序。
+
+实测初排 Top 6(2026-09-10,按当时的 V 固定口径):storage-prisma/index.ts > app.controller.ts(+test)> page.tsx > application/index.ts > contracts/index.ts(+test)> workflow-host-store.ts(+test)。
 
 ### 4.3 拆分决策树
 
@@ -182,3 +190,4 @@ packages/storage-prisma/src/
 | 2026-09-11 | **用户修订六条并全部并入**:①行为等价底线 = 现有测试全绿 + 公共入口契约测试 + 导出签名 diff 为零;②不拆边界(≤400 行且内聚不拆、100~600 行为佳、<100 行无独立职责视为过度拆分);③拆分顺序固定为桶文件 → 测试 → 单体;④验证闭环 = tsc + vitest 三配置 + build:packages + 导出签名 diff + 循环依赖检查;⑤MODULE.md 与代码同 PR 更新、repo-map 脚本生成并 CI 校验 diff;⑥storage-prisma 验收:index.ts ≤100 行、导出零 diff、典型任务读取量 9 万 → ≤1.5 万。派生调整:madge 因进入验证闭环提前至首个治理 Task 前安装。维持 `reviewing` | 用户(评审确认)+ Agent(并入) |
 | 2026-09-11 | 用户宣布提案通过并授权实施所需权限;状态转 `accepted`。实施载体:Task 26(storage-prisma 治理,编号按序列顺延),madge 随 Task 前置安装 | 用户(评审确认) |
 | 2026-09-11 | 用户裁定:治理类任务不沿用产品 Task 编号,新增 G 系列专门编号(目录 `.agents/tasks/governance/G{NN}-{slug}`,分支引用 `{type}/g{NN}-{slug}`);原 Task 26 更名 G02;章程写入 `.agents/tasks/governance/README.md` | 用户(评审确认) |
+| 2026-09-14 | **V 口径修订并并入 §4.2**(依据 G03 重排实测):①分母改为 `max(V + R, 1)` 消除除零;②V 绑定单元覆盖率数据源,换源即换口径;③`V = 0` 为「补测试前置」门禁,不作为代入数值;④`V` 未测(如由浏览器用例覆盖的 UI 对象)不得按 0 代入,不参与 P 排序、单独按 `N = T+L+H+D` 排序并标注。起因:G03 重排中三个 UI 对象单元覆盖率为 0(V 未测),按 0 代入使其被误顶到榜首。附带事实:`@vitest/coverage-v8` 已于 G03 切片 1 落地(§4.7 阶段③部分完成) | 用户(指示处理)+ Agent(并入) |
