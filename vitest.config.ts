@@ -28,6 +28,20 @@ export default defineConfig({
         ],
         exclude: [...configDefaults.exclude, "**/*.property.test.ts"],
         environment: "node",
+        // Prisma/SQLite 用例单条 3~5s,与 vitest 默认 5s 余量过窄,并行时偶发假失败;
+        // 与 property/e2e 配置保持一致。
+        testTimeout: 60_000,
+        hookTimeout: 120_000,
+        coverage: {
+            provider: "v8",
+            include: [
+                "packages/**/src/**/*.{ts,tsx}",
+                "plugins/**/src/**/*.{ts,tsx}",
+                "apps/**/src/**/*.{ts,tsx}",
+                "scripts/**/*.ts",
+            ],
+            exclude: ["**/*.test.ts", "**/*.d.ts"],
+        },
         passWithNoTests: false,
     },
 });
