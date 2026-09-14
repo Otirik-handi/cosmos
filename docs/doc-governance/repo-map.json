@@ -16,8 +16,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 69,
-      "bytes": 1007422,
+      "files": 74,
+      "bytes": 1058269,
       "red": [],
       "warn": [
         ".agents/tasks/07-deferred-workflow-host/walkthrough.md"
@@ -150,8 +150,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 89,
-      "bytes": 519972,
+      "files": 88,
+      "bytes": 519677,
       "red": [],
       "warn": [
         "apps/web/src/components/cosmos/board-view.tsx",
@@ -186,7 +186,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 129,
-      "bytes": 1751184,
+      "bytes": 1750697,
       "red": [],
       "warn": [
         "docs/api/0002-product-service-api.md",
@@ -324,21 +324,18 @@
     },
     {
       "dir": "packages/transport-http",
-      "moduleDoc": null,
-      "moduleDocBytes": null,
+      "moduleDoc": "packages/transport-http/MODULE.md",
+      "moduleDocBytes": 3093,
       "entry": {
         "path": "packages/transport-http/src/index.ts",
-        "bytes": 42368,
-        "lines": 1269,
-        "zone": "warn"
+        "bytes": 479,
+        "lines": 11,
+        "zone": "ok"
       },
-      "files": 4,
-      "bytes": 82745,
+      "files": 19,
+      "bytes": 90333,
       "red": [],
-      "warn": [
-        "packages/transport-http/src/index.test.ts",
-        "packages/transport-http/src/index.ts"
-      ]
+      "warn": []
     },
     {
       "dir": "packages/worker-admin",
@@ -414,16 +411,6 @@
       "entry": null,
       "files": 17,
       "bytes": 102784,
-      "red": [],
-      "warn": []
-    },
-    {
-      "dir": "test-results",
-      "moduleDoc": null,
-      "moduleDocBytes": null,
-      "entry": null,
-      "files": 1,
-      "bytes": 45,
       "red": [],
       "warn": []
     },

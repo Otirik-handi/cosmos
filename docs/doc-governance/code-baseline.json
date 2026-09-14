@@ -8,8 +8,6 @@
   "apps/worker/src/workflow-ingest.test.ts": 38271,
   "packages/application/src/workflow-host-runtime.ts": 44825,
   "packages/storage-prisma/src/workflow-backend.ts": 32164,
-  "packages/transport-http/src/index.test.ts": 39598,
-  "packages/transport-http/src/index.ts": 42368,
   "packages/worker-admin/src/index.ts": 38914
  }
 }
