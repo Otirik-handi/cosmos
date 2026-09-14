@@ -30,6 +30,11 @@ import {
 import { buildStoryTimeline, type StoryTimelineEvent } from "@/lib/story-timeline";
 import type { RelatedStory } from "@/lib/related-stories";
 
+import { EvidenceSection } from "./story-panel/evidence";
+import { HistoryShellSection } from "./story-panel/history-shell";
+import { RelatedSection } from "./story-panel/related";
+import { SourceMembersSection } from "./story-panel/source-members";
+
 import {
     STORY_KIND_LABELS,
     relationTypeLabel,
@@ -678,196 +683,11 @@ export function StoryPanel({
                     </Button>
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-                    <section aria-label="来源成员" className="border-b pb-4">
-                        <h3 className="font-medium">
-                            来源成员（{story.entries.length}）
-                        </h3>
-                        {story.entries.length > 0 && (
-                            <ul className="mt-2 flex flex-col gap-1 text-sm text-muted-foreground">
-                                {story.entries.map((member) => (
-                                    <li
-                                        key={member.id}
-                                        data-story-member-id={member.id}
-                                        className="flex flex-col"
-                                    >
-                                        <span className="truncate">
-                                            {member.sourceName} ·{" "}
-                                            {member.revisions[0]?.title ?? "无标题"} ·{" "}
-                                            {member.id}
-                                        </span>
-                                        {member.relatedStories.length > 0 && (
-                                            <span
-                                                className="truncate text-xs"
-                                                data-story-member-links={member.id}
-                                            >
-                                                作为{member.relatedStories
-                                                    .map((related) => relationTypeLabel(related.relationType))
-                                                    .join("、")}
-                                                关联到：
-                                                {member.relatedStories
-                                                    .map((related) => related.title)
-                                                    .join("、")}
-                                            </span>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </section>
-                    {isShell && (
-                        <section
-                            aria-label="历史壳"
-                            className="border-b pb-4"
-                            data-story-shell="true"
-                        >
-                            <h3 className="font-medium">
-                                历史壳（后继 {story.story.replacedBy.length}）
-                            </h3>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                本条 Story 已被拆分；它的成员历史、批注与审计仍然保留在这里，但不再接受归并、改标题或再次拆分。
-                            </p>
-                            <ul className="mt-2 grid gap-2">
-                                {story.story.replacedBy.map((successor) => (
-                                    <li
-                                        key={successor.storyId}
-                                        className="flex flex-col gap-0.5 rounded-sm border bg-muted/40 px-3 py-2"
-                                    >
-                                        <button
-                                            type="button"
-                                            disabled={!onOpenRelatedStory || busy}
-                                            onClick={() => {
-                                                if (onOpenRelatedStory) {
-                                                    void onOpenRelatedStory(successor.storyId);
-                                                }
-                                            }}
-                                            className="rounded-sm text-left text-sm hover:text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
-                                            data-story-successor-id={successor.storyId}
-                                        >
-                                            {successor.title}
-                                        </button>
-                                        <span className="text-xs text-muted-foreground">
-                                            {successor.kind} · {successor.storyId}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
-                    )}
-                    <section aria-label="证据来源" className="border-b pb-4">
-                        <h3 className="font-medium">证据来源（{story.evidence.length}）</h3>
-                        {story.evidence.length === 0 ? (
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                还没有其它 Story 引用本 Story 的条目；可在下方添加一条证据或提及。
-                            </p>
-                        ) : (
-                            <ul className="mt-2 grid gap-2" data-story-evidence="true">
-                                {story.evidence.map((item) => (
-                                    <li
-                                        key={item.entryId}
-                                        data-story-evidence-entry-id={item.entryId}
-                                        className="flex flex-col gap-1 rounded-sm border bg-muted/40 px-3 py-2"
-                                    >
-                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                            <Badge variant="secondary">
-                                                {relationTypeLabel(item.relationType)}
-                                            </Badge>
-                                            <span>{item.sourceName}</span>
-                                            {item.reason && <span>· {item.reason}</span>}
-                                        </div>
-                                        <span className="truncate text-sm">
-                                            {item.title ?? item.entryId}
-                                        </span>
-                                        <span className="truncate text-xs text-muted-foreground">
-                                            {item.entryId}
-                                        </span>
-                                        {onUnlinkEntry && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="w-fit"
-                                                disabled={busy}
-                                                onClick={() => void submitUnlinkEntry(item.entryId)}
-                                            >
-                                                解除
-                                            </Button>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        {onLinkEntry && (
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <select
-                                    aria-label="选择证据条目"
-                                    value={linkEntryId}
-                                    disabled={busy}
-                                    className="max-w-xs rounded-sm border bg-card px-2 py-1 text-sm"
-                                    onChange={(event) => setLinkEntryId(event.target.value)}
-                                >
-                                    <option value="">选择条目…</option>
-                                    {entryOptions.map((option) => (
-                                        <option key={option.id} value={option.id}>
-                                            {option.sourceName} · {option.title}
-                                        </option>
-                                    ))}
-                                </select>
-                                <select
-                                    aria-label="证据关系类型"
-                                    value={linkRelationType}
-                                    disabled={busy}
-                                    className="rounded-sm border bg-card px-2 py-1 text-sm"
-                                    onChange={(event) => {
-                                        setLinkRelationType(event.target.value as EntryStoryRelationType);
-                                    }}
-                                >
-                                    <option value="evidence_for">证据</option>
-                                    <option value="mentions">提及</option>
-                                </select>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={busy || !linkEntryId}
-                                    onClick={() => void submitLinkEntry()}
-                                >
-                                    添加
-                                </Button>
-                            </div>
-                        )}
-                    </section>
+                    <SourceMembersSection story={story} title={title} relatedStories={relatedStories} />
+                    {isShell && <HistoryShellSection busy={busy} kind={kind} onOpenRelatedStory={onOpenRelatedStory} story={story} title={title} />}
+                    <EvidenceSection busy={busy} entryOptions={entryOptions} linkEntryId={linkEntryId} linkRelationType={linkRelationType} onLinkEntry={onLinkEntry} onUnlinkEntry={onUnlinkEntry} setLinkEntryId={setLinkEntryId} setLinkRelationType={setLinkRelationType} story={story} submitLinkEntry={submitLinkEntry} submitUnlinkEntry={submitUnlinkEntry} title={title} />
                     <TimelineSection events={timeline} />
-                    <section aria-label="相关内容" className="border-b pb-4">
-                        <h3 className="font-medium">相关内容（{relatedStories.length}）</h3>
-                        {relatedStories.length === 0 ? (
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                暂无相关但不同事件的 Story；给本条 Story 添加分类或关联 Entity 后会自动出现。
-                            </p>
-                        ) : (
-                            <ul className="mt-2 grid gap-2" data-story-related="true">
-                                {relatedStories.map((item) => (
-                                    <li
-                                        key={item.storyId}
-                                        className="flex flex-col gap-0.5 rounded-sm border bg-muted/40 px-3 py-2"
-                                    >
-                                        <button
-                                            type="button"
-                                            disabled={!onOpenRelatedStory || busy}
-                                            onClick={() => {
-                                                if (onOpenRelatedStory) {
-                                                    void onOpenRelatedStory(item.storyId);
-                                                }
-                                            }}
-                                            className="rounded-sm text-left text-sm hover:text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
-                                        >
-                                            {item.title}
-                                        </button>
-                                        <span className="text-xs text-muted-foreground">
-                                            {item.reason} · {item.storyId}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </section>
+                    <RelatedSection busy={busy} onOpenRelatedStory={onOpenRelatedStory} relatedStories={relatedStories} story={story} title={title} />
                     {currentWebUrl && (
                         <a
                             href={currentWebUrl}
