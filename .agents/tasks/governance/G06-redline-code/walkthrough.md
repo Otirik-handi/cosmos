@@ -67,3 +67,13 @@
 - **推送**：`ebb9ddb..df76e96` → `origin/master`（`Otirik-handi/cosmos`）；**CI 已触发**（run `34831687620`，Quality + 其它作业）。G05 踩过的 `gh` 仓库解析坑已避开（显式 `--repo Otirik-handi/cosmos`）。
 - **清理**：`git worktree remove` 注销成功但目录有残留（Windows 长路径/junction）；按仓库规则先复核——**2,555 个 junction 全部指向该 worktree 内部**（outside=0），再用 `cmd /c rmdir /s /q` 删除（不跟随 junction）。清理前后主工作区 `node_modules` 文件数均为 **50,670**，确认无损伤。本地分支 `refactor/g06-redline-code` 已删除（`-d`，已合并）。
 - **口径更正（重要）**：本任务早期汇报的「代码红线文件 3 → 0」只对**字节/token 门禁**成立。按提案 §4.1 的完整红线（源码/测试 **>800 行** 或 >50 KB 或 >15k token），仓库仍有 **10 个文件超红线**，全部是「行数越界、字节未越界」——脚本门禁不拦行数（该缺口治理索引早有记载）。清单见治理索引「待治理候选」。
+
+## 2026-09-14 收尾续：CI 结果、文档体积门禁被自己触发并修复
+
+- **CI 结果**：合并提交所在推送触发 CI（run `34831971371`）。首次 Browser E2E **失败**于 `ingest.spec.ts` 的「390px 页面级横向溢出」断言；`gh run rerun --failed` 后**四个作业全绿**（Quality / Browser E2E / Windows Node smoke / Node process E2E）。
+- **对这次失败的态度（不轻率归因）**：内容确定性（来源名固定）、断言为既有断言（`990019d` 引入）；本地两次全绿、CI 重跑通过，故判为 flake 而非回归。但该断言跨「切换视口 → 立即测量」两步、对时序敏感（轮询/刷新落在两者之间会改变布局），属**薄弱断言**。已记 Follow-up：若复发，给断言加诊断输出（打印最宽元素）而非继续重跑。同时已逐条比对原版（`ebb9ddb`）与拆分后的分区/条件，DOM 结构等价。
+- **我自己触发了文档体积门禁**：推送 G06 收尾文档后 CI 在 38 秒内失败，原因是 `size-governance.py -c docs --check --fail-on-new` 判定 **`.agents/tasks/governance/G06-redline-code/walkthrough.md`（28.90 KB / 约 9.4k token）为「新增警戒区文件」**——我在切片过程中持续追加，把 token 推过了 9000 的警戒线（字节仍低于 30 KB）。按文档治理提案「追加型文档按预算滚动归档、只切历史、分册封口后只读」，已把它拆为：
+  - `walkthrough.md`（主文档，9.1 KB）：立项、口径更正、切片 5b-2 之后、收尾与本次记录；
+  - `walkthrough/slices-2026-09-14.md`（归档分册，21.0 KB）：切片 0 → 5b-1 的过程记录，封口后只读。
+  拆分后门禁 PASS（本地复现 + CI 复跑成功），`docs:check` 603 文件 0 失败。
+- **教训**：治理任务自己也在门禁管辖内。追加型文档应在接近警戒线时就分批归档，而不是等 CI 拦下——本次是「先失败、后修复」，多花了一次 CI 往返。
