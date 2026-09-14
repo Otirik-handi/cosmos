@@ -19,6 +19,7 @@
 
 - [`G05-application/`](G05-application/):代码治理第三对象——`packages/application` 的入口与实现拆分(桶文件模块地图化 + 显式导出 → 测试按行为拆 → 单体按聚合拆;评分与选型见该 Task README)。**已完成收口**(2026-09-14,维护者验收确认;经 `refactor/g05-application` 以 `--no-ff` 合入 master `66862ff`,worktree 与分支已清理):入口 **2149 → 98 行**,导出面逐字节零 diff(147),**madge 循环依赖 3 → 0**,读取量入口 −93%,typecheck 0 / unit 75·514 / property 3·4 / e2e 4·4 / build 0 / `docs:check` 0 失败(合并后在 master 重跑)。已推送 `origin`(2026-09-14);推送触发 CI,首次 Node process E2E 因既有用例时序 flake 失败、重跑失败作业后 4 作业全绿(详见该 Task walkthrough 勘误节)。
 - [`G06-redline-code/`](G06-redline-code/):红线代码批次——`packages/contracts/src/index.ts`(桶+单体混合,走完整三步)与 `apps/web` 的 `page.tsx`、`story-panel.tsx` 两个 UI 单体(桶文件步骤不适用;验收 = 现有浏览器用例全绿 + 导出面不变)。**已完成收口**(2026-09-14,维护者授权收尾;经 `refactor/g06-redline-code` 以 `--no-ff` 合入 master `df76e96`,worktree 与分支已清理,已推送 origin):contracts 入口 **1455 → 168 行**(导出面 432 逐字节零 diff、madge 0 环)、`page.tsx` **1680 → 738 行**(6 个域 hook)、`story-panel.tsx` **1902 → 757 行**(15 个内部件);`code-baseline.json` 18 → **8 条**;合并后 master 重验 typecheck 0 / unit 81·515 / property 4 / e2e 4 / 浏览器 17 / lint 0 error / `docs:check` 600 文件 0 失败。维护者指令 3 文件同批,偏离「单 Task 一文件」SOP 已记入该 Task Decisions。
+- [`G07-transport-http/`](G07-transport-http/):代码治理第四对象——`packages/transport-http` 单体拆分(纯单体:0 处 `export *`、解析后 4 个导出,桶文件步骤跳过;顺序 = 测试按行为拆 → 单体按聚合拆)。**立项**(2026-09-14;维护者指定对象;worktree/分支待审批,未动代码)。红线内最大者:`index.ts` 1269 行 / 41.4 KB + `index.test.ts` 964 行 / 38.7 KB。
 
 ## 待治理候选(编号未分配,待维护者裁决)
 
