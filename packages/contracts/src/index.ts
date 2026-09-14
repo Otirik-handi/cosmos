@@ -1,4 +1,30 @@
-export * from "./base.js";
+export {
+    aiHotSourceConfigSchema, assetErrorCodeSchema, assetErrorCodes, bilibiliSourceConfigSchema,
+    connectionInstanceSchema, connectionStatusSchema, contentKindSchema, contentMetricsSchema,
+    createConnectionCommandSchema, createSourceCommandSchema, fixtureRssSourceConfigSchema,
+    getSourceConfigurationSchema, idempotencyKeySchema, ingestCommandSchema,
+    mediaPolicyCeilings, mediaPolicyImagesSchema, mediaRetryCeiling, mediaRetryPolicySchema,
+    protocolVersion, publisherKindSchema, publisherMetricsSchema, publisherSchema,
+    retryableAssetErrorCodes, rssSourceConfigSchema, sourceActivationCommandSchema,
+    sourceConfigSchema, sourceConfigurationSchemas, sourceConnectorIdSchema,
+    sourceDefinitionRefSchema, sourceExecutionSnapshotSchema, sourceKindSchema,
+    sourceMediaPolicySchema, sourceOperationIdSchema, sourceProbeResultSchema,
+    sourceRevisionIdSchema, sourceSnapshotSchema, sourceTestResultSchema,
+    temporalFallbackSchema, temporalPrecisionSchema, temporalValueSchema, triggerBindingSchema,
+    triggerConfigSchema, triggerIntervalSchema, triggerKindSchema,
+    updateConnectionCommandSchema, updateSourceCommandSchema, type AiHotSourceConfig,
+    type AssetErrorCode, type BilibiliSourceConfig, type ConnectionInstance,
+    type ConnectionStatus, type ContentKind, type ContentMetrics, type CreateConnectionCommand,
+    type CreateSourceCommand, type FixtureRssSourceConfig, type IngestCommand,
+    type MediaPolicyImages, type MediaRetryPolicy, type Publisher, type PublisherKind,
+    type PublisherMetrics, type RssSourceConfig, type SourceActivationCommand,
+    type SourceConfig, type SourceConnectorId, type SourceDefinitionRef,
+    type SourceExecutionSnapshot, type SourceKind, type SourceMediaPolicy,
+    type SourceOperationId, type SourceProbeResult, type SourceRevisionId, type SourceSnapshot,
+    type SourceTestResult, type TemporalFallback, type TemporalPrecision, type TemporalValue,
+    type TriggerBinding, type TriggerConfig, type TriggerKind, type UpdateConnectionCommand,
+    type UpdateSourceCommand,
+} from "./base.js";
 
 import { z } from "zod";
 import {
@@ -1452,4 +1478,22 @@ export const sseEventSchema = z.object({
     payload: z.unknown(),
 });
 export type SseEvent = z.infer<typeof sseEventSchema>;
-export * from "./action.js";
+export {
+    actionDefinitionSchema, actionDescriptorSchema, actionErrorCodeSchema,
+    actionExecutionSchema, actionKindSchema, actionManifestSchema, actionRefSchema,
+    blobRefSchema, executionPlacementSchema, ingestTriggerKindSchema, libraryIngestInputSchema,
+    libraryIngestOutputSchema, mediaRetryApplyInputSchema, mediaRetryApplyOutputSchema,
+    mediaRetryFetchInputSchema, mediaRetryFetchOutputSchema, mediaRetryOutcomeSchema,
+    mediaRetryPolicySnapshotSchema, normalizedAssetInputSchema, normalizedIngestItemSchema,
+    parseActionRef, retryPolicySchema, sourceCheckpointInputSchema,
+    sourceCheckpointOutputSchema, sourceFetchInputSchema, sourceFetchOutputSchema,
+    type ActionDefinition, type ActionDescriptor, type ActionErrorCode, type ActionExecution,
+    type ActionKind, type ActionManifest, type ActionRef, type BlobRef,
+    type ExecutionPlacement, type IngestTriggerKind, type JsonValue, type LibraryIngestInput,
+    type LibraryIngestOutput, type MediaRetryApplyInput, type MediaRetryApplyOutput,
+    type MediaRetryFetchInput, type MediaRetryFetchOutput, type MediaRetryOutcomeContract,
+    type MediaRetryPolicySnapshot, type NormalizedAssetInputContract,
+    type NormalizedIngestItemContract, type ParsedActionRef, type RetryPolicy,
+    type SourceCheckpointInput, type SourceCheckpointOutput, type SourceFetchInput,
+    type SourceFetchOutput,
+} from "./action.js";
