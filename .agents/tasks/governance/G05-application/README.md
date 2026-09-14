@@ -62,7 +62,7 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 
 每切片验证:导出面逐字节零 diff(仍 147)、全仓 typecheck 0、unit 75 文件/514 用例、property 3/4、e2e 4/4、build:packages 0、`docs:check` 0 失败。**合并后在 master 上重跑同一套验证,全部通过**(含 e2e 4/4、两份门禁 PASS、madge 0 环)。读取量:入口 17,234 → 1,243 token(−93%),改域错误类型 22,525 → 2,707(−88%),改采集入队 22,525 → 5,620(−75%)。代价:`packages/application/dist` 735 → 953 KB(+30%,模块数量带来的文件固定开销)。
 
-worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 已按仓库流程清理(清理前复核 2,529 个 junction 全部指向该目录内部,删除后主工作区 `node_modules` 文件数 50,670 未变)。**已推送**(2026-09-14):`e5d5d26..5746884` → `origin`。**推送未触发远端 CI**(最近运行仍是 2026-09-09,与 G03 记录的环境发现一致),本次验证依据为本机全套命令,不是 CI。
+worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 已按仓库流程清理(清理前复核 2,529 个 junction 全部指向该目录内部,删除后主工作区 `node_modules` 文件数 50,670 未变)。**已推送**(2026-09-14):`e5d5d26..5746884`、`5746884..df451c0` → `origin`(`Otirik-handi/cosmos`)。推送**触发了远端 CI**(运行 `34811873705`):Quality、Browser E2E、Windows Node smoke 通过,Node process E2E 因 `e2e/scheduling.e2e.test.ts` 的日志等待超时(31.8s > 30s 预算)失败;在 CI 上只重跑失败作业后 **4 个作业全部成功**,判定为既有用例的时序 flake。此前「推送未触发 CI」的结论已作废,原因为 `gh` 未指定 `--repo` 时解析到了上游仓库,详见 `walkthrough.md` 勘误节。
 
 **记录位置**:本 README 与 `walkthrough.md` 现已同在 master(分支已合并)。
 

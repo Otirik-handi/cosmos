@@ -17,7 +17,7 @@
 - [`G03-api-controller/`](G03-api-controller/):代码治理第二对象——`apps/api/src/app.controller.ts` 按资源拆分(方案 B:继承链拆文件 + 门面;评分与选型见该 Task README)。**已完成收口**(2026-09-14,维护者验收确认;代码经 `refactor/g03-api-controller` 合入 master)。
 - [`G04-doc-splitting-batch2/`](G04-doc-splitting-batch2/):文档治理第二批——原基线红线区的 4 份文档(PRD、信息模型、Task 02 README、product-dtos)。**已完成收口**(2026-09-14,维护者验收确认):四份判拆、无一走豁免(提案 §4.1 增补「红线优先」),主文档合计 271.7 KB → 50.2 KB,18 个分册全部落在健康区,基线 12 → 8 条,`docs:check` 536 文件 0 失败。
 
-- [`G05-application/`](G05-application/):代码治理第三对象——`packages/application` 的入口与实现拆分(桶文件模块地图化 + 显式导出 → 测试按行为拆 → 单体按聚合拆;评分与选型见该 Task README)。**已完成收口**(2026-09-14,维护者验收确认;经 `refactor/g05-application` 以 `--no-ff` 合入 master `66862ff`,worktree 与分支已清理):入口 **2149 → 98 行**,导出面逐字节零 diff(147),**madge 循环依赖 3 → 0**,读取量入口 −93%,typecheck 0 / unit 75·514 / property 3·4 / e2e 4·4 / build 0 / `docs:check` 0 失败(合并后在 master 重跑)。已推送 `origin`(2026-09-14;推送未触发远端 CI,详见该 Task walkthrough)。
+- [`G05-application/`](G05-application/):代码治理第三对象——`packages/application` 的入口与实现拆分(桶文件模块地图化 + 显式导出 → 测试按行为拆 → 单体按聚合拆;评分与选型见该 Task README)。**已完成收口**(2026-09-14,维护者验收确认;经 `refactor/g05-application` 以 `--no-ff` 合入 master `66862ff`,worktree 与分支已清理):入口 **2149 → 98 行**,导出面逐字节零 diff(147),**madge 循环依赖 3 → 0**,读取量入口 −93%,typecheck 0 / unit 75·514 / property 3·4 / e2e 4·4 / build 0 / `docs:check` 0 失败(合并后在 master 重跑)。已推送 `origin`(2026-09-14);推送触发 CI,首次 Node process E2E 因既有用例时序 flake 失败、重跑失败作业后 4 作业全绿(详见该 Task walkthrough 勘误节)。
 
 ## 待治理候选(编号未分配,待维护者裁决)
 

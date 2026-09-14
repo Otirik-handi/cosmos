@@ -107,3 +107,10 @@
 - **已推送**(2026-09-14,维护者指示):`e5d5d26..5746884` → `origin`(`Otirik-handi/cosmos`)。推前 `git fetch origin` 确认远端无新提交、本地领先 17 个提交,按快进推送,推后 `origin/master` 与本地一致。
 - **推送未触发远端 CI**:`gh run list` 最近一次运行仍是 2026-09-09(`67ce4b9`),与 G03 walkthrough 2026-09-14 记录的「CI 未在运行」一致;仓库 Actions 权限为 `enabled: true`、workflow 触发条件含 push 到 master,故原因在账号侧(额度或设置),需维护者核查。**后果:本仓库的大小门禁(文档 + 代码)目前只在本地强制执行,远端没有第二道闸**;本次推送的验证依据是本机全套命令(见上),不是 CI。
 - 收口后遗留(不在 G05 范围):`packages/application/src/workflow-host-runtime.ts` 1,206 行 / ~11.2k token 自身仍越 800 行红线;`packages/application/src/repository-port.ts` 580 行 / ~5.0k token 为拆分产物中最大者(未越线);`packages/application/dist` 由 735 KB 增至 953 KB。
+
+## 2026-09-14 勘误:上一节「推送未触发远端 CI」的结论错误
+
+- **错在哪**:`gh run list` 未指定 `--repo` 时会解析当前目录归属的仓库;本仓库有两个远端(`origin` = `Otirik-handi/cosmos`,`upstream` = `notnotype/cosmos`),`gh repo view` 解析到的是 **upstream**。我据此读到的是上游的运行历史(最近一次 2026-09-09),于是写下「推送未触发 CI」。**实际推送目标是 `origin`(fork),那里的 CI 一直按 push 正常触发。**
+- **事实**(以 `--repo Otirik-handi/cosmos` 复查):`df451c0` 触发了运行 `34811873705`,4 个作业中 **Node process E2E 失败**——`e2e/scheduling.e2e.test.ts` 的 `schedule failure isolation` 用例在 31.8s 时触发 30s 日志等待超时;`5746884` 的运行被 `concurrency: cancel-in-progress` 取消(被紧随的第二次推送顶掉);推送前的 `e5d5d26` 四作业全绿;2026-09-13 的三次运行失败在 Quality 作业,与本次无关。
+- **复核**:在 CI 上只重跑失败作业(`gh run rerun --failed`),attempt 2 **4 个作业全部成功**;本机(Windows)同一代码在分支与合并后各跑一次 e2e 均 4/4。结论:该失败是既有日志轮询用例的时序 flake(预算 30s、实测 31.8s),不是 G05 引入。
+- **教训**:跨远端仓库执行 `gh` 命令必须显式 `--repo`;下结论前先确认 `gh repo view` 解析到的是哪个仓库。上一节中「远端没有第二道闸」的推论一并作废——门禁在远端是跑着的。

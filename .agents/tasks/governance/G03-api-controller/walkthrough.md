@@ -224,3 +224,8 @@
 ### 环境偏差:Prisma 生成产物被 `bun install` 冲掉(本次复现)
 
 在主工作区跑 `bun install` 后,`bun run build:storage` 报数百条 `Module '"@prisma/client"' has no exported member 'PrismaClient'`——即切片 1 记录过的同一坑(改依赖后必须重跑 `bun run db:generate`)。重跑 `db:generate` 后构建通过。此前该注意事项只记为"改依赖后"需重跑,本次确认**在任何工作区执行依赖安装后都必须重跑**,否则该工作区的构建与浏览器验收无法启动。
+
+## 勘误(2026-09-14 后补,不改原文):「CI 未在运行」结论不成立
+
+- 本文件前面的「环境发现:CI 未在运行(2026-09-14)」一节由 `gh run list`(未指定 `--repo`)得出,而 `gh` 在该工作目录解析到的是上游 `notnotype/cosmos`,不是推送目标 `origin`(`Otirik-handi/cosmos`)。**fork 上的 CI 一直按 push 正常运行**:维护者 2026-09-14 核查 Actions 后确认运转正常、额度未耗尽。
+- 按历史记录不改原文的纪律,该节文字保留;以此条更正其结论——不要按原文去排查 Actions 额度或仓库设置。正确做法是给 `gh` 命令显式指定 `--repo`。
