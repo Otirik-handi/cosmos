@@ -58,7 +58,9 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 
 ## Current State
 
-**实施中**(2026-09-14 起)。对象 `packages/application` 已获批准。worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 就绪(基于本地 `master` `a172e69`)。**切片 0–1 完成**:切片 0(`84ee6b5`)落基线、入口导出面快照(147 个导出)、常驻入口契约测试与 madge 循环依赖基线(3 个既有环);切片 1(`b729c3c`)把 7 处 `export *` 换成显式具名导出并新增 `MODULE.md`(2,664 B)。每切片在 worktree 内验证全绿——typecheck、unit 73 文件/514 用例、property 3/4、e2e 4/4、build:packages,且导出面逐字节零 diff。细节见 `walkthrough.md`(在分支上,合并后补齐)。
+**实施完成,待维护者验收**(2026-09-14)。对象 `packages/application` 已获批准。worktree `.worktree/g05-application` 与分支 `refactor/g05-application`(5 个提交)。**切片 0–4 全部完成**:切片 0(`84ee6b5`)基线 + 入口导出面快照(147 个)+ 常驻契约测试 + madge 基线(3 个既有环);切片 1(`b729c3c`)7 处 `export *` 换显式具名导出 + `MODULE.md`;切片 2(`ad624bc`)`index.test.ts` 按行为拆为 3 个测试文件 + 共享 helper;切片 3(`68efdf9`)60 个声明按聚合移入 11 个模块,**入口 2149 → 98 行**,内部 import 改指聚合模块后 **madge 循环依赖 3 → 0**;切片 4(`d5b7b4a` + `cd2de66`)MODULE.md 回写、repo-map 重生成、读取量指标、`docs/spec/` 旧行锚点同批修正。
+
+每切片验证:导出面逐字节零 diff(仍 147)、全仓 typecheck 0、unit 75 文件/514 用例、property 3/4、e2e 4/4、build:packages 0、worktree 内 `docs:check` 0 失败。读取量:入口 17,234 → 1,243 token(−93%),改域错误类型 22,525 → 2,707(−88%),改采集入队 22,525 → 5,620(−75%)。代价:`packages/application/dist` 735 → 953 KB(+30%,模块数量带来的文件固定开销)。细节见 `walkthrough.md`(在分支上,合并后补齐)。
 
 **记录位置**(沿用 G03 的裁定):本 README 落 master,`walkthrough.md` 随切片提交在分支上。
 
@@ -73,9 +75,9 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 |---|---|---|---|
 | 0 | 前置:worktree + 基线(大小/行数/导出清单/三配置测试/构建产物)+ 包入口契约测试(冻结当前导出符号集)+ madge 循环依赖基线 | 三配置全绿;入口契约测试与导出清单快照入库 | done(2026-09-14,`84ee6b5`;导出面 147 个,unit 73/514、property 3/4、e2e 4/4、build 0、typecheck 0) |
 | 1 | 桶文件步骤:新增 `packages/application/MODULE.md`(≤3 KB);7 处 `export *` 改为显式具名导出(不动实现) | 导出签名零 diff;三配置全绿 | done(2026-09-14,`b729c3c`;导出面逐字节零 diff 仍 147 个;MODULE.md 2,664 B;madge 仍 3 个既有环、未新增) |
-| 2 | 测试按行为拆:`index.test.ts`(610 行)按 describe/行为拆为同级文件,与切片 3 的聚合对齐 | 单文件 ≤400 行(不制造微文件);三配置全绿 | todo |
-| 3 | 单体按聚合拆:错误类 / 仓储端口(`CosmosRepository`)/ 连接器端口 / 结果与日志类型分别移出,`index.ts` 只留门面与模块地图(≤100 行) | 导出签名零 diff;`index.ts` ≤100 行;三配置全绿 | todo |
-| 4 | 收口:MODULE.md 回写、`repo-map.json` 重生成、读取量指标 | 验收三件套全过;典型任务读取量下降写入 walkthrough | todo |
+| 2 | 测试按行为拆:`index.test.ts`(610 行)按 describe/行为拆为同级文件,与切片 3 的聚合对齐 | 单文件 ≤400 行(不制造微文件);三配置全绿 | done(2026-09-14,`ad624bc`;3 个测试文件 24/329/149 行 + `test-support.ts`;用例数守恒 11 → 1+8+2) |
+| 3 | 单体按聚合拆:错误类 / 仓储端口(`CosmosRepository`)/ 连接器端口 / 结果与日志类型分别移出,`index.ts` 只留门面与模块地图(≤100 行) | 导出签名零 diff;`index.ts` ≤100 行;三配置全绿 | done(2026-09-14,`68efdf9`;60 个声明 → 11 个模块;入口 **98 行**;madge **0 环**,原 3 个全部消失) |
+| 4 | 收口:MODULE.md 回写、`repo-map.json` 重生成、读取量指标 | 验收三件套全过;典型任务读取量下降写入 walkthrough | done(2026-09-14,`d5b7b4a` + `cd2de66`;MODULE.md 2,916 B;入口读取量 −93%;spec 旧行锚点同批修正) |
 
 ## Verification
 
