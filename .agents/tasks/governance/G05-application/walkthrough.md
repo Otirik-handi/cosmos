@@ -56,3 +56,14 @@
 - 验证(worktree 内):**导出面零 diff**(重新生成后与 `entry-surface.txt` 逐字节相同,仍是 147 个);`bun run typecheck` EXIT=0;`bunx vitest run` 73 文件 / 514 用例;`bun run test:property` 3 文件 / 4 用例;`bun run test:e2e` 4 文件 / 4 用例;`bun run build:packages` EXIT=0。
 - madge:**仍是 3 个既有环,未新增**。桶文件步骤本身不消环——环源于入口同时 import 实现与再导出,消环要等切片 3 把实现移出 `index.ts`。切片 1 的验收因此是「不新增环」而非「环归零」。
 - 偏差:`MODULE.md` 没有逐条枚举 147 个导出名——3 KB 硬上限装不下,改为按语义分组概述 + 指向 `entry-surface.txt`(机器可读真相源)与 `entry-contract.test.ts`(常驻护栏)。提案 §4.5「公共入口导出清单」由此满足实质而非字面。
+
+## 2026-09-14 切片 2:index.test.ts 按行为拆(3 个测试文件 + 共享 helper)
+
+- 原 `index.test.ts` 610 行(含 5 个 describe + 两个共享 helper)拆为:
+  - `connector-registry.test.ts` 24 行(describe ConnectorRegistry)
+  - `connector-probe.test.ts` 329 行(ConnectorProbeService + SourceConfigProbeService + worker dispatch)
+  - `logger.test.ts` 149 行(runtime logging context)
+  - `test-support.ts`:`captureLogger()` 与 `source()` 被 4 个 describe 共用,抽成同级非测试模块(`.test.ts` 后缀会进 vitest 收集,故不叫测试文件)。仓库既有的 `dist` 已 emit `*.test.js`,因此该文件随包 emit 属现状而非新增问题。
+- 与切片 3 的聚合对齐:测试文件按「连接器注册表 / 连接器探测 / 日志」分组,对应切片 3 的 `connector-registry.ts`、`connector-probe.ts`、`logger.ts`。
+- 验证(worktree 内):类型检查 0;application 包内 9 文件 / 78 用例;全仓 unit **75 文件 / 514 用例**(文件数 73 → 75,用例数不变——拆分前后测试数守恒是本次的关键判据);property 3/4;e2e 4/4;build:packages 0;madge 仍是 3 个既有环、未新增。
+- 偏差:单个 describe 一个文件会产出 24 行的微文件,但 ConnectorRegistry 是独立单元,与 `connector-probe.ts` 各自成对,故保留 3 个文件而非合并成 2 个。
