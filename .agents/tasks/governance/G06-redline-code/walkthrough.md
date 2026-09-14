@@ -168,3 +168,32 @@
 - 验证：`apps/web` tsc 0；`bun run lint:web` 0 error；浏览器用例（执行中，结果续记）。
 
 切片 5a 验证补齐：`bun run test:browser` **17/17 全绿**（含 builds 全量构建）。**story-panel.tsx 仍在红线上（1634 行）**，切片 5 未完成——见 5b 待办。
+
+## 2026-09-14 切片 5b 前置分析（可执行方案）
+
+`StoryPanel` 的 return 是「单根 div → header div + 滚动体 div」，滚动体 div（680–1630）的**同级子节点正好是 9 个 `<section>`**，可作为现成的切分边界。9 段合计 **922 行**，全部搬出后 story-panel.tsx 约 **712 行**（红线 800 以下）。
+
+| 区块 | 行范围 | 行数 | 需传 props 名数 |
+|---|---|---|---|
+| source-members（来源成员） | 681–718 | 38 | 3 |
+| history-shell（历史壳） | 719–755 | 37 | 5 |
+| evidence（证据来源） | 756–836 | 81 | 11 |
+| related（相关内容） | 838–884 | 47 | 6 |
+| story-actions（Story 操作） | 916–1009 | 94 | 14 |
+| split（拆分 Story） | 1010–1161 | 152 | 29 |
+| organization（用户组织） | 1162–1461 | 300 | 42 |
+| link-entity（关联/创建 Entity） | 1462–1554 | 93 | 14 |
+| topic-join（加入/创建 Topic） | 1555–1634 | 80 | 14 |
+
+做法：保持**状态与提交处理器留在主组件**（行为等价风险最低），只把 JSX 搬成受控子组件，props 显式列出状态值 + setter + 处理器。类型来源已定位：`currentRevision = story.entry?.revisions[0]`、`currentWebUrl: string | null`、`timeline = buildStoryTimeline(story)`、`isShell: boolean`、`kind: StoryDetail["story"]["kind"]`、回调签名见 `StoryPanelProps`（需先把它移到 `story-panel/types.ts` 供子组件引用）。JSX 缩进需整体回退 8 空格。
+
+（本节为可执行方案，未执行部分见 README 切片表 5b。）
+
+## 2026-09-14 切片 5b-1：4 个 JSX 区块搬成受控子组件
+
+- 结果：story-panel.tsx **1634 → 1453 行**；新增 4 个子组件（`story-panel/` 下）：`source-members.tsx`（36 行）、`history-shell.tsx`（39）、`evidence.tsx`（81）、`related.tsx`（33）。均保持**状态与处理器留在主组件**、子组件受控（props 显式列出值 + setter + 处理器），行为等价风险最低。
+- 区间由「同缩进且以 `)}`／`</section>` 开头」自动判定；`{cond && (...)}` 包裹的区块把条件留在调用点（`{isShell && <HistoryShellSection … />}`），组件内部不再判空。
+- props 类型：`story: StoryDetail`、`title: string`、`busy: boolean`、`kind: StoryDetail["story"]["kind"]`、`relatedStories?: readonly RelatedStory[]`、`entryOptions?: readonly Pick<EntryListItem, "id"|"title"|"sourceName">[]`，回调签名沿用 `StoryPanelProps`。`entryOptions` 在子组件签名里给默认值 `= []`（父组件解构时本就有默认）。
+  - **踩坑**：无——本批只出现 2 类错误，均由 typecheck 直接指出（漏 `Button` 导入、可选 props 未给默认值）。
+- 验证：`apps/web` tsc 0；`bun run lint:web` 0 error（73 warning）；浏览器 **17/17 全绿**。
+- **剩余 5 个区块（719 行）未做**：story-actions（~94）、split（~152）、organization（~300）、link-entity（~93）、topic-join（~80）。全部搬出后 story-panel.tsx 约 734 行（红线 800 以下）。做法与本批一致：自动判定区间 → 子组件受控 → 显式 props；organization 的 42 个入参最多，建议单独一批。
