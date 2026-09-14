@@ -62,7 +62,7 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 
 每切片验证:导出面逐字节零 diff(仍 147)、全仓 typecheck 0、unit 75 文件/514 用例、property 3/4、e2e 4/4、build:packages 0、`docs:check` 0 失败。**合并后在 master 上重跑同一套验证,全部通过**(含 e2e 4/4、两份门禁 PASS、madge 0 环)。读取量:入口 17,234 → 1,243 token(−93%),改域错误类型 22,525 → 2,707(−88%),改采集入队 22,525 → 5,620(−75%)。代价:`packages/application/dist` 735 → 953 KB(+30%,模块数量带来的文件固定开销)。
 
-worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 已按仓库流程清理(清理前复核 2,529 个 junction 全部指向该目录内部,删除后主工作区 `node_modules` 文件数 50,670 未变)。**未推送**:本地 `master` 领先 `origin/master`,远端 CI 与 PR 流程未执行。
+worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 已按仓库流程清理(清理前复核 2,529 个 junction 全部指向该目录内部,删除后主工作区 `node_modules` 文件数 50,670 未变)。**已推送**(2026-09-14):`e5d5d26..5746884` → `origin`。**推送未触发远端 CI**(最近运行仍是 2026-09-09,与 G03 记录的环境发现一致),本次验证依据为本机全套命令,不是 CI。
 
 **记录位置**:本 README 与 `walkthrough.md` 现已同在 master(分支已合并)。
 

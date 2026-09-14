@@ -104,5 +104,6 @@
   - **合并后在 master 上重跑完整验证**:全仓 `bun run typecheck` 0;`bunx vitest run` 75 文件 / 514 用例;`bun run test:property` 3 文件 / 4 用例;`bun run test:e2e` 4 文件 / 4 用例(真实启 API/Worker 进程);`bun run build:packages` 0;`bun run docs:check` 556 文件 0 失败;文档门禁 PASS;代码门禁 PASS;madge 0 环。
   - worktree `.worktree/g05-application` 移除:先 `git worktree remove`(注销成功,文件清理后留下 3,679 个空目录与 2,529 个 junction),复核**全部 junction 目标都在该目录内部**(bun 自身 `.bun` store)、没有指向主工作区,才用 PowerShell 递归删除;删除后核对主工作区 `node_modules` 文件数仍为 50,670(与删除前基线一致),未被波及。
   - 分支 `refactor/g05-application` 已删除(内容已在 master 历史中)。
-- **未推送**:本地 `master` 领先 `origin/master`;推送、远端 CI 与 PR 流程未执行。
+- **已推送**(2026-09-14,维护者指示):`e5d5d26..5746884` → `origin`(`Otirik-handi/cosmos`)。推前 `git fetch origin` 确认远端无新提交、本地领先 17 个提交,按快进推送,推后 `origin/master` 与本地一致。
+- **推送未触发远端 CI**:`gh run list` 最近一次运行仍是 2026-09-09(`67ce4b9`),与 G03 walkthrough 2026-09-14 记录的「CI 未在运行」一致;仓库 Actions 权限为 `enabled: true`、workflow 触发条件含 push 到 master,故原因在账号侧(额度或设置),需维护者核查。**后果:本仓库的大小门禁(文档 + 代码)目前只在本地强制执行,远端没有第二道闸**;本次推送的验证依据是本机全套命令(见上),不是 CI。
 - 收口后遗留(不在 G05 范围):`packages/application/src/workflow-host-runtime.ts` 1,206 行 / ~11.2k token 自身仍越 800 行红线;`packages/application/src/repository-port.ts` 580 行 / ~5.0k token 为拆分产物中最大者(未越线);`packages/application/dist` 由 735 KB 增至 953 KB。
