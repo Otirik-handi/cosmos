@@ -81,3 +81,18 @@
   3. `ClaimedJob`/`CompleteJobInput` 是包内类型,`verbatimModuleSyntax` 要求 `import type`;首版按值导入报 TS1484。
   4. 生成器产出过 `import type { type X }`(TS2206),以及单行形式下的同类问题;两次修正后收敛。
   5. 每个模块整块继承原 import 头会留下一批未使用导入,既撑大文件又制造假循环边(`media-acquisition.ts > logger.ts`)。清掉未使用导入后,模块总行数由 4096 降到 2138,且最后一个环消失。
+
+## 2026-09-14 切片 4:收口(MODULE.md 回写、repo-map、读取量指标)
+
+- `packages/application/MODULE.md` 按拆分后的形态重写(2,916 B,≤3 KB):入口门面说明、147 个导出的取用方式、23 个非测试子模块的地图与 token 估算、阅读顺序、四条禁区(含「实现模块不从 `./index.js` 取类型,否则重新引入环」)。
+- `docs/doc-governance/repo-map.json` 由 `python scripts/size-governance.py --map` 重生成(38 个包/应用目录),与提交版本 diff 即本次结构变化。
+- 读取量指标(同一入口,拆分前后):
+
+| 典型任务 | 拆分前 | 拆分后 | 变化 |
+|---|---|---|---|
+| 读入口本身 | 17,234 token | 1,243 token | −93% |
+| 改域错误类型 | 22,525 token(入口+入口测试) | 892(MODULE.md)+1,815(errors.ts)= 2,707 | −88% |
+| 改采集入队行为 | 22,525 token | 892+2,806(ingestion-service)+1,922(相关测试)= 5,620 | −75% |
+
+- 本切片未改代码逻辑;验证沿用切片 3 的结果(同一工作树、同一提交内容,仅新增 MODULE.md 与 repo-map)。
+- 遗留:`workflow-host-runtime.ts`(1,206 行 / ~11.2k token)自身仍越 800 行红线,不在本对象范围内,仍列在治理候选清单。

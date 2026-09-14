@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-09-13",
+  "generated": "2026-09-14",
   "note": "脚本生成（size-governance.py --map），代码结构变化后重新生成提交，CI 校验与提交版本 diff 为零",
   "categories": [
     "code",
@@ -16,11 +16,9 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 62,
-      "bytes": 951835,
-      "red": [
-        ".agents/tasks/02-rss-ingestion/README.md"
-      ],
+      "files": 69,
+      "bytes": 998349,
+      "red": [],
       "warn": [
         ".agents/tasks/07-deferred-workflow-host/walkthrough.md"
       ]
@@ -71,7 +69,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 11338,
+      "bytes": 11842,
       "red": [],
       "warn": []
     },
@@ -189,13 +187,9 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 114,
-      "bytes": 1736416,
-      "red": [
-        "docs/api/0003-product-dtos.md",
-        "docs/architecture/0002-information-model.md",
-        "docs/requirements/0002-product-requirements.md"
-      ],
+      "files": 129,
+      "bytes": 1750931,
+      "red": [],
       "warn": [
         "docs/api/0002-product-service-api.md",
         "docs/api/0005-worker-gateway-api.md",
@@ -238,19 +232,17 @@
     },
     {
       "dir": "packages/application",
-      "moduleDoc": null,
-      "moduleDocBytes": null,
+      "moduleDoc": "packages/application/MODULE.md",
+      "moduleDocBytes": 2916,
       "entry": {
         "path": "packages/application/src/index.ts",
-        "bytes": 68937,
-        "lines": 2048,
-        "zone": "red"
+        "bytes": 4924,
+        "lines": 98,
+        "zone": "ok"
       },
-      "files": 20,
-      "bytes": 331584,
-      "red": [
-        "packages/application/src/index.ts"
-      ],
+      "files": 37,
+      "bytes": 349761,
+      "red": [],
       "warn": [
         "packages/application/src/workflow-host-runtime.ts"
       ]
@@ -426,8 +418,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 16,
-      "bytes": 99240,
+      "files": 17,
+      "bytes": 102784,
       "red": [],
       "warn": []
     },
