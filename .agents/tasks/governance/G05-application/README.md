@@ -58,11 +58,13 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 
 ## Current State
 
-**实施完成,待维护者验收**(2026-09-14)。对象 `packages/application` 已获批准。worktree `.worktree/g05-application` 与分支 `refactor/g05-application`(5 个提交)。**切片 0–4 全部完成**:切片 0(`84ee6b5`)基线 + 入口导出面快照(147 个)+ 常驻契约测试 + madge 基线(3 个既有环);切片 1(`b729c3c`)7 处 `export *` 换显式具名导出 + `MODULE.md`;切片 2(`ad624bc`)`index.test.ts` 按行为拆为 3 个测试文件 + 共享 helper;切片 3(`68efdf9`)60 个声明按聚合移入 11 个模块,**入口 2149 → 98 行**,内部 import 改指聚合模块后 **madge 循环依赖 3 → 0**;切片 4(`d5b7b4a` + `cd2de66`)MODULE.md 回写、repo-map 重生成、读取量指标、`docs/spec/` 旧行锚点同批修正。
+**已收口**(2026-09-14,维护者验收确认)。对象 `packages/application`。**切片 0–4 全部完成**并通过分支 `refactor/g05-application` 以 `--no-ff` 合入 `master`(merge commit `66862ff`):切片 0(`84ee6b5`)基线 + 入口导出面快照(147 个)+ 常驻契约测试 + madge 基线(3 个既有环);切片 1(`b729c3c`)7 处 `export *` 换显式具名导出 + `MODULE.md`;切片 2(`ad624bc`)`index.test.ts` 按行为拆为 3 个测试文件 + 共享 helper;切片 3(`68efdf9`)60 个声明按聚合移入 11 个模块,**入口 2149 → 98 行**,内部 import 改指聚合模块后 **madge 循环依赖 3 → 0**;切片 4(`d5b7b4a` + `cd2de66`)MODULE.md 回写、repo-map 重生成、读取量指标、`docs/spec/` 旧行锚点同批修正。
 
-每切片验证:导出面逐字节零 diff(仍 147)、全仓 typecheck 0、unit 75 文件/514 用例、property 3/4、e2e 4/4、build:packages 0、worktree 内 `docs:check` 0 失败。读取量:入口 17,234 → 1,243 token(−93%),改域错误类型 22,525 → 2,707(−88%),改采集入队 22,525 → 5,620(−75%)。代价:`packages/application/dist` 735 → 953 KB(+30%,模块数量带来的文件固定开销)。细节见 `walkthrough.md`(在分支上,合并后补齐)。
+每切片验证:导出面逐字节零 diff(仍 147)、全仓 typecheck 0、unit 75 文件/514 用例、property 3/4、e2e 4/4、build:packages 0、`docs:check` 0 失败。**合并后在 master 上重跑同一套验证,全部通过**(含 e2e 4/4、两份门禁 PASS、madge 0 环)。读取量:入口 17,234 → 1,243 token(−93%),改域错误类型 22,525 → 2,707(−88%),改采集入队 22,525 → 5,620(−75%)。代价:`packages/application/dist` 735 → 953 KB(+30%,模块数量带来的文件固定开销)。
 
-**记录位置**(沿用 G03 的裁定):本 README 落 master,`walkthrough.md` 随切片提交在分支上。
+worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 已按仓库流程清理(清理前复核 2,529 个 junction 全部指向该目录内部,删除后主工作区 `node_modules` 文件数 50,670 未变)。**未推送**:本地 `master` 领先 `origin/master`,远端 CI 与 PR 流程未执行。
+
+**记录位置**:本 README 与 `walkthrough.md` 现已同在 master(分支已合并)。
 
 ## Decisions and Deviations
 

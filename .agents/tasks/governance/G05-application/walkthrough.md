@@ -96,3 +96,13 @@
 
 - 本切片未改代码逻辑;验证沿用切片 3 的结果(同一工作树、同一提交内容,仅新增 MODULE.md 与 repo-map)。
 - 遗留:`workflow-host-runtime.ts`(1,206 行 / ~11.2k token)自身仍越 800 行红线,不在本对象范围内,仍列在治理候选清单。
+
+## 2026-09-14 维护者验收与收口
+
+- 维护者确认切片 0–4 全部通过(「验收完毕」)。收口动作:
+  - 分支 `refactor/g05-application` 以 `--no-ff` 合并入 `master`(merge commit `66862ff`),保留 6 个提交的分支边界,便于整体 revert。
+  - **合并后在 master 上重跑完整验证**:全仓 `bun run typecheck` 0;`bunx vitest run` 75 文件 / 514 用例;`bun run test:property` 3 文件 / 4 用例;`bun run test:e2e` 4 文件 / 4 用例(真实启 API/Worker 进程);`bun run build:packages` 0;`bun run docs:check` 556 文件 0 失败;文档门禁 PASS;代码门禁 PASS;madge 0 环。
+  - worktree `.worktree/g05-application` 移除:先 `git worktree remove`(注销成功,文件清理后留下 3,679 个空目录与 2,529 个 junction),复核**全部 junction 目标都在该目录内部**(bun 自身 `.bun` store)、没有指向主工作区,才用 PowerShell 递归删除;删除后核对主工作区 `node_modules` 文件数仍为 50,670(与删除前基线一致),未被波及。
+  - 分支 `refactor/g05-application` 已删除(内容已在 master 历史中)。
+- **未推送**:本地 `master` 领先 `origin/master`;推送、远端 CI 与 PR 流程未执行。
+- 收口后遗留(不在 G05 范围):`packages/application/src/workflow-host-runtime.ts` 1,206 行 / ~11.2k token 自身仍越 800 行红线;`packages/application/src/repository-port.ts` 580 行 / ~5.0k token 为拆分产物中最大者(未越线);`packages/application/dist` 由 735 KB 增至 953 KB。
