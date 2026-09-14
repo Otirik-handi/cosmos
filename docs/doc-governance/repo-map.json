@@ -17,7 +17,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 69,
-      "bytes": 998349,
+      "bytes": 1007422,
       "red": [],
       "warn": [
         ".agents/tasks/07-deferred-workflow-host/walkthrough.md"
@@ -150,14 +150,12 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 65,
-      "bytes": 495042,
-      "red": [
-        "apps/web/src/app/page.tsx",
-        "apps/web/src/components/cosmos/story-panel.tsx"
-      ],
+      "files": 89,
+      "bytes": 519972,
+      "red": [],
       "warn": [
-        "apps/web/src/components/cosmos/board-view.tsx"
+        "apps/web/src/components/cosmos/board-view.tsx",
+        "apps/web/src/components/cosmos/story-panel.tsx"
       ]
     },
     {
@@ -188,7 +186,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 129,
-      "bytes": 1750931,
+      "bytes": 1751184,
       "red": [],
       "warn": [
         "docs/api/0002-product-service-api.md",
@@ -264,22 +262,18 @@
     },
     {
       "dir": "packages/contracts",
-      "moduleDoc": null,
-      "moduleDocBytes": null,
+      "moduleDoc": "packages/contracts/MODULE.md",
+      "moduleDocBytes": 3960,
       "entry": {
         "path": "packages/contracts/src/index.ts",
-        "bytes": 54827,
-        "lines": 1455,
-        "zone": "red"
+        "bytes": 11478,
+        "lines": 168,
+        "zone": "ok"
       },
-      "files": 10,
-      "bytes": 139547,
-      "red": [
-        "packages/contracts/src/index.ts"
-      ],
-      "warn": [
-        "packages/contracts/src/index.test.ts"
-      ]
+      "files": 29,
+      "bytes": 168764,
+      "red": [],
+      "warn": []
     },
     {
       "dir": "packages/domain",
@@ -420,6 +414,16 @@
       "entry": null,
       "files": 17,
       "bytes": 102784,
+      "red": [],
+      "warn": []
+    },
+    {
+      "dir": "test-results",
+      "moduleDoc": null,
+      "moduleDocBytes": null,
+      "entry": null,
+      "files": 1,
+      "bytes": 45,
       "red": [],
       "warn": []
     },
