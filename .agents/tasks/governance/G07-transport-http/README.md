@@ -26,18 +26,25 @@
 
 ## Current State
 
-**进行中**（2026-09-14 开工）。worktree `.worktree/g07-transport-http` + 分支 `refactor/g07-transport-http`（基于 `master` `e33de88`）；维护者已把红线口径设定为**完整口径**（行数或字节或 token 先到先触发）。**切片 0 完成**：导出面 4 个（2 值 / 2 类型）冻结 + 常驻契约测试；madge 0 环；dist 94 KB；typecheck 0 / unit 82 文件·516 用例 / property 4 / e2e 4。
+**已完成收口**（2026-09-14，维护者授权「直到 G07 完成」）。经 `refactor/g07-transport-http` 以 `--no-ff` 合入 `master` **`06065cd`**，已推送 `origin`，worktree 与分支已清理；**CI 四作业全绿**（Quality / Browser E2E / Windows Node smoke / Node process E2E）。
 
-**下一步**：切片 1 按行为拆 `index.test.ts`（964 行）；切片 2 按 G03 先例「继承链拆文件 + 门面」拆 1058 行的 `HttpCosmosClient`（约 90 个方法按资源域分组），消费方与导出面零改动。
+| 对象 | 行数 | 字节 | 读取量 |
+|---|---|---|---|
+| `packages/transport-http/src/index.ts` | 1269 → **11** | 41.4 KB → **0.5 KB** | 10,592 → **141 token**（−98.7%） |
+| `packages/transport-http/src/index.test.ts` | 964 → 拆成 **6 个文件**（99~253 行） | 38.7 KB → 各 3~10 KB | — |
 
-## 计划切片（待 worktree 批复后细化）
+拆法（G03 先例「继承链拆文件 + 门面」）：`types.ts` → `client-base.ts`（字段/构造/**唯一 `request` 管道**/SSE）→ `client-platform`(90) → `client-sources`(223) → `client-content`(407) → `client-organization`(277) → `client-board`(223) → `index.ts` 门面。关键实测：**103 个方法之间无互相调用**（全是 `this.request(...)`），故继承链只是文件组织、无行为耦合；类仍是单个，消费方零改动。
+
+master 上重验：typecheck 0；unit **87 文件 / 516 用例**（用例数守恒）；property 4；e2e 4；浏览器 **17/17**；两份体积门禁 PASS；`docs:check` 618 文件 0 失败；**导出面 4 个逐字节零 diff**、madge 0 环。`code-baseline.json` 8 → 6 条；**完整红线口径下红线文件 10 → 8 个**。代价：`dist` 94 → 186 KB（+98%，模块数的固定开销）。
+
+## 切片记录
 
 | # | 切片 | 验收（≤3 条） | 状态 |
 |---|---|---|---|
 | 0 | 前置：worktree + 基线（大小/行数/4 个导出的导出面快照与常驻契约测试/三配置测试/build 字节/madge） | 三配置全绿；导出面快照与契约测试入库 | done（2026-09-14；导出面 4 个、契约测试入库、madge 0、dist 94 KB、typecheck 0 / unit 82·516 / property 4 / e2e 4） |
-| 1 | 测试按行为拆：`index.test.ts`（964 行）按行为/聚合拆为同级文件 | 单文件 ≤400 行；用例数守恒；三配置全绿 | todo |
-| 2 | 单体按聚合拆：按 HTTP 传输的关注点（客户端/错误/SSE 或等价聚合）移入模块，入口留门面 | 4 个导出零 diff；入口 ≤300 行；三配置全绿 | todo |
-| 3 | 收口：`MODULE.md`、`repo-map.json` 重生成、`code-baseline.json` 下调（2 条移除）、读取量指标 | 基线只减不增；`docs:check` 0 失败 | todo |
+| 1 | 测试按行为拆：`index.test.ts`（964 行）按行为/聚合拆为同级文件 | 单文件 ≤400 行；用例数守恒；三配置全绿 | done（2026-09-14；6 个域文件 99~253 行、17 用例守恒、全仓 unit 87 文件·516 用例） |
+| 2 | 单体按聚合拆：按 HTTP 传输的关注点（客户端/错误/SSE 或等价聚合）移入模块，入口留门面 | 4 个导出零 diff；入口 ≤300 行；三配置全绿 | done（2026-09-14；继承链 6 分册 + 门面，入口 **11 行**、导出面 4 个逐字节零 diff、madge 0 环） |
+| 3 | 收口：`MODULE.md`、`repo-map.json` 重生成、`code-baseline.json` 下调（2 条移除）、读取量指标 | 基线只减不增；`docs:check` 0 失败 | done（2026-09-14；`MODULE.md` 3,093 B、repo-map 38 目录、基线 **8 → 6 条**、入口读取量 −98.7%；`docs:check` 首跑断链已同批修正后 0 失败） |
 
 ## Verification
 
@@ -47,5 +54,5 @@
 
 ## Follow-ups
 
-- **行数红线盲区（本轮核实）**：`size-governance.py --check` 只按字节/token 判红线，行数越界不拦；按完整口径仓库仍有 10 个文件超红线（清单见 [`../README.md`](../README.md)「红线口径提醒」）。把行数阈值并入门禁是根因修复，承接 G03/G05 Follow-ups。
-- 其余 9 个行数越界文件的治理顺序由维护者裁定（维护者 2026-09-14 指令：非红线不做，本次不排）。
+- **门禁仍不拦行数**：维护者 2026-09-14 已裁定采用**完整口径**（行数或字节或 token），但 `size-governance.py --check` 目前只判字节/token——标准已定、执行未跟上。把行数阈值并入门禁（并为其建立行数基线）是下一步机制任务；完整口径下当前仍有 **8 个**红线文件，清单见 [`../README.md`](../README.md)「红线口径提醒」。
+- 其余 8 个红线（行数越界）文件的治理顺序：维护者 2026-09-14 裁定采用完整口径后，已在 [`../README.md`](../README.md) 按行数降序列出建议次序；G 系列任务当前暂停，待恢复时按该次序推进。

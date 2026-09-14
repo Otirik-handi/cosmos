@@ -46,4 +46,6 @@
 | `apps/web/src/component-lab/product-fixtures.tsx` | 807 | 27.6 KB |
 | `apps/web/src/components/cosmos/board-view.tsx` | 805 | 30.6 KB |
 
+**G 系列暂停**（维护者 2026-09-14）：G01–G07 已完成收口，系列暂时告一段落；**不做非红线文件**。恢复时从下表次序（行数降序）继续，并按「完整口径」判定触发（行数或字节或 token 先到先触发）；门禁尚未拦行数，选型时**必须用 `--json` 自行核对 `lines` 字段**，不要只看门禁结论。
+
 治理队列: **G07 = `packages/transport-http`**(index.ts + index.test.ts,完整口径下最大者,已开工);其余 8 个对象(G08 起)的排序待维护者裁定——候选次序建议按行数降序,即 `application/workflow-host-runtime.ts`(1205)→ `worker-admin/index.ts`(1047)→ `application/media-acquisition.ts`(918)→ `storage-prisma/workflow-backend.ts`(896)→ `worker/workflow-ingest.test.ts`(864)→ `plugins/collectors/index.ts`(818)→ `component-lab/product-fixtures.tsx`(807)→ `cosmos/board-view.tsx`(805)。
