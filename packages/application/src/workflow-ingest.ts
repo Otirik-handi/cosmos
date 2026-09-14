@@ -35,7 +35,9 @@ import {
     type HostActionExecutionFence,
     type RegisteredAction,
 } from "./action.js";
-import { ConnectorExecutionError } from "./index.js";
+import {
+    ConnectorExecutionError,
+} from "./connector-ports.js";
 import {
     acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
@@ -46,11 +48,17 @@ import {
 } from "./media-acquisition.js";
 import type {
     ConnectorResolver,
-    CosmosRepository,
     IngestConnector,
+} from "./connector-ports.js";
+import type {
+    CosmosRepository,
+} from "./repository-port.js";
+import type {
     LoggerPort,
+} from "./logger.js";
+import type {
     PersistIngestItemResult,
-} from "./index.js";
+} from "./result-types.js";
 
 export const ingestWorkflowReference = "cosmos.ingest@1" as const;
 export const ingestFetchActionReference = "source.fetch@1" as const;

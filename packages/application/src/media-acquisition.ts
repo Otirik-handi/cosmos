@@ -11,7 +11,9 @@ import type {
     NormalizedAssetInput,
     NormalizedIngestItem,
 } from "@cosmos/domain";
-import type { LoggerPort } from "./index.js";
+import type {
+    LoggerPort,
+} from "./logger.js";
 
 /**
  * Application-owned media acquisition (ADR-0005). The connector only extracts

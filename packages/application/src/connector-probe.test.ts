@@ -11,123 +11,32 @@ import type {
 
 import {
     ConnectorRegistry,
+} from "./connector-registry.js";
+import {
     ConnectorProbeService,
-    createBuiltinManifestCatalog,
-    IngestionService,
-    IngestionWorker,
     SourceConfigProbeService,
-    type CosmosRepository,
-    type IngestConnector,
-    type LoggerContext,
-    type LoggerPort,
-} from "./index.js";
+} from "./connector-probe.js";
+import {
+    createBuiltinManifestCatalog,
+} from "./catalog.js";
+import {
+    IngestionService,
+} from "./ingestion-service.js";
+import {
+    IngestionWorker,
+} from "./ingestion-worker.js";
+import type {
+    CosmosRepository,
+} from "./repository-port.js";
+import type {
+    IngestConnector,
+} from "./connector-ports.js";
+import type {
+    LoggerContext,
+    LoggerPort,
+} from "./logger.js";
 
-function captureLogger(): {
-    logger: LoggerPort;
-    records: Array<Record<string, unknown>>;
-} {
-    const storage = new AsyncLocalStorage<LoggerContext>();
-    const records: Array<Record<string, unknown>> = [];
-    const create = (localContext: LoggerContext = {}): LoggerPort => ({
-        child(context) {
-            return create({ ...localContext, ...context });
-        },
-        withContext<T>(
-            context: LoggerContext,
-            callback: () => T | Promise<T>,
-        ): T | Promise<T> {
-            return storage.run({
-                ...storage.getStore(),
-                ...localContext,
-                ...context,
-            }, callback);
-        },
-        debug(event, fields = {}) {
-            records.push({
-                ...storage.getStore(),
-                ...localContext,
-                ...fields,
-                event,
-                level: "debug",
-            });
-        },
-        info(event, fields = {}) {
-            records.push({
-                ...storage.getStore(),
-                ...localContext,
-                ...fields,
-                event,
-                level: "info",
-            });
-        },
-        warn(event, fields = {}) {
-            records.push({
-                ...storage.getStore(),
-                ...localContext,
-                ...fields,
-                event,
-                level: "warn",
-            });
-        },
-        error(event, fields = {}, error) {
-            records.push({
-                ...storage.getStore(),
-                ...localContext,
-                ...fields,
-                event,
-                level: "error",
-                ...(error ? { error: String(error) } : {}),
-            });
-        },
-    });
-    return {
-        logger: create(),
-        records,
-    };
-}
-
-function source(input: Partial<SourceSnapshot> = {}): SourceSnapshot {
-    return {
-        id: "source-1",
-        name: "Bilibili",
-        sourceDefinitionRef: "source.bilibili@1",
-        operationId: "fetch",
-        connectorId: "bilibili",
-        kind: "bilibili",
-        config: { mode: "hot", limit: 5 },
-        enabled: true,
-        revisionId: "source-1:1",
-        createdAt: "2026-08-08T00:00:00.000Z",
-        updatedAt: "2026-08-08T00:00:00.000Z",
-        lastRunAt: null,
-        lastError: null,
-        ...input,
-    };
-}
-
-describe("ConnectorRegistry", () => {
-    it("resolves by the manifest-projected connector id", () => {
-        const connector: IngestConnector = {
-            id: "bilibili",
-            description: "Bilibili",
-            configVersion: "v1",
-            capabilities: ["opencli"],
-            validate: () => undefined,
-            async fetchItems() {
-                return { items: [], nextCursor: null };
-            },
-        };
-        const registry = new ConnectorRegistry([connector]);
-
-        expect(registry.resolve(source({ kind: "legacy-bilibili" }))).toBe(connector);
-        expect(registry.descriptors()).toEqual([{
-            id: "bilibili",
-            description: "Bilibili",
-            capabilities: ["opencli"],
-            configVersion: "v1",
-        }]);
-    });
-});
+import { captureLogger, source } from "./test-support.js";
 
 describe("ConnectorProbeService", () => {
     it("fetches a sample without writing an observation or checkpoint", async () => {
@@ -455,155 +364,5 @@ describe("SourceConfigProbeService worker dispatch", () => {
             status: "failed_terminal",
             attempts: 1,
         });
-    });
-});
-
-describe("runtime logging context", () => {
-    it("propagates Run, Job, Source and Connector ids into connector work", async () => {
-        const { logger, records } = captureLogger();
-        const connector: IngestConnector = {
-            id: "bilibili",
-            description: "Bilibili",
-            configVersion: "v1",
-            capabilities: [],
-            validate: () => undefined,
-            async fetchItems() {
-                logger.info("connector.inside");
-                return { items: [], nextCursor: null };
-            },
-        };
-        const run: RunSnapshot = {
-            id: "run-1",
-            sourceId: "source-1",
-            triggerKind: "manual",
-            status: "queued",
-            createdAt: "2026-08-08T00:00:00.000Z",
-            startedAt: null,
-            finishedAt: null,
-            itemCount: 0,
-            createdEntryCount: 0,
-            revisedEntryCount: 0,
-            error: null,
-        };
-        const repository = {
-            getRun: async () => run,
-            getSource: async () => source(),
-            startRun: async () => ({ ...run, status: "running" }),
-            getCheckpoint: async () => null,
-            persistIngestItem: async () => ({
-                createdEntry: false,
-                revisedEntry: false,
-                duplicateObservation: true,
-            }),
-            setCheckpoint: async () => undefined,
-            completeRun: async () => ({ ...run, status: "succeeded" }),
-        } as unknown as CosmosRepository;
-        const service = new IngestionService(
-            repository,
-            () => connector,
-            logger,
-        );
-
-        await service.runExistingRunWithLease("run-1", {
-            jobId: "job-1",
-            leaseToken: "lease-1",
-        });
-
-        const record = records
-            .find((item) => item.event === "connector.inside");
-        expect(record).toMatchObject({
-            runId: "run-1",
-            jobId: "job-1",
-            sourceId: "source-1",
-            connectorId: "bilibili",
-        });
-    });
-
-    it("records rejected and failed Job completion without claiming success", async () => {
-        const rejectedCapture = captureLogger();
-        const rejectedRepository = {
-            listSources: async () => [],
-            listScheduleTriggers: async () => [],
-            claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
-                expect(acceptedKinds).toEqual(["source-ingest", "source-probe", "source-config-probe"]);
-                return {
-                    id: "job-1",
-                    runId: null,
-                    kind: "source-probe",
-                    leaseToken: "lease-1",
-                    attempts: 1,
-                    maxAttempts: 3,
-                    payload: { sourceId: "source-1" },
-                };
-            },
-            completeJob: async () => false,
-        } as unknown as CosmosRepository;
-        const rejectedWorker = new IngestionWorker(
-            rejectedRepository,
-            {} as IngestionService,
-            {
-                owner: "worker-1",
-                leaseMs: 60_000,
-                probe: {
-                    runSource: async () => ({
-                        sourceId: "source-1",
-                        connectorId: "bilibili",
-                        itemCount: 0,
-                        nextCursorAvailable: false,
-                        checkedAt: "2026-08-08T00:00:00.000Z",
-                    }),
-                } as unknown as ConnectorProbeService,
-                logger: rejectedCapture.logger,
-            },
-        );
-
-        await expect(rejectedWorker.pollOnce()).resolves.toBeNull();
-        expect(rejectedCapture.records.some((record) => (
-            record.event === "job.completion_rejected"
-        ))).toBe(true);
-
-        const failedCapture = captureLogger();
-        const failedRepository = {
-            listSources: async () => [],
-            listScheduleTriggers: async () => [],
-            claimNextJob: async ({ acceptedKinds }: { acceptedKinds: readonly string[] }) => {
-                expect(acceptedKinds).toEqual(["source-ingest", "source-probe", "source-config-probe"]);
-                return {
-                    id: "job-2",
-                    runId: null,
-                    kind: "source-probe",
-                    leaseToken: "lease-2",
-                    attempts: 1,
-                    maxAttempts: 3,
-                    payload: { sourceId: "source-1" },
-                };
-            },
-            completeJob: async () => {
-                throw new Error("database unavailable");
-            },
-        } as unknown as CosmosRepository;
-        const failedWorker = new IngestionWorker(
-            failedRepository,
-            {} as IngestionService,
-            {
-                owner: "worker-1",
-                leaseMs: 60_000,
-                probe: {
-                    runSource: async () => ({
-                        sourceId: "source-1",
-                        connectorId: "bilibili",
-                        itemCount: 0,
-                        nextCursorAvailable: false,
-                        checkedAt: "2026-08-08T00:00:00.000Z",
-                    }),
-                } as unknown as ConnectorProbeService,
-                logger: failedCapture.logger,
-            },
-        );
-
-        await expect(failedWorker.pollOnce()).resolves.toBeNull();
-        expect(failedCapture.records.some((record) => (
-            record.event === "job.completion_failed"
-        ))).toBe(true);
     });
 });

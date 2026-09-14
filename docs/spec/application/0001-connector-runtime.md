@@ -327,10 +327,10 @@ fetchItems(input: {
 
 ## 实现与测试锚点
 
-- 实现：[packages/application/src/index.ts](../../../packages/application/src/index.ts#L231-L689)
-- `ConnectorRegistry` 测试：[packages/application/src/index.test.ts](../../../packages/application/src/index.test.ts#L101-L123)
-- `ConnectorProbeService` 测试：[packages/application/src/index.test.ts](../../../packages/application/src/index.test.ts#L125-L212)
-- 运行时日志与 `IngestionService` 测试：[packages/application/src/index.test.ts](../../../packages/application/src/index.test.ts#L214-L273)
+- 实现：[connector-registry.ts](../../../packages/application/src/connector-registry.ts)、[connector-probe.ts](../../../packages/application/src/connector-probe.ts)、[connector-ports.ts](../../../packages/application/src/connector-ports.ts)
+- `ConnectorRegistry` 测试：[connector-registry.test.ts](../../../packages/application/src/connector-registry.test.ts)(describe `ConnectorRegistry`)
+- `ConnectorProbeService` 测试：[connector-probe.test.ts](../../../packages/application/src/connector-probe.test.ts)(describe `ConnectorProbeService`、`SourceConfigProbeService`)
+- 运行时日志与 `IngestionService` 测试：[logger.test.ts](../../../packages/application/src/logger.test.ts)(describe `runtime logging context`)、[workflow-ingest.test.ts](../../../packages/application/src/workflow-ingest.test.ts)
 - 公共契约：[公共契约](../contracts/0001-public-contracts.md)
 - 规范化内容模型：[规范化内容模型](../domain/0001-normalized-content.md)
 

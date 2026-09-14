@@ -221,8 +221,8 @@ Worker 主进程的默认 owner、lease 或轮询环境配置属于 runtime 文�
 
 ## 实现与测试锚点
 
-- 实现：[packages/application/src/index.ts](../../../packages/application/src/index.ts#L691-L1040)
-- 测试：[packages/application/src/index.test.ts](../../../packages/application/src/index.test.ts#L275-L360)，覆盖 accepted kinds 仅包含 `source-ingest`/`source-probe`，以及 completion 被拒绝或失败时不伪造成功。
+- 实现：[ingestion-worker.ts](../../../packages/application/src/ingestion-worker.ts)、[ingestion-service.ts](../../../packages/application/src/ingestion-service.ts)
+- 测试：[connector-probe.test.ts](../../../packages/application/src/connector-probe.test.ts)(describe `SourceConfigProbeService worker dispatch`)与 [workflow-ingest.test.ts](../../../packages/application/src/workflow-ingest.test.ts)，覆盖 accepted kinds 仅包含 `source-ingest`/`source-probe`，以及 completion 被拒绝或失败时不伪造成功。
 - Durable Host 调度接缝：[apps/worker/src/main.ts](../../../apps/worker/src/main.ts#L139-L145)，存在 Durable Host 时向旧 Worker 传入 `schedule: false`。
 
 ## 非目标/边界
