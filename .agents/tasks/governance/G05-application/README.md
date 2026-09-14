@@ -58,7 +58,7 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 
 ## Current State
 
-**实施中**(2026-09-14 起)。对象 `packages/application` 已获批准。worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 就绪(基于本地 `master` `a172e69`)。**切片 0 完成**(分支提交 `84ee6b5`):基线、入口导出面快照(147 个导出)、常驻入口契约测试、madge 循环依赖基线(3 个既有环),验证在 worktree 内全绿——typecheck、unit 73 文件/514 用例、property 3/4、e2e 4/4、build:packages。细节见 `walkthrough.md`(在分支上,合并后补齐)。
+**实施中**(2026-09-14 起)。对象 `packages/application` 已获批准。worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 就绪(基于本地 `master` `a172e69`)。**切片 0–1 完成**:切片 0(`84ee6b5`)落基线、入口导出面快照(147 个导出)、常驻入口契约测试与 madge 循环依赖基线(3 个既有环);切片 1(`b729c3c`)把 7 处 `export *` 换成显式具名导出并新增 `MODULE.md`(2,664 B)。每切片在 worktree 内验证全绿——typecheck、unit 73 文件/514 用例、property 3/4、e2e 4/4、build:packages,且导出面逐字节零 diff。细节见 `walkthrough.md`(在分支上,合并后补齐)。
 
 **记录位置**(沿用 G03 的裁定):本 README 落 master,`walkthrough.md` 随切片提交在分支上。
 
@@ -72,7 +72,7 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 | # | 切片 | 验收(≤3 条) | 状态 |
 |---|---|---|---|
 | 0 | 前置:worktree + 基线(大小/行数/导出清单/三配置测试/构建产物)+ 包入口契约测试(冻结当前导出符号集)+ madge 循环依赖基线 | 三配置全绿;入口契约测试与导出清单快照入库 | done(2026-09-14,`84ee6b5`;导出面 147 个,unit 73/514、property 3/4、e2e 4/4、build 0、typecheck 0) |
-| 1 | 桶文件步骤:新增 `packages/application/MODULE.md`(≤3 KB);7 处 `export *` 改为显式具名导出(不动实现) | 导出签名零 diff;三配置全绿 | todo |
+| 1 | 桶文件步骤:新增 `packages/application/MODULE.md`(≤3 KB);7 处 `export *` 改为显式具名导出(不动实现) | 导出签名零 diff;三配置全绿 | done(2026-09-14,`b729c3c`;导出面逐字节零 diff 仍 147 个;MODULE.md 2,664 B;madge 仍 3 个既有环、未新增) |
 | 2 | 测试按行为拆:`index.test.ts`(610 行)按 describe/行为拆为同级文件,与切片 3 的聚合对齐 | 单文件 ≤400 行(不制造微文件);三配置全绿 | todo |
 | 3 | 单体按聚合拆:错误类 / 仓储端口(`CosmosRepository`)/ 连接器端口 / 结果与日志类型分别移出,`index.ts` 只留门面与模块地图(≤100 行) | 导出签名零 diff;`index.ts` ≤100 行;三配置全绿 | todo |
 | 4 | 收口:MODULE.md 回写、`repo-map.json` 重生成、读取量指标 | 验收三件套全过;典型任务读取量下降写入 walkthrough | todo |
