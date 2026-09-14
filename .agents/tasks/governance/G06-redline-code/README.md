@@ -29,9 +29,17 @@
 
 ## Current State
 
-**进行中**（2026-09-14 开工）。worktree `.worktree/g06-redline-code` + 分支 `refactor/g06-redline-code` 已基于 `master` `ebb9ddb` 建立（维护者批复「批准开工」，并授权每切片提交）。**切片 0–4 完成**：contracts 离开红线（`export *` 清零、入口 1455 → **167 行纯门面 + 11 个域模块**、导出面逐字节零 diff 432）；`page.tsx` 离开红线（**1680 行 / 62.2 KB → 738 行 / 28.3 KB**，拆为 6 个域 hook + 2 个支撑模块）。门禁：typecheck 0 / unit 81 文件·515 用例 / property 4 / e2e 4 / 浏览器 17 / build 0 / madge 0 环 / lint:web 0 error。
+**切片 0–6 全部完成，待维护者验收与合并**（2026-09-14）。worktree `.worktree/g06-redline-code` + 分支 `refactor/g06-redline-code`（基于 `master` `ebb9ddb`）。三个红线对象全部离开红线，**代码红线文件 3 → 0**：
 
-**切片 5（story-panel.tsx，1902 行）待做**：它是单体组件（非页面编排），与 page.tsx 同属「V 未测」对象，浏览器 17 用例是唯一护栏。
+| 对象 | 行数 | 字节 | token |
+|---|---|---|---|
+| `packages/contracts/src/index.ts` | 1455 → **168** | 53.5 → **11.2 KB** | 13,566 → **2,882**（−79%） |
+| `apps/web/src/app/page.tsx` | 1680 → **738** | 62.2 → **28.1 KB** | 16,475 → **7,357**（−55%） |
+| `apps/web/src/components/cosmos/story-panel.tsx` | 1902 → **757** | 92.4 → **32.6 KB** | 24,080 → **8,496**（−65%） |
+
+分支最终验证：typecheck 0；unit 81 文件·515 用例；property 4；e2e 4；浏览器 **17/17**；`lint:web` 0 error；`build` 0；madge 0 环；contracts 导出面逐字节零 diff（432）；`docs:check` 598 文件 0 失败；两份体积门禁 PASS；`code-baseline.json` **18 → 8 条**（只减不增）。
+
+**未做（需维护者授权）**：推送、合并 `master`、清理 worktree 与分支。
 
 ## Decisions and Deviations
 
@@ -50,8 +58,8 @@
 | 3 | contracts 单体按聚合拆：schema/类型移入聚合模块，`index.ts` 成纯门面 | 导出面零 diff；入口满足红线（≤300 行）；madge 保持 0 | done（2026-09-14；297 声明 → 11 个域模块 38~298 行，入口 **167 行**，导出面逐字节零 diff 仍 432，madge 保持 0，入口读取量 14,602 → 2,824 token） |
 | 3b | contracts `MODULE.md` 回写为 11 模块地图（原为「尚未拆出」的过渡版） | 模块职责/token/依赖方向与代码一致 | done（2026-09-14） |
 | 4 | `page.tsx` 按聚合拆：页面 section 抽组件、helper 模块化 | 默认导出不变；门面 100~600 行；浏览器用例全绿 | done（2026-09-14；页面 1680 → **738 行 / 28.3 KB**，6 个域 hook + 2 个支撑模块，默认导出不变，typecheck 0 / lint 0 error / 浏览器 17/17） |
-| 5 | `story-panel.tsx` 按聚合拆：子组件模块化 + `StoryPanel` 门面 | `StoryPanel` 唯一具名导出不变；门面 100~600 行；浏览器用例全绿 | todo |
-| 6 | 收口：repo-map 重生成、code-baseline 下调（3 条红线条目移除；顺带移除已回健康区的 7 条登记，仅动基线登记不动文件）、读取量指标、本 README 与索引回写 | 基线只减不增；`docs:check` 0 失败 | todo |
+| 5 | `story-panel.tsx` 按聚合拆：子组件模块化 + `StoryPanel` 门面 | `StoryPanel` 唯一具名导出不变；门面 100~600 行；浏览器用例全绿 | done（2026-09-14，分 5a/5b-1/5b-2 三批；1902 → **757 行**，`story-panel/` 下 15 个内部件，`StoryPanel` 唯一具名导出不变，tsc 0 / lint 0 error / 浏览器 17/17） |
+| 6 | 收口：repo-map 重生成、code-baseline 下调、读取量指标、本 README 与索引回写 | 基线只减不增；`docs:check` 0 失败 | done（2026-09-14；repo-map 39 目录；基线 **18 → 8 条**、0 新增；红线文件 0；`docs:check` 598 文件 0 失败；PROJECT-STATUS 按惯例不改，理由见 walkthrough） |
 
 ## Verification
 
