@@ -6,11 +6,11 @@
 
 ## Goal
 
-`packages/application/src/index.ts`(67.32 KB / 2048 行 / 56 个导出,其中 7 处 `export *`)与其同目录测试 `index.test.ts`(36.37 KB / 1011 行)按提案固定顺序治理:**先桶文件模块地图化与显式导出(不动实现)→ 测试按行为拆 → 单体按聚合拆**。完成后 `index.ts` 只做导出与模块地图(≤100 行),`packages/application/MODULE.md` 成为定位入口,包入口导出符号零 diff。
+`packages/application/src/index.ts`(67.32 KB / 2048 行 / 147 个解析后导出,其中 7 处 `export *`)与其同目录测试 `index.test.ts`(21.16 KB / 610 行)按提案固定顺序治理:**先桶文件模块地图化与显式导出(不动实现)→ 测试按行为拆 → 单体按聚合拆**。完成后 `index.ts` 只做导出与模块地图(≤100 行),`packages/application/MODULE.md` 成为定位入口,包入口导出符号零 diff。
 
 ## Scope / Non-goals
 
-**范围**:`packages/application/src/index.ts`;`packages/application/src/index.test.ts`;新增 `packages/application/MODULE.md`(≤3 KB);`repo-map.json` 重生成;包入口契约测试(断言导出符号集合)。
+**范围**:`packages/application/src/index.ts`(红线:2048 行 / 67.32 KB);`packages/application/src/index.test.ts`(610 行 / 21.16 KB,警戒区,按拆分后的聚合同步调整);新增 `packages/application/MODULE.md`(≤3 KB);新增入口导出面快照 `packages/application/entry-surface.txt` 与契约测试 `src/entry-contract.test.ts`;`scripts/entry-export-surface.ts`(导出面生成器);`repo-map.json` 重生成。
 
 **非目标**:不改任何导出符号、类型形状或运行时行为;不动 Prisma schema/migration;不动其它包与 app(含 `contracts`/`transport-http` 的入口,属同一桶文件群但另开编号);不引入 eslint/prettier/knip(提案阶段②);不为达标制造微文件(产物 100~600 行为佳)。
 
@@ -54,11 +54,13 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 - 本次口径:application 2.64 > transport-http 2.49;
 - G03 口径(D 更小):transport-http 2.31 > application 1.84。
 
-两种口径下前三名都是 application / transport-http / contracts,差异只在名次。**本任务按本次口径的首位取 application**,并把 D 口径与评分逻辑并入 `scripts/size-governance.py` 列为切片候选(与 G03 Follow-ups 同一条:让排名可复现,不依赖临时脚本)。若维护者裁定改判 transport-http,本目录更名 `G05-transport-http` 即可(尚无实施内容)。两者的形态差异在于:`application` 是**桶 + 单体混合**(7 处 `export *` + 49 个自有导出),要跑完整三步;`transport-http` 是**纯单体**(0 处 `export *`、4 个导出、1269 行),跳过桶文件步骤。
+**维护者 2026-09-14 已批准本次口径与首位对象**(`packages/application`),并批准 worktree/分支创建;D 口径与评分逻辑并入 `scripts/size-governance.py` 仍列为后续项(与 G03 Follow-ups 同一条:让排名可复现,不依赖临时脚本)。两者形态差异在于:`application` 是**桶 + 单体混合**(7 处 `export *` + 35 个自有导出值声明),要跑完整三步;`transport-http` 是**纯单体**(0 处 `export *`、4 个导出、1269 行),跳过桶文件步骤——它是本批次的下一候选。
 
 ## Current State
 
-**对象按模型首位选出,待维护者确认**(2026-09-14)。worktree 与分支**未创建**——`G05-application` 的 worktree/branch 命名依赖最终对象,且仓库规则要求创建前获维护者审批。未改任何代码。
+**实施中**(2026-09-14 起)。对象 `packages/application` 已获批准。worktree `.worktree/g05-application` 与分支 `refactor/g05-application` 就绪(基于本地 `master` `a172e69`)。**切片 0 完成**(分支提交 `84ee6b5`):基线、入口导出面快照(147 个导出)、常驻入口契约测试、madge 循环依赖基线(3 个既有环),验证在 worktree 内全绿——typecheck、unit 73 文件/514 用例、property 3/4、e2e 4/4、build:packages。细节见 `walkthrough.md`(在分支上,合并后补齐)。
+
+**记录位置**(沿用 G03 的裁定):本 README 落 master,`walkthrough.md` 随切片提交在分支上。
 
 ## Decisions and Deviations
 
@@ -69,15 +71,17 @@ G03 表格里的 D 值(application 8、contracts 5、transport-http 1、media-ac
 
 | # | 切片 | 验收(≤3 条) | 状态 |
 |---|---|---|---|
-| 0 | 前置:worktree + 基线(大小/行数/导出清单/三配置测试/构建产物)+ 包入口契约测试(冻结当前导出符号集)+ madge 循环依赖基线 | 三配置全绿;入口契约测试与导出清单快照入库 | todo |
+| 0 | 前置:worktree + 基线(大小/行数/导出清单/三配置测试/构建产物)+ 包入口契约测试(冻结当前导出符号集)+ madge 循环依赖基线 | 三配置全绿;入口契约测试与导出清单快照入库 | done(2026-09-14,`84ee6b5`;导出面 147 个,unit 73/514、property 3/4、e2e 4/4、build 0、typecheck 0) |
 | 1 | 桶文件步骤:新增 `packages/application/MODULE.md`(≤3 KB);7 处 `export *` 改为显式具名导出(不动实现) | 导出签名零 diff;三配置全绿 | todo |
-| 2 | 测试按行为拆:`index.test.ts`(1011 行)按 describe/行为拆为同级文件 | 单文件 ≤800 行且 ≤50 KB;三配置全绿 | todo |
+| 2 | 测试按行为拆:`index.test.ts`(610 行)按 describe/行为拆为同级文件,与切片 3 的聚合对齐 | 单文件 ≤400 行(不制造微文件);三配置全绿 | todo |
 | 3 | 单体按聚合拆:错误类 / 仓储端口(`CosmosRepository`)/ 连接器端口 / 结果与日志类型分别移出,`index.ts` 只留门面与模块地图(≤100 行) | 导出签名零 diff;`index.ts` ≤100 行;三配置全绿 | todo |
 | 4 | 收口:MODULE.md 回写、`repo-map.json` 重生成、读取量指标 | 验收三件套全过;典型任务读取量下降写入 walkthrough | todo |
 
 ## Verification
 
-每切片:`bun run typecheck` → vitest 三配置(unit/property/e2e)→ `bun run build:packages` → 导出签名 diff(入口契约测试 + 脚本比对)→ madge 循环依赖检查。行为等价底线三条同时满足:现有测试全绿 + 公共入口契约测试通过 + 导出签名零 diff。回滚:每切片独立 commit,可单独 revert。
+每切片:`bun run typecheck` → vitest 三配置(unit/property/e2e)→ `bun run build:packages` → 导出签名 diff(`bun run scripts/entry-export-surface.ts packages/application/src/index.ts` 与 `packages/application/entry-surface.txt` 比对,加常驻契约测试)→ madge 循环依赖检查(基线 3 个既有环,按「不新增」守卫)。行为等价底线三条同时满足:现有测试全绿 + 公共入口契约测试通过 + 导出签名零 diff。回滚:每切片独立 commit,可单独 revert。
+
+**worktree 环境前置**(2026-09-14 实测,未写进仓库流程文档前先记此处):新建 worktree 在 `bun install` 之后必须再跑 `bun run db:generate`,否则 typecheck 会报隐式 any、测试与构建大面积失败;本机跑 e2e 还需把真实 `bun.exe` 所在目录加进 PATH(`scripts/e2e/helpers.ts` 的 `spawnSync("bun")` 无法执行 npm 的 Git Bash 包装脚本)。
 
 ## Follow-ups
 
