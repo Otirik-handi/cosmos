@@ -127,3 +127,22 @@
 切片 0–2 的代码改动目前**全部未提交**（在 worktree 工作区）。根 `AGENTS.md` 规定「除非用户明确要求，不自行 commit」，维护者批复的是「批准开工」，未含 commit 授权；而提案 SOP 与本 Task 计划要求「每切片独立 commit（可单独 revert）」。切片 3 会再次改动 `index.ts`（与切片 1 同文件），**一旦开始切片 3，切片 1 与切片 3 就无法再拆成两个 commit**。已在本次汇报中提请维护者授权；授权前不开始切片 3。
 
 **保险措施**：切片 0–2 的完整改动（含新增文件）已导出为补丁快照 `%TEMP%/g06-slice0-2.patch`（96,613 B，由 `git add -A -- packages/contracts && git diff --cached --binary` 生成，随后 `git reset` 复原索引）。若切片 3 覆盖 `index.ts` 后仍需把切片 1 与切片 3 分成两个 commit，可用该补丁先重建切片 0–2 的提交。
+
+## 2026-09-14 切片 3：contracts 单体按聚合拆（入口 1455 → 167 行）
+
+- 分析先行：解析 `index.ts` 的 **297 个顶层声明**（296 导出 + 1 个非导出 helper `blockLimitSchema`），用「声明间引用」建图并跑 Tarjan——**297 个强连通分量、无环**。结论：可以按域自由切分，只需保持依赖方向。
+- 切分决策：`revisionDetail` 入 `entry-relation`（它 extend 自 `entryRevisionSnapshotSchema`）、`ingestResult` 入 `source`、Saved View 入 `user-organization`（与切片 2 的测试文件对齐）、事件与 SSE 入 `platform`（与 `eventEnvelope` 同域）;run 状态族（`runStatus`/`stepStatus`/`jobStatus`/`jobKind`/`jobSnapshot`）移入 `run-control`——**这一步专为消环**：`runStatusSchema` 留在 `source` 会让 source ↔ run-control 互指，移入后模块图无环。
+- 结果：11 个域模块（38~298 行），入口成为纯门面 **167 行**（432 个显式导出、13 个导出块），含 application 同款说明头。
+- 工具：`scripts/entry-export-surface.ts` 逐模块解析 `base.ts`/`action.ts` 的导出面，按「解析结果 − 本地声明名」生成显式再导出；类型走 `export type`。转换脚本是一次性的，用完即删（未入库）。
+- **偏差 1（提案「入口 ≤100 行」对本对象不可达）**：application（147 导出）当时做到 98 行；contracts 的导出面 432 个（近 3 倍），显式门面的行数下限约为「名字密排 100+ 行 + 13 个导出块包装」≈130 行以上。实际 167 行，满足提案 §4.1 的**入口文件红线 >300 行**与文件红线（>800 行 / >50 KB），但高于「≤100 行」这一为 storage-prisma / application 设定的验收值。已同步改 README 的 Goal 与切片验收。
+- **偏差 2（踩坑，由 typecheck 发现）**：首版转换脚本的引用检测只在「index.ts 自己的声明名」集合里匹配，**完全漏掉 base.ts / action.ts 的名字**（它们不是 index.ts 的顶层声明），生成的模块缺 base 导入，typecheck 报 6 处 TS2552/TS2304；修正为「声明名 ∪ base/action 面名」后一次通过。另一类假依赖是**注释里的提及**（`entry-relation → entity`、`story-subtype → story` 两条假边都来自 JSDoc 里写的 `Entity`/`StoryDetail`），已在检测前剥离注释。教训：搬运前先证明导入闭包完整，**typecheck 是唯一可信判据**；导出面零 diff 不覆盖「模块缺导入」这类错误。
+- 代价：`packages/contracts/dist` 496 KB → **721 KB（+45%）**，模块数量带来的文件固定开销（G05 同类代价 +30%）。
+- 验证（worktree 内）：**导出面逐字节零 diff（仍 432）**；typecheck 0；**madge 0 环**；unit 81 文件 / 515 用例；property 3/4；e2e 4/4；build:packages 0。
+- 读取量：入口 **14,602 → 2,824 token（−81%）**；单域模块最大 `source.ts` 2,414 token、最小 `story-subtype.ts` 296 token。
+- 未运行：浏览器用例（端到端确认，执行中，结果待续记）；`docs:check`（收口前统一跑）。
+
+## 2026-09-14 切片 3 续：端到端确认
+
+`bun run test:browser`（Playwright 自起 RSS fixture 与 Web 栈）：**17 用例全绿**（52.7s）。这是 contracts 拆分的端到端确认——Web/API/Worker 全部消费 `@cosmos/contracts`，导出面零 diff 与全仓构建通过之外，真实浏览器路径（录入、媒体策略、离线图片、拆分、子类型、Topic/Entity/收藏/批注、主题）无回归。
+
+切片 3 至此收口并提交。
