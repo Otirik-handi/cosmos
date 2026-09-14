@@ -158,3 +158,13 @@
 - 行为等价依据：处理函数体逐字搬运，未改逻辑；**浏览器用例 17/17 全绿**（含 Story 打开/修订/归并/拆分/子类型/证据、Topic/Entity/收藏/Collection/批注、来源媒体策略与清理预览、离线图片、看板编辑、移动端溢出、主题）。
 - 验证：全仓 `bun run typecheck` 0；`bun run lint:web` 0 error；`bun run test:browser`（含 `bun run build` 全量构建）17/17。
 - 未运行：unit/property/node-e2e 三配置（本切片只改 `apps/web`，未触碰 packages 与 API/Worker 代码；contracts 侧影响已在切片 0–3 覆盖）。
+
+## 2026-09-14 切片 5a：story-panel.tsx 子组件与标签映射外移
+
+- 结果：`apps/web/src/components/cosmos/story-panel.tsx` **1902 → 1634 行**；新增子目录 `apps/web/src/components/cosmos/story-panel/`：`labels.ts`（60 行，四张标签映射 + `relationTypeLabel`/`kindLabel`/`formatBytes`/`formatTimelineDate`）、`timeline-section.tsx`（36）、`split-target-select.tsx`（35）、`entity-row.tsx`（44）、`revision-assets.tsx`（91）、`story-subtype-select.tsx`（60，含 `registeredStorySubtype`）。原文件的 75–355 行是「标签映射 + 5 个子组件」的连续块，整体搬出、逐字未改。
+- **本步不足以离开红线**：剩余 `StoryPanel` 主组件仍有 **约 1560 行**（文件 1634 行），远超 800 行红线。切片 5 需继续把主组件按 JSX 区块/状态聚合拆分（对外 props 合同不变、`StoryPanel` 唯一具名导出不变）。
+- **子组件拆分的量级判断（供 5b 参考）**：主组件承载 15+ 个 `useState`、多个表单/提交流程与全部 JSX；其 props 合同（`StoryPanelProps`，42 行）已由 `page.tsx` 侧完整驱动，因此 5b 应优先按「JSX 区块 → 子组件 + 受控 props」而非「状态 hook」推进——状态仍在主组件内，子组件保持无状态，行为等价更易保证。
+- 工具：一次性脚本按连续行段搬运并生成导言（含 `Image as ImageIcon` 这类别名导入的本地名匹配）；出现两处脚本 bug 均由 typecheck 拦下（别名导入匹配用错了写法、写文件时的 `export` 前缀未写回内存态），修正后一次通过。脚本用完即删、未入库。
+- 验证：`apps/web` tsc 0；`bun run lint:web` 0 error；浏览器用例（执行中，结果续记）。
+
+切片 5a 验证补齐：`bun run test:browser` **17/17 全绿**（含 builds 全量构建）。**story-panel.tsx 仍在红线上（1634 行）**，切片 5 未完成——见 5b 待办。
