@@ -4,7 +4,7 @@
 
 - `scan-YYYY-MM-DD.md`:全仓扫描报告(证据快照,按日期留存);
 - `.docs-size-exemptions.yml`:豁免清单(path/reason/owner/review_after/max_size),Task 实施时落地;
-- 基线文件:存量超标文档清单,只减不增,Task 实施时落地。
+- 基线文件:存量超标文档清单;登记值与条目只减不增是治理目标,基线内文件增长只报 warning 不阻塞 CI(见提案 §4.10),Task 实施时落地。
 
 扫描工具:`scripts/size-governance.py`(由根目录 findmd.ps1 经 find-large-files 演进而来,支持按类别扫描与 CI 门禁)。
 

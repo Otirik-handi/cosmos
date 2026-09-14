@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated": "2026-09-11",
-  "note": "存量超标登记，只减不增：条目只允许移除，bytes 只允许下调",
+  "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
   "files": {
     "apps/web/src/app/page.tsx": 63657,
     "apps/web/src/component-lab/product-fixtures.tsx": 28225,

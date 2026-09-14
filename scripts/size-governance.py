@@ -230,9 +230,11 @@ def run_gate(args: argparse.Namespace, files: list[dict], exemptions: list[dict]
             continue
         in_base = item["path"] in base_files
         if in_base:
+            # 存量债务只提醒不阻塞：登记值等于登记当天尺寸，若按增长即 fail，任何正当编辑（修死链、补一行）
+            # 都会卡住 CI；收敛改由扫描报告与治理任务推进（提案 §4.10）。
             if item["bytes"] > base_files[item["path"]]:
-                failures.append(
-                    f"基线内文件增长: {item['path']} {fmt_size(item['bytes'])} > 登记 {fmt_size(base_files[item['path']])}"
+                warnings.append(
+                    f"基线内文件增长(不阻塞,请安排拆分或减字节): {item['path']} {fmt_size(item['bytes'])} > 登记 {fmt_size(base_files[item['path']])}"
                 )
             elif zone == "red":
                 infos.append(f"基线内存量红线(暂不阻塞): {item['path']} {fmt_size(item['bytes'])}")
@@ -276,7 +278,7 @@ def write_baseline(args: argparse.Namespace, files: list[dict], exemptions: list
     payload = {
         "version": 1,
         "generated": datetime.date.today().isoformat(),
-        "note": "存量超标登记，只减不增：条目只允许移除，bytes 只允许下调",
+        "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
         "files": dict(sorted(entries.items())),
     }
     args.write_baseline.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

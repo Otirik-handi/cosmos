@@ -60,7 +60,7 @@ Leader 的阶段判断不等于外部操作授权。commit、push、创建 PR、
 
 ## 文档大小治理
 
-依据 [`docs/proposals/oversized-doc-splitting-v1.md`](docs/proposals/oversized-doc-splitting-v1.md)（accepted）。阈值字节与 token 双轨、先到先触发：健康区 ≤30 KB 且 ≤9k token；红线 >50 KB 或 >15k token。新增文档与分册必须落在健康区，单个分册 ≤30 KB（硬上限 50 KB）；追加型文档按预算滚动归档，只切历史、不切当前状态和有效决定；分册封口后只读，勘误走主文档勘误节或同级 `ERRATA.md`。存量超标登记在 [`docs/doc-governance/`](docs/doc-governance/) 基线，只减不增；豁免见根目录 `.docs-size-exemptions.yml`；CI 以 `scripts/size-governance.py --check` 把关。
+依据 [`docs/proposals/oversized-doc-splitting-v1.md`](docs/proposals/oversized-doc-splitting-v1.md)（accepted）。阈值字节与 token 双轨、先到先触发：健康区 ≤30 KB 且 ≤9k token；红线 >50 KB 或 >15k token。新增文档与分册必须落在健康区，单个分册 ≤30 KB（硬上限 50 KB）；追加型文档按预算滚动归档，只切历史、不切当前状态和有效决定；分册封口后只读，勘误走主文档勘误节或同级 `ERRATA.md`。存量超标登记在 [`docs/doc-governance/`](docs/doc-governance/) 基线，登记值与条目只减不增是治理目标；基线内文件的增长只报 warning 不阻塞，CI 只拦未登记文件进入警戒区或红线；豁免见根目录 `.docs-size-exemptions.yml`；CI 以 `scripts/size-governance.py --check` 把关。
 
 全局读取协议：先读根 `AGENTS.md` 与目标文档的分册索引，再用 `rg` 定位关键词，只读命中分册的相关段落（offset/limit）；禁止无理由全量读 >30 KB 文件，确需全量读必须说明理由和 token 预算；Agent 不支持分段读取时，分册必须 ≤ 健康区。禁读 node_modules、dist、.next、.worktree、锁文件、生成物和 `.cosmos/` 运行数据。
 

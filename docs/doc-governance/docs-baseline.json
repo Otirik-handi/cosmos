@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated": "2026-09-11",
-  "note": "存量超标登记,只减不增:条目只允许移除,bytes 只允许下调",
+  "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
   "files": {
     ".agents/tasks/02-rss-ingestion/README.md": 58746,
     ".agents/tasks/07-deferred-workflow-host/walkthrough.md": 41123,
