@@ -209,3 +209,19 @@
   3. 修 (2) 时用「从 `: Props` 往后找 `}`」定位闭合括号，实际应往前找（`}: Props` 的 `}` 在 `: Props` 之前），把签名与函数体开头整段删掉——因该文件是派生产物，直接回滚重跑比就地修补更省事。
 - 验证：`apps/web` tsc 0；`bun run lint:web` 0 error（86 warning）；浏览器 **17/17 全绿**。
 - **切片 5 完成**：story-panel 系（1902 行单体）现为 `story-panel.tsx` **757 行** + `story-panel/` 下 15 个文件（子组件 11 + 标签 1 + 其余支撑）。
+
+## 2026-09-14 切片 6：收口
+
+- **repo-map 重生成**：`python scripts/size-governance.py --map` → `docs/doc-governance/repo-map.json`（39 个包/应用目录）。
+- **基线下调**：`--write-baseline` 重写后 **18 → 8 条**，10 条移除、**0 条新增**（含 3 个红线对象与 7 条已回健康区/已不存在的文件，如 `packages/contracts/src/index.test.ts` 已被按域拆为 6 个文件）。按「登记值只允许下调」把 `workflow-host-runtime.ts` 的登记值手动改回原值（43.77 KB），保留其增长 warning。
+- **门禁结果**：`-c code tests --check` PASS；**红线以上文件 0 个**（G06 目标达成），警戒区 8 个（全部已登记）；`docs:check` 见下。
+- **最终读数**：
+
+| 对象 | 行数 | 字节 | token |
+|---|---|---|---|
+| `packages/contracts/src/index.ts` | 1455 → **168** | 53.5 → **11.2 KB** | 13,566 → **2,882**（−79%） |
+| `apps/web/src/app/page.tsx` | 1680 → **738** | 62.2 → **28.1 KB** | 16,475 → **7,357**（−55%） |
+| `apps/web/src/components/cosmos/story-panel.tsx` | 1902 → **757** | 92.4 → **32.6 KB** | 24,080 → **8,496**（−65%） |
+
+- **PROJECT-STATUS.md 未改**：核查确认该文件从不记录治理任务（G01–G05 均无提及），治理状态只维护在 `.agents/tasks/governance/README.md` 索引，故本次沿用惯例、不做虚增。
+- 未做的事（需维护者授权）：**推送**、**合并 master**、清理 worktree 与分支。

@@ -18,15 +18,15 @@
 - [`G04-doc-splitting-batch2/`](G04-doc-splitting-batch2/):文档治理第二批——原基线红线区的 4 份文档(PRD、信息模型、Task 02 README、product-dtos)。**已完成收口**(2026-09-14,维护者验收确认):四份判拆、无一走豁免(提案 §4.1 增补「红线优先」),主文档合计 271.7 KB → 50.2 KB,18 个分册全部落在健康区,基线 12 → 8 条,`docs:check` 536 文件 0 失败。
 
 - [`G05-application/`](G05-application/):代码治理第三对象——`packages/application` 的入口与实现拆分(桶文件模块地图化 + 显式导出 → 测试按行为拆 → 单体按聚合拆;评分与选型见该 Task README)。**已完成收口**(2026-09-14,维护者验收确认;经 `refactor/g05-application` 以 `--no-ff` 合入 master `66862ff`,worktree 与分支已清理):入口 **2149 → 98 行**,导出面逐字节零 diff(147),**madge 循环依赖 3 → 0**,读取量入口 −93%,typecheck 0 / unit 75·514 / property 3·4 / e2e 4·4 / build 0 / `docs:check` 0 失败(合并后在 master 重跑)。已推送 `origin`(2026-09-14);推送触发 CI,首次 Node process E2E 因既有用例时序 flake 失败、重跑失败作业后 4 作业全绿(详见该 Task walkthrough 勘误节)。
-- [`G06-redline-code/`](G06-redline-code/):红线代码批次——`packages/contracts/src/index.ts`(桶+单体混合,走完整三步)与 `apps/web` 的 `page.tsx`、`story-panel.tsx` 两个 UI 单体(桶文件步骤不适用;验收 = 现有浏览器用例全绿 + 导出面不变)。**进行中**(2026-09-14 立项;维护者指令 3 文件同批,偏离「单 Task 一文件」SOP 已记入该 Task Decisions;worktree/分支待审批,未动代码)。
+- [`G06-redline-code/`](G06-redline-code/):红线代码批次——`packages/contracts/src/index.ts`(桶+单体混合,走完整三步)与 `apps/web` 的 `page.tsx`、`story-panel.tsx` 两个 UI 单体(桶文件步骤不适用;验收 = 现有浏览器用例全绿 + 导出面不变)。**切片 0–5 完成,待合并**(2026-09-14;分支 `refactor/g06-redline-code`):三个对象全部离开红线,**代码红线文件 3 → 0**;contracts 入口 1455 → **168 行**(导出面 432 逐字节零 diff、madge 0 环)、`page.tsx` 1680 → **738 行**(6 个域 hook)、`story-panel.tsx` 1902 → **757 行**(15 个内部件);`code-baseline.json` 18 → **8 条**(只减不增);维护者指令 3 文件同批,偏离「单 Task 一文件」SOP 已记入该 Task Decisions。
 
 ## 待治理候选(编号未分配,待维护者裁决)
 
 确认时间 2026-09-14,依据 `docs/proposals/code-size-governance-v1.md` §4.1 阈值(源码/测试 >800 行 或 >50 KB;入口文件 >300 行)。脚本门禁当前只按字节/token 判红线,行数越界不拦,故候选含门禁未报的对象。
 
-**实测排名(P 与 N 的完整表格、D 口径问题)见 [`G05-application/README.md`](G05-application/README.md) 的「评分与选型依据」**——同一证据不在两处维护。分配现状:G05 已取 `packages/application`(P 首位 2.64);G06(2026-09-14 立项)取 `packages/contracts/src/index.ts`(P=1.90)与 V 未测对象 `page.tsx`(N=13.80)、`story-panel.tsx`(N=12.53),即当前全部红线代码文件。剩余候选:
+**实测排名(P 与 N 的完整表格、D 口径问题)见 [`G05-application/README.md`](G05-application/README.md) 的「评分与选型依据」**——同一证据不在两处维护。分配现状:G05 取 `packages/application`;G06 取 `contracts`、`page.tsx`、`story-panel.tsx`(即当时的全部红线代码文件,**已全部离开红线**)。剩余候选:
 
-- `packages/transport-http/src/index.ts`(P=2.49):桶文件群最后一员,纯单体。
-- V 未测对象(提案 §4.2)按 `N` 排序:`product-fixtures.tsx` 10.36 > `board-view.tsx` 3.63,均为警戒区非红线;是否先接入浏览器侧覆盖口径由维护者决定。
-- 不在上列但同样越界:`packages/domain/src/index.ts`(714 行)、`packages/logging/src/index.ts`(674 行)、`plugins/rss/src/index.ts`(558 行)为入口文件 >300 行的桶文件对象;`apps/worker/src/workflow-ingest.test.ts`(865 行)为纯测试对象,`V` 不适用。
-- 排名对 `D` 口径敏感(见 G05 README),改判其它对象只需该目录更名。
+- `packages/transport-http/src/index.ts`(P=2.49,41.4 KB):桶文件群最后一员,纯单体;`index.test.ts`(38.7 KB)随其拆。
+- V 未测对象(提案 §4.2):`product-fixtures.tsx`(10.36)、`board-view.tsx`(3.63,30.6 KB),均为警戒区非红线;是否接入浏览器侧覆盖口径由维护者决定。
+- 不在上列但同样越界:`packages/domain/src/index.ts`(714 行)、`packages/logging/src/index.ts`(674 行)、`plugins/rss/src/index.ts`(558 行)为入口文件 >300 行的桶文件对象;`apps/worker/src/workflow-ingest.test.ts`(865 行)为纯测试对象。
+- 警戒区存量(2026-09-14 门禁):`packages/application/src/workflow-host-runtime.ts`(43.8 KB,基线内已增长)、`packages/worker-admin/src/index.ts`(38.0)、`packages/storage-prisma/src/workflow-backend.ts`(31.4)。
