@@ -26,13 +26,15 @@
 
 ## Current State
 
-**立项**（2026-09-14）。任务文档已建；**worktree/分支创建待维护者审批**，批复前不动代码。
+**进行中**（2026-09-14 开工）。worktree `.worktree/g07-transport-http` + 分支 `refactor/g07-transport-http`（基于 `master` `e33de88`）；维护者已把红线口径设定为**完整口径**（行数或字节或 token 先到先触发）。**切片 0 完成**：导出面 4 个（2 值 / 2 类型）冻结 + 常驻契约测试；madge 0 环；dist 94 KB；typecheck 0 / unit 82 文件·516 用例 / property 4 / e2e 4。
+
+**下一步**：切片 1 按行为拆 `index.test.ts`（964 行）；切片 2 按 G03 先例「继承链拆文件 + 门面」拆 1058 行的 `HttpCosmosClient`（约 90 个方法按资源域分组），消费方与导出面零改动。
 
 ## 计划切片（待 worktree 批复后细化）
 
 | # | 切片 | 验收（≤3 条） | 状态 |
 |---|---|---|---|
-| 0 | 前置：worktree + 基线（大小/行数/4 个导出的导出面快照与常驻契约测试/三配置测试/build 字节/madge） | 三配置全绿；导出面快照与契约测试入库 | todo |
+| 0 | 前置：worktree + 基线（大小/行数/4 个导出的导出面快照与常驻契约测试/三配置测试/build 字节/madge） | 三配置全绿；导出面快照与契约测试入库 | done（2026-09-14；导出面 4 个、契约测试入库、madge 0、dist 94 KB、typecheck 0 / unit 82·516 / property 4 / e2e 4） |
 | 1 | 测试按行为拆：`index.test.ts`（964 行）按行为/聚合拆为同级文件 | 单文件 ≤400 行；用例数守恒；三配置全绿 | todo |
 | 2 | 单体按聚合拆：按 HTTP 传输的关注点（客户端/错误/SSE 或等价聚合）移入模块，入口留门面 | 4 个导出零 diff；入口 ≤300 行；三配置全绿 | todo |
 | 3 | 收口：`MODULE.md`、`repo-map.json` 重生成、`code-baseline.json` 下调（2 条移除）、读取量指标 | 基线只减不增；`docs:check` 0 失败 | todo |

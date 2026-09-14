@@ -21,3 +21,44 @@ G06 汇报里的「代码红线文件 3 → 0」只对**字节/token 门禁**成
 ### 未做
 
 worktree/分支创建（待维护者审批）；全部验证命令（尚无代码改动）。
+
+## 2026-09-14 切片 0：前置（worktree + 基线 + 导出面与契约测试）
+
+### 载体
+
+- 维护者 2026-09-14 批复「批准 G07 开工」，并把**红线口径设定为完整口径**（>800 行 或 >50 KB 或 >15k token 先到先触发），裁定已写入治理索引。
+- worktree `.worktree/g07-transport-http`，分支 `refactor/g07-transport-http`，基于 `master` `e33de88`（`git fetch origin` 后与 `origin/master` 一致）。
+- 环境前置：`bun install`（1,659 包）+ `bun run db:generate`（G05/G06 教训复用）。
+
+### 基线（对象 = 文件 + 同名测试）
+
+| 文件 | 行数 | 字节 |
+|---|---|---|
+| `packages/transport-http/src/index.ts` | 1269 | 42,368（41.4 KB） |
+| `packages/transport-http/src/index.test.ts` | 964 | 39,598（38.7 KB） |
+| 对象合计 | 2233 | 81,966（80.0 KB） |
+
+- **导出面 4 个**（2 值 / 2 类型）：值 `CosmosTransportError`、`HttpCosmosClient`；类型 `CosmosEventSource`、`HttpCosmosClientOptions`。0 处 `export *`，源码层与解析后一致。
+- **内部形态**：顶层只有 4 个声明——两个 interface、`CosmosTransportError`（约 12 行）、`HttpCosmosClient`（**约 1058 行**，含约 90 个按资源排列的 `async` 方法：health/connector/来源定义/探测/媒体清理 → 来源 → 连接 → 存储备份 → 运行控制 → feed/search → story → topic → entity → label/collection/favorite/annotation/saved view → board/spotlight）。
+- 构建产物基线：`packages/transport-http/dist` = 94 KB。
+- madge 循环依赖基线：**0 环**（守卫是保持 0）。
+
+### 新增资产
+
+- `packages/transport-http/entry-surface.txt`：4 行导出面快照。
+- `packages/transport-http/src/entry-contract.test.ts`：常驻契约测试，断言运行时值导出集合等于快照 `value` 行（2 个）。
+
+### 验证（worktree 内）
+
+| 命令 | 结果 |
+|---|---|
+| `bun run typecheck` | EXIT=0 |
+| `bunx vitest run` | 82 文件 / 516 用例全绿（master 基线 81/515 + 本切片新增契约测试 1 文件 1 用例） |
+| `bun run test:property` | 4 用例全绿 |
+| `bun run test:e2e` | 4 用例全绿 |
+| `bun run build:packages` | EXIT=0；`dist` = 94 KB |
+| `bunx madge --circular --extensions ts packages/transport-http/src/index.ts` | 0 环 |
+
+### 方案预告（待切片 2 执行）
+
+沿用 **G03 先例：继承链拆文件 + 门面**——`HttpCosmosClient` 按资源域拆到多个模块（Base 承载构造与请求管道 → 来源/内容/用户组织/看板各一册 → `index.ts` 留 4 个导出的门面），类仍是单个、**消费方与导出面零改动**；模块级 helper 与请求管道抽到 `internals.ts`。切片 1 先按行为拆 `index.test.ts`（964 行）作为护栏。
