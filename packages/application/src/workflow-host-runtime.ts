@@ -27,7 +27,9 @@ import {
 import type { RetryPolicy } from "@cosmos/contracts";
 import { ActionExecutionError, ActionRegistry } from "./action.js";
 import type { HostActionExecutionFence } from "./action.js";
-import type { LoggerPort } from "./index.js";
+import type {
+    LoggerPort,
+} from "./logger.js";
 import {
     WorkflowHostError,
     type ActivityJobLease,

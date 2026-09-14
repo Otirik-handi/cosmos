@@ -20,7 +20,12 @@ import {
     type WorkflowEnvelope,
     type WorkflowHostStore,
 } from "./workflow-host.js";
-import type { CosmosRepository, LoggerPort } from "./index.js";
+import type {
+    CosmosRepository,
+} from "./repository-port.js";
+import type {
+    LoggerPort,
+} from "./logger.js";
 
 /**
  * Explicit retention cleanup as a maintenance Run (ADR-0015 decisions 7/10).

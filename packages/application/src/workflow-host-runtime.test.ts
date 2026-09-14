@@ -15,15 +15,19 @@ import type { ActionDefinition } from "@cosmos/contracts";
 import {
     ActionExecutionError,
     ActionRegistry,
+} from "./action.js";
+import {
     WorkflowActivityWorker,
     WorkflowCompletionDispatcher,
     WorkflowRunLane,
-    type WorkflowActivityJobClaim,
-    type WorkflowCompletionClaim,
-    type WorkflowEnvelope,
-    type WorkflowHostStore,
-    type WorkflowRunLease,
-} from "./index.js";
+} from "./workflow-host-runtime.js";
+import type {
+    WorkflowActivityJobClaim,
+    WorkflowCompletionClaim,
+    WorkflowEnvelope,
+    WorkflowHostStore,
+    WorkflowRunLease,
+} from "./workflow-host.js";
 import type {
     CompleteActivityInput,
     CompleteActivityResult,

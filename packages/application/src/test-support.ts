@@ -2,7 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { SourceSnapshot } from "@cosmos/contracts";
 
-import type { LoggerContext, LoggerPort } from "./index.js";
+import type {
+    LoggerContext,
+    LoggerPort,
+} from "./logger.js";
 
 export function captureLogger(): {
     logger: LoggerPort;

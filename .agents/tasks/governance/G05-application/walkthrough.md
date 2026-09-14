@@ -67,3 +67,17 @@
 - 与切片 3 的聚合对齐:测试文件按「连接器注册表 / 连接器探测 / 日志」分组,对应切片 3 的 `connector-registry.ts`、`connector-probe.ts`、`logger.ts`。
 - 验证(worktree 内):类型检查 0;application 包内 9 文件 / 78 用例;全仓 unit **75 文件 / 514 用例**(文件数 73 → 75,用例数不变——拆分前后测试数守恒是本次的关键判据);property 3/4;e2e 4/4;build:packages 0;madge 仍是 3 个既有环、未新增。
 - 偏差:单个 describe 一个文件会产出 24 行的微文件,但 ConnectorRegistry 是独立单元,与 `connector-probe.ts` 各自成对,故保留 3 个文件而非合并成 2 个。
+
+## 2026-09-14 切片 3:单体按聚合拆(入口 2149 → 98 行)
+
+- 入口自有 60 个顶层声明按聚合移入 11 个模块:`result-types`、`logger`、`errors`(31 个域错误类)、`repository-port`(含 `CosmosRepository` 532 行)、`connector-ports`、`connector-registry`、`connector-probe`、`ingestion-service`、`ingestion-worker`、`health`,以及包内共享 helper 模块 `internals`(文件读取、失败归类与重试延时;被探测与 Worker 共用,故不放进任何一方)。`internals` 的取舍沿用 G03 的先例(模块级 helper 抽到 `internals.ts`)。
+- 入口改写为「每模块一条导出语句、类型用内联 `type` 修饰、名字按 92 列密集排布」:**98 行**,全部是导出与模块地图。
+- **内部 import 改指聚合模块**是本次的关键动作:原先 `media-acquisition.ts`、`workflow-ingest.ts`、`workflow-media-cleanup.ts`、`workflow-host.ts` 等实现模块都从包入口 `./index.js` 取类型——这正是 3 个循环依赖的成因。改为指向各自聚合模块后,**madge 循环依赖 3 → 0**(不再只是「不新增」)。
+- 验证(worktree 内):导出面**逐字节零 diff(仍 147 个)**;全仓 `bun run typecheck` 0 错误;unit **75 文件 / 514 用例**(与切片 2 一致);property 3/4;e2e 4/4;`bun run build:packages` 0;madge 0 环。
+- 成本记录:`packages/application/dist` 由 735 KB 增至 953 KB(+30%)——模块数量增加带来更多 `.js`/`.d.ts`/`.map` 文件的固定开销。这是拆分的真实代价,按提案「最小必要上下文」的目标换取的是读取量下降。
+- 偏差(全部由验证发现,非人工核对发现):
+  1. 首版脚本用「最后一个 `} from "…"` 行」定位 import 头结束,而切片 1 之后**导出语句同样以 `} from "…"` 结尾**,导致每个聚合模块的头部被塞进整段导出块(重复导出、假循环边、测试大面积失败)。改为只在第一个导出语句之前统计。
+  2. `ConnectorExecutionError` 名称以 `Error` 结尾,被 `errors` 与 `connector-ports` 同时认领,声明写了两份、入口重复导出。按「连接器错误属于连接器端口合同」判归 `connector-ports`。
+  3. `ClaimedJob`/`CompleteJobInput` 是包内类型,`verbatimModuleSyntax` 要求 `import type`;首版按值导入报 TS1484。
+  4. 生成器产出过 `import type { type X }`(TS2206),以及单行形式下的同类问题;两次修正后收敛。
+  5. 每个模块整块继承原 import 头会留下一批未使用导入,既撑大文件又制造假循环边(`media-acquisition.ts > logger.ts`)。清掉未使用导入后,模块总行数由 4096 降到 2138,且最后一个环消失。

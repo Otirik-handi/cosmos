@@ -11,16 +11,30 @@ import type {
 
 import {
     ConnectorRegistry,
+} from "./connector-registry.js";
+import {
     ConnectorProbeService,
-    createBuiltinManifestCatalog,
-    IngestionService,
-    IngestionWorker,
     SourceConfigProbeService,
-    type CosmosRepository,
-    type IngestConnector,
-    type LoggerContext,
-    type LoggerPort,
-} from "./index.js";
+} from "./connector-probe.js";
+import {
+    createBuiltinManifestCatalog,
+} from "./catalog.js";
+import {
+    IngestionService,
+} from "./ingestion-service.js";
+import {
+    IngestionWorker,
+} from "./ingestion-worker.js";
+import type {
+    CosmosRepository,
+} from "./repository-port.js";
+import type {
+    IngestConnector,
+} from "./connector-ports.js";
+import type {
+    LoggerContext,
+    LoggerPort,
+} from "./logger.js";
 
 import { captureLogger, source } from "./test-support.js";
 

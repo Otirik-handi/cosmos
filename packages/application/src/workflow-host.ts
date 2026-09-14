@@ -7,7 +7,9 @@ import type {
     WorkflowDefinitionReference,
 } from "@notnotype/nb-workflow";
 import type { ActionDefinition, RetryPolicy } from "@cosmos/contracts";
-import type { LoggerPort } from "./index.js";
+import type {
+    LoggerPort,
+} from "./logger.js";
 
 /**
  * Workflow status stored by the host envelope. `waiting` is an internal
