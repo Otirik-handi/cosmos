@@ -439,7 +439,7 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 - class merge utility：[`apps/web/src/lib/utils.ts`](../../../apps/web/src/lib/utils.ts)。
 - Next rewrite/output/logging：[`apps/web/next.config.ts`](../../../apps/web/next.config.ts)。
 - Web scripts/dependencies：[`apps/web/package.json`](../../../apps/web/package.json)。
-- HTTP URL/schema/error/SSE behavior：[`packages/transport-http/src/index.ts`](../../../packages/transport-http/src/index.ts)、[`packages/transport-http/src/index.test.ts`](../../../packages/transport-http/src/index.test.ts)。
+- HTTP URL/schema/error/SSE behavior：[`packages/transport-http/src/client-base.ts`](../../../packages/transport-http/src/client-base.ts)、[`packages/transport-http/src/client-platform.test.ts`](../../../packages/transport-http/src/client-platform.test.ts)。
 - Shared form/response contracts：[`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)、[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)。
 
 ## React 组件实验室

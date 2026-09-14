@@ -218,7 +218,7 @@ EventSource factory error 不会被包成 `CosmosTransportError`，会以原始�
 ## 实现与测试锚点
 
 - Client、CosmosTransportError、EventSource port 和所有方法：[`packages/transport-http/src/index.ts`](../../../packages/transport-http/src/index.ts)。
-- URL、health schema、connector catalog、SSE parse/close 测试：[`packages/transport-http/src/index.test.ts`](../../../packages/transport-http/src/index.test.ts)。
+- URL、health schema、connector catalog、SSE parse/close 测试：[`packages/transport-http/src/client-platform.test.ts`](../../../packages/transport-http/src/client-platform.test.ts)。
 - DTO/Zod owner：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)、[`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)。
 - 当前调用方与 error display：[`apps/web/src/app/page.tsx`](../../../apps/web/src/app/page.tsx)。
 - 同源 rewrite：[`apps/web/next.config.ts`](../../../apps/web/next.config.ts)。
