@@ -146,3 +146,15 @@
 `bun run test:browser`（Playwright 自起 RSS fixture 与 Web 栈）：**17 用例全绿**（52.7s）。这是 contracts 拆分的端到端确认——Web/API/Worker 全部消费 `@cosmos/contracts`，导出面零 diff 与全仓构建通过之外，真实浏览器路径（录入、媒体策略、离线图片、拆分、子类型、Topic/Entity/收藏/批注、主题）无回归。
 
 切片 3 至此收口并提交。
+
+## 2026-09-14 切片 4：page.tsx 按域拆为页面壳 + 6 个域 hook
+
+- 结果：`apps/web/src/app/page.tsx` **1680 行 / 62.2 KB → 738 行 / 28.3 KB**（低于源码红线 >800 行 与 >50 KB；高于「100~600 行为佳」的偏好值）。新增 `apps/web/src/app/home/`：`page-runtime.ts`（客户端单例、来源定义常量、无状态 helper）、`page-bridge.ts`（共享上下文类型）、6 个域 hook（`use-story-workspace` 341 行、`use-source-workspace` 294、`use-feed-workspace` 198、`use-topic-workspace` 194、`use-entity-workspace` 187、`use-board-workspace` 140）。
+- **关键发现（决定了做法）**：对 Home 的 117 个顶层声明建依赖图，**弱连通聚类只有 1 个**（115 名互相牵连）——page.tsx **没有机械切分点**。前四个切片那种「连续行段搬运」在这里不成立，必须主动引入 hook 边界与显式依赖。这是 UI 对象与 contracts 类对象的本质差异，后续 UI 治理应以此为前提评估工作量。
+- 依赖接线（按依赖顺序，避免环）：`useStoryWorkspace` 无外部依赖 → `useFeedWorkspace(ctx, storyApi, searchForm, setSources)` → `useSourceWorkspace(ctx, sourceForm, shared{error,loading,sources,setSources}, feedApi)` → `useEntityWorkspace(ctx, storyApi)` → `useTopicWorkspace(ctx, storyApi)` → `useBoardWorkspace(ctx, storyApi, topicApi)`。跨域只传「先建立的 hook 的返回面」或页面壳持有的共享值，不做可变对象桥接。
+- **偏差 1（`sources` 归位页面壳）**：`sources` 同时被 feed 的整体刷新与来源操作写、被 JSX 读，抽取时造成 feed ↔ source 双向依赖。改为把它当作共享读模型留在页面壳（与 `loading`/`error`/`notice` 同类），feed 收 `setSources`、source 收 `sources`+`setSources`，环消失。
+- **偏差 2（两个 probe effect 回到页面壳）**：`react-hooks/set-state-in-effect` 只在自定义 hook 内触发——同一段 effect 代码在页面组件里 lint 为 0 error（已用 HEAD 版本实证），抽进 hook 后变成 2 个 error。把「打开表单重置探测态」与「字段变化作废探测结果」两个 effect 搬回页面壳（纯搬运、行为不变、deps 不变）。**代价**：`lint:web` warning 由 14 增至 **60**（多为 hook 入参对象的 exhaustive-deps 提示），0 error；已记 Follow-ups 评估是否把各 hook 的返回面 memo 化。
+- 工具：一次性脚本按域搬移状态与处理函数（自动计算闭包、校验自由变量、生成 hook 文件与解构），用完即删；未入库。
+- 行为等价依据：处理函数体逐字搬运，未改逻辑；**浏览器用例 17/17 全绿**（含 Story 打开/修订/归并/拆分/子类型/证据、Topic/Entity/收藏/Collection/批注、来源媒体策略与清理预览、离线图片、看板编辑、移动端溢出、主题）。
+- 验证：全仓 `bun run typecheck` 0；`bun run lint:web` 0 error；`bun run test:browser`（含 `bun run build` 全量构建）17/17。
+- 未运行：unit/property/node-e2e 三配置（本切片只改 `apps/web`，未触碰 packages 与 API/Worker 代码；contracts 侧影响已在切片 0–3 覆盖）。
