@@ -225,3 +225,11 @@
 
 - **PROJECT-STATUS.md 未改**：核查确认该文件从不记录治理任务（G01–G05 均无提及），治理状态只维护在 `.agents/tasks/governance/README.md` 索引，故本次沿用惯例、不做虚增。
 - 未做的事（需维护者授权）：**推送**、**合并 master**、清理 worktree 与分支。
+
+## 2026-09-14 收尾：合并、推送与清理（维护者授权「完成 G06 收尾工作」）
+
+- **合并**：`git merge --no-ff refactor/g06-redline-code` → merge commit **`df76e96`**（基于 `ebb9ddb`，本地 master 当时领先 origin 8 个提交、远端无新提交，无需 ff 同步）。
+- **master 上重验**（G05 惯例，合并后必须重跑）：typecheck 0；unit 81 文件 / 515 用例；property 4；e2e 4；浏览器 **17/17**；`lint:web` 0 error；两份体积门禁 PASS；`docs:check` **600 文件 0 失败**。
+- **推送**：`ebb9ddb..df76e96` → `origin/master`（`Otirik-handi/cosmos`）；**CI 已触发**（run `34831687620`，Quality + 其它作业）。G05 踩过的 `gh` 仓库解析坑已避开（显式 `--repo Otirik-handi/cosmos`）。
+- **清理**：`git worktree remove` 注销成功但目录有残留（Windows 长路径/junction）；按仓库规则先复核——**2,555 个 junction 全部指向该 worktree 内部**（outside=0），再用 `cmd /c rmdir /s /q` 删除（不跟随 junction）。清理前后主工作区 `node_modules` 文件数均为 **50,670**，确认无损伤。本地分支 `refactor/g06-redline-code` 已删除（`-d`，已合并）。
+- **口径更正（重要）**：本任务早期汇报的「代码红线文件 3 → 0」只对**字节/token 门禁**成立。按提案 §4.1 的完整红线（源码/测试 **>800 行** 或 >50 KB 或 >15k token），仓库仍有 **10 个文件超红线**，全部是「行数越界、字节未越界」——脚本门禁不拦行数（该缺口治理索引早有记载）。清单见治理索引「待治理候选」。
