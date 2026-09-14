@@ -62,3 +62,29 @@ worktree/分支创建（待维护者审批）；全部验证命令（尚无代�
 ### 方案预告（待切片 2 执行）
 
 沿用 **G03 先例：继承链拆文件 + 门面**——`HttpCosmosClient` 按资源域拆到多个模块（Base 承载构造与请求管道 → 来源/内容/用户组织/看板各一册 → `index.ts` 留 4 个导出的门面），类仍是单个、**消费方与导出面零改动**；模块级 helper 与请求管道抽到 `internals.ts`。切片 1 先按行为拆 `index.test.ts`（964 行）作为护栏。
+
+## 2026-09-14 切片 1：index.test.ts 按资源域拆（6 个文件）
+
+- 原 `index.test.ts` 964 行 / 1 个 describe / 17 个用例，按资源域拆为 6 个同级文件：`client-platform.test.ts`（99 行 / 3 用例）、`client-sources.test.ts`（234 / 5）、`client-entity.test.ts`（140 / 2）、`client-story.test.ts`（138 / 2）、`client-organization.test.ts`（253 / 3）、`client-board.test.ts`（140 / 2）。用例**逐字搬运**、名称不变，只换 describe 标题。
+- 拆分口径与切片 2 的实现分册对齐（platform / sources / content 的 story+entity / organization / board）。
+- **踩坑（2 个，均由测试直接拦下）**：① 最后一个用例的行范围含了外层 describe 的收尾 `});`，生成文件多一个 `}`（esbuild 报 `Unexpected "}"`）；② 修 ① 时用 `strip()` 判尾行，把用例自身的 `    });` 也当成收尾删掉，6 个文件一起坏——改为「只裁无缩进的 `});`」后一次通过。教训：**按缩进区分嵌套层级的收尾**，不要用 `strip()`。
+- 验证：包内 7 文件 / 18 用例全绿（6 分册 17 用例 + 切片 0 的契约测试）；全仓 unit **87 文件 / 516 用例**（文件 82 → 87，用例数守恒）；typecheck 0；property 4；e2e 4。
+
+## 2026-09-14 切片 2：HttpCosmosClient 继承链拆分（入口 1058 → 11 行门面）
+
+- 关键实测：类内 **102 处 `this.request(`**、1 处 `this.fetcher(`、1 处 `this.eventSourceFactory(`——**方法之间不互相调用**，因此继承链纯粹是文件组织、无行为耦合。私有管道只有 **1 个** `request<T>()`（原 1244–1268）。
+- 拆分为「基类 + 5 个资源分册 + 门面」（G03 先例：继承链拆文件 + 门面，消费方与导出面零改动）：
+  - `types.ts`（23 行）接口 2 个 + `CosmosTransportError`；`client-base.ts`（87）字段 / 构造 / `protected request()` / SSE 事件流；
+  - 链：`HttpCosmosClientBase` → `PlatformClient`(90) → `SourcesClient`(223) → `ContentClient`(407) → `OrganizationClient`(277) → `BoardClient`(223) → `HttpCosmosClient`（**index.ts 11 行门面**）。
+- 三处 `private` → `protected`（三个字段 + `request`），因为分册要经 `this.request()` 取数据；这是本切片唯一的可见性调整，消费方无感。
+- **踩坑（3 个，均由 typecheck 拦下）**：① 构造函数的结束行用「首个 `}` 行」判定，被内部 lambda 的花括号截断 → 改为从 `constructor(options` 起配平花括号；② `request` 方法块把类的收尾 `}` 也含进去，生成多一个 `}`；③ `private async request<` 的替换只作用于字段块、没作用到方法体 → 分册报 `TS2341: Property 'request' is private`。三次都是「结构定位/替换作用域」类错误，`tsc` 一次说清。
+- 验证（worktree 内）：**导出面逐字节零 diff（仍 4 个）**；包内与全仓 typecheck 0；**madge 0 环**；unit 87 文件 / 516 用例；property 4；e2e 4；build:packages 0。
+- 代价：`packages/transport-http/dist` 94 → **186 KB（+98%）**——模块数的文件固定开销（G05 +30%、G06 +45%，本次分册更多故更高）。
+- 读取量：入口 **10,592 → 141 token（−98.7%）**；最大分册 `client-content.ts` 3,469 token，最小 `types.ts` 163 token。
+
+## 2026-09-14 切片 3：收口
+
+- `packages/transport-http/MODULE.md`（3,093 B）：职责、公共入口、**继承链子模块地图**、阅读顺序、禁区（必须走 `this.request()`、新方法进资源分册、接口只放 `types.ts`、改导出前先重生成快照）。
+- `repo-map.json` 重生成（38 个包/应用目录）。
+- `code-baseline.json` **8 → 6 条**：移除 `transport-http/src/index.ts` 与 `index.test.ts` 两条；**0 条新增**；按「登记值只减不增」把 `workflow-host-runtime.ts` 的登记值回落。门禁 PASS。
+- **完整红线口径下**（维护者 2026-09-14 裁定）红线文件 **10 → 8 个**：transport-http 两项已消除，剩余 8 个全为行数越界（`workflow-host-runtime.ts` 1205 行起，至 `board-view.tsx` 805 行止）。
