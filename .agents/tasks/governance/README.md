@@ -27,7 +27,11 @@
 
 **实测排名(P 与 N 的完整表格、D 口径问题)见 [`G05-application/README.md`](G05-application/README.md) 的「评分与选型依据」**——同一证据不在两处维护。分配现状:G05 取 `packages/application`;G06 取 `contracts`、`page.tsx`、`story-panel.tsx`。
 
-**红线口径提醒(2026-09-14 核实)**:提案 §4.1 的红线是「源码/测试 **>800 行** 或 >50 KB」,**脚本门禁只按字节/token 判、行数越界不拦**。因此 G06 收口时的「红线 0 个」仅对字节口径成立;按完整口径仓库仍有 10 个文件超红线(全部为行数越界):
+**红线口径(维护者 2026-09-14 裁定)**:采用**完整红线**——源码/测试 **>800 行** 或 >50 KB 或 >15k token,三者先到先触发;行数越界与字节越界**同等**作为治理触发条件。
+
+**门禁缺口**:`scripts/size-governance.py --check` 目前只判字节/token,**行数越界不拦**,因此 CI 报不出行数越界文件;把行数阈值并入 `--check`(并为其建立行数基线)是根因修复,列为下一步机制任务。G06 收口时汇报的「红线 0 个」仅对字节口径成立。
+
+**完整口径下当前超红线文件(10 个,全部为行数越界;G07 治理其第 1、4 项)**:
 
 | 文件 | 行 | 字节 |
 |---|---|---|
@@ -42,4 +46,4 @@
 | `apps/web/src/component-lab/product-fixtures.tsx` | 807 | 27.6 KB |
 | `apps/web/src/components/cosmos/board-view.tsx` | 805 | 30.6 KB |
 
-下一步候选:G07 取 `packages/transport-http`(index.ts + index.test.ts,红线内最大者);其余由维护者裁定顺序。**把行数阈值并入 `scripts/size-governance.py --check`** 是消除该盲区的根因修复(承接 G03/G05 Follow-ups)。
+治理队列: **G07 = `packages/transport-http`**(index.ts + index.test.ts,完整口径下最大者,已开工);其余 8 个对象(G08 起)的排序待维护者裁定——候选次序建议按行数降序,即 `application/workflow-host-runtime.ts`(1205)→ `worker-admin/index.ts`(1047)→ `application/media-acquisition.ts`(918)→ `storage-prisma/workflow-backend.ts`(896)→ `worker/workflow-ingest.test.ts`(864)→ `plugins/collectors/index.ts`(818)→ `component-lab/product-fixtures.tsx`(807)→ `cosmos/board-view.tsx`(805)。
