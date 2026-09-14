@@ -47,3 +47,12 @@
 ### 未运行
 
 浏览器/component-lab 验收(切片 2 测试拆分后按需运行);CI(分支未推送)。
+
+## 2026-09-14 切片 1:桶文件步骤(显式具名导出 + MODULE.md)
+
+- 变更:`packages/application/src/index.ts` 的 7 处 `export *`(原第 77–83 行)替换为 27 行显式具名导出。值导出用 `export { … } from "…"`,类型导出用 `export type { … } from "…"`——仓库 `verbatimModuleSyntax: true`,类型再导出必须走 `export type`。**实现零改动**。
+- 新资产 `packages/application/MODULE.md`(2,664 B,≤3 KB):职责、公共入口(147 个导出的分组概述 + 快照与契约测试指针)、11 个非测试子模块的地图与 token 估算、阅读顺序、禁区。
+- 显式清单由脚本按解析结果生成,不手抄:逐个模块跑 `scripts/entry-export-surface.ts` 取值/类型导出再合成(值 19 个、类型 79 个)。147 个名字手工转录必然出错。
+- 验证(worktree 内):**导出面零 diff**(重新生成后与 `entry-surface.txt` 逐字节相同,仍是 147 个);`bun run typecheck` EXIT=0;`bunx vitest run` 73 文件 / 514 用例;`bun run test:property` 3 文件 / 4 用例;`bun run test:e2e` 4 文件 / 4 用例;`bun run build:packages` EXIT=0。
+- madge:**仍是 3 个既有环,未新增**。桶文件步骤本身不消环——环源于入口同时 import 实现与再导出,消环要等切片 3 把实现移出 `index.ts`。切片 1 的验收因此是「不新增环」而非「环归零」。
+- 偏差:`MODULE.md` 没有逐条枚举 147 个导出名——3 KB 硬上限装不下,改为按语义分组概述 + 指向 `entry-surface.txt`(机器可读真相源)与 `entry-contract.test.ts`(常驻护栏)。提案 §4.5「公共入口导出清单」由此满足实质而非字面。

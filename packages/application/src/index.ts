@@ -74,13 +74,114 @@ import {
     type MediaRetryOutcome,
 } from "./media-acquisition.js";
 
-export * from "./action.js";
-export * from "./catalog.js";
-export * from "./media-acquisition.js";
-export * from "./workflow-host.js";
-export * from "./workflow-host-runtime.js";
-export * from "./secret-store.js";
-export * from "./connector-state-store.js";
+export { ActionExecutionError, ActionRegistry } from "./action.js";
+export type {
+    ActionExecutionContext,
+    ActionHandler,
+    HostActionExecutionContext,
+    HostActionExecutionFence,
+    HostActionHandler,
+    RegisteredAction,
+} from "./action.js";
+export { StaticCatalog, createBuiltinManifestCatalog } from "./catalog.js";
+export type {
+    ActionDefinitionManifest,
+    CatalogPort,
+    JsonSchemaRef,
+    ManifestHash,
+    SourceAuthManifest,
+    SourceDefinitionManifest,
+    SourceOperationManifest,
+    WorkflowDefinitionManifest,
+} from "./catalog.js";
+export {
+    acquireItemsSkippingUnchanged,
+    createMediaAcquirer,
+    isPublicAddress,
+    mediaAcquisitionDefaults,
+    mediaDownloadCapability,
+    mediaRetryDefaults,
+    parseAllowedHosts,
+    resolveMediaPolicy,
+} from "./media-acquisition.js";
+export type {
+    HostResolver,
+    MediaAcquirer,
+    MediaAcquirerOptions,
+    MediaAcquisitionContext,
+    MediaAcquisitionLimits,
+    MediaPolicy,
+    MediaRetrier,
+    MediaRetryCandidate,
+    MediaRetryContext,
+    MediaRetryOutcome,
+} from "./media-acquisition.js";
+export { WorkflowHostConflictError, WorkflowHostError } from "./workflow-host.js";
+export type {
+    ActivityJobLease,
+    ActivityJobTerminalResult,
+    CancelWorkflowRunInput,
+    ClaimActivityJobInput,
+    ClaimWorkflowCompletionInput,
+    ClaimWorkflowRunInput,
+    CompleteActivityInput,
+    CompleteActivityResult,
+    CreateWorkflowEnvelopeInput,
+    DeadLetterWorkflowCompletionInput,
+    DeliverWorkflowCompletionInput,
+    FailWorkflowRunInput,
+    HeartbeatActivityJobInput,
+    HeartbeatWorkflowCompletionInput,
+    HeartbeatWorkflowRunInput,
+    ListWorkflowRunsInput,
+    MarkResumeRequiredInput,
+    RecoverWorkflowRunInput,
+    RecoveryRunsInput,
+    ReleaseActivityJobInput,
+    ReleaseWorkflowRunInput,
+    RequeueWorkflowCompletionInput,
+    WorkflowActionReference,
+    WorkflowActivityJob,
+    WorkflowActivityJobClaim,
+    WorkflowActivityJobKind,
+    WorkflowActivityJobPayload,
+    WorkflowActivityJobPort,
+    WorkflowCompletion,
+    WorkflowCompletionClaim,
+    WorkflowCompletionPort,
+    WorkflowCompletionStatus,
+    WorkflowEnvelope,
+    WorkflowHostErrorCode,
+    WorkflowHostOptions,
+    WorkflowHostStore,
+    WorkflowJobStatus,
+    WorkflowRunClaimPurpose,
+    WorkflowRunLease,
+    WorkflowRunLeasePort,
+    WorkflowRunStatus,
+    WorkflowRuntimeAttempt,
+} from "./workflow-host.js";
+export {
+    FixedRunIdGenerator,
+    WorkflowActivityWorker,
+    WorkflowCompletionDispatcher,
+    WorkflowRunLane,
+} from "./workflow-host-runtime.js";
+export type {
+    WorkflowActivityWorkerOptions,
+    WorkflowActivityWorkerResult,
+    WorkflowCompletionDispatcherOptions,
+    WorkflowCompletionDispatcherResult,
+    WorkflowLeaseRuntimeOptions,
+    WorkflowRunLaneOptions,
+    WorkflowRunLaneResult,
+    WorkflowRunnerFactory,
+    WorkflowRunnerLike,
+    WorkflowRuntimeDependencies,
+} from "./workflow-host-runtime.js";
+export type { SecretStorePort } from "./secret-store.js";
+export { ConnectorStateConflictError } from "./connector-state-store.js";
+export type { ConnectorStateEntry, ConnectorStateStorePort } from "./connector-state-store.js";
 
 export interface PersistIngestItemResult {
     createdEntry: boolean;
