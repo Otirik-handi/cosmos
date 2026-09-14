@@ -88,3 +88,12 @@ worktree/分支创建（待维护者审批）；全部验证命令（尚无代�
 - `repo-map.json` 重生成（38 个包/应用目录）。
 - `code-baseline.json` **8 → 6 条**：移除 `transport-http/src/index.ts` 与 `index.test.ts` 两条；**0 条新增**；按「登记值只减不增」把 `workflow-host-runtime.ts` 的登记值回落。门禁 PASS。
 - **完整红线口径下**（维护者 2026-09-14 裁定）红线文件 **10 → 8 个**：transport-http 两项已消除，剩余 8 个全为行数越界（`workflow-host-runtime.ts` 1205 行起，至 `board-view.tsx` 805 行止）。
+
+## 2026-09-14 收尾：合并、推送与清理（维护者授权「直到 G07 完成」）
+
+- **合并**：`git merge --no-ff refactor/g07-transport-http` → merge commit **`06065cd`**（分支基于 `master` `e33de88`）。
+- **master 上重验**：typecheck 0；unit **87 文件 / 516 用例**；property 4；e2e 4；浏览器 **17/17**；两份体积门禁 PASS；`docs:check` 618 文件 0 失败。
+- **踩坑（docs:check 拦下）**：拆掉 `index.test.ts` 后，`docs/spec/interfaces/0004-http-client.md` 与 `0005-web-client.md` 里指向它的相对链接断链——正是根 `AGENTS.md` 明写的那条「引用被移动文件的文档锚点要与拆分同批修正」。已在同一批次改指 `client-platform.test.ts` 与 `client-base.ts`（提交 `c876fbe`）。教训：**测试文件也是被引用对象**，切片 3 收口清单里应包含「全仓 `rg` 被拆文件名」这一步（本次是 CI/门禁兜住的，不是自己想到的）。
+- **推送**：`08c0554..c876fbe` → `origin/master`；CI run `34833525669` 触发。
+- **清理**：`git worktree remove` + `cmd /c rmdir /s /q`（删前复核 **2,529 个 junction 全部指向该 worktree 内部**、outside=0）；清理前后主工作区 `node_modules` 文件数均为 **50,670**；本地分支已删除。
+- **最终读数**：`index.ts` 1269 行 / 41.4 KB → **11 行 / 0.5 KB**（读取量 10,592 → **141 token，−98.7%**）；`index.test.ts` 964 行 → 6 个文件（99~253 行，17 用例守恒）；最大分册 `client-content.ts` 407 行 / ~3.5k token。`code-baseline.json` 8 → 6 条；**完整红线口径下红线文件 10 → 8**（剩余 8 个全为行数越界）。
