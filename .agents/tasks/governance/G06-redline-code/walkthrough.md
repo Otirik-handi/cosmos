@@ -197,3 +197,15 @@
   - **踩坑**：无——本批只出现 2 类错误，均由 typecheck 直接指出（漏 `Button` 导入、可选 props 未给默认值）。
 - 验证：`apps/web` tsc 0；`bun run lint:web` 0 error（73 warning）；浏览器 **17/17 全绿**。
 - **剩余 5 个区块（719 行）未做**：story-actions（~94）、split（~152）、organization（~300）、link-entity（~93）、topic-join（~80）。全部搬出后 story-panel.tsx 约 734 行（红线 800 以下）。做法与本批一致：自动判定区间 → 子组件受控 → 显式 props；organization 的 42 个入参最多，建议单独一批。
+
+## 2026-09-14 切片 5b-2：剩余 5 个区块搬出，story-panel 离开红线
+
+- 结果：story-panel.tsx **1453 → 757 行**（**低于 800 行红线**）。新增 5 个子组件：`story-actions.tsx`（Story 操作，94 行原区块）、`split.tsx`（拆分 Story，134）、`organization.tsx`（用户组织，309）、`link-entity.tsx`（关联/创建 Entity，92）、`topic-join.tsx`（加入/创建 Topic，76）。
+- 与 5b-1 的差异：这 5 个区块多数由**多个 `{cond && (...)}` 组成**（link-entity 3 段、topic-join 2 段），因此改为**子组件自持条件判断**（组件内返回 `<>…</>`），调用点只剩一行 `<XSection … />`；5b-1 的单区块仍把条件留在调用点。
+- props：15 / 18 / 42 / 13 / 13 个，全部显式传值 + setter + 处理器，状态与提交处理器仍在主组件。
+- **踩坑（3 个，全部由 typecheck 拦下）**：
+  1. 区间起始行差一：link-entity 的条件行 `{story.entities.length > 0 && (` 在 1280 而非 1281，漏搬后父组件残留半截条件、括号不平衡（TS2657）。教训：**多段条件区块的起始行要含条件行本身**。
+  2. 可选 props 正则漏配：`(\w+):` 匹配不到 `name?:`，生成的解构缺了可选参数。
+  3. 修 (2) 时用「从 `: Props` 往后找 `}`」定位闭合括号，实际应往前找（`}: Props` 的 `}` 在 `: Props` 之前），把签名与函数体开头整段删掉——因该文件是派生产物，直接回滚重跑比就地修补更省事。
+- 验证：`apps/web` tsc 0；`bun run lint:web` 0 error（86 warning）；浏览器 **17/17 全绿**。
+- **切片 5 完成**：story-panel 系（1902 行单体）现为 `story-panel.tsx` **757 行** + `story-panel/` 下 15 个文件（子组件 11 + 标签 1 + 其余支撑）。
