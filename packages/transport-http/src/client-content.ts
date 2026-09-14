@@ -1,0 +1,407 @@
+import {
+    feedPageSchema,
+    mergeStoriesCommandSchema,
+    moveEntryToStoryCommandSchema,
+    splitStoryCommandSchema,
+    searchPageSchema,
+    storyDetailSchema,
+    storySubtypePageSchema,
+    topicDetailSchema,
+    topicPageSchema,
+    addTopicMemberCommandSchema,
+    createTopicCommandSchema,
+    mergeTopicsCommandSchema,
+    removeTopicMemberCommandSchema,
+    restoreTopicMemberCommandSchema,
+    updateTopicCommandSchema,
+    updateTopicMemberRoleCommandSchema,
+    updateStoryRevisionCommandSchema,
+    entryDetailSchema,
+    entryPageSchema,
+    revisionDetailSchema,
+    type FeedPage,
+    type SearchPage,
+    type SearchQuery,
+    type StoryDetail,
+    type StorySubtype,
+    type TopicDetail,
+    type TopicPage,
+    type AddTopicMemberCommand,
+    type CreateTopicCommand,
+    type MergeTopicsCommand,
+    type RemoveTopicMemberCommand,
+    type RestoreTopicMemberCommand,
+    type UpdateTopicCommand,
+    type UpdateTopicMemberRoleCommand,
+    type EntryDetail,
+    type EntryListQuery,
+    type EntryPage,
+    type MergeStoriesCommand,
+    type SplitStoryCommand,
+    type MoveEntryToStoryCommand,
+    type RevisionDetail,
+    type UpdateStoryRevisionCommand,
+    entityDetailSchema,
+    entityPageSchema,
+    createEntityCommandSchema,
+    updateEntityCommandSchema,
+    addEntityAliasCommandSchema,
+    removeEntityAliasCommandSchema,
+    linkStoryEntityCommandSchema,
+    unlinkStoryEntityCommandSchema,
+    linkEntryStoryCommandSchema,
+    unlinkEntryStoryCommandSchema,
+    createEntityRelationCommandSchema,
+    removeEntityRelationCommandSchema,
+    type EntityDetail,
+    type EntityPage,
+    type CreateEntityCommand,
+    type UpdateEntityCommand,
+    type AddEntityAliasCommand,
+    type RemoveEntityAliasCommand,
+    type LinkStoryEntityCommand,
+    type UnlinkStoryEntityCommand,
+    type LinkEntryStoryCommand,
+    type UnlinkEntryStoryCommand,
+    type CreateEntityRelationCommand,
+    type RemoveEntityRelationCommand,
+} from "@cosmos/contracts";
+
+import { SourcesClient } from "./client-sources.js";
+import type {
+    CosmosEventSource,
+    HttpCosmosClientOptions,
+} from "./types.js";
+import { CosmosTransportError } from "./types.js";
+export class ContentClient extends SourcesClient {
+    async feed(options: {
+        cursor?: string;
+        limit?: number;
+    } = {}): Promise<FeedPage> {
+        const params = new URLSearchParams();
+        if (options.cursor) {
+            params.set("cursor", options.cursor);
+        }
+        if (options.limit) {
+            params.set("limit", String(options.limit));
+        }
+        return this.request(`/api/v1/feed?${params.toString()}`, {
+            schema: feedPageSchema,
+        });
+    }
+
+    async search(query: SearchQuery): Promise<SearchPage> {
+        const params = new URLSearchParams();
+        if (query.text) {
+            params.set("text", query.text);
+        }
+        if (query.sourceId) {
+            params.set("sourceId", query.sourceId);
+        }
+        if (query.publishedAfter) {
+            params.set("publishedAfter", query.publishedAfter);
+        }
+        if (query.publishedBefore) {
+            params.set("publishedBefore", query.publishedBefore);
+        }
+        if (query.labelIds) {
+            params.set("labelIds", query.labelIds);
+        }
+        if (query.topicIds) {
+            params.set("topicIds", query.topicIds);
+        }
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/search?${params.toString()}`, {
+            schema: searchPageSchema,
+        });
+    }
+
+    async story(storyId: string): Promise<StoryDetail> {
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}`, {
+            schema: storyDetailSchema,
+        });
+    }
+
+    async moveEntryToStory(
+        storyId: string,
+        input: MoveEntryToStoryCommand,
+    ): Promise<StoryDetail> {
+        const payload = moveEntryToStoryCommandSchema.parse(input);
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/entry-moves`, {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async updateStoryRevision(
+        storyId: string,
+        input: UpdateStoryRevisionCommand,
+    ): Promise<StoryDetail> {
+        const payload = updateStoryRevisionCommandSchema.parse(input);
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/revisions`, {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async mergeStories(input: MergeStoriesCommand): Promise<StoryDetail> {
+        const payload = mergeStoriesCommandSchema.parse(input);
+        return this.request("/api/v1/stories/merges", {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async splitStory(storyId: string, input: SplitStoryCommand): Promise<StoryDetail> {
+        const payload = splitStoryCommandSchema.parse(input);
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/splits`, {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async listStorySubtypes(query: { kind?: StorySubtype["kind"] } = {}): Promise<readonly StorySubtype[]> {
+        const params = new URLSearchParams();
+        if (query.kind) {
+            params.set("kind", query.kind);
+        }
+        const page = await this.request(`/api/v1/story-subtypes?${params.toString()}`, {
+            schema: storySubtypePageSchema,
+        });
+        return page.items;
+    }
+
+    async listTopics(query: { cursor?: string; limit?: number } = {}): Promise<TopicPage> {
+        const params = new URLSearchParams();
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/topics?${params.toString()}`, {
+            schema: topicPageSchema,
+        });
+    }
+
+    async topic(topicId: string): Promise<TopicDetail> {
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}`, {
+            schema: topicDetailSchema,
+        });
+    }
+
+    async createTopic(input: CreateTopicCommand): Promise<TopicDetail> {
+        const payload = createTopicCommandSchema.parse(input);
+        return this.request("/api/v1/topics", {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async updateTopic(topicId: string, input: UpdateTopicCommand): Promise<TopicDetail> {
+        const payload = updateTopicCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/revisions`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async mergeTopics(input: MergeTopicsCommand): Promise<TopicDetail> {
+        const payload = mergeTopicsCommandSchema.parse(input);
+        return this.request("/api/v1/topics/merges", {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async addTopicMember(topicId: string, input: AddTopicMemberCommand): Promise<TopicDetail> {
+        const payload = addTopicMemberCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/members`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async updateTopicMemberRole(
+        topicId: string,
+        input: UpdateTopicMemberRoleCommand,
+    ): Promise<TopicDetail> {
+        const payload = updateTopicMemberRoleCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/member-role-updates`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async removeTopicMember(topicId: string, input: RemoveTopicMemberCommand): Promise<TopicDetail> {
+        const payload = removeTopicMemberCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/member-removals`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async restoreTopicMember(
+        topicId: string,
+        input: RestoreTopicMemberCommand,
+    ): Promise<TopicDetail> {
+        const payload = restoreTopicMemberCommandSchema.parse(input);
+        return this.request(`/api/v1/topics/${encodeURIComponent(topicId)}/member-restorations`, {
+            method: "POST",
+            body: payload,
+            schema: topicDetailSchema,
+        });
+    }
+
+    async listEntities(query: { cursor?: string; limit?: number } = {}): Promise<EntityPage> {
+        const params = new URLSearchParams();
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/entities?${params.toString()}`, {
+            schema: entityPageSchema,
+        });
+    }
+
+    async entity(entityId: string): Promise<EntityDetail> {
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}`, {
+            schema: entityDetailSchema,
+        });
+    }
+
+    async createEntity(input: CreateEntityCommand): Promise<EntityDetail> {
+        const payload = createEntityCommandSchema.parse(input);
+        return this.request("/api/v1/entities", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async updateEntity(entityId: string, input: UpdateEntityCommand): Promise<EntityDetail> {
+        const payload = updateEntityCommandSchema.parse(input);
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}/revisions`, {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async addEntityAlias(entityId: string, input: AddEntityAliasCommand): Promise<EntityDetail> {
+        const payload = addEntityAliasCommandSchema.parse(input);
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}/aliases`, {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async removeEntityAlias(entityId: string, input: RemoveEntityAliasCommand): Promise<EntityDetail> {
+        const payload = removeEntityAliasCommandSchema.parse(input);
+        return this.request(`/api/v1/entities/${encodeURIComponent(entityId)}/alias-removals`, {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async linkStoryEntity(input: LinkStoryEntityCommand): Promise<EntityDetail> {
+        const payload = linkStoryEntityCommandSchema.parse(input);
+        return this.request("/api/v1/story-entity-links", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async unlinkStoryEntity(input: UnlinkStoryEntityCommand): Promise<EntityDetail> {
+        const payload = unlinkStoryEntityCommandSchema.parse(input);
+        return this.request("/api/v1/story-entity-links/removals", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async linkEntryStory(input: LinkEntryStoryCommand): Promise<StoryDetail> {
+        const payload = linkEntryStoryCommandSchema.parse(input);
+        return this.request("/api/v1/entry-story-links", {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async unlinkEntryStory(input: UnlinkEntryStoryCommand): Promise<StoryDetail> {
+        const payload = unlinkEntryStoryCommandSchema.parse(input);
+        return this.request("/api/v1/entry-story-links/removals", {
+            method: "POST",
+            body: payload,
+            schema: storyDetailSchema,
+        });
+    }
+
+    async createEntityRelation(input: CreateEntityRelationCommand): Promise<EntityDetail> {
+        const payload = createEntityRelationCommandSchema.parse(input);
+        return this.request("/api/v1/entity-relations", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async removeEntityRelation(input: RemoveEntityRelationCommand): Promise<EntityDetail> {
+        const payload = removeEntityRelationCommandSchema.parse(input);
+        return this.request("/api/v1/entity-relations/removals", {
+            method: "POST",
+            body: payload,
+            schema: entityDetailSchema,
+        });
+    }
+
+    async entries(query: EntryListQuery = {}): Promise<EntryPage> {
+        const params = new URLSearchParams();
+        if (query.sourceId) {
+            params.set("sourceId", query.sourceId);
+        }
+        if (query.cursor) {
+            params.set("cursor", query.cursor);
+        }
+        if (query.limit) {
+            params.set("limit", String(query.limit));
+        }
+        return this.request(`/api/v1/entries?${params.toString()}`, {
+            schema: entryPageSchema,
+        });
+    }
+
+    async entry(entryId: string): Promise<EntryDetail> {
+        return this.request(`/api/v1/entries/${encodeURIComponent(entryId)}`, {
+            schema: entryDetailSchema,
+        });
+    }
+
+    async revision(revisionId: string): Promise<RevisionDetail> {
+        return this.request(`/api/v1/revisions/${encodeURIComponent(revisionId)}`, {
+            schema: revisionDetailSchema,
+        });
+    }
+}
