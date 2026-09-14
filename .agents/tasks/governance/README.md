@@ -17,35 +17,15 @@
 - [`G03-api-controller/`](G03-api-controller/):代码治理第二对象——`apps/api/src/app.controller.ts` 按资源拆分(方案 B:继承链拆文件 + 门面;评分与选型见该 Task README)。**已完成收口**(2026-09-14,维护者验收确认;代码经 `refactor/g03-api-controller` 合入 master)。
 - [`G04-doc-splitting-batch2/`](G04-doc-splitting-batch2/):文档治理第二批——原基线红线区的 4 份文档(PRD、信息模型、Task 02 README、product-dtos)。**已完成收口**(2026-09-14,维护者验收确认):四份判拆、无一走豁免(提案 §4.1 增补「红线优先」),主文档合计 271.7 KB → 50.2 KB,18 个分册全部落在健康区,基线 12 → 8 条,`docs:check` 536 文件 0 失败。
 
+- [`G05-application/`](G05-application/):代码治理第三对象——`packages/application` 的入口与实现拆分(桶文件模块地图化 + 显式导出 → 测试按行为拆 → 单体按聚合拆;评分与选型见该 Task README)。**对象按模型首位选出,待维护者确认**(2026-09-14):worktree/分支未创建,需审批。
+
 ## 待治理候选(编号未分配,待维护者裁决)
 
-确认时间 2026-09-14,依据 `docs/proposals/code-size-governance-v1.md` §4.1 阈值(源码/测试 >800 行 或 >50 KB;入口文件 >300 行)。脚本门禁当前只按字节/token 判红线,行数越界不拦,故下表包含门禁未报的对象。
+确认时间 2026-09-14,依据 `docs/proposals/code-size-governance-v1.md` §4.1 阈值(源码/测试 >800 行 或 >50 KB;入口文件 >300 行)。脚本门禁当前只按字节/token 判红线,行数越界不拦,故候选含门禁未报的对象。
 
-**字节红线(门禁报「基线内存量红线」)**
+**实测排名(P 与 N 的完整表格、D 口径问题)见 [`G05-application/README.md`](G05-application/README.md) 的「评分与选型依据」**——同一证据不在两处维护。要点:
 
-| 对象 | 行数 / 大小 | 拆分模式(§4.4) | V |
-|---|---|---|---|
-| `apps/web/src/components/cosmos/story-panel.tsx` | 1902 / 92.39 KB | 组件分解 | 未测(UI) |
-| `packages/application/src/index.ts` | 2048 / 67.32 KB | 单体按聚合拆 | 8 |
-| `apps/web/src/app/page.tsx` | 1680 / 62.17 KB | 组件分解 | 未测(UI) |
-| `packages/contracts/src/index.ts` | 1455 / 53.54 KB | 桶文件模块地图化 | 10 |
-
-**行数红线(提案口径越界,门禁未拦)**
-
-| 对象 | 行数 / 大小 | 拆分模式(§4.4) | V |
-|---|---|---|---|
-| `packages/transport-http/src/index.ts` | 1269 / 42.37 KB | 单体 / 桶文件 | 5 |
-| `packages/application/src/workflow-host-runtime.ts` | 1203 / 44.83 KB | 单体按聚合拆 | — |
-| `packages/worker-admin/src/index.ts` | 1047 / 38.91 KB | 桶文件模块地图化 | — |
-| `packages/contracts/src/index.test.ts` | 1011 / 36.37 KB | 测试按行为拆 | — |
-| `packages/transport-http/src/index.test.ts` | 964 / 39.60 KB | 测试按行为拆 | — |
-| `packages/application/src/media-acquisition.ts` | 916 / 29.48 KB | 单体按聚合拆 | — |
-| `packages/storage-prisma/src/workflow-backend.ts` | 896 / 32.16 KB | 单体按聚合拆 | — |
-| `apps/worker/src/workflow-ingest.test.ts` | 864 / 38.27 KB | 测试按行为拆 | — |
-| `plugins/collectors/src/index.ts` | 818 / 25.98 KB | 桶文件模块地图化 | — |
-| `apps/web/src/component-lab/product-fixtures.tsx` | 807 / 28.22 KB | 组件分解 | 未测(fixture) |
-| `apps/web/src/components/cosmos/board-view.tsx` | 805 / 31.35 KB | 组件分解 | 未测(UI) |
-
-入口文件 >300 行另含 `packages/domain/src/index.ts`(713)、`packages/logging/src/index.ts`(673)、`plugins/rss/src/index.ts`(557),均为桶文件模块地图化对象。
-
-**未分配编号的理由**:编号分配由维护者裁决。G03 Follow-ups 已列出下一批方向(桶文件群 → 组件分解),建议按此继续顺延;UI 对象按提案 §4.2 记 `V` 未测、不参与 `P` 排序,需维护者先决定是否接入浏览器侧覆盖口径。
+- `P` 前三名:`packages/application/src/index.ts`(2.64)、`packages/transport-http/src/index.ts`(2.49)、`packages/contracts/src/index.ts`(1.90);后两者与 `application` 构成 §4.4 点名的桶文件群。
+- `V` 未测对象(UI 组件与 component-lab fixture,提案 §4.2)按 `N` 排序:`page.tsx` 13.80 > `story-panel.tsx` 12.53 > `product-fixtures.tsx` 10.36 > `board-view.tsx` 3.63;是否先接入浏览器侧覆盖口径由维护者决定。
+- 不在上列但同样越界:`packages/domain/src/index.ts`(714 行)、`packages/logging/src/index.ts`(674 行)、`plugins/rss/src/index.ts`(558 行)为入口文件 >300 行的桶文件对象;`apps/worker/src/workflow-ingest.test.ts`(865 行)为纯测试对象,`V` 不适用。
+- G05 已按模型首位取 `packages/application`;排名对 `D` 口径敏感(见该 README),改判其它对象只需该目录更名。
