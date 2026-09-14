@@ -1,0 +1,4 @@
+type	CosmosEventSource
+type	HttpCosmosClientOptions
+value	CosmosTransportError
+value	HttpCosmosClient
