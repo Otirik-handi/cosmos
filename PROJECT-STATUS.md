@@ -50,6 +50,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - Entity merge/dedup；批注的正文片段字符级锚点；`e2e/browser/ingest.spec.ts:127` 的 390px 横向溢出断言误报修复；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
 - **搜索 FTS5 查询未转义（2026-09-15 发现，未修）**：`packages/storage-prisma/src/repository/search.ts` 把用户输入原样交给 `entry_search MATCH ?`，搜索含 `-`、`"`、`*`、括号等 FTS5 语法字符的词会返回 500（实测 `GET /api/v1/search?text=绝不匹配-212c82&limit=5`）。既有缺陷，与看板切片无关；修法需单独确认边界并补回归测试。
 - **看板拖拽排序**：真人验收定为必做，尚未开工；ADR-0010 的「v1 纵向流 + 上移/下移」后置项届时需加注记。
+- **`e2e/browser/phase2-organization.spec.ts` 的间歇失败（2026-09-15 观察到）**：6 个场景共用一个数据根与 SQLite，单跑通过、整文件连跑时失败点会漂移（3 次里 1 次失败，且失败的是另一个用例）。看板切片让每个阅读流区块各发一次取数请求，可能加剧了并发读压力。后续考虑把场景隔离到独立数据根，或让区块取数复用共享请求。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
@@ -171,7 +172,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - 合并后在 `master`（`14ce892`）重跑：`bun run typecheck` 全仓 0；`bun run test` **88 文件 / 524 用例**全绿；`bun run docs:check` 625 文件 `failures=[]`。
 - Story split 用户状态迁移（分支内，合并前）：`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，新文件 0）；浏览器产品 E2E **17/17**（含拆分场景新增的迁移与撤销断言）；组件实验室 **13/13**；契约与 application 的导出面快照显式重生成，diff 只有本次新增的 6 + 1 项；API 路由表守卫快照 114 → 115 条。先红后绿：短路迁移事务后 storage 迁移测试 7 例中 4 例失败。
-- 看板 Feed Block 独立取数（分支内，合并前）：`bun run build` 通过；浏览器产品 E2E **18/18**（新增「未绑定区块渲染最新内容流 + 绑定视图的区块各取各的 + 搜索在页面级」用例）；组件实验室 **13/13**。
+- 看板 Feed Block 独立取数（分支内，合并前）：`bun run build` 通过；浏览器产品 E2E **18/18**；组件实验室 **13/13**。合并后在 `master` 重跑同一套件为 **17/18**，1 例间歇失败（详见下方开着的项），该结论按实测如实记录，不按绿灯口径写。
 - 本轮未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 - 分支工作的先红后绿证据：短路迁移事务后，`story-user-state-migration.test.ts` 7 例中 4 例失败（另 3 例断言拒绝与空选择 no-op，本就不需要迁移发生）。
 
