@@ -3,6 +3,26 @@ import { type SearchPage, type SearchQuery } from "@cosmos/contracts";
 import { parseCursor, parseIdList } from "./repository-internals.js";
 import { PrismaCosmosRepositoryMedia } from "./media.js";
 
+/**
+ * 把用户输入变成 FTS5 查询：按空白切成词，每段作为字面短语（内部引号双写转义）。
+ *
+ * `MATCH` 有自己的查询语言——`-` 是 NOT、`*` 是前缀通配、括号分组、`OR`/`NEAR`
+ * 是运算符。用户给的是关键词而不是查询语句：把 `绝不匹配-212c82` 当查询语言会让
+ * SQLite 抛语法错误（实测 `fts5: syntax error near ""`）并让整个请求 500，把
+ * `cosmos OR scaffold` 当查询语言则得到用户没要求的布尔语义。这里统一按字面处理，
+ * 多词之间保持 AND（与修复前普通词的行为一致）。
+ *
+ * 返回 null 表示输入里没有可搜索的词（例如只有 `-` 或 `()`）：调用方按「没有文本
+ * 条件」处理，而不是拿一个空查询去查。
+ */
+function toFtsMatchQuery(text: string): string | null {
+    const phrases = text
+        .split(/\s+/)
+        .filter((token) => /[\p{L}\p{N}]/u.test(token))
+        .map((token) => `"${token.replaceAll("\"", "\"\"")}"`);
+    return phrases.length > 0 ? phrases.join(" ") : null;
+}
+
 export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
     async search(input: SearchQuery): Promise<SearchPage> {
         const parsed = {
@@ -25,12 +45,14 @@ export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
         ) {
             throw new Error("Search date filters must be valid ISO timestamps.");
         }
+        const matchQuery = toFtsMatchQuery(parsed.text);
+        const hasText = matchQuery !== null;
 
         const conditions: string[] = [];
         const parameters: unknown[] = [];
-        if (parsed.text) {
+        if (matchQuery) {
             conditions.push("entry_search MATCH ?");
-            parameters.push(parsed.text);
+            parameters.push(matchQuery);
         }
         if (parsed.sourceId) {
             conditions.push("e.sourceInstanceId = ?");
@@ -58,14 +80,14 @@ export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
             );
             parameters.push(...parsed.topicIds);
         }
-        const fromClause = parsed.text
+        const fromClause = hasText
             ? "FROM entry_search JOIN Entry e ON e.id = entry_search.entry_id"
             : "FROM Entry e";
-        const rankSelect = parsed.text ? "bm25(entry_search)" : "0.0";
+        const rankSelect = hasText ? "bm25(entry_search)" : "0.0";
         const whereClause = conditions.length > 0
             ? `WHERE ${conditions.join(" AND ")}`
             : "";
-        const orderClause = parsed.text
+        const orderClause = hasText
             ? "ORDER BY rank ASC, e.updatedAt DESC"
             : "ORDER BY e.updatedAt DESC";
         parameters.push(parsed.limit + 1, parsed.cursor);

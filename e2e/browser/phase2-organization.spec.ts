@@ -535,3 +535,34 @@ test("gives each feed block its own stream and keeps an unbound one on the lates
 
     expect(consoleErrors).toEqual([]);
 });
+
+test("searches a term carrying FTS5 syntax characters without failing", async ({ page }) => {
+    test.setTimeout(120_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("region", { name: "信息库与搜索" })).toBeVisible();
+
+    // 直接打接口：`-` 在 FTS5 的 MATCH 里是 NOT 运算符，修复前这类输入会变成
+    // 语法错误并让整个请求 500。
+    const direct = await page.evaluate(async () => {
+        const response = await fetch(`/api/v1/search?text=${encodeURIComponent("state-of-the-art")}&limit=5`);
+        const body = await response.json() as { items?: unknown[] };
+        return { status: response.status, isArray: Array.isArray(body.items) };
+    });
+    expect(direct.status).toBe(200);
+    expect(direct.isArray).toBe(true);
+
+    // UI 路径同样不能再报错：搜索框填一个带连字符的词并提交。
+    const searchRegion = page.getByRole("region", { name: "信息库与搜索" });
+    await searchRegion.getByLabel("搜索已保存内容").fill("state-of-the-art");
+    await searchRegion.getByRole("button", { name: "搜索" }).click();
+    await expect(searchRegion.getByText("分类：", { exact: false })).toHaveCount(0);
+    // 搜索结果区正常渲染（空结果也只是空列表，不是错误状态）。
+    await expect(page.locator("article")).toHaveCount(0);
+
+    expect(consoleErrors).toEqual([]);
+});
