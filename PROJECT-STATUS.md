@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-15。基线 `master` = `origin/master` = `2e46dca`（Phase 2 收口文档），工作树干净、无遗留 worktree；分支 `feat/t17-story-user-state-migration` 上的 Story split 用户状态迁移待合并。Phase 2 十四切片全部合入，平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）落地；维护者 2026-09-15 判定进入 Phase 2 收口，ORG-021 改标 Phase 3，收尾范围见「当前下一步」。2026-09-11 ~ 09-14 的 G01–G07 代码与文档治理已收口并暂停，见分册索引首行。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-15。基线 `master` = `origin/master` = `8388931`（Story split 用户状态迁移已合并），工作树干净；`fix/t14-board-feed-blocks` 分支在做看板 Feed Block 独立取数。Phase 2 十四切片、平台面四块与**四条验收标准的真人验收**均已完成，Phase 2 收口；ORG-021 改标 Phase 3，收尾范围与真人验收产生的新方向见「当前下一步」。2026-09-11 ~ 09-14 的 G01–G07 代码与文档治理已收口并暂停，见分册索引首行。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -19,7 +19,7 @@
 
 ## 一句话结论
 
-Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已进入收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中「按来源/分类/时间/全文/Topic 浏览」「多来源 Story 的时间线与相关内容」「可调整看板且删除 Block 不删除底层信息」三条有实现与浏览器自动化证据，第四条「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立、未被真正考验，Phase 3 的 Knowledge Workflow 落地后需重新回归。ORG-021 已于 2026-09-15 改标 Phase 3，剩余尾巴见「当前下一步」。本轮验证数字与未运行项见「验证边界」。
+Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中前三条（按来源/分类/时间/全文/Topic 浏览、多来源 Story 的时间线与相关内容、可调整看板且删除 Block 不删除底层信息）已有实现、浏览器自动化与真人验收三层证据，第三条的专问由维护者明确回答「完好」。第四条「重分析不覆盖用户批注和人工关系修正」仍只靠「Phase 2 尚无自动重分析写入路径」在结构上成立、未被真正考验，Phase 3 的 Knowledge Workflow 落地后需重新回归。真人验收同时暴露三条界面方向（Topic/Entity/用户组织缺独立面板、看板需要拖拽、文案过于专业化），已登记为待 Proposal 的新方向。ORG-021 已改标 Phase 3。本轮验证数字与未运行项见「验证边界」。
 
 > 本条原为 2026-08-24 的 Source 身份/revision clean cutover 快照；该快照原文（含当日 migration `20260824100000_source_activation_result_snapshot`、五轴审查收口项与 34 文件/249 用例等验证数字）随 2026-09-15 刷新移入 [history-2026-09-3.md](PROJECT-STATUS/history-2026-09-3.md) 附节留存。
 
@@ -34,10 +34,16 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **Phase 2 收口（维护者 2026-09-15 判定）**：
 
-- **Story split 用户状态迁移与撤销**：**已实现，待合并**。Proposal 于 2026-09-15 接受，稳定结论见 ADR [`0020`](docs/adr/0020-story-split-user-state-migration-v1.md)。改动在 `feat/t17-story-user-state-migration` 分支（worktree `.worktree/story-user-state-migration`，基线 `2e46dca`）分三个提交：契约与 storage/API/transport、Web 迁移区块、ADR 与稳定文档。无 Prisma schema 变更、无 migration；`StoryDetail` 不新增字段。待维护者验收后合并、推送并清理 worktree。
-- **看板 UI 缺口**：多个 Feed Block 当前只有第一个渲染真实阅读流（`config.savedViewId` 已持久化但渲染未消费），其余渲染占位；区块只有上移/下移、没有拖拽排序。复用 Task 14 实施。**拖拽排序经维护者 2026-09-15 指示留到后续**，本批只修 Feed Block 独立取数。
-- **四条主流程真人验收**：Topic / Entity / 用户组织 / 看板流程迄今只有自动化证据，没有真人走过；验收脚本见 [`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](.agents/tasks/15-phase2-acceptance/manual-acceptance.md)，结果回填该 Task。
+- **Story split 用户状态迁移与撤销**：**已合并**（`8388931`，2026-09-15）。Proposal 接受，稳定结论见 ADR [`0020`](docs/adr/0020-story-split-user-state-migration-v1.md)。无 Prisma schema 变更、无 migration；`StoryDetail` 不新增字段。worktree 与分支已按授权清理。
+- **看板 UI 缺口**：多个 Feed Block 当前只有第一个渲染真实阅读流（`config.savedViewId` 已持久化但渲染未消费）。维护者 2026-09-15 选定**方案 A**：未绑定 = 渲染默认的最新内容流（保持今天首页行为），绑定 Save View 后按其条件取数；ADR-0010 决定 5 的「未绑定渲染占位」收窄为「悬空引用渲染占位」。**拖拽排序由真人验收升级为必做**，与 Feed Block 独立取数同属 Task 14 追加切片。
+- **四条主流程真人验收**：**已完成**（维护者 2026-09-15 执行）。四条功能全部通过，PRD Phase 2 第三条验收标准的专问明确回答「删除 Block 后底层信息完好」。结论落在界面：Topic / Entity / 用户组织缺独立操作面板、功能堆在 Story 面板；看板排序按钮让人烦躁；UI 文案过于专业化。记录见 [`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](.agents/tasks/15-phase2-acceptance/manual-acceptance.md)。
 - **ORG-021 已改标 Phase 3**：登记在 PRD 主文档「分册勘误登记」，ORG-021 的需求文字、验收条件与既有切片注记均未改写。
+
+**真人验收产生的新方向（待 Proposal，尚未排期）**：
+
+- **界面职责重划**：Topic、Entity 与用户组织各自需要独立操作面板，Story 面板只留与该 Story 直接相关的操作。改用户可观察行为、跨 Web 模块、涉及 PRD §8 的界面职责，按准入决策表先出 Proposal。
+- **UI 文案审查**：「专业但不过度专业」的措辞标准与审查范围需要先定，再动文案，避免变成无边界改写。
+- **看板拖拽排序**：已升为必做，随 Task 14 追加切片实施；ADR-0010「v1 纵向流 + 上移/下移」的后置项需要相应注记。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 

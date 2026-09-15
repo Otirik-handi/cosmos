@@ -59,16 +59,24 @@ Non-goals：
 
 ### 追加切片（2026-09-15）：四条主流程真人验收
 
-- 生命周期阶段：定义完成，待维护者执行。
+- 生命周期阶段：**已完成**（维护者 2026-09-15 执行并填回记录表）。
 - 连贯目标：为 Phase 2 收口补齐四条主流程（Topic / Entity / 用户组织 / 看板）的真人验收证据——此前这四条只有自动化证据。
 - 可观察验收（≤3 条）：
-  1. 维护者按 [`manual-acceptance.md`](manual-acceptance.md) 走完四条流程并填回记录表；
-  2. 明确回答 PRD Phase 2 第三条验收标准的专问：删除 Block 后底层收藏/标签/批注/Story 是否完好；
-  3. 发现的「走不通」项回到对应 Task，「不好用」项归入 Phase 3 或其后切片。
+  1. 维护者按 [`manual-acceptance.md`](manual-acceptance.md) 走完四条流程并填回记录表；✅ 四条全部执行，结果见该文件「验收记录表」与「开发者总结」；
+  2. 明确回答 PRD Phase 2 第三条验收标准的专问：删除 Block 后底层收藏/标签/批注/Story 是否完好；✅ 回答「完好」；
+  3. 发现的「走不通」项回到对应 Task，「不好用」项归入 Phase 3 或其后切片。✅ 无「走不通」项；「不好用」项见下方结果。
 - 依赖：无代码依赖；需要至少有 2 条来自不同来源的 Story 的可运行环境。
 - 受影响合同：无。本切片不产生代码或合同变化，只产生人工验收记录。
 - 验证层级：人工浏览器验收（不能由自动化替代）。
 - 本切片是 Phase 2 收口项之一，选定理由见 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」。
+
+**验收结果（2026-09-15）**：四条流程功能全部通过（Topic / Entity / 用户组织 / 看板），无卡住步骤、无「预期与实际不符」。结论落在界面而不是功能上：
+
+1. **Topic / Entity / 用户组织没有自己的操作面板**，全部操作都堆在 Story 面板里，导致 Story 面板拥挤、功能分散，用户需要到处找入口。
+2. **看板排序用上移/下移按钮让人烦躁、容易丢失注意点**，拖拽排序由「后置可选」升级为**必做**。
+3. **UI 文案过于专业化**，需要在保持准确的前提下改到普通用户一眼能懂。
+
+这三条都是新的产品方向（改用户可观察行为、涉及界面职责划分），不是本 Task 的缺陷修复；按准入决策表需要先出 Proposal，见下方 Follow-ups。
 
 ## Decisions and Deviations
 
@@ -106,7 +114,10 @@ Non-goals：
 
 ## Follow-ups
 
-- 真人验收结果回填本 README（记录表在 [`manual-acceptance.md`](manual-acceptance.md)）；Phase 2 收口完成前必须先有这份人工证据，不能只用浏览器 E2E 替代。
+- 真人验收已完成（2026-09-15），结果与三条界面方向见上方「验收结果」；记录表在 [`manual-acceptance.md`](manual-acceptance.md)。
+- **界面职责重划（新方向，待 Proposal）**：Topic、Entity 与用户组织（Label/Collection/Annotation/Saved View）各自需要独立操作面板，Story 面板只保留与该 Story 直接相关的操作。这改变用户可观察行为、跨 Web 模块并涉及 PRD §8 的界面职责，按准入决策表先出 Proposal。
+- **UI 文案审查（新方向，待 Proposal 或治理任务）**：把过于专业化的措辞改成普通用户一眼能懂的表述，同时不牺牲准确性（例如 Topic 的六个成员角色名、Entity 的类型与关系名）。需要先定审查范围与判据，避免变成无边界改写。
+- 看板拖拽排序已由维护者升级为**必做**（原为 ADR-0010 的后置项），与本轮 Feed Block 独立取数同属 Task 14 的追加切片。
 - 相关内容的服务端排序与更大候选集并入 Phase 4 推荐体系；ORG-017 的 Story Revision「时间范围」字段仍未落地。
 - Phase 2 需求清单其余条目按 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」排序；ORG-021（自动聚类/Knowledge Workflow）已于 2026-09-15 改标 Phase 3。
 - 看板「Feed Block 绑定分类/Topic 条件」的独立配置、Read State「未读」过滤仍待后续切片。
