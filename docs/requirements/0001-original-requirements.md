@@ -611,3 +611,9 @@ Agent 就 B 组粒度反问「整个 B 组都不译，还是只保留 Story 和 
 > 只保留 Story 和 Entity
 
 同轮交互确认（2026-09-15）：术语对照表按此定稿——A 组（仓库已定用户词：信息条目、话题、热点、时间线、信息流、栏目/专题/学习计划、产物、标签、收藏夹、已保存视图、批注、来源）直接执行；B 组仅保留 `Story` 与 `Entity` 两个有完整含义的架构术语，`Revision` → 「版本」、`kind`/`subtype` → 「类型」/「细分类型」、`evidence_for`/`mentions` → 「引用关系」；C 组六个 Topic 成员角色按建议替换为「核心内容 / 最新进展 / 背景资料 / 分析解读 / 不同看法 / 使用教程」（枚举值与数量不变）；D 组禁用内部词（历史壳、未注册、Spotlight 区块、Story ID、受管理 subtype、审计/不变量/provenance/policy/version）按 R2 执行；E 组「分类」在概念被定义前，界面只用「标签」和「已保存视图」。落点与实施方式（G 系列治理任务 vs 产品 Task）、判据 R1–R5 本身仍需维护者接受，`ui-copy-review-v1.md` 维持 `reviewing`。未写实现代码、未建 worktree、未 commit。
+
+## 2026-09-15：界面实现作废与开发重心
+
+> 本次分支作废，记录UI问题，待以后重做UI，当前开发重心以功能为主。
+
+同轮交互确认（2026-09-15）：界面职责重划的实现在分支 `feat/t25-ui-surface-ownership` 上完成后被判定布局有问题并回退，维护者进一步裁定**该分支作废**、**UI 待以后重做**、**当前开发重心以功能为主**。维护者同时确认问题性质为「形状对，页面内部重排」，即三层分工与对象页的形状决定不变，只重排页面内部与导航/侧栏位置。UI 问题与教训记录在 [`docs/proposals/ui-surface-ownership-v1.md`](../proposals/ui-surface-ownership-v1.md) 的「实现尝试与作废」一节；该分支与 worktree 保留但不再使用，其中的 ADR、Task 与 spec 改动都不进入 `master`。未被推翻的部分：本 Proposal 已 accepted 的信息架构决定，以及 [`docs/proposals/ui-copy-review-v1.md`](../proposals/ui-copy-review-v1.md) 已逐行裁定的术语表。

@@ -1,9 +1,9 @@
 ---
 parent: PROJECT-STATUS.md
-range: 无日期 ~ (7 节)
-sealed_at: 2026-09-11
+range: 无日期 ~ (8 节)
+sealed_at: 2026-09-11（2026-09-15 追加一节，见文末）
 tags: [project-status, history]
-tokens_est: 2539
+tokens_est: 3900
 ---
 
 ## Task 09 本地实现证据
@@ -93,3 +93,59 @@ console/page error 为 0；截图存于被忽略的 `test-results/theme-visual/`
 - Docker、真实来源、生产部署、多主机、Gateway、Redis 和远程 Worker 仍不由当前默认门禁证明。
 - 远端 CI run `32464307892` attempt 2 已 completed/success；该远端证据与当前工作树未提交状态分开记录。
 
+## 2026-08-15 之前的历史基线（自 PROJECT-STATUS 主文档移入）
+
+以下条目是 2026-08-15 之前的历史基线或 Spike 证据，不是当前合入提交的新验收；当前
+Task 07 合入后的命令与边界见上方 2026-08-16 记录。本节保留历史数字，避免把历史
+evidence 与当前验证混淆。
+
+- `git diff --check`：历史基线曾通过；本轮未重跑。
+- `bun install`：通过，生成根 `bun.lock`。
+- `bun run db:validate`、`bun run db:generate`：通过，Prisma schema 合法并生成 Prisma Client 6.19.3。
+- `bun run typecheck`、`bun run build`、`bun run lint:web`：通过。
+- 当前最终全量基线：`bunx vitest run --reporter=dot` 通过，39 个测试文件、
+  285 个测试；`bun run typecheck`、`bun run lint:web`、`bun run build`、
+  `bun run db:validate` 和 `bun run db:generate` 通过。
+- Task 05 基线：13 个测试文件、63 个测试通过；覆盖 Publisher、
+  ContentKind、TemporalValue、指标持久化和包含 `sourceLocator` 的 URL-free
+  fallback；无条目级稳定 locator 时的修订身份仍待显式建模。
+- 当前隔离数据库已应用 4 条 migration，状态 up to date；真实 master 三条
+  migration 携带既有数据升级到第 4 条也已通过。
+- 归档 WIP 的启用 Prisma Definition/Worker Registry Node production smoke 曾通过；固定
+  Ingest Run 产出 Feed 3 条、Search 1 条，并验证 Story、SSE、日志 correlation、
+  API 400/404、Run/Probe 幂等重放与冲突、超长 key 拒绝和 Worker discovery；该证据不属于当前 `master`。
+- Node production Connector smoke：通过；AI HOT 真实 GET 返回 200，Worker 真实保存 3 条 Entry；OpenCLI 内置入口返回版本 `1.8.6`。
+- Bilibili doctor smoke：已运行；daemon 在端口 `19825`，但 Browser Bridge 为 `Extension: not connected`，真实 hot 采集未执行成功。
+- Docker/Compose 仍因当前环境缺少 Docker CLI 未验证。
+- Playwright 浏览器验收：通过来源创建、固定 Ingest Workflow、SSE 自动刷新、
+  Feed 3 条、搜索 `Cosmos` 1 条、Story → Entry → Source/Revision/Observation、
+  URL-free 内容、第二次 Run 幂等和健康检查；控制台 0 error、0 warning。
+  Source execution snapshot 收口后没有改动 Web/Transport；归档 WIP 的 Registry-enabled Node
+  production smoke 覆盖了当时的后端，不能作为当前主线 Registry 实现证据。
+- `docker` 命令不存在，因此 Docker/Compose 验收保留为未运行。
+- API/DTO 文档收口检查：全仓 48 个 Markdown 相对链接错误 0、未闭合围栏 0、
+  EOF 缺失 0、尾随空白 0、conflict marker 0；PRD 164 个定义型需求 ID 无重复；
+  原始需求只新增 22 行、删除 0 行；8 份 API 文档的 37 个 TypeScript 围栏合并后
+  strict/noEmit syntax + semantic 检查为 0 diagnostics；staged files 0。
+- API/DTO v0.2 本轮只运行文档与内嵌类型检查，没有重跑代码 typecheck/test/build、
+  Node、browser、Docker、真实来源、恢复或 Gateway 多主机。
+- 未运行：Docker/Compose、真实 RSS/RSSHub、Bilibili Browser Bridge 成功采集、跨平台 Node 和长时间故障恢复验收。
+
+2026-08-11 文档收口只运行 Markdown 一致性、需求编号、append-only 和 dirty
+文件边界检查；没有重新运行 typecheck、Vitest、build、Node、浏览器、Docker、
+真实来源或 Agent。上面的代码/产品证据来自 Round 104–105 的既有 Spike 基线，
+不是本轮新架构已经实现或重新验收的证据。
+
+本轮文档验证结果：49 个 Markdown 的相对链接、围栏、EOF、尾随空白和冲突标记
+错误均为 0；PRD 164 个定义型需求 ID 无重复；原始需求相对 `HEAD` 为
+`+28/-0`；`git diff --check` 通过。编辑前后 77 个非文档 dirty 项的综合
+SHA-256 均为
+`7aa14ea29ec056cd6f8b81f991a57cbabac2803dbdba825d81b64aa90e0c6826`，
+本轮未改变代码、migration、依赖、Docker 或既有删除状态。
+
+此前 Phase 0 的远端仓库、许可证、研究文件 SHA-256 和 GitHub 配置检查结果仍保留在历史 Task 记录中；本次没有执行远端同步、commit、push 或发布。
+
+此前根状态文档只记录 `b678fb5` / PR A 基线和 PR B dirty 边界；以下 Round 7/8
+段落保留合入前的 worktree 证据，不代表当前分支状态。当前实现基线已变为
+`5ce628690ab0110b0525e8ebcbacbe673ced9c55`；未验证的完整 Ingest parity、恢复、
+browser/Docker、真实来源和多主机能力仍不能从历史证据推断为完成。
