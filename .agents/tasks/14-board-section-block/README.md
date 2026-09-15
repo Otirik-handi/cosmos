@@ -71,6 +71,22 @@ Non-goals（见 Proposal / ADR-0010）：
 - 受影响合同：contracts（新枚举/DTO/命令 schema）、application（repository 端口）、storage-prisma（新表 + 命令）、api（新端点）、transport-http（client 方法）、web（首页布局 + 编辑模式）。
 - 验证层级：focused（domain/contracts/storage）→ API 集成 → 浏览器（已执行，见下）。
 
+### 追加切片（2026-09-14，计划中）：Feed Block 独立取数与拖拽排序
+
+Phase 2 收口项之一，维护者 2026-09-14 选定。**尚未开工**，待维护者批准 worktree 与 ADR-0010 的注记范围。
+
+- 生命周期阶段：分流与定义完成，待批准后进入计划。
+- 连贯目标：让每个 Feed Block 按 ADR-0010 已决定的语义独立取数，并补齐区块/分区拖拽排序。
+- 可观察验收（≤3 条）：
+  1. 两个以上「阅读流」区块各自按 `config.savedViewId` 渲染自己的结果，互不干扰；未绑定或悬空引用渲染占位（不阻断其它区块）；
+  2. 交互式搜索与「已保存视图」管理回到页面级搜索区，不再依附于某个区块（对齐 PRD §8.2「信息库与搜索」）；
+  3. 区块与分区可用拖拽排序，且键盘/按钮路径（上移/下移）保留。
+- 依赖：无新增合同依赖；复用既有 `search` 端点与 `moveBlockCommandSchema`。
+- 受影响合同：**无公共合同变化**（`savedViewId` 已持久化，`moveBlockCommandSchema` 已存在）；Web 内部取数位置与布局变化。
+- 验证层级：unit（Web lib）→ 浏览器产品 E2E（多 Feed Block 与拖拽）→ 全量门禁。
+- 分类依据：第 1 项是**当前合同可判定的局部 Bug**——ADR-0010 已决定「Feed Block 绑定 Saved View、未绑定渲染占位、渲染数据源复用既有端点」，实现却让第一个可见 feed 区块独占全局阅读流、`savedViewId` 写入后未被消费；按准入决策表不需要新 Proposal。第 3 项是 ADR-0010 明确后置的能力（「v1 纵向流 + 上移/下移」），恢复它需要记录拖拽库与可访问性取舍，拟记入本 Task 的 Decisions 并在落地后给 ADR-0010 加注记，不新开 Proposal。
+- 待维护者裁决：交互式搜索提到页面级后，未绑定的阅读流区块是渲染占位还是渲染可交互搜索（本 Task 倾向渲染占位，与 `collection` 区块未绑定的既有行为一致）。
+
 ## Decisions and Deviations
 
 - 以 ADR-0010 六条为稳定边界（Block 纯展示配置 + Section 无 kind、type 受管枚举 + 判别 config、Spotlight v1 仅 manual 绑定 Board、多 Board 实体 + 幂等 seed、悬空降级 + merge 重定向、command 编排无新 Workflow）。

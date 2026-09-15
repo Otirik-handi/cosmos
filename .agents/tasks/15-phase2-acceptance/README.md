@@ -57,6 +57,19 @@ Non-goals：
 - 受影响合同：无公共合同变化；仅 Web 内部表单状态与两个新 lib 模块。
 - 验证层级：unit（新 lib 与 component-lab）→ 浏览器产品 E2E → 全量门禁。
 
+### 追加切片（2026-09-14）：四条主流程真人验收
+
+- 生命周期阶段：定义完成，待维护者执行。
+- 连贯目标：为 Phase 2 收口补齐四条主流程（Topic / Entity / 用户组织 / 看板）的真人验收证据——此前这四条只有自动化证据。
+- 可观察验收（≤3 条）：
+  1. 维护者按 [`manual-acceptance.md`](manual-acceptance.md) 走完四条流程并填回记录表；
+  2. 明确回答 PRD Phase 2 第三条验收标准的专问：删除 Block 后底层收藏/标签/批注/Story 是否完好；
+  3. 发现的「走不通」项回到对应 Task，「不好用」项归入 Phase 3 或其后切片。
+- 依赖：无代码依赖；需要至少有 2 条来自不同来源的 Story 的可运行环境。
+- 受影响合同：无。本切片不产生代码或合同变化，只产生人工验收记录。
+- 验证层级：人工浏览器验收（不能由自动化替代）。
+- 本切片是 Phase 2 收口项之一，选定理由见 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」。
+
 ## Decisions and Deviations
 
 - 分类/Topic 用 chip 多选而不是 `<select multiple>`：保持搜索表单横向布局，并用 `aria-pressed`/`aria-label` 提供可测试、可键盘访问的入口。
@@ -93,6 +106,8 @@ Non-goals：
 
 ## Follow-ups
 
+- 真人验收结果回填本 README（记录表在 [`manual-acceptance.md`](manual-acceptance.md)）；Phase 2 收口完成前必须先有这份人工证据，不能只用浏览器 E2E 替代。
 - 相关内容的服务端排序与更大候选集并入 Phase 4 推荐体系；ORG-017 的 Story Revision「时间范围」字段仍未落地。
-- Phase 2 需求清单其余条目（Story split、`evidence_for`/`mentions`、自动聚类、subtype 注册表）与平台面（Trigger/Connection/StateStore/媒体策略/Run 控制/OPS）继续按 PROJECT-STATUS「当前下一步」排序。
+- Phase 2 需求清单其余条目按 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」排序；ORG-021（自动聚类/Knowledge Workflow）已于 2026-09-14 改标 Phase 3。
 - 看板「Feed Block 绑定分类/Topic 条件」的独立配置、Read State「未读」过滤仍待后续切片。
+- 第四条验收标准「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，Phase 3 的 Knowledge Workflow 落地后必须重新回归。

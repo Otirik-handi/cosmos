@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-10。Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已合并 `master` 并推送（`27f249b`）。第十三切片 Trigger/SDK v1（Task 23）已合并（`e8c2f84`）；第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并（`9c4cf72`）；第十一切片 Run 控制 v1（Task 21，RUN-004）已合并（`1f879f4` + `da44743`）。第十切片媒体失败重试与保留期清理 v1（Task 20）已随 PR #3 合入（`0ad4d2b`）；第九/八/七切片（Task 19/18/17）此前已合入；第六切片（Task 16）、验收补完（Task 15）与可配置看板 v1（Task 14）此前已合入。Phase 2 平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）全部落地，worktree 与分支均已清理。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-14。当前基线 `master` = `origin/master` = `e176312`，工作树干净、无遗留 worktree。Phase 2 十四切片全部合入，平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）落地；维护者 2026-09-14 判定进入 Phase 2 收口，ORG-021 改标 Phase 3，收尾范围见「当前下一步」。2026-09-11 ~ 09-14 的 G01–G07 代码与文档治理已收口并暂停，见分册索引首行。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -9,6 +9,7 @@
 
 | 分册 | 覆盖范围 | 大小 |
 |---|---|---|
+| [history-2026-09-3.md](PROJECT-STATUS/history-2026-09-3.md) | 2026-09-14 ~ 2026-09-11(2 节,含 2026-08-24 被取代快照原文) | 7.8 KB |
 | [history-2026-09-1.md](PROJECT-STATUS/history-2026-09-1.md) | 2026-09-10 ~ 2026-09-09(9 节) | 22.7 KB |
 | [history-2026-09-2.md](PROJECT-STATUS/history-2026-09-2.md) | 2026-09-09 ~ 2026-09-08(6 节) | 15.5 KB |
 | [history-2026-09-phase1.md](PROJECT-STATUS/history-2026-09-phase1.md) | 2026-09-07 ~ 2026-09-01(5 节) | 13.1 KB |
@@ -18,7 +19,9 @@
 
 ## 一句话结论
 
-Source 身份/revision 持久化合同与默认验收调用方已完成本地 clean cutover：Product API/Web/Node E2E/Windows smoke 使用 `sourceDefinitionRef + operationId + config` 创建默认停用 Source，再以 revision CAS activation command 启用；产品路径不再提交 `kind`、`enabled` 或 `fixturePath`。本轮经五轴审查收口：激活同键重放持久化并返回首结果快照（新 migration `20260824100000_source_activation_result_snapshot`）、API 边界配置校验切换 canonical Zod schema（Bilibili feed 缺 profile 即拒）、未启用 Source 手动 Run 返回 409、RSS `feedUrl` 收紧 http(s)、Idempotency-Key 统一 1–300 字符、迁移回归测试临时目录修复。本地通过全仓类型检查、34 文件/249 单元测试、4 文件/4 Node 进程 E2E、8 个生产浏览器场景、12 个组件实验室浏览器场景和 Windows Node smoke。Docker CLI 不可用，Docker 验收未运行；真实 RSS/AI HOT/Bilibili、断网媒体验收和发布部署仍未完成（媒体边界 v1 的设计与实现已于 2026-09-04 合入 master，见下方“当前下一步”；未保存配置 Probe 与 schema 驱动 Web 配置流程已分别于 2026-09-02 以 PR #1、PR #2 合入；两块固定看板与来源健康切片已于 2026-09-03 快进合入 master）。
+Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已进入收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中「按来源/分类/时间/全文/Topic 浏览」「多来源 Story 的时间线与相关内容」「可调整看板且删除 Block 不删除底层信息」三条有实现与浏览器自动化证据，第四条「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立、未被真正考验，Phase 3 的 Knowledge Workflow 落地后需重新回归。ORG-021 已于 2026-09-14 改标 Phase 3，剩余尾巴见「当前下一步」。本轮验证数字与未运行项见「验证边界」。
+
+> 本条原为 2026-08-24 的 Source 身份/revision clean cutover 快照；该快照原文（含当日 migration `20260824100000_source_activation_result_snapshot`、五轴审查收口项与 34 文件/249 用例等验证数字）随 2026-09-14 刷新移入 [history-2026-09-3.md](PROJECT-STATUS/history-2026-09-3.md) 附节留存。
 
 ## 当前运维边界
 
@@ -29,25 +32,21 @@ Source 身份/revision 持久化合同与默认验收调用方已完成本地 cl
 
 ## 当前下一步
 
-（2026-09-09 更新：Phase 2 第十切片已随 PR #3 合入 `master`，见顶部记录。）
+**Phase 2 收口（维护者 2026-09-14 判定）**：
 
-- Phase 2 第十切片媒体失败重试与保留期清理 v1（Task 20，ING-009 剩余部分）已随 PR #3 合入并推送 `master`（merge commit `0ad4d2b`）；worktree `.worktree/media-retry-retention` 与分支 `feat/t20-media-retry-retention`（本地与远端）已清理。
-- Phase 2 第九切片按来源的媒体策略 v1（Task 19）已随 `a5a8005` 合入并推送 `master`；稳定文档（PRD/架构/ADR-0014/spec/testing）已同步。
-- Phase 2 第八切片 Story subtype 受管注册表 v1（Task 18）已随 `087544b` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0013/spec/testing）已同步。
-- Phase 2 验收四条标准已全部满足（分类/Topic 浏览、Story 时间线、相关内容见顶部“Phase 2 验收补完”）；实现随 Task 15 合入 `master` 并推送。
-- Phase 2 第六切片 Entry↔Story 证据关系 v1（Task 16）已随 `961e942` 合入并推送 `master`；接受后的稳定文档（PRD/信息模型/ADR-0011/spec/testing）已同步。
-- Phase 2 第七切片 Story split v1（Task 17）已随 `8d44000` 合入并推送 `master`；稳定文档（PRD/信息模型/ADR-0012/spec/testing）已同步。
-- Phase 2 第十一切片 Run 控制 v1（Task 21，RUN-004）已合并 `master` 并推送（`1f879f4` + `da44743`）；Proposal accepted + ADR-0016 + PRD 注记 + Task 已同步；worktree 与分支已清理。
-- Phase 2 第十二切片 Connection/SecretStore/StateStore v1（Task 22）已合并 `master` 并推送（`9c4cf72`）；Proposal accepted + ADR-0017 + PRD 注记 + Task 已同步。
-- Phase 2 第十三切片 Trigger/SDK v1（Task 23）已合并 `master` 并推送（`e8c2f84`）；Proposal accepted + ADR-0018 + PRD 注记 + Task 已同步。
-- Phase 2 第十四切片存储占用统计与备份/恢复 v1（Task 24）已合并 `master` 并推送（`27f249b`）；Proposal accepted + ADR-0019 + PRD 注记 + Task 已同步；worktree 与分支已清理。
-- Phase 2 平台面四块（RUN-004、Connection/StateStore、Trigger/SDK、OPS-003/004）已全部落地；下一切片候选仅剩自动聚类/Knowledge Workflow（ORG-021，依赖 Phase 3 Agent 边界）。ING-009 的剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
-- 可配置看板 v1（Task 14）已合入本地 `master`（tip `2ea8939`）并推送至远端；worktree `.worktree/board-section-block` 与分支 `feat/t14-board-section-block` 已清理。
-- 用户组织 v1（Task 13）已合入本地 `master`（tip `77ca54f`，状态记录提交 `31cfdbd`）并推送至远端；worktree `.worktree/user-organization` 与分支 `feat/t13-user-organization` 已清理。
-- Entity/关系 v1（Task 12）已合入 `master`（`5b3e327`）并推送至远端（`origin/master` = `f44b4e9`）。
-- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
-- 后续 Phase 2 切片候选（按 PRD 顺序）：Story split 完整生命周期、`evidence_for`/`mentions` 跨 Story 引用、自动聚类/Knowledge Workflow、Entity merge/dedup 后置；Topic/Entity/用户组织/看板流程的人工验收留待后续。
-- 已知待补：多个 Feed Block 的独立取数（当前只有第一个渲染真实阅读流）；拖拽排序；批注 Artifact 目标与正文片段字符级锚点；Read State 驱动的「未读」过滤；相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）。
+- **Story split 用户状态迁移与撤销**：split 当前只迁移主成员、证据关系、Story↔Entity 与 Topic 成员四类；收藏、标签、收藏夹、批注、Spotlight 全部留在历史壳，且全仓没有任何撤销入口。按 PRD 待决定事项 10（显式 state migration command 的批量操作、撤销和用户确认边界）先出 Proposal，接受后复用 Task 17 实施。
+- **看板 UI 缺口**：多个 Feed Block 当前只有第一个渲染真实阅读流（`config.savedViewId` 已持久化但渲染未消费），其余渲染占位；区块只有上移/下移、没有拖拽排序。复用 Task 14 实施。
+- **四条主流程真人验收**：Topic / Entity / 用户组织 / 看板流程迄今只有自动化证据，没有真人走过；验收脚本见 [`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](.agents/tasks/15-phase2-acceptance/manual-acceptance.md)，结果回填该 Task。
+- **ORG-021 已改标 Phase 3**：登记在 PRD 主文档「分册勘误登记」，ORG-021 的需求文字、验收条件与既有切片注记均未改写。
+
+**本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
+
+- Entity merge/dedup；批注的正文片段字符级锚点；`e2e/browser/ingest.spec.ts:127` 的 390px 横向溢出断言误报修复；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
+- ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
+- Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
+- Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
+
+**Phase 3 入口条件（2026-09-14 复核，尚未满足）**：Phase 3 目前没有 Proposal、ADR 或 Task。架构约定的 Agent 运行时 `neuro-agent-harness` 与共享记忆 `nb-memory` 仍是外部候选，仓库内没有 LLM/Agent 依赖、没有 Artifact/Workspace/Agent Session 数据模型，可执行 Action 只有 `cosmos.ingest@1` 与 `cosmos.media-cleanup@1`（`agent`/`artifact` 只是 `actionKindSchema` 的枚举值，注册表里没有对应实现；给新 Action 用的注册、重试策略、执行位置与宿主栅栏管道已具备）。PRD §12 Phase 3 的 5 条范围与主文档「后置决定」中的 6 项尚未收敛为 Proposal。
 
 ## 当前架构基线
 
@@ -159,6 +158,14 @@ Source 身份/revision 持久化合同与默认验收调用方已完成本地 cl
 - 看板、推送、摘要图片和网页发布。
 
 ## 验证边界（历史证据与当前未验证项分开）
+
+**当前验证（2026-09-14 实际运行，主工作区 `e176312` 干净）**：
+
+- `bun run typecheck` 全仓通过。
+- `bun run test` 87 文件 / 516 用例全绿；本轮未复现既有的 Windows SQLite `migrate deploy` 超时与 EBUSY 抖动（该抖动是历史多轮记录的环境固有问题，仍可能复发）。
+- `bun run docs:check` 618 文件 `failures=[]`。
+- G07 收口时在 `master` 重跑的完整门禁：property 4、e2e 4、浏览器产品 17/17、两份体积门禁 PASS、madge 0 环（详见分册索引首行链到的治理记录）。
+- 本轮未运行：property、e2e、浏览器、`build`、`lint:web`、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 
 以下条目是 2026-08-15 之前的历史基线或 Spike 证据，不是当前合入提交的新验收；当前
 Task 07 合入后的命令与边界见上方 2026-08-16 记录。本节保留历史数字，避免把历史

@@ -217,3 +217,11 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 24. Workflow Context、Action 调用、Child Workflow、Research Request、Workflow kind/tags 和用户/Agent 配置绑定的公共 API。
 
 → §14 原始需求追踪、§15 当前解释与勘误候选 已归档:[part-14-15.md](0002-product-requirements/part-14-15.md)
+
+## 分册勘误登记
+
+分册封口后只读；对已封口分册的更正登记在此，不改写分册正文。
+
+| 日期 | 位置 | 更正 | 理由与决策 |
+| --- | --- | --- | --- |
+| 2026-09-14 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-021 的「阶段」列 | 由 `Phase 2` 更正为 `Phase 3` | ORG-021 要求 Entry → Story 的组织允许确定性算法、传统模型与 LLM 协同，并提出分类、聚类、实体、关系、重要性和紧急性建议；其落地依赖 Agent 调用边界、Agent 候选 Revision 与确认策略、第一版预算模型，而这三者都是 Phase 3 的交付物，§12「Phase 3：Agent Artifact 与 Workspace」的范围也已含 Knowledge Workflow。原表将 ORG-021 标为 `Phase 2`，与 §7.5 各切片注记一致记的「自动聚类与 Knowledge Workflow（ORG-021）后置」自相矛盾，并使 Phase 2 按需求表字面无法完成；该矛盾此前未暴露，是因为 Phase 2 的四条验收标准（§12）不要求自动聚类。维护者 2026-09-14 裁定改标 Phase 3；ORG-021 的需求文字、验收条件与既有切片注记均不改写。 |
