@@ -9,7 +9,7 @@ Windows smoke 写成已验证能力。
 
 ## 最后更新
 
-2026-09-09。
+2026-09-14。
 
 ## 组件定位
 
@@ -139,6 +139,13 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    然后调用 `splitStory`（ADR-0012）。成功后面板切到返回的历史壳：标题旁显示“历史壳”
    说明、`来源成员（0）`、后继列表（`data-story-shell` 内的 `data-story-successor-id`
    按钮可继续打开后继），Entry/Revision/Observation 详情与写操作区不再渲染。
+11. **拆分后的用户状态迁移与撤销**（ADR-0020）：历史壳上“迁移用户状态”区（`data-story-user-state-migration`）
+   把收藏、标签、收藏夹、批注与看板固定从一个家族成员搬到另一个。“从”下拉列出本壳与全部后继，
+   “迁到”列出除来源外的其它成员；切换来源会重新读取该成员的状态并清空勾选。读操作由
+   `use-story-workspace` 的 `loadStoryUserState` 组合 `story`/`listCollections`/`listAnnotations`/
+   `listSpotlightPlacements` 四个读端点完成，提交调用 `migrateStoryUserState`。提交前显示“即将迁移：…”
+   摘要，超过 20 项时提示是批量操作；成功后重读来源并显示 `已迁移 N 项标记`（有去重时附带跳过数）。
+   把“从”选成某个后继、去向选成本壳，就是撤销同一次迁移。
 11. **Topic 入口与详情**：`topic-list` Block 由 `client.listTopics` 加载（按 Block `limit` 截断），每行显示标题与
     active 成员数，点击“打开”调用 `client.topic(topicId)` 打开 TopicPanel。TopicPanel 展示
     title/purpose/scope 与成员列表（role 徽章、story id、reason、actor、removed），支持

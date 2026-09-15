@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-09-09。
+2026-09-14。
 
 ## 组件定位
 
@@ -76,6 +76,7 @@ Phase 2 编排方法（同一 transport 形态：先 parse 命令 schema，再 P
 | `moveEntryToStory(storyId,input)` / `updateStoryRevision(storyId,input)` | `POST /api/v1/stories/:encodedId/entry-moves`、`/revisions` | `StoryDetail` |
 | `mergeStories(input)` | `POST /api/v1/stories/merges` | `StoryDetail` |
 | `splitStory(storyId,input)` | `POST /api/v1/stories/:encodedId/splits` | `StoryDetail`（历史壳） |
+| `migrateStoryUserState(sourceStoryId,input)` | `POST /api/v1/stories/:encodedId/user-state-migrations` | `StoryUserStateMigrationResult`（每类 `moved`/`deduped`） |
 | `listStorySubtypes({kind?})` | `GET /api/v1/story-subtypes` | `StorySubtypePage` 的 `items`（`readonly StorySubtype[]`）；kind 按 truthy 发送 |
 | `listTopics(query?)` / `topic(topicId)` | `GET /api/v1/topics`、`/topics/:encodedId` | `TopicPage`、`TopicDetail` |
 | `createTopic(input)` / `updateTopic(topicId,input)` / `mergeTopics(input)` | `POST /api/v1/topics`、`/topics/:encodedId/revisions`、`/topics/merges` | `TopicDetail` |

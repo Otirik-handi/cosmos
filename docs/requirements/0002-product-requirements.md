@@ -198,7 +198,7 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 7. 同一 Workspace 的并发更新、重复触发合并和取消/接管语义。
 8. Agent 候选 Revision 的接受/拒绝界面，以及字段保护的最小实现。
 9. `updated_since_last_seen` 在不同 surface、Story split 和 Story merge 后的投影规则。
-10. 显式 state migration command 的批量操作、撤销和用户确认边界。
+10. 显式 state migration command 的批量操作、撤销和用户确认边界。（2026-09-14 注记：split 的用户状态迁移按 [`story-split-user-state-migration-v1` Proposal](../proposals/story-split-user-state-migration-v1.md) 与 ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md) 收窄——批量以「一次命令显式声明多类对象、每类上限 500」表达，撤销是同一命令的反向调用而不是账本回放，确认边界是「API 不做二次确认、Web 提交前显示迁移摘要并在超过 20 项时提示批量」。其它 state migration 场景——merge 之外的跨对象批量、一键撤销、通用撤销账本——仍待决定。）
 11. Bun 开发与 Node 生产在 Next、Nest、Prisma、Worker 和 Harness Adapter 上的完整兼容矩阵及发布检查。
 12. Prisma/SQLite 的 FTS5 migration、触发器、Raw SQL Repository 和未来存储替换边界。
 13. 三种部署模式的认证、公网暴露、SSE 恢复和 Blob/Artifact transfer
@@ -225,3 +225,4 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 | 日期 | 位置 | 更正 | 理由与决策 |
 | --- | --- | --- | --- |
 | 2026-09-14 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-021 的「阶段」列 | 由 `Phase 2` 更正为 `Phase 3` | ORG-021 要求 Entry → Story 的组织允许确定性算法、传统模型与 LLM 协同，并提出分类、聚类、实体、关系、重要性和紧急性建议；其落地依赖 Agent 调用边界、Agent 候选 Revision 与确认策略、第一版预算模型，而这三者都是 Phase 3 的交付物，§12「Phase 3：Agent Artifact 与 Workspace」的范围也已含 Knowledge Workflow。原表将 ORG-021 标为 `Phase 2`，与 §7.5 各切片注记一致记的「自动聚类与 Knowledge Workflow（ORG-021）后置」自相矛盾，并使 Phase 2 按需求表字面无法完成；该矛盾此前未暴露，是因为 Phase 2 的四条验收标准（§12）不要求自动聚类。维护者 2026-09-14 裁定改标 Phase 3；ORG-021 的需求文字、验收条件与既有切片注记均不改写。 |
+| 2026-09-14 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-014/020 的切片注记（2026-09-09）中「用户状态的显式迁移与撤销后置」 | 该项已实现，不再是后置项：见 ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md) 与下文 §13 待决定事项 10 的注记 | ADR-0012 的 Revisit Gate 首项被触发并已处理。ADR-0020 固定：只迁移以 Story 为 target 的用户状态、迁移是独立命令、撤销 = 同命令反向调用、作用域限定同一 split 家族、冲突按唯一键让目标侧优先；迁移是历史壳上唯一允许的写操作。分册正文与既有注记不改写。 |

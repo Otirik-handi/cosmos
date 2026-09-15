@@ -572,6 +572,14 @@ export function renderStoryPanelLab(props: LabProps) {
             onUpdateStoryRevision={async () => undefined}
             onMergeStory={async () => undefined}
             onSplitStory={async () => undefined}
+            onLoadStoryUserState={async () => ({
+                favorite: true,
+                labels: [{ id: "label-fixture", name: "开发" }],
+                collections: [{ id: "collection-fixture", name: "Fixture collection" }],
+                annotations: [{ id: "annotation-fixture", name: "A fixture note" }],
+                placements: [{ id: "placement-fixture", name: "board-fixture" }],
+            })}
+            onMigrateStoryUserState={async () => undefined}
             subtypeOptions={labStorySubtypeOptions}
             relatedStories={[{
                 storyId: "story-related-fixture",
