@@ -42,6 +42,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **真人验收产生的新方向**：
 
 - **界面职责重划**：Proposal [`docs/proposals/ui-surface-ownership-v1.md`](docs/proposals/ui-surface-ownership-v1.md) 已 **accepted**（维护者 2026-09-15 裁定六项）。三层分工冻结为「首页看 / 独立页面管 / Story 抽屉读」；Story 抽屉只留「读它 + 它自己的关系 + 阅读时顺手做的标记」；新页面为 Topic 页、Entity 页、用户组织页（一页内分区）；不含 Artifact/Workspace（Phase 3 另议）。接受时未冻结一个细节：「新建标签留在 Story 抽屉、新建收藏夹迁出」的不对称处理，实施前需复核。PRD §8 / 架构 §11.4 / 新 ADR 的更新与 Task 创建**尚未执行**。
+  - **实现尝试已回退（2026-09-15）**：三个切片（Topic 页、Entity 页、「整理」页）曾在分支 `feat/t25-ui-surface-ownership` 完成、验证并合并到本地 `master`，维护者本地查看后判定**布局有问题**，当日按 `git reset --hard` 回退 `master` 到 `b67e71e`；分支与 worktree `.worktree/ui-surface-ownership` 保留，内容未丢，改动方向待按布局问题重做。**具体是哪些布局问题尚未记录**（见该分支 Task 25 walkthrough 的「回退」一节）。
 - **UI 文案审查**：Proposal [`docs/proposals/ui-copy-review-v1.md`](docs/proposals/ui-copy-review-v1.md) 维持 `reviewing`。维护者给出的判据（`Story`、`Entity` 等是架构术语，**展示名必须忠实反映概念的实际意义**）已确立为规则 R0；术语对照表 **v1 已逐行裁定**——A 组（已定用户词，直接执行：信息条目/话题/热点/时间线/信息流/产物/标签/收藏夹/已保存视图/批注/来源）、B 组（**只保留 `Story` 和 `Entity`**；`Revision`→版本、`kind`/`subtype`→类型/细分类型、`evidence_for`/`mentions`→引用关系）、C 组（六个角色替换为 核心内容/最新进展/背景资料/分析解读/不同看法/使用教程）、D 组（禁用内部词：历史壳/未注册/Spotlight 区块/Story ID 等）、E 组（「分类」概念定义前界面只用「标签」和「已保存视图」）。仍需维护者接受：判据 R1–R5 本身、术语表落点与实施归属（建议 G 系列治理任务）。改动需与 5 个浏览器 spec 里 205 处按文案定位的断言同批修改。
 - **看板拖拽排序**：已升为必做，随 Task 14 追加切片实施；ADR-0010「v1 纵向流 + 上移/下移」的后置项需要相应注记。
 
