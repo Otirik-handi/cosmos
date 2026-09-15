@@ -573,3 +573,41 @@
 > 大文件治理任务不要沿用原来的Task编号体系，应该新增一个专门的编号体系，并写入规范中。
 
 同轮交互确认（2026-09-11）：新增 G 系列治理任务编号——目录 `.agents/tasks/governance/G{NN}-{slug}`（从 G01 起顺延、永不复用），分支/worktree 引用 `{type}/g{NN}-{slug}`；原 Task 25、26 分别更名 G01（文档拆分）、G02（storage-prisma 治理）；章程写入 `.agents/tasks/governance/README.md` 并同步两份提案与 Task 导航；产品 Task 的 NN 编号序列不受影响。
+
+## 2026-09-15：Phase 2 四条主流程真人验收——界面职责与 UI 文案
+
+> 上述功能基本完整，但是都没有完整独立UI，许多功能堆积到Story的UI面板中，这导致功能分散+Story UI混乱，让用户不知所措。一个好的UI应该本身就包含优秀的引导，不要让用户到处探索。UI方面还有一个严重的问题：文案太过于专业化，让用户有所疑惑。UI文案可以专业，但不能太专业，必须保证大部分正常用户能够一眼看懂。
+
+分条原话（同一份验收记录表）：
+
+> A. Topic：功能通过但不好用，六个角色名中有一些语义不清晰。根据流程A，我发现创建Topic是在Story的面板中完成的，Topic没有自己的操作面板。并且Story面板中堆积了大量和其他内容相关的操作。
+
+> B. Entity：功能通过，但和Topic一样，没有自己的操作面板。
+
+> C. 用户组织：功能通过，理由和上方一致，功能面板又堆积到Story中去了。
+
+> D. 看板：功能通过，但是通过点击按钮来上下移动确实让人烦躁，十分容易丢失注意点。所以后续一定要完成拖拽排序功能。
+
+> 专问：删除 Block 后底层信息是否完好 —— 完好。
+
+出处：[`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](../../.agents/tasks/15-phase2-acceptance/manual-acceptance.md)「验收记录表」与「开发者总结」，维护者 2026-09-15 填写。原话保留措辞、顺序与不确定性（例如「有些不清晰」未指明具体哪几个角色名）。
+
+同轮交互确认（2026-09-15）：本条目由 Agent 按维护者原话追加，未改写措辞。其中「看板拖拽排序」一条已在 [`.agents/tasks/14-board-section-block/README.md`](../../.agents/tasks/14-board-section-block/README.md) 的 Follow-ups 登记为必做，属另一条线，不并入本次界面职责提案。界面职责重划与 UI 文案审查按[准入决策表](../standards/repository-workflow.md#准入决策表)「新增或改变用户可观察行为」一行先出 Proposal：`docs/proposals/ui-surface-ownership-v1.md`、`docs/proposals/ui-copy-review-v1.md`，均维持 `reviewing`。Agent 已就面板形态、Story 面板保留范围、六个角色命名、两件事先后、是否含 Phase 3 对象五项提出选择，维护者本轮未答复，故五项在 Proposal 中列为待裁定，未选默认值、未写实现代码、未建 worktree、未 commit。
+
+## 2026-09-15：界面职责与 UI 文案的裁定
+
+> 界面职责重划：1.独立页面。2.读它 + 它自己的关系 + 阅读时顺手做的标记。3.只改口语名，这里类似与过于术语化。4.先界面。5.不包含。6.先试试一个页面内分区。
+>
+> UI文案：Story、Entity等等都是架构中的术语，文案起名要符合它们的实际意义。
+
+同轮交互确认（2026-09-15）：序号与前一节 Proposal 的六项待裁定一一对应，结论为——新面板用独立页面（D1）；Story 抽屉只留「读它 + 它自己的关系 + 阅读时顺手做的标记」（D2）；六个角色保留数量、只把过于术语化的名字改成口语名（D3）；先做界面、文案单独跟进（D4）；范围不含 Phase 3 才出现的 Artifact/Workspace（D5）；用户组织先做一页内分区（D6）。UI 文案给出的是判据而非逐词对应：Story、Entity 等词来自架构，**展示名必须忠实反映该概念的实际含义**，不得为了顺口而改窄或改偏。据此 `ui-surface-ownership-v1.md` 转 `accepted`（骨架冻结，具体角色展示名移交术语表）；`ui-copy-review-v1.md` 维持 `reviewing`，并已按该判据补出「术语对照表 v0」供逐行裁定，仍待维护者确认的行在表内标为「待确认」。两项接受时未冻结的细节（「新建标签留在 Story 抽屉、新建收藏夹迁出」的不对称、六个角色的具体展示名）记录在 Proposal 内，实施前需维护者复核。
+
+## 2026-09-15：术语对照表裁定
+
+> B组保留，C组替换。对于分类这个词，先按照你的建议来。
+
+Agent 就 B 组粒度反问「整个 B 组都不译，还是只保留 Story 和 Entity」后，维护者回答：
+
+> 只保留 Story 和 Entity
+
+同轮交互确认（2026-09-15）：术语对照表按此定稿——A 组（仓库已定用户词：信息条目、话题、热点、时间线、信息流、栏目/专题/学习计划、产物、标签、收藏夹、已保存视图、批注、来源）直接执行；B 组仅保留 `Story` 与 `Entity` 两个有完整含义的架构术语，`Revision` → 「版本」、`kind`/`subtype` → 「类型」/「细分类型」、`evidence_for`/`mentions` → 「引用关系」；C 组六个 Topic 成员角色按建议替换为「核心内容 / 最新进展 / 背景资料 / 分析解读 / 不同看法 / 使用教程」（枚举值与数量不变）；D 组禁用内部词（历史壳、未注册、Spotlight 区块、Story ID、受管理 subtype、审计/不变量/provenance/policy/version）按 R2 执行；E 组「分类」在概念被定义前，界面只用「标签」和「已保存视图」。落点与实施方式（G 系列治理任务 vs 产品 Task）、判据 R1–R5 本身仍需维护者接受，`ui-copy-review-v1.md` 维持 `reviewing`。未写实现代码、未建 worktree、未 commit。

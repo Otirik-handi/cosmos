@@ -39,10 +39,10 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - **四条主流程真人验收**：**已完成**（维护者 2026-09-15 执行）。四条功能全部通过，PRD Phase 2 第三条验收标准的专问明确回答「删除 Block 后底层信息完好」。结论落在界面：Topic / Entity / 用户组织缺独立操作面板、功能堆在 Story 面板；看板排序按钮让人烦躁；UI 文案过于专业化。记录见 [`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](.agents/tasks/15-phase2-acceptance/manual-acceptance.md)。
 - **ORG-021 已改标 Phase 3**：登记在 PRD 主文档「分册勘误登记」，ORG-021 的需求文字、验收条件与既有切片注记均未改写。
 
-**真人验收产生的新方向（待 Proposal，尚未排期）**：
+**真人验收产生的新方向**：
 
-- **界面职责重划**：Topic、Entity 与用户组织各自需要独立操作面板，Story 面板只留与该 Story 直接相关的操作。改用户可观察行为、跨 Web 模块、涉及 PRD §8 的界面职责，按准入决策表先出 Proposal。
-- **UI 文案审查**：「专业但不过度专业」的措辞标准与审查范围需要先定，再动文案，避免变成无边界改写。
+- **界面职责重划**：Proposal [`docs/proposals/ui-surface-ownership-v1.md`](docs/proposals/ui-surface-ownership-v1.md) 已 **accepted**（维护者 2026-09-15 裁定六项）。三层分工冻结为「首页看 / 独立页面管 / Story 抽屉读」；Story 抽屉只留「读它 + 它自己的关系 + 阅读时顺手做的标记」；新页面为 Topic 页、Entity 页、用户组织页（一页内分区）；不含 Artifact/Workspace（Phase 3 另议）。接受时未冻结一个细节：「新建标签留在 Story 抽屉、新建收藏夹迁出」的不对称处理，实施前需复核。PRD §8 / 架构 §11.4 / 新 ADR 的更新与 Task 创建**尚未执行**。
+- **UI 文案审查**：Proposal [`docs/proposals/ui-copy-review-v1.md`](docs/proposals/ui-copy-review-v1.md) 维持 `reviewing`。维护者给出的判据（`Story`、`Entity` 等是架构术语，**展示名必须忠实反映概念的实际意义**）已确立为规则 R0；术语对照表 **v1 已逐行裁定**——A 组（已定用户词，直接执行：信息条目/话题/热点/时间线/信息流/产物/标签/收藏夹/已保存视图/批注/来源）、B 组（**只保留 `Story` 和 `Entity`**；`Revision`→版本、`kind`/`subtype`→类型/细分类型、`evidence_for`/`mentions`→引用关系）、C 组（六个角色替换为 核心内容/最新进展/背景资料/分析解读/不同看法/使用教程）、D 组（禁用内部词：历史壳/未注册/Spotlight 区块/Story ID 等）、E 组（「分类」概念定义前界面只用「标签」和「已保存视图」）。仍需维护者接受：判据 R1–R5 本身、术语表落点与实施归属（建议 G 系列治理任务）。改动需与 5 个浏览器 spec 里 205 处按文案定位的断言同批修改。
 - **看板拖拽排序**：已升为必做，随 Task 14 追加切片实施；ADR-0010「v1 纵向流 + 上移/下移」的后置项需要相应注记。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
