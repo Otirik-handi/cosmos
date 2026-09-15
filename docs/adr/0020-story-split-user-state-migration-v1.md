@@ -2,9 +2,9 @@
 
 > 状态：Accepted design contract
 >
-> 日期：2026-09-14
+> 日期：2026-09-15
 >
-> 关联：[`story-split-user-state-migration-v1` Proposal](../proposals/story-split-user-state-migration-v1.md)（accepted 2026-09-14）、ADR [`0012`](0012-story-split-v1.md)（本 ADR 处理其 Revisit Gate 首项）、[`0006`](0006-story-domain-v1.md)（Story merge 的迁移与冲突处理先例）、[`0009`](0009-user-organization-v1.md)、[`0010`](0010-board-section-block-v1.md)、信息模型 [`../architecture/0002-information-model.md`](../architecture/0002-information-model.md) §4.6/§5.4、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) ORG-014/020 与待决定事项 10
+> 关联：[`story-split-user-state-migration-v1` Proposal](../proposals/story-split-user-state-migration-v1.md)（accepted 2026-09-15）、ADR [`0012`](0012-story-split-v1.md)（本 ADR 处理其 Revisit Gate 首项）、[`0006`](0006-story-domain-v1.md)（Story merge 的迁移与冲突处理先例）、[`0009`](0009-user-organization-v1.md)、[`0010`](0010-board-section-block-v1.md)、信息模型 [`../architecture/0002-information-model.md`](../architecture/0002-information-model.md) §4.6/§5.4、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) ORG-014/020 与待决定事项 10
 
 ## Context
 

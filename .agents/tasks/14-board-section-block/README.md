@@ -71,9 +71,9 @@ Non-goals（见 Proposal / ADR-0010）：
 - 受影响合同：contracts（新枚举/DTO/命令 schema）、application（repository 端口）、storage-prisma（新表 + 命令）、api（新端点）、transport-http（client 方法）、web（首页布局 + 编辑模式）。
 - 验证层级：focused（domain/contracts/storage）→ API 集成 → 浏览器（已执行，见下）。
 
-### 追加切片（2026-09-14，计划中）：Feed Block 独立取数与拖拽排序
+### 追加切片（2026-09-15，计划中）：Feed Block 独立取数与拖拽排序
 
-Phase 2 收口项之一，维护者 2026-09-14 选定。**尚未开工**，待维护者批准 worktree 与 ADR-0010 的注记范围。
+Phase 2 收口项之一，维护者 2026-09-15 选定。**尚未开工**，待维护者批准 worktree 与 ADR-0010 的注记范围。
 
 - 生命周期阶段：分流与定义完成，待批准后进入计划。
 - 连贯目标：让每个 Feed Block 按 ADR-0010 已决定的语义独立取数，并补齐区块/分区拖拽排序。

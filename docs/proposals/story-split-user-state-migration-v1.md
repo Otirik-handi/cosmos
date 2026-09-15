@@ -2,7 +2,7 @@
 
 > 状态：accepted
 >
-> 日期：2026-09-14
+> 日期：2026-09-15
 >
 > 关联需求：[PRD](../requirements/0002-product-requirements.md) ORG-014、ORG-020、待决定事项 10（显式 state migration command 的批量操作、撤销和用户确认边界）
 >
@@ -10,7 +10,7 @@
 >
 > 关联既有切片：Task 17（Story split v1，`splitStory`）、Task 13（用户组织 v1）、Task 14（可配置看板 v1，Spotlight 固定）
 >
-> 触发来源：维护者 2026-09-14 选定 Phase 2 收口项「Story split 用户状态迁移」；本条是 ADR-0012 Revisit Gate 的第一个触发条件。
+> 触发来源：维护者 2026-09-15 选定 Phase 2 收口项「Story split 用户状态迁移」；本条是 ADR-0012 Revisit Gate 的第一个触发条件。
 
 ## 1. 问题
 
@@ -24,7 +24,7 @@ ADR-0012 在 v1 明确把本条列为非目标，并在 Revisit Gate 首项写�
 
 ## 2. 当前行为与证据
 
-从代码读到的事实（2026-09-14，`master` = `e176312`）：
+从代码读到的事实（2026-09-15，`master` = `e176312`）：
 
 - `splitStory` 的事务只迁移四类关系：`Entry.storyId`、`EntryStoryLink`、`StoryEntity`、`TopicMembership`（`packages/storage-prisma/src/repository/stories.ts:314-346`）。
 - `splitStory` 函数体内**没有**对 `Favorite`、`LabelAssignment`、`CollectionItem`、`Annotation`、`SpotlightPlacement` 的任何引用（`stories.ts:159-388`），因此它们全部留在历史壳。
@@ -49,7 +49,7 @@ ADR-0012 在 v1 明确把本条列为非目标，并在 Revisit Gate 首项写�
 - 自动迁移或"按成员跟随"的隐式迁移（ORG-020 要求显式）。
 - 撤销 split 本身（架构规定撤销通过补偿操作完成；拆回去等于重新 merge，不在本切片）。
 - Story Read State 上线后 `updated_since_last_seen` 在 split 后的投影（待决定事项 9，且 Story Read State 尚未实现）。
-- 自动拆分建议与聚类（ORG-021，已于 2026-09-14 改标 Phase 3）。
+- 自动拆分建议与聚类（ORG-021，已于 2026-09-15 改标 Phase 3）。
 - Story↔Story 类型化关系、批注的正文片段字符级锚点、Artifact 作为批注目标。
 - Web 的拖拽排序与看板 UI 缺口（并行的 Phase 2 收口项）。
 
@@ -153,6 +153,6 @@ ADR-0012 规定历史壳拒绝 `updateStoryRevision`、`mergeStories`、再次 `
 
 | 日期 | 决策者 | 决定 |
 | --- | --- | --- |
-| 2026-09-14 | 维护者 | 选定「Story split 用户状态迁移与撤销」为 Phase 2 收口项，要求先出 Proposal 再实施（依据 PROJECT-STATUS「当前下一步」）。 |
-| 2026-09-14 | Agent | 提出本 Proposal 的问题、范围与四个取舍点建议（§4.2 独立命令、§4.3 反向即撤销、§4.4 家族内作用域、§4.5 沿用 merge 冲突处理），状态置 `reviewing`，等待维护者裁决。 |
-| 2026-09-14 | 维护者 | **接受**本 Proposal，四项取舍建议（§4.2 独立迁移命令、§4.3 反向迁移即撤销、§4.4 限定在同一 split 家族内、§4.5 冲突处理沿用 merge 先例）全部按建议采用，状态置 `accepted`；授权创建 worktree 与任务分支实施，复用 Task 17。实现时需按 §6 更新 ADR（`0020`）、信息模型 §4.6/§5.4 与 PRD 切片注记。 |
+| 2026-09-15 | 维护者 | 选定「Story split 用户状态迁移与撤销」为 Phase 2 收口项，要求先出 Proposal 再实施（依据 PROJECT-STATUS「当前下一步」）。 |
+| 2026-09-15 | Agent | 提出本 Proposal 的问题、范围与四个取舍点建议（§4.2 独立命令、§4.3 反向即撤销、§4.4 家族内作用域、§4.5 沿用 merge 冲突处理），状态置 `reviewing`，等待维护者裁决。 |
+| 2026-09-15 | 维护者 | **接受**本 Proposal，四项取舍建议（§4.2 独立迁移命令、§4.3 反向迁移即撤销、§4.4 限定在同一 split 家族内、§4.5 冲突处理沿用 merge 先例）全部按建议采用，状态置 `accepted`；授权创建 worktree 与任务分支实施，复用 Task 17。实现时需按 §6 更新 ADR（`0020`）、信息模型 §4.6/§5.4 与 PRD 切片注记。 |
