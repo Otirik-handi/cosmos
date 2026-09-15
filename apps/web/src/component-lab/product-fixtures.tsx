@@ -708,7 +708,28 @@ export function renderEntityPanelLab(props: LabProps) {
     );
 }
 
-const labBoardClient = new HttpCosmosClient({ baseUrl: "" });
+/**
+ * 实验室的只读客户端：阅读流区块是自取数区块，这里给 feed 一个固定响应，让它在
+ * 实验室里渲染出内容而不是失败占位；其余方法不覆盖，本 fixture 不触发它们。
+ */
+const labBoardClient = Object.assign(new HttpCosmosClient({ baseUrl: "" }), {
+    feed: async () => ({
+        items: [{
+            storyId: "story-fixture-feed",
+            storyKind: "event" as const,
+            title: "合成阅读流条目",
+            summary: null,
+            entryId: "entry-fixture-feed",
+            sourceId: "source-fixture",
+            sourceName: "Cosmos fixture source",
+            sourceKind: "rss" as const,
+            revisionId: "revision-fixture-feed",
+            publishedAt: null,
+            assets: [],
+        }],
+        nextCursor: null,
+    }),
+});
 
 export function renderBoardViewLab(props: LabProps) {
     const state = optionProp(props, "state", "default", ["default", "unknown-block"] as const);
@@ -788,11 +809,6 @@ export function renderBoardViewLab(props: LabProps) {
         <BoardView
             board={board}
             client={labBoardClient}
-            feedSlot={(
-                <div className="rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-sm text-muted-foreground">
-                    合成阅读流区块（实验室不发起 Product API 请求）。
-                </div>
-            )}
             sourceActionsSlot={(
                 <div className="rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-sm text-muted-foreground">
                     合成来源健康区块。

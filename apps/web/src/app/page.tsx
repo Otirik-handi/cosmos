@@ -589,6 +589,12 @@ export default function Home() {
                 </div>
             )}
 
+            {/* 信息库与搜索是页面级入口（PRD §8.2），不再依附某个看板区块：
+                看板内的每个阅读流区块各自按绑定取数。 */}
+            <section aria-label="信息库与搜索" className="border-b pb-6">
+                {feedBrowser}
+            </section>
+
             <div className="grid w-full flex-1 items-start gap-8 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[330px_minmax(0,1fr)]">
                 <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-8">
                     <StatusSummary
@@ -644,7 +650,6 @@ export default function Home() {
                     <BoardView
                         board={board}
                         client={client}
-                        feedSlot={feedBrowser}
                         sourceActionsSlot={sourceActions}
                         topics={topics}
                         openingTopicId={openingTopicId}
@@ -656,9 +661,7 @@ export default function Home() {
                         collections={collections.items}
                         refreshToken={boardRefreshToken}
                     />
-                ) : (
-                    feedBrowser
-                )}
+                ) : null}
             </div>
 
             <section aria-label="运行记录" className="flex flex-col gap-3">
