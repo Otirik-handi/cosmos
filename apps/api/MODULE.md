@@ -10,7 +10,7 @@ Cosmos HTTP API 进程(NestJS):把产品 Command/Query 以 `/api/v1` 暴露给 W
 ## 路由入口契约(冻结)
 
 - `src/app.controller.ts` 是 8 行门面:`@Controller() export class AppController extends AppControllerOrganization {}`;类名与构造签名不变,`app.module.ts` 与 25 处测试实例化零改动。
-- 114 条路由(method + path)冻结。`src/app.controller.route-table.test.ts` 按 Nest 元数据枚举并与 `.agents/tasks/governance/G03-api-controller/route-snapshot-app.controller.txt` 比对;改路由表必须同步更新快照。
+- 115 条路由(method + path)冻结。`src/app.controller.route-table.test.ts` 按 Nest 元数据枚举并与 `.agents/tasks/governance/G03-api-controller/route-snapshot-app.controller.txt` 比对;改路由表必须同步更新快照。
 
 ## 子模块地图(2026-09-13,G03 切片 3/4 后)
 
@@ -21,7 +21,7 @@ Cosmos HTTP API 进程(NestJS):把产品 Command/Query 以 `/api/v1` 暴露给 W
 | src/app.controller/internals.ts | 模块级 helper(错误映射、游标、公开投影)+ productRunSchema | 2.0k |
 | src/app.controller/sources.ts | health / definitions / capabilities / sources / probes / connections / storage / backups(27 路由) | 3.6k |
 | src/app.controller/runs.ts | runs / workflow-runs / media-cleanups / jobs / attempts / events(12 路由) | 3.0k |
-| src/app.controller/content.ts | story / topic / entity / relation / evidence / subtype / revision / asset / feed / search(33 路由) | 4.7k |
+| src/app.controller/content.ts | story / topic / entity / relation / evidence / subtype / revision / user-state-migration / asset / feed / search(34 路由) | 4.8k |
 | src/app.controller/organization.ts | label / collection / favorite / annotation / saved-view / board / section / block / spotlight(42 路由) | 4.3k |
 | src/app.controller.*.test.ts(5 个) | 按资源的控制器行为测试 | — |
 | src/source-probe.service.ts | 源配置的同步校验与探测 | — |

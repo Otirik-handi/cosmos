@@ -1,4 +1,4 @@
-# 共 114 条路由
+# 共 115 条路由
 
 GET       /health                                      health
 GET       /connectors                                  connectors
@@ -46,6 +46,7 @@ POST      /stories/:storyId/entry-moves                moveEntryToStory
 POST      /stories/:storyId/revisions                  updateStoryRevision
 POST      /stories/merges                              mergeStories
 POST      /stories/:storyId/splits                     splitStory
+POST      /stories/:storyId/user-state-migrations  migrateStoryUserState
 GET       /story-subtypes                              listStorySubtypes
 GET       /topics                                      listTopics
 GET       /topics/:topicId                             topic

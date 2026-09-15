@@ -6,7 +6,7 @@ import type {
     EntryDetail, EntryPage, JobSnapshot, RevisionDetail,
     RunSnapshot, SearchPage, SearchQuery, SourceActivationCommand,
     SourceCheckpointOutput, SourceConfigProbeCommand, SourceSnapshot,
-    StoryDetail, TopicDetail, TopicPage, UpdateSourceCommand,
+    StoryDetail, StoryUserStateMigrationResult, TopicDetail, TopicPage, UpdateSourceCommand,
     EntityDetail, EntityPage, LabelDetail, LabelItem, LabelList,
     CollectionDetail, CollectionList, CollectionSummary, FavoriteList,
     Annotation, AnnotationList, SavedView, SavedViewList,
@@ -254,6 +254,18 @@ export interface CosmosRepository {
         actor?: string | null;
         reason?: string | null;
     }): Promise<StoryDetail | null>;
+    migrateStoryUserState(input: {
+        sourceStoryId: string;
+        targetStoryId: string;
+        favorite: boolean;
+        labelIds: readonly string[];
+        collectionIds: readonly string[];
+        annotationIds: readonly string[];
+        spotlightPlacementIds: readonly string[];
+        actor?: string | null;
+        reason?: string | null;
+        basis?: string | null;
+    }): Promise<StoryUserStateMigrationResult>;
     createTopic(input: {
         title: string;
         purpose: string;

@@ -81,6 +81,20 @@ export class StorySubtypeInvalidError extends Error {
     }
 }
 
+/**
+ * A user-state migration names source/target Stories that are not in the same
+ * split family, or names a row that is not currently on the source Story
+ * (ADR-0020 decision 3).
+ */
+export class StoryUserStateMigrationConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "StoryUserStateMigrationConflictError";
+    }
+}
+
 export class TopicNotFoundError extends Error {
     readonly code = "not_found" as const;
 

@@ -108,6 +108,7 @@ type	MediaRetryPolicy
 type	MediaRetryPolicySnapshot
 type	MergeStoriesCommand
 type	MergeTopicsCommand
+type	MigrateStoryUserStateCommand
 type	MoveBlockCommand
 type	MoveEntryToStoryCommand
 type	NormalizedAssetInputContract
@@ -183,6 +184,8 @@ type	StorySubtypeQuery
 type	StorySubtypeStatus
 type	StorySuccessor
 type	StoryTopic
+type	StoryUserStateMigrationCounts
+type	StoryUserStateMigrationResult
 type	TargetType
 type	TemporalFallback
 type	TemporalPrecision
@@ -324,6 +327,7 @@ value	mediaRetryPolicySchema
 value	mediaRetryPolicySnapshotSchema
 value	mergeStoriesCommandSchema
 value	mergeTopicsCommandSchema
+value	migrateStoryUserStateCommandSchema
 value	moveBlockCommandSchema
 value	moveEntryToStoryCommandSchema
 value	normalizedAssetInputSchema
@@ -402,6 +406,8 @@ value	storySubtypeSchema
 value	storySubtypeStatusSchema
 value	storySuccessorSchema
 value	storyTopicSchema
+value	storyUserStateMigrationCountsSchema
+value	storyUserStateMigrationResultSchema
 value	targetTypeSchema
 value	temporalFallbackSchema
 value	temporalPrecisionSchema

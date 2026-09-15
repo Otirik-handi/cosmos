@@ -141,6 +141,57 @@ export const splitStoryCommandSchema = z.object({
 
 export type SplitStoryCommand = z.infer<typeof splitStoryCommandSchema>;
 
+// Explicit move of Story-target user state inside one split family: the
+// historical shell and the successors it replaced_by. Only state whose target
+// is the Story itself is named here — state attached to an Entry or a Topic
+// follows that object instead (ADR-0020 decision 1). Naming a row that is not
+// on the source Story is a conflict, not a silent no-op: the caller's view is
+// stale.
+
+export const migrateStoryUserStateCommandSchema = z.object({
+    targetStoryId: z.string().trim().min(1).max(300),
+    // There is at most one Story favorite, so it is a flag rather than an id.
+    favorite: z.boolean().default(false),
+    // Labels and collections are named by their own id, not by the id of the
+    // assignment row: `(label, story)` and `(collection, story)` are unique, so
+    // the row to move is already unambiguous and the read model never has to
+    // expose an internal assignment id.
+    labelIds: z.array(z.string().trim().min(1).max(300)).max(500).default([]),
+    collectionIds: z.array(z.string().trim().min(1).max(300)).max(500).default([]),
+    annotationIds: z.array(z.string().trim().min(1).max(300)).max(500).default([]),
+    spotlightPlacementIds: z.array(z.string().trim().min(1).max(300)).max(500).default([]),
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+    basis: z.string().trim().min(1).max(1000).nullish(),
+});
+
+export type MigrateStoryUserStateCommand = z.infer<typeof migrateStoryUserStateCommandSchema>;
+
+// Per-kind outcome of one migration, so the caller can report what actually
+// happened instead of assuming every named row moved.
+
+export const storyUserStateMigrationCountsSchema = z.object({
+    moved: z.number().int().nonnegative(),
+    // Rows dropped because the target Story already carried the equivalent row;
+    // the target's row wins (ADR-0020 decision 4, symmetric to Story merge).
+    deduped: z.number().int().nonnegative(),
+});
+
+export type StoryUserStateMigrationCounts = z.infer<typeof storyUserStateMigrationCountsSchema>;
+
+
+export const storyUserStateMigrationResultSchema = z.object({
+    sourceStoryId: z.string(),
+    targetStoryId: z.string(),
+    favorite: storyUserStateMigrationCountsSchema,
+    labelAssignments: storyUserStateMigrationCountsSchema,
+    collectionItems: storyUserStateMigrationCountsSchema,
+    annotations: storyUserStateMigrationCountsSchema,
+    spotlightPlacements: storyUserStateMigrationCountsSchema,
+});
+
+export type StoryUserStateMigrationResult = z.infer<typeof storyUserStateMigrationResultSchema>;
+
 
 export const linkEntryStoryCommandSchema = z.object({
     entryId: z.string().trim().min(1).max(300),
