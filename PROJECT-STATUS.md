@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-15。基线 `master` = `origin/master` = `8388931`（Story split 用户状态迁移已合并），工作树干净；`fix/t14-board-feed-blocks` 分支在做看板 Feed Block 独立取数。Phase 2 十四切片、平台面四块与**四条验收标准的真人验收**均已完成，Phase 2 收口；ORG-021 改标 Phase 3，收尾范围与真人验收产生的新方向见「当前下一步」。2026-09-11 ~ 09-14 的 G01–G07 代码与文档治理已收口并暂停，见分册索引首行。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-15。基线 `master` = `origin/master` = `14ce892`（Story split 用户状态迁移与看板 Feed Block 独立取数均已合并），工作树干净、无遗留 worktree。Phase 2 十四切片、平台面四块与**四条验收标准的真人验收**均已完成，Phase 2 收口；ORG-021 改标 Phase 3，收尾范围与真人验收产生的新方向见「当前下一步」。2026-09-11 ~ 09-14 的 G01–G07 代码与文档治理已收口并暂停，见分册索引首行。Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -35,7 +35,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 收口（维护者 2026-09-15 判定）**：
 
 - **Story split 用户状态迁移与撤销**：**已合并**（`8388931`，2026-09-15）。Proposal 接受，稳定结论见 ADR [`0020`](docs/adr/0020-story-split-user-state-migration-v1.md)。无 Prisma schema 变更、无 migration；`StoryDetail` 不新增字段。worktree 与分支已按授权清理。
-- **看板 UI 缺口**：多个 Feed Block 当前只有第一个渲染真实阅读流（`config.savedViewId` 已持久化但渲染未消费）。维护者 2026-09-15 选定**方案 A**：未绑定 = 渲染默认的最新内容流（保持今天首页行为），绑定 Save View 后按其条件取数；ADR-0010 决定 5 的「未绑定渲染占位」收窄为「悬空引用渲染占位」。**拖拽排序由真人验收升级为必做**，与 Feed Block 独立取数同属 Task 14 追加切片。
+- **看板 UI 缺口**：**Feed Block 独立取数已合并**。每个阅读流区块按自己的 `config.savedViewId` 取数（绑定后按视图条件调 `search`，未绑定渲染最新内容流，悬空引用渲染占位），交互式搜索与「已保存视图」归位到页面级 section（PRD §8.2）。维护者选定**方案 A**，ADR-0010 决定 5 对 `feed` 收窄为「悬空引用渲染占位」并已加注记。**拖拽排序仍未开工**（真人验收已定为必做）。
 - **四条主流程真人验收**：**已完成**（维护者 2026-09-15 执行）。四条功能全部通过，PRD Phase 2 第三条验收标准的专问明确回答「删除 Block 后底层信息完好」。结论落在界面：Topic / Entity / 用户组织缺独立操作面板、功能堆在 Story 面板；看板排序按钮让人烦躁；UI 文案过于专业化。记录见 [`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](.agents/tasks/15-phase2-acceptance/manual-acceptance.md)。
 - **ORG-021 已改标 Phase 3**：登记在 PRD 主文档「分册勘误登记」，ORG-021 的需求文字、验收条件与既有切片注记均未改写。
 
@@ -48,6 +48,8 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
 - Entity merge/dedup；批注的正文片段字符级锚点；`e2e/browser/ingest.spec.ts:127` 的 390px 横向溢出断言误报修复；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
+- **搜索 FTS5 查询未转义（2026-09-15 发现，未修）**：`packages/storage-prisma/src/repository/search.ts` 把用户输入原样交给 `entry_search MATCH ?`，搜索含 `-`、`"`、`*`、括号等 FTS5 语法字符的词会返回 500（实测 `GET /api/v1/search?text=绝不匹配-212c82&limit=5`）。既有缺陷，与看板切片无关；修法需单独确认边界并补回归测试。
+- **看板拖拽排序**：真人验收定为必做，尚未开工；ADR-0010 的「v1 纵向流 + 上移/下移」后置项届时需加注记。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
@@ -167,8 +169,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证（2026-09-15 实际运行）**：
 
-- 主工作区 `2e46dca`（Phase 2 收口文档）：`bun run typecheck` 全仓通过；`bun run test` 87 文件 / 516 用例全绿；`bun run docs:check` 618 文件 `failures=[]`。
-- 分支 `feat/t17-story-user-state-migration`（尚未合并）在 worktree 内实际运行：`bun run typecheck` 0；`bun run test` **88 文件 / 524 用例**全绿；`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，新文件 0）；浏览器产品 E2E **17/17**（含拆分场景新增的迁移与撤销断言）；组件实验室浏览器 **13/13**；`bun run docs:check` 625 文件 `failures=[]`；契约与 application 的导出面快照显式重生成，diff 只有本次新增的 6 + 1 项；API 路由表守卫快照 114 → 115 条。
+- 合并后在 `master`（`14ce892`）重跑：`bun run typecheck` 全仓 0；`bun run test` **88 文件 / 524 用例**全绿；`bun run docs:check` 625 文件 `failures=[]`。
+- Story split 用户状态迁移（分支内，合并前）：`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，新文件 0）；浏览器产品 E2E **17/17**（含拆分场景新增的迁移与撤销断言）；组件实验室 **13/13**；契约与 application 的导出面快照显式重生成，diff 只有本次新增的 6 + 1 项；API 路由表守卫快照 114 → 115 条。先红后绿：短路迁移事务后 storage 迁移测试 7 例中 4 例失败。
+- 看板 Feed Block 独立取数（分支内，合并前）：`bun run build` 通过；浏览器产品 E2E **18/18**（新增「未绑定区块渲染最新内容流 + 绑定视图的区块各取各的 + 搜索在页面级」用例）；组件实验室 **13/13**。
 - 本轮未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 - 分支工作的先红后绿证据：短路迁移事务后，`story-user-state-migration.test.ts` 7 例中 4 例失败（另 3 例断言拒绝与空选择 no-op，本就不需要迁移发生）。
 
