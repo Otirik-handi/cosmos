@@ -57,7 +57,7 @@ Non-goals：
 - 受影响合同：无公共合同变化；仅 Web 内部表单状态与两个新 lib 模块。
 - 验证层级：unit（新 lib 与 component-lab）→ 浏览器产品 E2E → 全量门禁。
 
-### 追加切片（2026-09-14）：四条主流程真人验收
+### 追加切片（2026-09-15）：四条主流程真人验收
 
 - 生命周期阶段：定义完成，待维护者执行。
 - 连贯目标：为 Phase 2 收口补齐四条主流程（Topic / Entity / 用户组织 / 看板）的真人验收证据——此前这四条只有自动化证据。
@@ -108,6 +108,6 @@ Non-goals：
 
 - 真人验收结果回填本 README（记录表在 [`manual-acceptance.md`](manual-acceptance.md)）；Phase 2 收口完成前必须先有这份人工证据，不能只用浏览器 E2E 替代。
 - 相关内容的服务端排序与更大候选集并入 Phase 4 推荐体系；ORG-017 的 Story Revision「时间范围」字段仍未落地。
-- Phase 2 需求清单其余条目按 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」排序；ORG-021（自动聚类/Knowledge Workflow）已于 2026-09-14 改标 Phase 3。
+- Phase 2 需求清单其余条目按 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」排序；ORG-021（自动聚类/Knowledge Workflow）已于 2026-09-15 改标 Phase 3。
 - 看板「Feed Block 绑定分类/Topic 条件」的独立配置、Read State「未读」过滤仍待后续切片。
 - 第四条验收标准「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，Phase 3 的 Knowledge Workflow 落地后必须重新回归。

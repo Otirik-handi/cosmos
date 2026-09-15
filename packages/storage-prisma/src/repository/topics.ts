@@ -2,9 +2,9 @@ import { type TopicDetail, type TopicPage, type TopicSummary } from "@cosmos/con
 import { fingerprintTopicRevision, type TopicMemberRole } from "@cosmos/domain";
 import { StoryNotFoundError, TopicMergeConflictError, TopicMembershipNotFoundError, TopicNotFoundError, TopicRevisionConflictError } from "@cosmos/application";
 import { appendDomainEvent } from "./repository-internals.js";
-import { PrismaCosmosRepositoryStoryMerge } from "./story-merge.js";
+import { PrismaCosmosRepositoryStoryUserState } from "./story-user-state-migration.js";
 
-export class PrismaCosmosRepositoryTopics extends PrismaCosmosRepositoryStoryMerge {
+export class PrismaCosmosRepositoryTopics extends PrismaCosmosRepositoryStoryUserState {
     async createTopic(input: {
         title: string;
         purpose: string;

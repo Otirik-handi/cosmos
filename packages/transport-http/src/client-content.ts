@@ -1,11 +1,13 @@
 import {
     feedPageSchema,
     mergeStoriesCommandSchema,
+    migrateStoryUserStateCommandSchema,
     moveEntryToStoryCommandSchema,
     splitStoryCommandSchema,
     searchPageSchema,
     storyDetailSchema,
     storySubtypePageSchema,
+    storyUserStateMigrationResultSchema,
     topicDetailSchema,
     topicPageSchema,
     addTopicMemberCommandSchema,
@@ -37,7 +39,9 @@ import {
     type EntryListQuery,
     type EntryPage,
     type MergeStoriesCommand,
+    type MigrateStoryUserStateCommand,
     type SplitStoryCommand,
+    type StoryUserStateMigrationResult,
     type MoveEntryToStoryCommand,
     type RevisionDetail,
     type UpdateStoryRevisionCommand,
@@ -167,6 +171,21 @@ export class ContentClient extends SourcesClient {
             body: payload,
             schema: storyDetailSchema,
         });
+    }
+
+    async migrateStoryUserState(
+        sourceStoryId: string,
+        input: MigrateStoryUserStateCommand,
+    ): Promise<StoryUserStateMigrationResult> {
+        const payload = migrateStoryUserStateCommandSchema.parse(input);
+        return this.request(
+            `/api/v1/stories/${encodeURIComponent(sourceStoryId)}/user-state-migrations`,
+            {
+                method: "POST",
+                body: payload,
+                schema: storyUserStateMigrationResultSchema,
+            },
+        );
     }
 
     async listStorySubtypes(query: { kind?: StorySubtype["kind"] } = {}): Promise<readonly StorySubtype[]> {

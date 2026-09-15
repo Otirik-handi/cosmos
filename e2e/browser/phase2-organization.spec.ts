@@ -232,6 +232,14 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
     await dialog.getByRole("button", { name: "归并" }).click();
     await expect(dialog.getByText("来源成员（2）")).toBeVisible();
 
+    // 拆分前先留下用户真相：一个标签和一个收藏。拆开后它们留在历史壳上，这正是
+    // 待迁移的错位；迁移与撤销在下面验证（ADR-0020）。
+    await dialog.getByPlaceholder("新标签名称").fill("迁移验收标签");
+    await dialog.getByRole("button", { name: "创建并添加" }).click();
+    await expect(dialog.getByRole("button", { name: "☆ 收藏" })).toBeVisible();
+    await dialog.getByRole("button", { name: "☆ 收藏" }).click();
+    await expect(dialog.getByRole("button", { name: "★ 取消收藏" })).toBeVisible();
+
     // 显式把两个成员各分给一个后继；未列出的关系留在历史壳。
     const splitForm = dialog.locator('form[aria-label="拆分 Story"]');
     await expect(splitForm).toBeVisible();
@@ -258,6 +266,68 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
         return { status: body.story.status, successors: body.story.replacedBy.length, entry: body.entry };
     }, canonical.id);
     expect(shellStatus).toEqual({ status: "split", successors: 2, entry: null });
+
+    // 迁移（ADR-0020）：标签与收藏在拆分后都留在壳上，显式搬到该去的后继。
+    const migration = dialog.locator('[data-story-user-state-migration="true"]');
+    await expect(migration).toBeVisible();
+    const successorIds = await shell.locator("[data-story-successor-id]").evaluateAll(
+        (nodes) => nodes.map((node) => (node as HTMLElement).dataset.storySuccessorId ?? ""),
+    );
+    const readUserState = async (shellId: string, successorId: string) => page.evaluate(
+        async (input) => {
+            const [shellResponse, successorResponse] = await Promise.all([
+                fetch(`/api/v1/stories/${encodeURIComponent(input.shellId)}`),
+                fetch(`/api/v1/stories/${encodeURIComponent(input.successorId)}`),
+            ]);
+            const shellBody = await shellResponse.json() as {
+                favorited: boolean;
+                labels: Array<{ name: string }>;
+            };
+            const successorBody = await successorResponse.json() as {
+                favorited: boolean;
+                labels: Array<{ name: string }>;
+            };
+            return {
+                shell: {
+                    favorited: shellBody.favorited,
+                    labels: shellBody.labels.map((label) => label.name),
+                },
+                successor: {
+                    favorited: successorBody.favorited,
+                    labels: successorBody.labels.map((label) => label.name),
+                },
+            };
+        },
+        { shellId, successorId },
+    );
+    expect(await readUserState(canonical.id, successorIds[0]!)).toEqual({
+        shell: { favorited: true, labels: ["迁移验收标签"] },
+        successor: { favorited: false, labels: [] },
+    });
+
+    await migration.getByLabel("迁移标签 迁移验收标签").check();
+    await migration.getByLabel("迁移收藏").check();
+    await migration.getByLabel("迁移去向").selectOption(successorIds[0]!);
+    await expect(migration.getByTestId("migration-summary")).toContainText("即将迁移");
+    await migration.getByTestId("story-user-state-migrate-submit").click();
+    await expect(page.getByText("已迁移 2 项标记。")).toBeVisible();
+    expect(await readUserState(canonical.id, successorIds[0]!)).toEqual({
+        shell: { favorited: false, labels: [] },
+        successor: { favorited: true, labels: ["迁移验收标签"] },
+    });
+
+    // 撤销就是同一个命令反向调用：把后继上的标记迁回本壳。
+    await migration.getByLabel("迁移来源").selectOption(successorIds[0]!);
+    await expect(migration.getByLabel("迁移标签 迁移验收标签")).toBeVisible();
+    await migration.getByLabel("迁移标签 迁移验收标签").check();
+    await migration.getByLabel("迁移收藏").check();
+    await migration.getByLabel("迁移去向").selectOption(canonical.id);
+    await migration.getByTestId("story-user-state-migrate-submit").click();
+    await expect(page.getByText("已迁移 2 项标记。")).toBeVisible();
+    expect(await readUserState(canonical.id, successorIds[0]!)).toEqual({
+        shell: { favorited: true, labels: ["迁移验收标签"] },
+        successor: { favorited: false, labels: [] },
+    });
 
     // 后继是普通 Story：单成员、可继续打开，且不再显示历史壳。
     await shell.locator("[data-story-successor-id]").first().click();

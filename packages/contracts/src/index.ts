@@ -75,12 +75,15 @@ export {
 } from "./entry-relation.js";
 export {
     labelRefSchema, linkEntryStoryCommandSchema, mergeStoriesCommandSchema,
-    moveEntryToStoryCommandSchema, splitStoryCommandSchema, storyDetailSchema,
-    storyEntitySummarySchema, storySplitSuccessorSchema, storySuccessorSchema,
-    storyTopicSchema, unlinkEntryStoryCommandSchema, updateStoryRevisionCommandSchema,
+    migrateStoryUserStateCommandSchema, moveEntryToStoryCommandSchema, splitStoryCommandSchema,
+    storyDetailSchema, storyEntitySummarySchema, storySplitSuccessorSchema,
+    storySuccessorSchema, storyTopicSchema, storyUserStateMigrationCountsSchema,
+    storyUserStateMigrationResultSchema, unlinkEntryStoryCommandSchema,
+    updateStoryRevisionCommandSchema,
     type LabelRef, type LinkEntryStoryCommand, type MergeStoriesCommand,
-    type MoveEntryToStoryCommand, type SplitStoryCommand, type StoryDetail,
-    type StoryEntitySummary, type StorySplitSuccessor, type StorySuccessor, type StoryTopic,
+    type MigrateStoryUserStateCommand, type MoveEntryToStoryCommand, type SplitStoryCommand,
+    type StoryDetail, type StoryEntitySummary, type StorySplitSuccessor, type StorySuccessor,
+    type StoryTopic, type StoryUserStateMigrationCounts, type StoryUserStateMigrationResult,
     type UnlinkEntryStoryCommand, type UpdateStoryRevisionCommand,
 } from "./story.js";
 export {

@@ -119,7 +119,9 @@ export default function Home() {
         entryOptions,
         labels,
         linkEntryStory,
+        loadStoryUserState,
         mergeStory,
+        migrateStoryUserState,
         openStory,
         openingStoryId,
         refreshRelatedStories,
@@ -701,6 +703,8 @@ export default function Home() {
                     })}
                     onLinkEntry={linkEntryStory}
                     onUnlinkEntry={unlinkEntryStory}
+                    onLoadStoryUserState={loadStoryUserState}
+                    onMigrateStoryUserState={migrateStoryUserState}
                 />
             )}
 

@@ -42,6 +42,8 @@ Story split v1（ADR-0012）的迁移为全新表（`20260909160000_story_split_
 
 Story subtype 受管注册表 v1（ADR-0013）无 Prisma schema/migration 变更，注册表是 `packages/domain` 的代码常量。注册项命名空间/唯一性、`checkStorySubtype` 的四类拒绝与 `listStorySubtypes` 的状态过滤由 `packages/domain/src/index.test.ts` 覆盖；写入侧「新赋值必须是该 kind 的 `active` 注册项、未注册旧值可原样保留、kind 变化或换值必须合法、后继不接受未注册 subtype」以及 kind/subtype 写回 Story 行由 `packages/storage-prisma/src/story-subtype-registry.test.ts` 使用隔离库覆盖（先红后绿：移除校验后 5 例全部失败）；目录 DTO 与查询 schema 由 `packages/contracts/src/index.test.ts` 覆盖，transport 路径与 kind 过滤由 `packages/transport-http/src/index.test.ts` 覆盖，API 目录页与 400 `validation_failed` 映射由 `apps/api/src/app.controller.story-domain.test.ts` 覆盖；组件实验室新增 Legacy subtype 场景，浏览器侧由 `e2e/browser/phase2-organization.spec.ts` 覆盖（改类型为媒体并选中「漫画」后徽章变化、API 提交未注册 subtype 返回 400 且 Story 不变）。
 
+Story 用户状态迁移 v1（ADR-0020）无 Prisma schema/migration 变更（不建迁移账本、不迁 Checkpoint），迁移是既有行在一个事务内的改指与去重删除。只迁移 Story 级状态、家族内任意方向、命名不在来源 Story 上的行被拒、唯一键碰撞让目标侧优先、批注 `targetRevisionId` 不被改写、Entry 级标记完全不参与、空选择是 no-op 且不写事件，由 `packages/storage-prisma/src/story-user-state-migration.test.ts` 使用隔离库覆盖（7 例；先红后绿：短路迁移事务后 4 例失败，另 3 例断言拒绝与空选择 no-op，本就不需要迁移发生）；命令 schema 与结果 DTO 由 `packages/contracts` 覆盖，transport 路径由 `packages/transport-http` 覆盖，API 回执与 400/404/409 映射由 `apps/api/src/app.controller.story-domain.test.ts` 覆盖；路由表守卫 `apps/api/src/app.controller.route-table.test.ts` 的快照由 114 条更新为 115 条；浏览器侧并入 `e2e/browser/phase2-organization.spec.ts` 的拆分场景（拆分前留下标签与收藏 → 拆分后从壳迁到后继并核对两端 API 状态 → 反向迁回即撤销）；组件实验室沿用既有 `story-panel` 的 `split` 场景（该场景本就是历史壳），由 fixture 提供来源读取与提交回调，不新增场景。
+
 性能修复使用 Task 记录的确定性 seed 或本地生成器，数据位于 `.agent/tmp/`。修复前后必须使用同一数据形状、规模、环境、命令和测量口径并重复采样；墙钟阈值不进入默认 `bun run test`，优先用查询次数、查询计划/索引、复杂度或有界结果等确定性断言防回归。原始基准输出不入库，Task/PR 记录完整命令、数据规模、环境、样本统计、波动和结论。
 
 ## 文档治理

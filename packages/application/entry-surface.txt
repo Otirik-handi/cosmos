@@ -126,6 +126,7 @@ value	StoryNotFoundError
 value	StoryRevisionConflictError
 value	StorySplitConflictError
 value	StorySubtypeInvalidError
+value	StoryUserStateMigrationConflictError
 value	TopicMembershipNotFoundError
 value	TopicMergeConflictError
 value	TopicNotFoundError

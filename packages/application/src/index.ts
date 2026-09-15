@@ -65,7 +65,8 @@ export {
 export {
     SourceNotFoundError, SourceRevisionConflictError, ConnectionNotFoundError,
     StoryNotFoundError, StoryRevisionConflictError, StoryMergeConflictError,
-    StorySplitConflictError, StorySubtypeInvalidError, TopicNotFoundError,
+    StorySplitConflictError, StorySubtypeInvalidError, StoryUserStateMigrationConflictError,
+    TopicNotFoundError,
     TopicRevisionConflictError, TopicMergeConflictError, TopicMembershipNotFoundError,
     EntityNotFoundError, EntityRevisionConflictError, EntityRelationConflictError,
     EntityAliasConflictError, LabelNotFoundError, LabelConflictError,

@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-08-24。
+2026-09-15。
 
 ## 组件定位
 
@@ -231,6 +231,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期或目标是历史壳 409 conflict，subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。 |
 | `POST /stories/merges` | body `MergeStoriesCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，归并自身/已 merge Story/历史壳 409 conflict。 |
 | `POST /stories/:storyId/splits` | body `SplitStoryCommand` | `StoryDetail`（历史壳）；Schema 失败 400，Story 缺失 404，后继不足 2 个、映射不属于当前关系、跨后继重复、自关联或已是历史壳 409 conflict（ADR-0012），后继 subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。 |
+| `POST /stories/:storyId/user-state-migrations` | body `MigrateStoryUserStateCommand`（目标 Story 与五类对象选择） | `StoryUserStateMigrationResult`（每类 `moved`/`deduped`）；Schema 失败 400，来源或目标 Story 缺失 404，两端不是同一 split 家族、同一 Story、或命名的行不在来源 Story 上 409 conflict（ADR-0020）。来源在 path、目标在 body，形态对齐 `/splits`。 |
 | `GET /story-subtypes` | query `kind?`（核心 kind 枚举） | `StorySubtypePage`：受管理 subtype 目录（`active` + `deprecated`，`retired` 不返回）；未知 `kind` 400。只读，不写任何状态。 |
 | `GET /topics` | query `cursor?`、`limit?` | `TopicPage`；limit 经 clampLimit，按 Topic `updatedAt` 倒序，nextCursor 为偏移字符串或 null。 |
 | `GET /topics/:topicId` | path `topicId` | `TopicDetail`（topic 摘要 + 成员列表，含 removed/tombstone 成员）；旧 merge id 解析到 canonical Topic，不存在 404。 |

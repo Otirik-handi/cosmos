@@ -12,6 +12,7 @@ import {
     entryListQuerySchema,
     searchQuerySchema,
     mergeStoriesCommandSchema,
+    migrateStoryUserStateCommandSchema,
     moveEntryToStoryCommandSchema,
     splitStoryCommandSchema,
     storySubtypeQuerySchema,
@@ -170,6 +171,28 @@ export class AppControllerContent extends AppControllerRuns {
                 reason: parsed.reason ?? null,
             });
             return result;
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("stories/:storyId/user-state-migrations")
+    @Bind(Param("storyId"), Body())
+    async migrateStoryUserState(storyId: string, body: unknown) {
+        try {
+            const parsed = migrateStoryUserStateCommandSchema.parse(body);
+            return await this.repository.migrateStoryUserState({
+                sourceStoryId: storyId,
+                targetStoryId: parsed.targetStoryId,
+                favorite: parsed.favorite,
+                labelIds: parsed.labelIds,
+                collectionIds: parsed.collectionIds,
+                annotationIds: parsed.annotationIds,
+                spotlightPlacementIds: parsed.spotlightPlacementIds,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+                basis: parsed.basis ?? null,
+            });
         } catch (error) {
             sourceCommandError(error);
         }

@@ -68,13 +68,31 @@ Non-goals（见 Proposal / ADR-0012）：
 - 受影响合同：contracts（新命令 + StoryDetail 三个字段变化）、application（错误 + 端口）、storage-prisma（新表 + 命令 + 读取 + 写边界）、api（新端点）、transport-http（client 方法）、web（Story 面板）。
 - 验证层级：focused（contracts/storage）→ API 集成 → 浏览器 → 全量门禁（已执行，见下）。
 
+## 追加切片（2026-09-15）：用户状态迁移与撤销
+
+Phase 2 收口项之一，维护者 2026-09-15 选定并接受 Proposal。**已实现，待维护者验收后合并**；改动在分支 `feat/t17-story-user-state-migration`（worktree `.worktree/story-user-state-migration`，基线 `2e46dca`），本目录记录随分支提交。
+
+- 生命周期阶段：实现与门禁完成，待验收合并。
+- 连贯目标：让拆分后留在历史壳上的用户状态可以显式搬到该去的后继，并且能退回。
+- 可观察验收（≤3 条）：
+  1. 拆分后历史壳上的收藏/标签/收藏夹/批注/看板固定可勾选迁到指定后继，提交前显示迁移摘要，成功后壳与后继两端状态都正确；
+  2. 把来源选成后继、去向选成本壳即为撤销，状态原样回到壳上；
+  3. 迁到与该壳无关的 Story、或命名一条不在来源 Story 上的行都返回 409，且不产生任何改动与领域事件。
+- 依赖：Task 13（Label/Collection/Annotation/Favorite 读端点）、Task 14（SpotlightPlacement）、本 Task 切片 1–3（历史壳与 `replacedBy[]`）。
+- 受影响合同：contracts（新命令 + 结果 DTO）、application（新错误 + 端口）、storage-prisma（新命令，**无 schema/migration 变更**）、api（新端点 + 路由表快照 114 → 115）、transport-http（client 方法）、web（历史壳上的迁移区块）。`StoryDetail` 等读合同不变。
+- 验证层级：unit（storage/API/contracts）→ 浏览器产品 E2E → 全量门禁（已执行，见下）。
+
 ## Decisions and Deviations
 
 - 以 ADR-0012 六条为稳定边界（壳表 + 派生状态、`entry` 可空、单命令显式映射、用户状态留在壳、事件审计、壳写边界）。
 - `splitStory` 返回历史壳的 `StoryDetail`（而非某个后继）：调用方刚拆开对象，面板应立刻显示壳与后继列表；后继详情可由 `replacedBy[]` 再打开。
-- Web 表单不提供「用户状态迁移」入口（收藏/标签/收藏夹/批注/Spotlight），与 ADR-0012 决策 4 一致。
-- Web 表单不逐后继编辑 `summary`/`subtype`：`summary` 传 null、`subtype` 继承原 Story（避免静默丢失）；两者仍可通过 API 显式指定，记为偏差。
+- Web 表单不提供「用户状态迁移」入口（收藏/标签/收藏夹/批注/Spotlight），与 ADR-0012 决策 4 一致。（2026-09-15 注记：该决策由本期追加切片取代——ADR-0020 实现了迁移与撤销，历史壳上已有入口；本条保留为当时的记录。）
+- Web 拆分表单不逐后继编辑 `summary`/`subtype`：`summary` 传 null、`subtype` 继承原 Story（避免静默丢失）；两者仍可通过 API 显式指定，记为偏差。
 - 为让 Web 拆分表单能列出并迁移 Topic 成员，`StoryDetail` 增加 `topics` 投影（向后兼容新增，超出 Proposal 明列字段，但 Proposal 的映射范围要求 UI 可达）。
+- 追加切片（2026-09-15）：迁移命令按 Label/Collection **自身 id** 命名而不用内部分配行 id。原设计写的是 `labelAssignmentIds`/`collectionItemIds`，实现期发现读模型只暴露 Label/Collection 自身 id，客户端拿不到分配行 id；因 `(label, story)` 与 `(collection, story)` 唯一，按自身 id 定位无歧义，且不必改 `StoryDetail`（Proposal 明确承诺不改读合同），故改为此形态。
+- 追加切片（2026-09-15）：迁移区块挂在历史壳上（唯一知道整个家族的一端）。后继在读模型里没有指回壳的引用，要做到后继也能发起迁移就得给 `StoryDetail` 加字段，与「不改读合同」冲突；因此把来源做成可选（壳或任一同族成员），撤销由「来源=后继、去向=壳」表达，同样一次点击面。
+- 追加切片（2026-09-15）：空选择是 no-op（返回全零、不写领域事件），不是错误。Web 在没有任何勾选时禁用提交按钮。
+- 追加切片（2026-09-15，实现缺陷）：迁移区块最初把 `onLoadSource` 放进 effect 依赖。父组件每次重渲染都会换掉这个函数身份，effect 随之重跑并取消上一次读取，导致切换来源后永远停在「正在读取该成员的标记…」；浏览器用例的 trace 显示同一组四个读请求在 100ms 内连发数轮后停止提交。改为用 ref 持有回调、effect 只依赖来源 Story id 后解决（该用例从 5 分钟超时降到约 4 秒）。
 
 ## Implementation Walkthrough（2026-09-09）
 
@@ -98,8 +116,20 @@ Non-goals（见 Proposal / ADR-0012）：
 - Node 进程 E2E：`BUN_BINARY=<真实 bun.exe> bun run test:e2e` **4/4 通过**。
 - 未运行：Windows Node smoke（`scripts/smoke-node.ps1`）、Docker/Compose、发布部署（均为既有后置边界）。
 
+### 追加切片验证（2026-09-15，实际运行，worktree `.worktree/story-user-state-migration`）
+
+- `bun run typecheck` 全仓 0；`bun run test` **88 文件 / 524 用例**全绿；`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，本次新增与改动的文件 0 warning）；`bun run docs:check` 625 文件 `failures=[]`；`git diff --check` 干净。
+- **先红后绿**：短路 `migrateStoryUserState` 的事务后，`packages/storage-prisma/src/story-user-state-migration.test.ts` 7 例中 4 例失败；仍通过的 3 例断言的是「拒绝不合法的请求」与「空选择 no-op」，本就不需要迁移发生。恢复实现后 7/7 通过。
+- focused：storage `story-user-state-migration` 7/7（只迁移命名项、反向即撤销、目标侧去重优先、家族外与同 Story 拒绝、命名不在来源的行拒绝、Entry 级标记不受影响、空选择不写事件）；contracts / transport / API 相关用例随全量跑通；API 路由表守卫 3/3（快照 114 → 115）。
+- **导出面**：按入口治理规则显式重生成 `packages/contracts/entry-surface.txt` 与 `packages/application/entry-surface.txt`，diff 只有本次新增的 6 项（3 type + 3 value）与 1 项（新错误类），无其它漂移。
+- 浏览器产品 E2E：`COSMOS_E2E_WEB_PORT=4191 bunx playwright test --config playwright.config.ts` **17/17 通过**，其中拆分场景扩展为「拆分前留下标签与收藏 → 拆分后从壳迁到后继并核对两端 API 状态 → 反向迁回即撤销」。
+- 组件实验室浏览器：`COSMOS_E2E_WEB_PORT=4192 bunx playwright test --config playwright.component-lab.config.ts` **13/13 通过**（`split` 场景沿用，fixture 补两个回调以渲染迁移区块）。
+- 未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
+- 未做（需维护者授权）：commit 之外的推送、合并 `master`、清理 worktree 与分支。
+
 ## Follow-ups
 
-- 用户状态显式迁移与撤销、Read State 投影、自动拆分建议按 ADR-0012 Revisit Gate 评估。
+- 用户状态显式迁移与撤销**已实现**（ADR-0020，2026-09-15）；Read State 投影、自动拆分建议按 ADR-0012 Revisit Gate 评估。
+- ADR-0020 的 Revisit Gate：可查询的迁移历史、一键撤销最近一次迁移、Entry 级错位的统一迁移语义。
 - Web 拆分表单的 `summary`/`subtype` 逐后继编辑（当前继承原 Story）可按需要补齐。
-- Phase 2 需求清单其余条目：Story subtype 注册表（ORG-013）、自动聚类（ORG-021）。
+- Phase 2 需求清单其余条目：Story subtype 注册表（ORG-013）已交付；自动聚类（ORG-021）已于 2026-09-15 改标 Phase 3。

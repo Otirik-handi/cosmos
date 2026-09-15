@@ -16,6 +16,7 @@ import {
     StoryRevisionConflictError,
     StorySplitConflictError,
     StorySubtypeInvalidError,
+    StoryUserStateMigrationConflictError,
     TopicMembershipNotFoundError,
     TopicMergeConflictError,
     TopicRevisionConflictError,
@@ -190,6 +191,75 @@ describe("AppController story orchestration", () => {
         };
         await expect(createController(validationRepository).splitStory("story-a", {
             successors: [{ title: "A", kind: "event", entryIds: ["entry-a"] }],
+        })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("migrates Story user state and maps family conflicts to 409", async () => {
+        const resultFixture = {
+            sourceStoryId: "story-shell",
+            targetStoryId: "story-a",
+            favorite: { moved: 1, deduped: 0 },
+            labelAssignments: { moved: 1, deduped: 1 },
+            collectionItems: { moved: 0, deduped: 0 },
+            annotations: { moved: 2, deduped: 0 },
+            spotlightPlacements: { moved: 0, deduped: 0 },
+        };
+        const repository = {
+            migrateStoryUserState: vi.fn().mockResolvedValue(resultFixture),
+        };
+        const controller = createController(repository);
+
+        const result = await controller.migrateStoryUserState("story-shell", {
+            targetStoryId: "story-a",
+            favorite: true,
+            labelIds: ["label-a", "label-b"],
+            annotationIds: ["annotation-a", "annotation-b"],
+            actor: "user",
+            reason: "归到主事件",
+            basis: "entry-a 才是主事件",
+        });
+
+        expect(result).toEqual(resultFixture);
+        // Unset lists default to empty rather than undefined, so the command
+        // always describes a complete selection.
+        expect(repository.migrateStoryUserState).toHaveBeenCalledWith({
+            sourceStoryId: "story-shell",
+            targetStoryId: "story-a",
+            favorite: true,
+            labelIds: ["label-a", "label-b"],
+            collectionIds: [],
+            annotationIds: ["annotation-a", "annotation-b"],
+            spotlightPlacementIds: [],
+            actor: "user",
+            reason: "归到主事件",
+            basis: "entry-a 才是主事件",
+        });
+
+        const conflictRepository = {
+            migrateStoryUserState: vi.fn().mockRejectedValue(
+                new StoryUserStateMigrationConflictError(
+                    "User state can only move between a split Story shell and its successors",
+                ),
+            ),
+        };
+        await expect(createController(conflictRepository).migrateStoryUserState("story-shell", {
+            targetStoryId: "story-other",
+        })).rejects.toBeInstanceOf(ConflictException);
+
+        const notFoundRepository = {
+            migrateStoryUserState: vi.fn().mockRejectedValue(
+                new StoryNotFoundError("story-missing"),
+            ),
+        };
+        await expect(createController(notFoundRepository).migrateStoryUserState("story-missing", {
+            targetStoryId: "story-a",
+        })).rejects.toBeInstanceOf(NotFoundException);
+
+        const validationRepository = {
+            migrateStoryUserState: vi.fn(),
+        };
+        await expect(createController(validationRepository).migrateStoryUserState("story-shell", {
+            targetStoryId: "",
         })).rejects.toBeInstanceOf(BadRequestException);
     });
 

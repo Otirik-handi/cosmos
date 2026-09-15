@@ -111,3 +111,12 @@
 25. Spotlight 人工覆盖绑定具体 target placement，并持续到用户解除；kind 差异通过共享 policy 的配置表达。
 
 → §12–14 迁移、后置压力测试问题与变更记录 已归档:[part-12-14.md](0002-information-model/part-12-14.md)
+
+## 分册勘误登记
+
+分册封口后只读；对已封口分册的更正登记在此，不改写分册正文。
+
+| 日期 | 位置 | 更正 | 理由与决策 |
+| --- | --- | --- | --- |
+| 2026-09-15 | [`part-05-10.md`](0002-information-model/part-05-10.md) §4.6 中 split 后用户状态的语义 | 补充：split 后用户状态仍不自动扇出（§11 不变量 24 不变），但现在有显式的家族内迁移命令，反向调用即撤销 | ADR-0012 的 Revisit Gate 首项（用户状态的显式迁移、批量与撤销）已处理，稳定结论见 ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md)；§5.4「可逆操作或补偿记录」在 split 场景的落地即该命令。分册正文不改写。 |
+| 2026-09-15 | [`part-05-10.md`](0002-information-model/part-05-10.md) §4.6 的历史壳写边界 | 补充：迁移用户状态是历史壳上唯一允许的写操作；改 Revision、merge、再次 split 仍被拒绝 | 同 ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md) 决定 7：迁移是 ORG-020 要求的补偿操作，不是对壳内容的改写。分册正文不改写。 |
