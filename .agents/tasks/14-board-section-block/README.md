@@ -85,6 +85,10 @@ Phase 2 收口项之一，维护者 2026-09-15 选定。**尚未开工**，待�
 - 受影响合同：**无公共合同变化**（`savedViewId` 已持久化，`moveBlockCommandSchema` 已存在）；Web 内部取数位置与布局变化。
 - 验证层级：unit（Web lib）→ 浏览器产品 E2E（多 Feed Block 与拖拽）→ 全量门禁。
 - 分类依据：第 1 项是**当前合同可判定的局部 Bug**——ADR-0010 已决定「Feed Block 绑定 Saved View、未绑定渲染占位、渲染数据源复用既有端点」，实现却让第一个可见 feed 区块独占全局阅读流、`savedViewId` 写入后未被消费；按准入决策表不需要新 Proposal。第 3 项是 ADR-0010 明确后置的能力（「v1 纵向流 + 上移/下移」），恢复它需要记录拖拽库与可访问性取舍，拟记入本 Task 的 Decisions 并在落地后给 ADR-0010 加注记，不新开 Proposal。
+- **开工前发现的合同冲突，待维护者裁决**（2026-09-15）：默认看板 seed 的阅读流区块是**未绑定**态（`packages/storage-prisma/src/repository/views.ts:228` 写入 `configJson: "{}"`）。若照 ADR-0010 决定 5 的字面把「未绑定」渲染成占位，首页「信息流」分区将不再显示内容，与 PRD §8.1「首页看板展示热点、精华和多个分类 Feed」以及 Phase 1 的「Feed 以 Story 为入口」验收冲突。两种收口方式见下，需维护者选定后再动代码：
+  - **A（建议）**：未绑定 = 渲染默认的最新内容流（即今天首页的实际行为），绑定 Save View 后改按该视图条件取数；ADR-0010 决定 5 的「未绑定渲染占位」收窄为「悬空引用渲染占位」并加注记说明。
+  - **B**：保持「未绑定渲染占位」，同时把默认 seed 改成绑定一个覆盖全部内容的 Saved View；新建区块仍是未绑定态，需要用户显式绑定才显示内容。
+- 开工状态：worktree `.worktree/t14-board-feed-blocks` 与分支 `fix/t14-board-feed-blocks` 已按维护者授权创建（基线 `2e46dca`），**未改动任何代码**，等待上述裁决。
 - 待维护者裁决：交互式搜索提到页面级后，未绑定的阅读流区块是渲染占位还是渲染可交互搜索（本 Task 倾向渲染占位，与 `collection` 区块未绑定的既有行为一致）。
 
 ## Decisions and Deviations
