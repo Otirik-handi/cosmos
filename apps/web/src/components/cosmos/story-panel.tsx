@@ -9,6 +9,7 @@ import type {
     EntryListItem,
     EntryStoryRelationType,
     LabelRef,
+    MigrateStoryUserStateCommand,
     SplitStoryCommand,
     StoryDetail,
     StoryEntitySummary,
@@ -37,6 +38,8 @@ import { StoryLinkEntitySection } from "./story-panel/link-entity";
 import { StoryTopicSection } from "./story-panel/topic-join";
 import { EvidenceSection } from "./story-panel/evidence";
 import { HistoryShellSection } from "./story-panel/history-shell";
+import { StoryUserStateMigrationSection } from "./story-panel/user-state-migration";
+import type { StoryUserStateSnapshot } from "./story-panel/user-state-migration";
 import { RelatedSection } from "./story-panel/related";
 import { SourceMembersSection } from "./story-panel/source-members";
 
@@ -92,6 +95,13 @@ type StoryPanelProps = {
     entryOptions?: readonly Pick<EntryListItem, "id" | "title" | "sourceName">[];
     onLinkEntry?: (input: { entryId: string; relationType: EntryStoryRelationType }) => Promise<void>;
     onUnlinkEntry?: (entryId: string) => Promise<void>;
+    /** 读取拆分家族某个成员上的 Story 级用户状态（ADR-0020 迁移表单的来源侧）。 */
+    onLoadStoryUserState?: (storyId: string) => Promise<StoryUserStateSnapshot>;
+    /** 在同一个拆分家族内迁移 Story 级用户状态；反向调用即撤销。 */
+    onMigrateStoryUserState?: (input: {
+        sourceStoryId: string;
+        command: MigrateStoryUserStateCommand;
+    }) => Promise<void>;
 };
 
 /**
@@ -130,6 +140,8 @@ export function StoryPanel({
     entryOptions = [],
     onLinkEntry,
     onUnlinkEntry,
+    onLoadStoryUserState,
+    onMigrateStoryUserState,
 }: StoryPanelProps) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -690,6 +702,14 @@ export function StoryPanel({
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     <SourceMembersSection story={story} title={title} relatedStories={relatedStories} />
                     {isShell && <HistoryShellSection busy={busy} kind={kind} onOpenRelatedStory={onOpenRelatedStory} story={story} title={title} />}
+                    {isShell && onLoadStoryUserState && onMigrateStoryUserState && (
+                        <StoryUserStateMigrationSection
+                            busy={busy}
+                            onLoadSource={onLoadStoryUserState}
+                            onMigrate={onMigrateStoryUserState}
+                            story={story}
+                        />
+                    )}
                     <EvidenceSection busy={busy} entryOptions={entryOptions} linkEntryId={linkEntryId} linkRelationType={linkRelationType} onLinkEntry={onLinkEntry} onUnlinkEntry={onUnlinkEntry} setLinkEntryId={setLinkEntryId} setLinkRelationType={setLinkRelationType} story={story} submitLinkEntry={submitLinkEntry} submitUnlinkEntry={submitUnlinkEntry} title={title} />
                     <TimelineSection events={timeline} />
                     <RelatedSection busy={busy} onOpenRelatedStory={onOpenRelatedStory} relatedStories={relatedStories} story={story} title={title} />

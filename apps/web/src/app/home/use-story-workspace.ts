@@ -9,6 +9,7 @@ import {
     type EntryListItem,
     type EntryStoryRelationType,
     type LabelList,
+    type MigrateStoryUserStateCommand,
     type SplitStoryCommand,
     type StoryDetail,
     type StorySubtype,
@@ -18,6 +19,7 @@ import {
     loadRelatedStories,
     type RelatedStory,
 } from "@/lib/related-stories";
+import type { StoryUserStateSnapshot } from "@/components/cosmos/story-panel/user-state-migration";
 import {
     client,
     readError,
@@ -148,6 +150,65 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         const updated = await client.splitStory(story.story.id, command);
         setStory(updated);
         await refreshRelatedStories(updated);
+    };
+
+    /**
+     * 读取拆分家族某个成员上的 Story 级用户状态，供迁移表单的来源侧使用。
+     * 批注/收藏夹/看板固定各自有独立读端点，这里按同一个 Story 目标合并成一份清单。
+     */
+    const loadStoryUserState = useCallback(async (storyId: string): Promise<StoryUserStateSnapshot> => {
+        const [detail, storyCollections, annotationList, placements] = await Promise.all([
+            client.story(storyId),
+            client.listCollections({ storyId }),
+            client.listAnnotations({ targetType: "story", targetId: storyId }),
+            client.listSpotlightPlacements(),
+        ]);
+        return {
+            favorite: detail.favorited,
+            labels: detail.labels.map((label) => ({ id: label.id, name: label.name })),
+            collections: storyCollections.items
+                .filter((collection) => collection.containsStory === true)
+                .map((collection) => ({ id: collection.id, name: collection.name })),
+            annotations: annotationList.items.map((annotation) => ({
+                id: annotation.id,
+                name: annotation.body,
+            })),
+            placements: placements.items
+                .filter((placement) => placement.targetType === "story"
+                    && placement.targetId === storyId)
+                .map((placement) => ({ id: placement.id, name: placement.boardId })),
+        };
+    }, []);
+
+    /**
+     * 在同一个拆分家族内迁移 Story 级用户状态（ADR-0020）；反向调用即撤销。
+     * 迁完后重读当前面板：历史壳上的标记清单可能刚刚变少。
+     */
+    const migrateStoryUserState = async (input: {
+        sourceStoryId: string;
+        command: MigrateStoryUserStateCommand;
+    }): Promise<void> => {
+        const result = await client.migrateStoryUserState(input.sourceStoryId, {
+            ...input.command,
+            actor: "user",
+        });
+        const counts = [
+            result.favorite,
+            result.labelAssignments,
+            result.collectionItems,
+            result.annotations,
+            result.spotlightPlacements,
+        ];
+        const moved = counts.reduce((sum, count) => sum + count.moved, 0);
+        const deduped = counts.reduce((sum, count) => sum + count.deduped, 0);
+        ctx.setNotice(deduped > 0
+            ? `已迁移 ${moved} 项标记；${deduped} 项因去向已有相同标记而跳过。`
+            : `已迁移 ${moved} 项标记。`);
+        if (story) {
+            setStory(await client.story(story.story.id));
+            await refreshStoryCollections();
+            await refreshStoryAnnotations();
+        }
     };
 
     /** 标签/收藏变更后重读打开的 Story，并把标签列表刷到最新指派计数。 */
@@ -319,7 +380,9 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         entryOptions,
         labels,
         linkEntryStory,
+        loadStoryUserState,
         mergeStory,
+        migrateStoryUserState,
         openStory,
         openingStoryId,
         refreshRelatedStories,
