@@ -236,9 +236,20 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
     // 待迁移的错位；迁移与撤销在下面验证（ADR-0020）。
     await dialog.getByPlaceholder("新标签名称").fill("迁移验收标签");
     await dialog.getByRole("button", { name: "创建并添加" }).click();
-    await expect(dialog.getByRole("button", { name: "☆ 收藏" })).toBeVisible();
     await dialog.getByRole("button", { name: "☆ 收藏" }).click();
-    await expect(dialog.getByRole("button", { name: "★ 取消收藏" })).toBeVisible();
+    // 两次写入都必须是服务端已确认的，否则后面的拆分与状态断言会在竞态下
+    // 读到尚未落库的中间态（2026-09-15 观察到过一次这种失败）。
+    await expect.poll(async () => {
+        const response = await page.evaluate(async (storyId) => {
+            const detail = await fetch(`/api/v1/stories/${encodeURIComponent(storyId)}`);
+            const body = await detail.json() as {
+                favorited: boolean;
+                labels: Array<{ name: string }>;
+            };
+            return { favorited: body.favorited, labels: body.labels.map((label) => label.name) };
+        }, canonical.id);
+        return `${response.favorited}:${response.labels.join(",")}`;
+    }, { timeout: 30_000 }).toBe("true:迁移验收标签");
 
     // 显式把两个成员各分给一个后继；未列出的关系留在历史壳。
     const splitForm = dialog.locator('form[aria-label="拆分 Story"]');
@@ -478,6 +489,49 @@ test("organizes a Story with Topic, Entity, favorite, collection, and annotation
     await expect(member.getByRole("button", { name: "恢复" })).toBeVisible();
     await member.getByRole("button", { name: "恢复" }).click();
     await expect(member.getByRole("button", { name: "移除" })).toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+});
+
+test("gives each feed block its own stream and keeps an unbound one on the latest content", async ({ page }) => {
+    test.setTimeout(300_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    const sourceName = await ingestFeed(page, "阅读流区块来源");
+
+    // 搜索与已保存视图是页面级入口（PRD §8.2），不再寄居在某个看板区块里。
+    const searchRegion = page.getByRole("region", { name: "信息库与搜索" });
+    await expect(searchRegion).toBeVisible();
+    await expect(searchRegion.getByRole("region", { name: "已保存视图" })).toBeVisible();
+
+    // 未绑定的阅读流区块按最新内容取数，而不是「后续切片」占位。
+    const feedBlocks = page.locator('[data-block-type="feed"]');
+    await expect(feedBlocks).toHaveCount(1);
+    await expect(feedBlocks.first()).toContainText("Cosmos scaffold is ready");
+
+    // 造一个匹配不到任何内容的视图。
+    await searchRegion.getByLabel("搜索已保存内容").fill(`绝不匹配的关键词${randomUUID().slice(0, 6)}`);
+    await searchRegion.getByPlaceholder("视图名称").fill("空视图");
+    await searchRegion.getByRole("button", { name: "保存当前条件" }).click();
+    await expect(page.getByText("已保存视图「空视图」。")).toBeVisible();
+
+    // 在「信息流」分区加第二个阅读流区块并绑定该视图。
+    await page.getByRole("button", { name: "编辑看板" }).click();
+    const feedSection = page.getByRole("region", { name: "信息流" });
+    await feedSection.getByLabel("新增区块类型").selectOption("feed");
+    await feedSection.getByLabel("新增区块绑定视图").selectOption({ label: "空视图" });
+    await feedSection.getByRole("button", { name: "添加区块" }).click();
+    await page.getByRole("button", { name: "完成编辑" }).click();
+
+    // 两个阅读流区块各自取数：绑定的按视图条件为空，未绑定的仍是最新内容。
+    await expect(feedBlocks).toHaveCount(2);
+    await expect(feedBlocks.nth(1)).toContainText("视图「空视图」没有匹配的内容。");
+    await expect(feedBlocks.first()).toContainText("Cosmos scaffold is ready");
+    // 页面级搜索此时没有结果，正好说明区块不共享页面搜索的状态。
+    await expect(searchRegion.getByRole("region", { name: "已保存视图" })).toBeVisible();
 
     expect(consoleErrors).toEqual([]);
 });

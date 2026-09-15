@@ -184,12 +184,16 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 18. **健康检查**：点击“检查服务”调用 `client.health()`，保存 health 并显示 service、
    workerStatus 及 storageStatus notice。
 19. **看板渲染（Board）**：首次挂载先 `client.ensureDefaultBoard()` 再 `client.listBoards()`（串行，避免 seed 前的空列表），把 `BoardDetail` 交给
-   `BoardView` 按 Section 顺序渲染可见 Block；`feed` Block 复用页面的完整阅读流（搜索卡 +
-   Feed 列表 + 已保存视图），`source-health` Block 复用页面持有的 SourceActions，`topic-list`
-   Block 渲染 Topic 列表，`collection` Block 由组件用 `client.collection(collectionId)` 自取
-   收藏夹详情（按 collectionId 重挂载，无同步 setState），`spotlight` Block 用
-   `client.listSpotlightPlacements({ boardId })` 自取固定列表并支持逐项解除。未知 Block type
-   与悬空引用显示占位文案，不影响其它 Block。看板请求失败时主区直接渲染完整阅读流，不写 error。
+   `BoardView` 按 Section 顺序渲染可见 Block。交互式搜索与「已保存视图」管理是**页面级入口**
+   （`aria-label="信息库与搜索"` 的 section，对齐 PRD §8.2），不再寄居在某个 Block 里；看板内的
+   每个 `feed` Block **各自取数**：绑定 Saved View 时按该视图条件调 `client.search`，未绑定调
+   `client.feed` 取最新内容（ADR-0010 决定 5 按 2026-09-15 裁定收窄为「悬空引用才占位」，因为
+   默认看板的阅读流区块是未绑定态，占位会让首页失去内容流）。`source-health` Block 复用页面持有的
+   SourceActions，`topic-list` Block 渲染 Topic 列表，`collection` Block 由组件用
+   `client.collection(collectionId)` 自取收藏夹详情，`spotlight` Block 用
+   `client.listSpotlightPlacements({ boardId })` 自取固定列表并支持逐项解除。`feed`/`collection`/`spotlight`
+   三种自取数 Block 都按绑定值重挂载（避免 effect 内同步 setState），取数失败或引用悬空只降级占位。未知
+   Block type 与悬空引用显示占位文案，不影响其它 Block。
 20. **看板编辑与人工 Spotlight**：看板工具条提供 Board 切换下拉、编辑模式开关与新建看板；
    编辑模式下分区支持改名/上移/下移/删除，区块支持上移/下移/隐藏/复制/删除/跨分区移动，
    添加区块时 `feed` 可选绑定 Saved View、`collection` 可选绑定收藏夹（都可先建为未绑定态），

@@ -71,27 +71,32 @@ Non-goals（见 Proposal / ADR-0010）：
 - 受影响合同：contracts（新枚举/DTO/命令 schema）、application（repository 端口）、storage-prisma（新表 + 命令）、api（新端点）、transport-http（client 方法）、web（首页布局 + 编辑模式）。
 - 验证层级：focused（domain/contracts/storage）→ API 集成 → 浏览器（已执行，见下）。
 
-### 追加切片（2026-09-15，计划中）：Feed Block 独立取数与拖拽排序
+### 追加切片（2026-09-15）：Feed Block 独立取数（拖拽排序另记）
 
-Phase 2 收口项之一，维护者 2026-09-15 选定。**尚未开工**，待维护者批准 worktree 与 ADR-0010 的注记范围。
+Phase 2 收口项之一，维护者 2026-09-15 选定。**Feed Block 独立取数已完成、待验收合并**；改动在分支 `fix/t14-board-feed-blocks`（worktree `.worktree/t14-board-feed-blocks`，基线 `2e46dca`，已 rebase 到合并 split 之后的 master），本目录记录随分支提交。
 
-- 生命周期阶段：分流与定义完成，待批准后进入计划。
-- 连贯目标：让每个 Feed Block 按 ADR-0010 已决定的语义独立取数，并补齐区块/分区拖拽排序。
+- 生命周期阶段：Feed Block 独立取数实现与门禁完成，待验收合并；拖拽排序**未开工**。
+- 连贯目标：让每个阅读流区块按自己的绑定取数，不再由「第一个可见区块」独占页面阅读流；交互式搜索归位页面级。
 - 可观察验收（≤3 条）：
-  1. 两个以上「阅读流」区块各自按 `config.savedViewId` 渲染自己的结果，互不干扰；未绑定或悬空引用渲染占位（不阻断其它区块）；
-  2. 交互式搜索与「已保存视图」管理回到页面级搜索区，不再依附于某个区块（对齐 PRD §8.2「信息库与搜索」）；
-  3. 区块与分区可用拖拽排序，且键盘/按钮路径（上移/下移）保留。
-- 依赖：无新增合同依赖；复用既有 `search` 端点与 `moveBlockCommandSchema`。
-- 受影响合同：**无公共合同变化**（`savedViewId` 已持久化，`moveBlockCommandSchema` 已存在）；Web 内部取数位置与布局变化。
-- 验证层级：unit（Web lib）→ 浏览器产品 E2E（多 Feed Block 与拖拽）→ 全量门禁。
-- 分类依据：第 1 项是**当前合同可判定的局部 Bug**——ADR-0010 已决定「Feed Block 绑定 Saved View、未绑定渲染占位、渲染数据源复用既有端点」，实现却让第一个可见 feed 区块独占全局阅读流、`savedViewId` 写入后未被消费；按准入决策表不需要新 Proposal。第 3 项是 ADR-0010 明确后置的能力（「v1 纵向流 + 上移/下移」），恢复它需要记录拖拽库与可访问性取舍，拟记入本 Task 的 Decisions 并在落地后给 ADR-0010 加注记，不新开 Proposal。
-- 待维护者裁决：交互式搜索提到页面级后，未绑定的阅读流区块是渲染占位还是渲染可交互搜索（本 Task 倾向渲染占位，与 `collection` 区块未绑定的既有行为一致）。
+  1. 两个以上「阅读流」区块各自取数、互不干扰：绑定的按该 Saved View 条件显示，未绑定的显示最新内容流，悬空引用显示占位；
+  2. 交互式搜索与「已保存视图」管理位于页面级 section（对齐 PRD §8.2），不再依附某个区块；
+  3. 首页既有流程（录入、搜索、Story 打开、390px 无横向溢出）不回归。
+- 依赖：无新增合同依赖；复用既有 `search`/`feed` 端点与既有 `boardConfig` schema。
+- 受影响合同：**无公共合同变化**（`savedViewId` 早已持久化并可选）；Web 内部取数位置与布局变化。
+- 验证层级：typecheck → 单元回归 → build → 浏览器产品 E2E（新增独立取数用例）→ 组件实验室 → `docs:check`。
+- 分类依据：属**当前合同可判定的局部 Bug**——ADR-0010 已决定阅读流区块绑定 Saved View，实现却让第一个可见区块独占页面阅读流、`savedViewId` 写入后未被消费；按准入决策表不需要新 Proposal。
+
+**开工前发现的合同冲突与裁决（2026-09-15）**：默认看板 seed 的阅读流区块是**未绑定**态（`packages/storage-prisma/src/repository/views.ts` 写入 `configJson: "{}"`）。照 ADR-0010 决定 5 的字面把「未绑定」渲染成占位，首页「信息流」分区将不再显示内容，与 PRD §8.1「首页看板展示热点、精华和多个分类 Feed」及 Phase 1 的「Feed 以 Story 为入口」验收冲突。维护者选 **方案 A**：未绑定 = 渲染默认最新内容流（即原首页行为），绑定 Save View 后按其条件取数；决定 5 对 `feed` 收窄为「悬空引用渲染占位」（`collection` 不变），ADR-0010 已加注记。
 
 ## Decisions and Deviations
 
 - 以 ADR-0010 六条为稳定边界（Block 纯展示配置 + Section 无 kind、type 受管枚举 + 判别 config、Spotlight v1 仅 manual 绑定 Board、多 Board 实体 + 幂等 seed、悬空降级 + merge 重定向、command 编排无新 Workflow）。
 - 交付顺序：2 个子切片逐片合入（域 + 只读渲染 → 编辑模式 + Spotlight），每片独立验收。
 - seed 不进 migration（ADR-0010 决定 4）：migration 保持纯 schema，默认 Board 由应用侧幂等 seed。
+- 追加切片（2026-09-15）：`BoardFeedBlock` 沿用 `BoardCollectionBlock` 的自取数模式——按绑定值重挂载、effect 内不做同步 setState、失败或悬空只降级占位。绑定的 Saved View 解析用页面已加载的 `savedViews`（不再单独拉一次视图详情）：既避免多一次请求，也让视图被改名/删除时区块跟着刷新。
+- 追加切片（2026-09-15）：区块内的流是**紧凑列表**（标题 + 来源，点击打开 Story），不复用完整 `FeedBrowser`。完整的搜索卡与结果列表留在页面级；区块是看板的一个格子，不需要承载搜索表单。
+- 追加切片（2026-09-15）：组件实验室的 `board-view` fixture 给 `feed` 一个固定响应，使自取数区块在实验室里渲染内容而不是失败占位；此前该 fixture 用 `feedSlot` 传合成内容，现在改为覆盖 client 的 `feed`。
+- 追加切片（2026-09-15，验证期发现）：拆分场景的浏览器用例原先只断言收藏按钮翻转、没有服务端确认，标签写入慢时可能在状态落库前就拆分并在事后读到中间态（观察过一次该失败）。已改为先轮询 API 确认收藏与标签都已落库再继续。
 
 ## Verification / Gate
 
@@ -163,8 +168,18 @@ Phase 2 收口项之一，维护者 2026-09-15 选定。**尚未开工**，待�
 - Node 进程 E2E：`BUN_BINARY=<真实 bun.exe> bun run test:e2e` **4/4 通过**（Windows 需指向 `node_modules/bun/bin/bun.exe`，npm shim 路径会 ENOENT）。
 - 未运行：Windows Node smoke（`scripts/smoke-node.ps1`）、Docker/Compose、发布部署（均为既有后置边界）。
 
+## 追加切片验证（Feed Block 独立取数，2026-09-15，实际运行）
+
+- `bun run typecheck` 全仓 0；`bun run test` **88 文件 / 524 用例**全绿；`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，本次改动文件 0 warning）；`bun run docs:check` 625 文件 `failures=[]`；`git diff --check` 干净。
+- 浏览器产品 E2E：**18/18 通过**。新增用例断言：未绑定的阅读流区块渲染最新内容流（不是占位）；再绑定一个匹配不到内容的 Saved View 后两个区块各取各的（绑定的显示「视图「空视图」没有匹配的内容。」，未绑定的仍是最新内容）；搜索与「已保存视图」位于页面级 `region`「信息库与搜索」；首页 390px 与 1440px 无横向溢出。
+- 组件实验室浏览器：**13/13 通过**。
+- 首次运行新增用例时失败过一次，原因是测试用的搜索词带连字符，撞上了 search 端点把用户输入直接交给 SQLite FTS5 `MATCH` 的既有缺陷（500）。改用不含 FTS5 特殊字符的搜索词后通过；**该缺陷属搜索路径、不属于本切片**，见 Follow-ups。
+- 未运行：Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
+
 ## Follow-ups
 
-- 子切片 B 已完成；本 Task 实现阶段结束，已随 `2ea8939` 合入并推送 `master`。
+- **搜索 FTS5 查询未转义（2026-09-15 发现，未修）**：`packages/storage-prisma/src/repository/search.ts` 把 `parsed.text` 原样放进 `entry_search MATCH ?`，用户搜索含 `-`、`"`、`*`、括号等 FTS5 语法字符的词会触发 SQLite 语法错误 → search 端点返回 500（实测：`GET /api/v1/search?text=绝不匹配-212c82&limit=5`）。这是既有缺陷，与看板切片无关；修法（把用户输入转成短语查询/转义引号）需要单独确认边界并补回归测试。
+- **拖拽排序（维护者 2026-09-15 定为必做）**：真人验收明确「用上下按钮排序让人烦躁、容易丢失注意点」，因此 ADR-0010 里后置的拖拽排序不再是可选。落地时需要记录拖拽库与可访问性取舍（键盘/按钮路径必须保留），并给 ADR-0010 加注记。
+- 子切片 B 已完成；本 Task 已在 `2ea8939` 合入并推送 `master`。
 - 后续 Phase 2 切片候选：Story split 完整生命周期、`evidence_for`/`mentions`、自动聚类/Knowledge Workflow、Entity merge/dedup。
-- 后续能力：Phase 4 Spotlight policy（为 `SpotlightPlacement` 加列与写入路径）、Phase 3 Workspace/Artifact Block、拖拽排序、多 Feed Block 独立取数、Read State「未读」过滤。
+- 后续能力：Phase 4 Spotlight policy（为 `SpotlightPlacement` 加列与写入路径）、Phase 3 Workspace/Artifact Block、Read State「未读」过滤。

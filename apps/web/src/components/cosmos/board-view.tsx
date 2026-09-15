@@ -7,6 +7,7 @@ import type {
     BoardDetail,
     CollectionDetail,
     CollectionSummary,
+    FeedItem,
     SavedView,
     SpotlightPlacement,
     TopicSummary,
@@ -78,11 +79,6 @@ export type BoardCommands = {
 type BoardViewProps = {
     board: BoardDetail;
     client: HttpCosmosClient;
-    /**
-     * 完整阅读流（搜索卡 + Feed 列表 + 已保存视图）由页面持有状态，渲染在
-     * 首个可见 feed 区块位置；多个 Feed 区块的自取数留给后续切片。
-     */
-    feedSlot: ReactNode;
     /** 来源健康区块复用页面的 SourceActions（含启用/停用/手动录入操作）。 */
     sourceActionsSlot: ReactNode;
     topics: readonly TopicSummary[];
@@ -105,7 +101,6 @@ type BoardViewProps = {
 export function BoardView({
     board,
     client,
-    feedSlot,
     sourceActionsSlot,
     topics,
     openingTopicId,
@@ -117,10 +112,6 @@ export function BoardView({
     collections = [],
     refreshToken = 0,
 }: BoardViewProps) {
-    const firstFeedBlockId = board.sections
-        .flatMap((section) => section.blocks)
-        .find((block) => block.type === "feed" && block.visible)?.id;
-
     return (
         <div className="flex flex-col gap-10">
             {board.sections.map((section, sectionIndex) => {
@@ -171,8 +162,8 @@ export function BoardView({
                                             block={block}
                                             client={client}
                                             boardId={board.id}
-                                            feedSlot={block.id === firstFeedBlockId ? feedSlot : null}
                                             sourceActionsSlot={sourceActionsSlot}
+                                            savedViews={savedViews}
                                             topics={topics}
                                             openingTopicId={openingTopicId}
                                             onOpenTopic={onOpenTopic}
@@ -541,8 +532,8 @@ type BoardBlockContentProps = {
     block: BoardBlock;
     client: HttpCosmosClient;
     boardId: string;
-    feedSlot: ReactNode | null;
     sourceActionsSlot: ReactNode;
+    savedViews: readonly SavedView[];
     topics: readonly TopicSummary[];
     openingTopicId: string | null;
     onOpenTopic: (topicId: string) => void;
@@ -554,8 +545,8 @@ function BoardBlockContent({
     block,
     client,
     boardId,
-    feedSlot,
     sourceActionsSlot,
+    savedViews,
     topics,
     openingTopicId,
     onOpenTopic,
@@ -563,10 +554,24 @@ function BoardBlockContent({
     refreshToken,
 }: BoardBlockContentProps) {
     switch (block.type) {
-        case "feed":
-            return feedSlot ?? (
-                <BlockPlaceholder text="此阅读流区块将在后续切片支持独立取数与配置。" />
+        case "feed": {
+            const savedViewId = configString(block, "savedViewId");
+            // 悬空引用（视图被删）降级占位；未绑定不是错误，按最新内容流渲染
+            // （ADR-0010 决定 5，按维护者 2026-09-15 裁定收窄为「悬空才占位」）。
+            if (savedViewId && !savedViews.some((view) => view.id === savedViewId)) {
+                return <BlockPlaceholder text="绑定的已保存视图不存在或已被删除。" />;
+            }
+            const savedView = savedViews.find((view) => view.id === savedViewId) ?? null;
+            return (
+                <BoardFeedBlock
+                    key={savedView?.id ?? "latest"}
+                    client={client}
+                    savedView={savedView}
+                    limit={blockLimit(block, 5)}
+                    onOpenStory={onOpenStory}
+                />
             );
+        }
         case "spotlight":
             return (
                 <BoardSpotlightBlock
@@ -634,6 +639,91 @@ function BoardTopicListBlock({ topics, openingTopicId, onOpenTopic }: BoardTopic
                 </li>
             ))}
         </ul>
+    );
+}
+
+type BoardFeedBlockProps = {
+    client: HttpCosmosClient;
+    /** 绑定的已保存视图；null 表示未绑定。 */
+    savedView: SavedView | null;
+    limit: number;
+    onOpenStory: (storyId: string) => void;
+};
+
+/**
+ * 阅读流区块：自取数据并渲染紧凑内容流。未绑定视图时取最新内容，绑定后按该视图
+ * 的条件取数——每个区块各自取数，互不干扰。父组件按绑定传 key：绑定切换时整体
+ * 重挂载，状态回到 loading，effect 内不做同步 setState（同收藏夹区块）。
+ */
+function BoardFeedBlock({ client, savedView, limit, onOpenStory }: BoardFeedBlockProps) {
+    const [items, setItems] = useState<readonly FeedItem[]>([]);
+    const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
+
+    useEffect(() => {
+        let cancelled = false;
+        const request = savedView
+            ? client.search({
+                text: savedView.text ?? undefined,
+                sourceId: savedView.sourceId ?? undefined,
+                publishedAfter: savedView.publishedAfter ?? undefined,
+                publishedBefore: savedView.publishedBefore ?? undefined,
+                labelIds: savedView.labelIds.join(",") || undefined,
+                topicIds: savedView.topicIds.join(",") || undefined,
+                limit,
+            })
+            : client.feed({ limit });
+        request
+            .then((result) => {
+                if (!cancelled) {
+                    setItems(result.items);
+                    setState("loaded");
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setState("failed");
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [client, limit, savedView]);
+
+    if (state === "loading") {
+        return <BlockPlaceholder text="正在读取内容流…" />;
+    }
+    if (state === "failed") {
+        return <BlockPlaceholder text="内容流读取失败；稍后可刷新重试。" />;
+    }
+    if (items.length === 0) {
+        return (
+            <BlockPlaceholder
+                text={savedView
+                    ? `视图「${savedView.name}」没有匹配的内容。`
+                    : "还没有已录入的内容。"}
+            />
+        );
+    }
+    return (
+        <div className="flex flex-col gap-2">
+            {savedView && (
+                <p className="text-xs text-muted-foreground">视图「{savedView.name}」</p>
+            )}
+            <ul className="grid gap-1">
+                {items.map((item) => (
+                    <li key={item.storyId}>
+                        <button
+                            type="button"
+                            onClick={() => onOpenStory(item.storyId)}
+                            className="flex w-full flex-col rounded-sm border bg-card px-3 py-2 text-left hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"
+                        >
+                            <span className="truncate text-sm">{item.title}</span>
+                            <span className="text-xs text-muted-foreground">{item.sourceName}</span>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 

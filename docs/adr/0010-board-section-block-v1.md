@@ -20,7 +20,7 @@ Phase 2 前四切片已交付 Story、Topic、Entity/关系与用户组织（Lab
 
 ### 2. Block type 受管枚举 + 按 type 判别的白名单 config
 
-`blockTypes` 受管枚举 `feed`/`spotlight`/`source-health`/`topic-list`/`collection`，写入侧校验、读取侧未知值降级为「未知区块」占位（同 `storyKinds`/`entityTypes` 模式）。`config` 是白名单化 JSON，按 type 判别 union 校验：`feed`/`collection` 的对象引用（`savedViewId`/`collectionId`）与所有类型的 `limit` 均可选——区块可以先创建为未绑定态再配置，未绑定或悬空引用在读取侧渲染占位（决定 5），不阻断创建。Block 渲染数据源复用既有端点（`search`/`listSources`/`listTopics`/`listCollections`），不新增内容查询端点。
+`blockTypes` 受管枚举 `feed`/`spotlight`/`source-health`/`topic-list`/`collection`，写入侧校验、读取侧未知值降级为「未知区块」占位（同 `storyKinds`/`entityTypes` 模式）。`config` 是白名单化 JSON，按 type 判别 union 校验：`feed`/`collection` 的对象引用（`savedViewId`/`collectionId`）与所有类型的 `limit` 均可选——区块可以先创建为未绑定态再配置，未绑定或悬空引用在读取侧渲染占位（决定 5），不阻断创建。Block 渲染数据源复用既有端点（`search`/`listSources`/`listTopics`/`listCollections`），不新增内容查询端点。（2026-09-15 注记：决定 5 对 `feed` 收窄为「悬空引用渲染占位」——默认看板的阅读流区块以空配置 seed（`views.ts` 写入 `configJson: "{}"`），若未绑定也渲染占位，首页「信息流」分区就不再显示内容，与 PRD §8.1「首页看板展示热点、精华和多个分类 Feed」及 Phase 1 的「Feed 以 Story 为入口」验收冲突。现在未绑定按最新内容流取数、绑定后按该视图条件取数；`collection` 维持未绑定渲染占位不变。）
 
 ### 3. Spotlight v1 只有 manual Placement，绑定具体 Board
 
