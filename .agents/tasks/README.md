@@ -45,6 +45,7 @@ Task 导航：
 - [`22-connection-state-store/`](22-connection-state-store/)：Phase 2 第十二切片 Connection/SecretStore/StateStore v1（AUT-009/ING-012/OPS-009）——`ConnectionInstance` 实体 + `SourceInstance.connectionId` 可空外键、SecretStore 第一版（受限权限明文文件 + 不透明 SecretRef）、`ConnectorStateStore`（命名空间化版本化 KV + version CAS，不迁 Checkpoint）与 Secret 脱敏/所有权边界；CollectionPlan/Checkpoint 迁移/加密后置；编号待维护者确认。
 - [`23-trigger-sdk/`](23-trigger-sdk/)：Phase 2 第十三切片 Trigger/SDK v1（AUT-004/EXT-006/007）——`TriggerBinding` 实体（单绑定 schedule/manual）+ 从 `SourceInstance.config.scheduleIntervalMs` 迁出（调度循环改读 `listScheduleTriggers`）、`SourceDefinitionManifest` 扩展 `auth`/`operations`（external key/discovery/media/stateStore 命名空间）；webhook/事件触发、自定义 Trigger/Action 插件运行时、多计划后置；编号待维护者确认。
 - [`24-ops-storage/`](24-ops-storage/)：Phase 2 第十四切片存储占用统计与备份/恢复 v1（OPS-003/004）——`GET /storage-stats` 分层统计（raw/user/rebuildable/cleanable）、`POST/GET /backups`（`VACUUM INTO` 复制 SQLite，不依赖源码 checkout）+ `POST /backups/:id/restores`（覆盖 + 恢复前保护）、清理沿用 media-cleanup；导出/Artifact 清理/Blob 备份后置；编号待维护者确认。
+- [`26-entry-duplicate-relations/`](26-entry-duplicate-relations/)：Phase 2 尾巴第二切片 Entry 跨来源重复/转载关系 v1（ING-006）——`EntryRelation`（`(fromEntryId, toEntryId)` 唯一 + 受管类型 `duplicate_of`/`syndicated_from`/`near_duplicate_of` + provenance）、对称类型按条目 id 字典序归一化并双向读取、关系挂条目内容身份（`mergeStories`/`splitStory` 不迁移）、只人工写入且不参与 Feed 排序与搜索；「归入同一 Story」由既有归并/引用关系承担；编号 26 由维护者 2026-09-16 分配。
 
 治理类任务（文档/代码规模治理等）使用**独立编号体系**，位于 [`governance/`](governance/)（`G{NN}` 编号，不占用上述产品 Task 编号），章程与任务索引见 [`governance/README.md`](governance/README.md)。
 

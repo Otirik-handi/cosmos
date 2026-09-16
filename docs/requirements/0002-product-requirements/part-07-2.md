@@ -57,6 +57,8 @@ tokens_est: 7017
 
 **Phase 2 第十四切片注记（2026-09-10，[`ops-storage-v1` Proposal](../../proposals/ops-storage-v1.md) accepted）**：OPS-003/004 的 v1 按 Proposal 冻结——先交付 `GET /storage-stats`（数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层 raw/user/rebuildable/cleanable，只读）+ `POST /backups`/`GET /backups`（`VACUUM INTO` 复制 SQLite 到数据根 `backups/`，不依赖源码 checkout）+ `POST /backups/:id/restores`（覆盖 SQLite + 恢复前保护备份，需重启生效）；清理沿用 media-cleanup「预览 → 确认」。导出、Artifact/Cache 清理（LIB-008 完整形态）、Blob 备份、增量/云端备份后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
+**Phase 2 尾巴第一切片注记（2026-09-16，[`story-key-facts-and-time-range-v1` Proposal](../../proposals/story-key-facts-and-time-range-v1.md) accepted）**：ORG-017 剩余两项（关键事实、时间范围）的 v1 实施顺序按 Proposal 与 [ADR-0021](../../adr/0021-story-key-facts-and-time-range-v1.md) 冻结——Story 的当前表示扩为四项（标题、摘要、时间范围、关键事实）：时间范围复用既有 `TemporalValue`（起止 + 精度 + 依据，**不按 kind 限制、可留空**），关键事实为有序清单（≤20 条、单条 ≤500 字）且**每条挂一条出处**（`entryId` 不要求属于本 Story）；两项都参与 Story Revision 的变化判定，且**两项为空时的指纹必须与升级前逐字节一致**（不做全库指纹回填）；写入沿用 `POST /stories/:id/revisions` 的全量提交语义（省略即清空），`splitStory` 后继同批支持但不迁移原值。「结构化概览」、自动抽取（ORG-021）、字段级保护（ORG-019）、跨 Story 时间对齐与时间线重做后置。上述注记只排定实现顺序，不改变本表最终验收条件。
+
 | ID | 阶段 | 需求 | 验收条件 |
 | --- | --- | --- | --- |
 | REC-001 | Phase 1 | Admission 决定是否录入，Ranking 决定当前是否展示。 | 一条未进入今日 Feed 的已录入信息仍可在信息库搜索。 |

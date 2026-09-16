@@ -617,3 +617,23 @@ Agent 就 B 组粒度反问「整个 B 组都不译，还是只保留 Story 和 
 > 本次分支作废，记录UI问题，待以后重做UI，当前开发重心以功能为主。
 
 同轮交互确认（2026-09-15）：界面职责重划的实现在分支 `feat/t25-ui-surface-ownership` 上完成后被判定布局有问题并回退，维护者进一步裁定**该分支作废**、**UI 待以后重做**、**当前开发重心以功能为主**。维护者同时确认问题性质为「形状对，页面内部重排」，即三层分工与对象页的形状决定不变，只重排页面内部与导航/侧栏位置。UI 问题与教训记录在 [`docs/proposals/ui-surface-ownership-v1.md`](../proposals/ui-surface-ownership-v1.md) 的「实现尝试与作废」一节；该分支与 worktree 保留但不再使用，其中的 ADR、Task 与 spec 改动都不进入 `master`。未被推翻的部分：本 Proposal 已 accepted 的信息架构决定，以及 [`docs/proposals/ui-copy-review-v1.md`](../proposals/ui-copy-review-v1.md) 已逐行裁定的术语表。
+
+## 2026-09-16：Phase 2 尾巴两条切片（Story 表示字段 + 跨来源重复关系）
+
+> 1+2开切片
+
+序号指 Agent 当时给出的 Phase 2 待办重要性排序中的前两项：「1」= ORG-017 的 Story 表示扩展字段（关键事实 + 时间范围），「2」= ING-006 的跨来源重复/转载关系。
+
+同轮交互确认（2026-09-16）：两条都按[准入决策表](../standards/repository-workflow.md#准入决策表)落入「改变持久化、公开接口」一行，因此先出 Proposal——[`story-key-facts-and-time-range-v1`](../proposals/story-key-facts-and-time-range-v1.md) 与 [`entry-duplicate-relations-v1`](../proposals/entry-duplicate-relations-v1.md)，均标 `reviewing` 待维护者评审。维护者同轮裁定：**分成两份 Proposal**（两个主题、两个 Task，可分别接受）；**ORG-017 复用 Task 10 追加切片，ING-006 需新 Task 编号**（25 已被作废的 `feat/t25-ui-surface-ownership` 占用，故不复用该号）；**本轮只写 Proposal**，不建 worktree、不改代码、不修改稳定文档。两条均已存在 PRD 与架构层面的依据：ORG-017 对应 ADR-0006 决定 3 的「后续切片补齐」，ING-006 的关系词 `duplicate_of`/`syndicated_from`/`near_duplicate_of` 已由信息模型 §4.2 冻结。
+
+## 2026-09-16：ORG-017 Proposal 接受
+
+> 好的，我了解了，对于ORG-017没有疑问了，可以接受你的建议。
+
+同轮交互确认（2026-09-16）：[`story-key-facts-and-time-range-v1`](../proposals/story-key-facts-and-time-range-v1.md) 由 `reviewing` 转 `accepted`，六项默认建议与两个开放项（时间范围不按 kind 限制、关键事实不做「已确认/推测」标记）一并接受。就「关键事实的依据（出处）与 Story 内容的关系」追问后确认：**出处不要求属于本 Story**（一条内容只有一个主归属，否则用别处内容作依据就写不进来），**一条事实 v1 只挂一条出处**。稳定决定沉淀于 [ADR-0021](../adr/0021-story-key-facts-and-time-range-v1.md)；PRD §7.5 注记、信息模型 §4.7 注记与 ADR-0006 决定 3 的更新注记已同步，切片挂回 Task 10（「实施切片 4」，**未开工**）。[`entry-duplicate-relations-v1`](../proposals/entry-duplicate-relations-v1.md)（ING-006）仍为 `reviewing`，Task 编号待分配，待后续讨论。
+
+## 2026-09-16：ING-006 Proposal 接受
+
+> 都没问题了，可以开工，按顺序来。
+
+同轮交互确认（2026-09-16）：[`entry-duplicate-relations-v1`](../proposals/entry-duplicate-relations-v1.md) 由 `reviewing` 转 `accepted`——六项默认建议与四项开放项（不做跨 Story 的「同一事件提示」；成员行标注不带对端 Story 链接；三种关系够用、翻译暂用近重复；关系数量不设硬上限、界面折叠）一并接受。稳定决定沉淀于 [ADR-0022](../adr/0022-entry-duplicate-relations-v1.md)；PRD §7.4 注记与信息模型 §4.2 注记已同步。「按顺序来」指先落两份 Proposal 的稳定文档，再按 ORG-017 → ING-006 的次序实施；Task 编号分配与 worktree/分支授权在同轮向维护者申请，未获授权前不动代码。

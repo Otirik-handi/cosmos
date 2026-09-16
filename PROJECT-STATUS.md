@@ -45,6 +45,12 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
   - **实现尝试已作废（2026-09-15）**：三个切片曾在分支 `feat/t25-ui-surface-ownership` 完成并本地合并，维护者本地查看后判定布局有问题（原话「整体布局不合理，导航栏出现在页面下方，侧边栏消失不见」）、要求回退，随后裁定**该分支作废**、**待以后重做 UI**、**当前开发重心以功能为主**；性质为「形状对，页面内部重排」，信息架构决定不变。UI 问题与重做前置条件见分册 [`attempt-and-void-2026-09-15.md`](docs/proposals/ui-surface-ownership/attempt-and-void-2026-09-15.md)；分支与 worktree 保留但不再使用，删除需另行授权。
 - **UI 文案审查**：Proposal [`docs/proposals/ui-copy-review-v1.md`](docs/proposals/ui-copy-review-v1.md) 维持 `reviewing`。维护者给出的判据（`Story`、`Entity` 等是架构术语，**展示名必须忠实反映概念的实际意义**）已确立为规则 R0；术语对照表 **v1 已逐行裁定**——A 组（已定用户词，直接执行：信息条目/话题/热点/时间线/信息流/产物/标签/收藏夹/已保存视图/批注/来源）、B 组（**只保留 `Story` 和 `Entity`**；`Revision`→版本、`kind`/`subtype`→类型/细分类型、`evidence_for`/`mentions`→引用关系）、C 组（六个角色替换为 核心内容/最新进展/背景资料/分析解读/不同看法/使用教程）、D 组（禁用内部词：历史壳/未注册/Spotlight 区块/Story ID 等）、E 组（「分类」概念定义前界面只用「标签」和「已保存视图」）。仍需维护者接受：判据 R1–R5 本身、术语表落点与实施归属（建议 G 系列治理任务）。改动需与 5 个浏览器 spec 里 205 处按文案定位的断言同批修改。**推论（未获维护者确认）**：UI 既然要整体重做，逐屏文案批次同样应等重做之后再排，否则要改两遍；术语表本身已裁定，重做时直接按它写即可。
 
+**Phase 2 尾巴两项（2026-09-16）**：
+
+- **ORG-017（关键事实 + 时间范围）**：Proposal 与 ADR [`0021`](docs/adr/0021-story-key-facts-and-time-range-v1.md) 已接受，PRD §7.5、信息模型 §4.7 与 ADR-0006 注记已同步；实现在 worktree `feat/t10-story-representation`（base `085c217`）完成——域 + 持久化 + 合同 + API + transport + Web + `docs/spec`，含 forward-only 迁移（两个可空列、不回填老数据）。**完整验证证据、浏览器 20/21 的实测与两处待裁定事项（出处不做写入校验；两个规格文件贴治理警戒线）见 Task [`10`](.agents/tasks/10-story-domain/README.md) walkthrough 的 2026-09-16 两节**。未 commit、未 push、未合并；维护者先自行点验。
+- **ING-006（跨来源重复/转载关系）**：Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) 已建、**未开工**，按顺序排在 ORG-017 之后。
+- **待裁定**：需求表 §7 仍有 **13 条标 `Phase 2` 而实际未交付或半交付**（两项已进流程，其余 11 条是否改标待定；此前只纠正过 ORG-021）。两项都按准入决策表先评审、后动代码。
+
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
 - Entity merge/dedup；批注的正文片段字符级锚点；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。

@@ -1,15 +1,17 @@
 {
   "version": 1,
   "generated": "2026-09-11",
-  "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
+  "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI。2026-09-16 维护者裁定增补两条（docs/spec/domain/0001-normalized-content.md、docs/testing/README.md）：两者都只在 token 轨道触线，因未登记文件进警戒区而阻塞 CI，登记后允许 ORG-017 的规格按实际行为完整书写；登记值为该次合并后的实际字节。",
   "files": {
     ".agents/tasks/07-deferred-workflow-host/walkthrough.md": 41123,
     "CONTEXT.md": 38133,
     "docs/api/0002-product-service-api.md": 35341,
     "docs/api/0005-worker-gateway-api.md": 30732,
     "docs/spec/contracts/0001-public-contracts.md": 40427,
+    "docs/spec/domain/0001-normalized-content.md": 29246,
     "docs/spec/interfaces/0002-product-api-http.md": 42765,
     "docs/spec/interfaces/0005-web-client.md": 41785,
-    "docs/spec/storage/0001-prisma-repository.md": 45279
+    "docs/spec/storage/0001-prisma-repository.md": 45279,
+    "docs/testing/README.md": 28294
   }
 }

@@ -126,3 +126,35 @@ robocopy <empty> .worktree/story-domain /MIR && rm -rf
 ```
 
 未运行：人工浏览器验收（推迟，非门禁失败）；自动化浏览器 E2E 切片 3 已在 worktree 通过 1/1。
+
+## 2026-09-16：追加切片「Story 表示扩展字段 v1」——后端切片实施与验证
+
+- 背景：ORG-017 剩余两项（关键事实、时间范围）由 Proposal [`story-key-facts-and-time-range-v1`](../../../docs/proposals/story-key-facts-and-time-range-v1.md)（2026-09-16 accepted）与 [ADR-0021](../../../docs/adr/0021-story-key-facts-and-time-range-v1.md) 冻结；切片定义见 README「实施切片 4」。worktree `.worktree/t10-story-representation`、分支 `feat/t10-story-representation`、base `085c217`（经维护者 2026-09-16 批准）。
+- 实现（域 + 持久化 + 合同 + API + transport）：`StoryTimeRange`/`StoryKeyFact` 类型与共用归一化 `normalizeStoryRepresentation`（指纹与持久化同一份归一化，ADR-0021 决定 4）；`StoryRevision` 加 `timeRangeJson`/`keyFactsJson` 两个可空列 + forward-only migration `20260916120000_story_representation_v1`（不回填）；`updateStoryRevision`/`splitStory` 写入与 `story()` 投影；contracts 新增 `storyTimeRangeSchema`/`storyKeyFactSchema`（复用 `temporalValueSchema`，上限 20 条 / 500 字，`end < start` 拒绝）并扩展更新命令、split 后继与 `StoryDetail`；API 与 transport 透传。
+- 分工与偏差：后端切片由实施代理完成，**代理未返回报告**，由 leader 逐项复核（非接受其自述）。复核发现并处理三处：① worktree 的 `bun.lock` 因 `bun install` 被写入 `configVersion: 0`，与本切片无关，已 `git checkout -- bun.lock` 还原；② 新增公共导出使 `packages/contracts/entry-surface.txt` 守卫失败，按入口治理规则显式重生成（diff 仅新增 `type StoryKeyFact`、`type StoryTimeRange`、`value storyKeyFactSchema`、`value storyTimeRangeSchema`；application 与 transport-http 的导出面未变）；③ 代理未补存储层行为测试，由 leader 新增 `packages/storage-prisma/src/story-representation.test.ts`（2 例）并在 `story-split.test.ts` 既有拆分用例上补「后继各自带自己的表示、壳的值不被复制」断言。
+- 关键护栏（独立复算，非信任实现）：`packages/domain/src/index.test.ts` 中 6 个「扩展字段为空时指纹与升级前逐字节相同」的期望值，由 leader 用独立的 node:crypto 脚本按旧算法 `sha256(JSON.stringify({title,summary,kind,subtype}))` 重算，6/6 一致；存储侧另有一份不 import domain 的同类护栏（`story-representation.test.ts` 的 `preExtensionFingerprint`）。
+- 验证（2026-09-16，worktree 内实际运行）：
+  - `bunx vitest run packages/domain packages/contracts` → **12 文件 / 83 用例全绿**（重生成导出面快照后复跑；重生成前 1 例失败，即导出面守卫）。
+  - `bunx vitest run --no-file-parallelism packages/storage-prisma/src/story-representation.test.ts packages/storage-prisma/src/story-split.test.ts packages/storage-prisma/src/story-orchestration.test.ts` → **3 文件 / 8 用例全绿**（含「pre-extension Revision 不改内容仍 no-op」「改 / 重复提交 / 清空各产生一次新版本并落库」「拆分后继各自带自己的表示」）。
+  - `bun run typecheck` 全仓 → **exit 0**。
+- 未运行（本节仅覆盖后端切片）：全量 `bun run test`、`bun run build`、`bun run lint:web`、浏览器 E2E、Node 进程 E2E、Docker/Compose、真实来源验收。Web 切片、全量门禁与 `docs/spec` 同步的证据记在下一节。
+
+## 2026-09-16：追加切片「Story 表示扩展字段 v1」——Web 切片、全量门禁与浏览器验收
+
+- Web 切片（实施代理完成，leader 复核）：新增 `apps/web/src/lib/story-time-range-draft.ts`（表单 ↔ `StoryTimeRange` 映射：准确时刻 / 只有原文 + 天月年精度 / 未定；`end < start` 与「有 end 无 start」在前端拦下，后端仍会拒）、`story-event-time.ts`（显示口径：有准确时刻按本地分钟显示，只有原文则显示原文 + 「不精确」，出处找不到显示「出处已删除」）、`story-panel/representation-form.tsx` 与 `representation.tsx`（表单与详情两块）、组件实验室新场景；`story-panel.tsx` / `story-actions.tsx` / `use-story-workspace.ts` / `page.tsx` 接入全量提交与出处候选；`apps/api/src/app.controller.story-domain.test.ts` 增加 `timeRange`/`keyFacts` 透传断言（含「省略 → null / 空数组」）。
+- leader 超出代理报告的整理（三处，均为治理或护栏需要）：① 新浏览器用例原本追加在 `e2e/browser/phase2-organization.spec.ts`，该文件既在体积警戒区（32.6 KB）又是登记在案的间歇失败文件，追加后涨到 39.6 KB；已把它拆成独立文件 `e2e/browser/story-representation.spec.ts`（8.7 KB），原文件逐字节回到 HEAD 状态（`git diff` 为空）。② 存储层行为测试由 leader 补写（代理未写）。③ worktree 的 `bun.lock` 因 `bun install` 被写入 `configVersion`，已还原。
+- 验证（2026-09-16，worktree 内实际运行）：
+  - `bun run typecheck` → **exit 0**。
+  - `bun run test` → **93 文件 / 563 用例全绿**（本轮未出现既有的 Windows SQLite 抖动）。
+  - `bun run lint:web` → **0 error，83 warning**（均为既有告警；本次改动文件 0 warning；总数比改动前少 5 条，因为顺带清掉了改动文件里原本未使用的 import/props）。
+  - `bun run build`（packages + api + worker + Next standalone）→ **通过**（由 Web 代理在最终代码状态下运行；leader 未重跑，理由：其后只有测试文件改动，不属于 build 输入）。
+  - 浏览器整套：**20/21**，失败的正是 [`docs/testing/known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md) 登记的拆分场景 `splits a Story into successors and keeps a historical shell`。诊断：单跑复现失败 1 次、再单跑通过；合计本轮 3 次运行 2 失败 1 通过。失败现场是测试用 API 直读拿到的仍是「迁移写入之前」的状态（撤销那一步期望状态在壳上、实际仍在后继），与登记条目里**未排除**的假设「某次写入晚于读取才落库 / 某个连接看到了提交前的视图」一致。**本轮不能证明该失败与本次改动无关，也不能证明相关**；本次改动让面板多了一个表单与一次取数，可能加剧原有抖动，但没有证据支持因果。
+  - 新增浏览器用例 `e2e/browser/story-representation.spec.ts`：单跑 **1 passed**（覆盖填时间范围 + 两条事实 → 顺序保持 → 刷新后仍在 → 重复提交版本指针不动 → 换成「只有原文」后按原文 + 不精确显示 → 再提交仍 no-op）。组件实验室 `story-panel` 场景单跑 **1 passed**（代理运行）。
+  - `bun run docs:check`（worktree 内，含 `docs/spec` 同步后）→ **645 文件 `failures=[]`**；`git diff --check` → exit 0。
+  - `docs/spec` 同步（代理完成，leader 复核）：`domain/0001`、`contracts/0001`、`storage/0001`、`interfaces/0002`、`interfaces/0005` 与 `docs/testing/README.md` 六个文件按**实现实际行为**补齐（含「扩展为空时指纹与升级前逐字节相同且不回填」「空扩展序列化为 NULL，所以既有 Story 的编辑仍是 no-op」「entryId 不校验存在性、悬空出处由读取侧降级」）。
+- 两处需要维护者裁定的事项（本轮未自行改合同）：
+  1. **Proposal 与实现的偏差**：Proposal 附录写 keyFacts 的 `entryId`「必须存在（不存在按现有错误映射 404/400）」，**实现未做该校验**——仓储原样落库、原样投影，只有 Web 在候选列表找不到该 id 时显示「出处已删除」。ADR-0021 决定 3 未要求写入时校验，故 `docs/spec` 按实际行为记录；是否补写入校验（或反向修正 ADR/Proposal 措辞）待维护者决定。
+  2. **文档治理天花板**：`docs/spec/domain/0001`（8986 token / 9000 上限）与 `docs/testing/README.md`（8963 token）都是**未登记**文件，越过即可触发 CI 违规，本次同步被迫压缩（放弃 domain 的重建验收第 16 条与 `StoryTimeRange`/`StoryKeyFact` 独立定义段）。要完整展开需先拆分或把这两个文件登记进 `docs/doc-governance/docs-baseline.json`。
+- 既有欠账（本切片未改）：`docs/spec/contracts/0001` 的实现锚点仍引用已不存在的 `packages/contracts/src/index.test.ts`（contracts 已拆成 story.ts/topic.ts 等分册），该节测试覆盖描述也与现状不符。
+- 未运行（本切片整体）：`bun run test:property`（独立配置，未单独运行）、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
+- 未做（需维护者授权）：commit、push、合并 `master`、清理 worktree 与分支。

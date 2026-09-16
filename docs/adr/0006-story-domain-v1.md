@@ -26,6 +26,8 @@ Story 从 ingest 私有的最小投影升级为独立域对象。v1 的实现顺
 
 `StoryRevision` 增加 revision 编号（`(storyId, revision)` 唯一）与确定性 fingerprint；既有数据的当前 Revision 回填为 revision 1。v1 最小字段集为 title、summary、kind、subtype；title/summary/kind/subtype 任一实质变化才追加 revision，无实质变化的更新命令 no-op。历史 Revision 只追加、可读，`currentRevisionId` 指向当前表示。“关键事实、时间范围、结构化概览”等扩展字段在后续切片补齐。
 
+（2026-09-16 更新：「关键事实」与「时间范围」已由 [`0021`](0021-story-key-facts-and-time-range-v1.md) 补齐并冻结形态——时间范围复用既有时间语义、关键事实为有序清单且每条挂一条出处、两项参与变化判定且空值与升级前一致、写入沿用全量提交；「结构化概览」仍在后续切片。）
+
 ### 4. kind/subtype 保持受管核心枚举；动态注册表后置
 
 核心 kind 继续使用稳定枚举（event/document/media/thread），subtype 允许 null；未知 subtype 读取时按核心 kind 降级展示（ORG-013 的读取兼容部分）。动态插件 subtype 注册表后置，不建立第二套注册机制。

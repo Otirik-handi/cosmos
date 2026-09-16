@@ -39,6 +39,7 @@ Non-goals（见 Proposal / ADR-0006）：
 - PRD [`0002`](../../../docs/requirements/0002-product-requirements.md) §7.5 注记与 ORG-001/004/011/012/013/017/020/022。
 - 信息模型 [`0002`](../../../docs/architecture/0002-information-model.md) v0.12 §1/§4.3/§4.7。
 - 现状 spec：domain/0001（Story projection）、contracts/0001、storage/0001、interfaces/0002 与 0005。
+- **追加切片（2026-09-16）**：Proposal [`story-key-facts-and-time-range-v1`](../../../docs/proposals/story-key-facts-and-time-range-v1.md)（accepted）与 ADR [`0021`](../../../docs/adr/0021-story-key-facts-and-time-range-v1.md)（Story 表示扩展字段 v1，补齐 ADR-0006 决定 3 的欠账）。
 
 ## 实施切片（capability map，无环依赖）
 
@@ -52,12 +53,24 @@ Non-goals（见 Proposal / ADR-0006）：
 3. **切片 3：Web 多来源 Story 详情与操作入口**（apps/web）
    - Story 详情成员列表、归并/编辑/merge 操作；
    - 组件实验室登记 + 浏览器验收。
+4. **追加切片（2026-09-16）：Story 表示扩展字段 v1（关键事实 + 时间范围，ORG-017 剩余两项）**
+   - 生命周期阶段：**切片已定义、未开工**（Proposal 已接受、ADR-0021 已冻结形态；定义本轮只写文档，无代码、无 worktree、未 commit）。
+   - 连贯目标：Story 的当前表示从 title/summary 扩为四项，新增「时间范围」（起止 + 精度 + 依据，不按 kind 限制、可留空）与「关键事实」（有序清单，每条挂一条出处），并沿用既有 Revision 与 no-op 机制。
+   - 可观察验收（≤3 条）：
+     1. 填、改、清空这两项各追加一次新 Revision，重复提交相同内容不追加；
+     2. Story 详情按精度显示事件时间、关键事实顺序保持；split 后继各自带自己的两项；
+     3. 升级后的既有 Story 不改任何字段时仍是 no-op（扩展字段为空时指纹与升级前逐字节一致）。
+   - 依赖：Task 05（`TemporalValue` 语义复用）、本 Task 切片 1（Revision/fingerprint）、Task 17（split 后继定义）、Task 15（Story 详情展示）。
+   - 受影响合同：domain（`StoryRevisionContent` + `fingerprintStoryRevision`）、Prisma（`StoryRevision` 加列 + migration）、contracts（`updateStoryRevisionCommandSchema`、`storySplitSuccessorSchema`、`StoryDetail`）、storage（写入与读取）、api、transport-http、web。
+   - 预计核心文件：`packages/domain/src/index.ts`、`packages/storage-prisma/prisma/schema.prisma` + migration、`packages/storage-prisma/src/repository/stories.ts`、`packages/contracts/src/story.ts`、`packages/transport-http/src/client-content.ts`、`apps/api/src/app.controller/content.ts`、`apps/web/src/components/cosmos/story-panel.tsx`、`apps/web/src/app/home/use-story-workspace.ts`（约 8 个，按「域 + 持久化 → 合同 + API → Web」三步走，每步可独立合入）。
+   - 验证层级：focused（domain/contracts/storage，含「空扩展字段 = 升级前指纹」的兼容断言）→ 隔离库 upgrade 两态 → API 集成 → 浏览器 → 全量门禁。
 
 ## Current State
 
 - 生命周期阶段：已收口。切片 1a（StoryRevision 版本化）、1b（编排仓储命令）、切片 2（公共合同/Product API/transport）、切片 3（Web 多成员详情与编排）实现并合入 master（`82a90b8`…`452c8c2`）；分支与 worktree 已清理，过程记录见 [walkthrough.md](walkthrough.md)。
 - `docs/api`/`docs/spec`/`docs/testing` 已按行为同步；PROJECT-STATUS 已更新（`452c8c2`）。
 - 人工浏览器验收由用户决定推迟到后续开发（自动化浏览器 E2E 已通过；Story ID 不展示导致的归并表单可用性障碍见 walkthrough 2026-09-08 收尾记录）。
+- **追加切片（Story 表示扩展字段 v1）**：2026-09-16 完成 Proposal 接受与切片定义（见上方「实施切片 4」），**尚未开工**；实现的当前事实仍是 master 上的 `title`/`summary` 字段集。
 
 ## Decisions and Deviations
 
@@ -77,3 +90,4 @@ Non-goals（见 Proposal / ADR-0006）：
 - 已完成：`docs/spec/domain/0001`、`contracts/0001`、`storage/0001`、`interfaces/0002/0005` 与 testing README 同步；PROJECT-STATUS 更新（`452c8c2`）。
 - 后续开发时补：人工浏览器验收（含冲突 409 路径）；决定 Story ID 的展示方式与归并表单可用性；决定 move entry 是否需要 UI 入口。
 - 后续 Phase 2 切片：Topic、Entity/关系、标签/批注/集合/Saved View、可配置看板、自动聚类/Knowledge Workflow。
+- **Story 表示扩展字段（ORG-017 剩余两项）**：Proposal 已接受、ADR-0021 已冻结形态，切片定义见上方「实施切片 4」；待授权后开 worktree 实施。「结构化概览」、自动抽取（ORG-021）、字段级保护（ORG-019）仍后置。
