@@ -14,7 +14,8 @@ import type {
 } from "@cosmos/contracts";
 import type {
     EntityRelationType, EntityType, EntryStoryRelationType, FavoriteTargetType,
-    NormalizedIngestItem, StoryKind, StorySubtypeRegistration, TargetType, TopicMemberRole,
+    NormalizedIngestItem, StoryKeyFact, StoryKind, StorySubtypeRegistration, StoryTimeRange,
+    TargetType, TopicMemberRole,
     BlockType, SpotlightTargetType,
 } from "@cosmos/domain";
 import type {
@@ -230,6 +231,10 @@ export interface CosmosRepository {
         summary: string | null;
         kind: StoryKind;
         subtype: string | null;
+        // Full-representation submit: an omitted extension is stored as empty
+        // (ADR-0021 decision 5).
+        timeRange?: StoryTimeRange | null;
+        keyFacts?: readonly StoryKeyFact[] | null;
         actor?: string | null;
         reason?: string | null;
     }): Promise<StoryDetail | null>;
@@ -246,6 +251,10 @@ export interface CosmosRepository {
             summary: string | null;
             kind: StoryKind;
             subtype: string | null;
+            // Each successor carries its own representation; the shell's is not
+            // copied (ADR-0021 decision 6).
+            timeRange?: StoryTimeRange | null;
+            keyFacts?: readonly StoryKeyFact[] | null;
             entryIds: readonly string[];
             evidenceEntryIds: readonly string[];
             entityIds: readonly string[];

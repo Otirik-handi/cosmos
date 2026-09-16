@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type StoryDetail } from "@cosmos/contracts";
-import { fingerprintStoryRevision, listStorySubtypes as listRegisteredStorySubtypes, type StoryKind, type StorySubtypeRegistration } from "@cosmos/domain";
+import { fingerprintStoryRevision, listStorySubtypes as listRegisteredStorySubtypes, normalizeStoryRepresentation, type StoryKeyFact, type StoryKind, type StorySubtypeRegistration, type StoryTimeRange } from "@cosmos/domain";
 import { StoryNotFoundError, StoryRevisionConflictError, StorySplitConflictError } from "@cosmos/application";
 import { appendDomainEvent, assertStorySubtype } from "./repository-internals.js";
 import { PrismaCosmosRepositorySearch } from "./search.js";
@@ -74,6 +74,8 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
         summary: string | null;
         kind: "event" | "document" | "media" | "thread";
         subtype: string | null;
+        timeRange?: StoryTimeRange | null;
+        keyFacts?: readonly StoryKeyFact[] | null;
         actor?: string | null;
         reason?: string | null;
     }): Promise<StoryDetail | null> {
@@ -100,11 +102,17 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
         if (input.kind !== story.kind || input.subtype !== story.subtype) {
             assertStorySubtype(input.kind, input.subtype);
         }
+        // Fingerprint and persistence share one normalization so that a Story
+        // created before the extension keeps its stored fingerprint and stays a
+        // no-op (ADR-0021 decision 4).
+        const representation = normalizeStoryRepresentation(input);
         const fingerprint = fingerprintStoryRevision({
             title: input.title,
             summary: input.summary,
             kind: input.kind,
             subtype: input.subtype,
+            timeRange: representation.timeRange,
+            keyFacts: representation.keyFacts,
         });
         if (story.currentRevision.fingerprint === fingerprint) {
             return this.story(canonicalStoryId);
@@ -124,6 +132,8 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
                     reason: input.reason ?? null,
                     title: input.title,
                     summary: input.summary,
+                    timeRangeJson: serializeTimeRange(representation.timeRange),
+                    keyFactsJson: serializeKeyFacts(representation.keyFacts),
                 },
             });
             await tx.story.update({
@@ -167,6 +177,8 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
             evidenceEntryIds: readonly string[];
             entityIds: readonly string[];
             topicIds: readonly string[];
+            timeRange?: StoryTimeRange | null;
+            keyFacts?: readonly StoryKeyFact[] | null;
         }[];
         actor?: string | null;
         reason?: string | null;
@@ -284,6 +296,7 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
             for (const successor of input.successors) {
                 const successorStoryId = `story:${randomUUID()}`;
                 successorStoryIds.push(successorStoryId);
+                const representation = normalizeStoryRepresentation(successor);
                 await tx.story.create({
                     data: {
                         id: successorStoryId,
@@ -300,11 +313,15 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
                             summary: successor.summary,
                             kind: successor.kind,
                             subtype: successor.subtype,
+                            timeRange: representation.timeRange,
+                            keyFacts: representation.keyFacts,
                         }),
                         actorJson,
                         reason: input.reason ?? null,
                         title: successor.title,
                         summary: successor.summary,
+                        timeRangeJson: serializeTimeRange(representation.timeRange),
+                        keyFactsJson: serializeKeyFacts(representation.keyFacts),
                     },
                 });
                 await tx.story.update({
@@ -387,4 +404,16 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
         return this.story(shellStoryId);
     }
 
+}
+
+// An empty extension is stored as NULL rather than as `null`/`[]`: NULL is the
+// shape every pre-extension Revision already has, and the fingerprint ignores
+// empty extensions, so both forms stay equivalent (ADR-0021 decision 4).
+
+function serializeTimeRange(value: StoryTimeRange | null): string | null {
+    return value ? JSON.stringify(value) : null;
+}
+
+function serializeKeyFacts(value: readonly StoryKeyFact[]): string | null {
+    return value.length > 0 ? JSON.stringify(value) : null;
 }

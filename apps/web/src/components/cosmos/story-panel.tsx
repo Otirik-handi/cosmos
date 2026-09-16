@@ -42,19 +42,31 @@ import { StoryUserStateMigrationSection } from "./story-panel/user-state-migrati
 import type { StoryUserStateSnapshot } from "./story-panel/user-state-migration";
 import { RelatedSection } from "./story-panel/related";
 import { SourceMembersSection } from "./story-panel/source-members";
+import type { StoryEntryOption } from "./story-panel/entry-option";
+import {
+    StoryKeyFactsForm,
+    StoryTimeRangeForm,
+    storyKeyFactsFromDraft,
+    storyKeyFactsToDraft,
+    type StoryKeyFactDraft,
+} from "./story-panel/representation-form";
+import {
+    StoryEventTimeLine,
+    StoryKeyFactsBlock,
+} from "./story-panel/representation";
+import {
+    storyTimeRangeFromDraft,
+    storyTimeRangeToDraft,
+    type StoryTimeRangeDraft,
+} from "@/lib/story-time-range-draft";
 
 import {
     STORY_KIND_LABELS,
     relationTypeLabel,
 } from "./story-panel/labels";
 import { TimelineSection } from "./story-panel/timeline-section";
-import { SplitTargetSelect } from "./story-panel/split-target-select";
-import { EntityRow } from "./story-panel/entity-row";
 import { RevisionAssets } from "./story-panel/revision-assets";
-import {
-    StorySubtypeSelect,
-    registeredStorySubtype,
-} from "./story-panel/story-subtype-select";
+import { registeredStorySubtype } from "./story-panel/story-subtype-select";
 type StoryPanelProps = {
     onClose: () => void;
     story: StoryDetail;
@@ -93,6 +105,8 @@ type StoryPanelProps = {
     onOpenRelatedStory?: (storyId: string) => Promise<void>;
     /** 证据关系候选条目（来自 GET /entries）；页面已排除本 Story 的成员。 */
     entryOptions?: readonly Pick<EntryListItem, "id" | "title" | "sourceName">[];
+    /** 关键事实出处候选：本 Story 的成员 + 全量已加载条目（ADR-0021 决定 3）。 */
+    entryCandidates?: readonly StoryEntryOption[];
     onLinkEntry?: (input: { entryId: string; relationType: EntryStoryRelationType }) => Promise<void>;
     onUnlinkEntry?: (entryId: string) => Promise<void>;
     /** 读取拆分家族某个成员上的 Story 级用户状态（ADR-0020 迁移表单的来源侧）。 */
@@ -138,6 +152,7 @@ export function StoryPanel({
     relatedStories = [],
     onOpenRelatedStory,
     entryOptions = [],
+    entryCandidates,
     onLinkEntry,
     onUnlinkEntry,
     onLoadStoryUserState,
@@ -151,6 +166,12 @@ export function StoryPanel({
     // keeping it unchanged is allowed, so it must stay selectable.
     const [subtype, setSubtype] = useState<string | null>(story.story.subtype);
     const [mergeStoryId, setMergeStoryId] = useState("");
+    const [timeRangeDraft, setTimeRangeDraft] = useState<StoryTimeRangeDraft>(
+        () => storyTimeRangeToDraft(story.story.timeRange),
+    );
+    const [keyFactsDraft, setKeyFactsDraft] = useState<StoryKeyFactDraft[]>(
+        () => storyKeyFactsToDraft(story.story.keyFacts),
+    );
     const [actionError, setActionError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [joinTopicId, setJoinTopicId] = useState("");
@@ -209,6 +230,19 @@ export function StoryPanel({
     const currentWebUrl = currentRevision?.webUrl ?? null;
     const timeline = buildStoryTimeline(story);
     const isShell = story.story.status === "split";
+    // 出处候选：页面给了全量清单就用它（含本 Story 成员标记），否则退回面板已有的
+    // 条目选项，保证「出处已删除」这类判断仍能基于当前加载到的条目。
+    const keyFactSources: StoryEntryOption[] = entryCandidates
+        ? [...entryCandidates]
+        : [
+            ...story.entries.map((member) => ({
+                id: member.id,
+                title: member.revisions[0]?.title ?? member.id,
+                sourceName: member.sourceName,
+                isMember: true,
+            })),
+            ...entryOptions.map((option) => ({ ...option, isMember: false })),
+        ];
     const storySubtypeLabel = story.story.subtype === null
         ? null
         : subtypeOptions.find((option) => (
@@ -220,6 +254,16 @@ export function StoryPanel({
         if (!normalized) {
             return;
         }
+        const timeRange = storyTimeRangeFromDraft(timeRangeDraft);
+        if (!timeRange.ok) {
+            setActionError(timeRange.error);
+            return;
+        }
+        const keyFacts = storyKeyFactsFromDraft(keyFactsDraft);
+        if (keyFacts.some((fact) => fact.text.length === 0)) {
+            setActionError("每条关键事实都需要文字；不需要的请删除。");
+            return;
+        }
         setBusy(true);
         setActionError(null);
         try {
@@ -229,7 +273,12 @@ export function StoryPanel({
                 summary: story.story.summary,
                 kind,
                 subtype,
+                timeRange: timeRange.timeRange,
+                keyFacts,
             });
+            // 保存后把表单对齐到刚落库的值：清掉「点了删除但没保存」这类未提交编辑。
+            setTimeRangeDraft(storyTimeRangeToDraft(timeRange.timeRange));
+            setKeyFactsDraft(storyKeyFactsToDraft(keyFacts));
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "Story 操作失败。");
         } finally {
@@ -683,6 +732,7 @@ export function StoryPanel({
                                 </Badge>
                             )}
                         </div>
+                        <StoryEventTimeLine story={story} />
                         <p className="text-sm text-muted-foreground">
                             {story.entry
                                 ? `${story.entry.sourceName} · ${story.entry.revisions.length} 个 Revision`
@@ -701,6 +751,7 @@ export function StoryPanel({
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     <SourceMembersSection story={story} title={title} relatedStories={relatedStories} />
+                    <StoryKeyFactsBlock entryOptions={keyFactSources} story={story} />
                     {isShell && <HistoryShellSection busy={busy} kind={kind} onOpenRelatedStory={onOpenRelatedStory} story={story} title={title} />}
                     {isShell && onLoadStoryUserState && onMigrateStoryUserState && (
                         <StoryUserStateMigrationSection
@@ -756,7 +807,7 @@ export function StoryPanel({
                             </div>
                         </>
                     )}
-                    <StoryActionsSection busy={busy} isShell={isShell} kind={kind} mergeStoryId={mergeStoryId} onSplitStory={onSplitStory} setKind={setKind} setMergeStoryId={setMergeStoryId} setSubtype={setSubtype} setTitle={setTitle} story={story} submitMerge={submitMerge} submitRevisionUpdate={submitRevisionUpdate} subtype={subtype} subtypeOptions={subtypeOptions} title={title} />
+                    <StoryActionsSection busy={busy} isShell={isShell} keyFactEntryOptions={keyFactSources} keyFactsDraft={keyFactsDraft} kind={kind} mergeStoryId={mergeStoryId} onKeyFactsDraftChange={setKeyFactsDraft} onTimeRangeDraftChange={setTimeRangeDraft} setKind={setKind} setMergeStoryId={setMergeStoryId} setSubtype={setSubtype} setTitle={setTitle} submitMerge={submitMerge} submitRevisionUpdate={submitRevisionUpdate} subtype={subtype} subtypeOptions={subtypeOptions} timeRangeDraft={timeRangeDraft} title={title} />
                     <StorySplitSection addSplitSuccessor={addSplitSuccessor} busy={busy} isShell={isShell} onSplitStory={onSplitStory} setSplitEntityTargets={setSplitEntityTargets} setSplitEntryTargets={setSplitEntryTargets} setSplitEvidenceTargets={setSplitEvidenceTargets} setSplitTopicTargets={setSplitTopicTargets} splitEntityTargets={splitEntityTargets} splitEntryTargets={splitEntryTargets} splitEvidenceTargets={splitEvidenceTargets} splitSuccessors={splitSuccessors} splitTopicTargets={splitTopicTargets} story={story} submitSplit={submitSplit} subtypeOptions={subtypeOptions} topics={topics} updateSplitSuccessor={updateSplitSuccessor} />
                     {actionError && (
                         <p

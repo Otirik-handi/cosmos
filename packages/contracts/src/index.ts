@@ -76,13 +76,15 @@ export {
 export {
     labelRefSchema, linkEntryStoryCommandSchema, mergeStoriesCommandSchema,
     migrateStoryUserStateCommandSchema, moveEntryToStoryCommandSchema, splitStoryCommandSchema,
-    storyDetailSchema, storyEntitySummarySchema, storySplitSuccessorSchema,
-    storySuccessorSchema, storyTopicSchema, storyUserStateMigrationCountsSchema,
+    storyDetailSchema, storyEntitySummarySchema, storyKeyFactSchema, storySplitSuccessorSchema,
+    storySuccessorSchema, storyTimeRangeSchema, storyTopicSchema,
+    storyUserStateMigrationCountsSchema,
     storyUserStateMigrationResultSchema, unlinkEntryStoryCommandSchema,
     updateStoryRevisionCommandSchema,
     type LabelRef, type LinkEntryStoryCommand, type MergeStoriesCommand,
     type MigrateStoryUserStateCommand, type MoveEntryToStoryCommand, type SplitStoryCommand,
-    type StoryDetail, type StoryEntitySummary, type StorySplitSuccessor, type StorySuccessor,
+    type StoryDetail, type StoryEntitySummary, type StoryKeyFact, type StorySplitSuccessor,
+    type StorySuccessor, type StoryTimeRange,
     type StoryTopic, type StoryUserStateMigrationCounts, type StoryUserStateMigrationResult,
     type UnlinkEntryStoryCommand, type UpdateStoryRevisionCommand,
 } from "./story.js";

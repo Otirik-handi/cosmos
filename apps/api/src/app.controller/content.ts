@@ -124,6 +124,8 @@ export class AppControllerContent extends AppControllerRuns {
                 summary: parsed.summary ?? null,
                 kind: parsed.kind,
                 subtype: parsed.subtype ?? null,
+                timeRange: parsed.timeRange ?? null,
+                keyFacts: parsed.keyFacts ?? [],
                 actor: parsed.actor ?? null,
                 reason: parsed.reason ?? null,
             });
@@ -162,6 +164,8 @@ export class AppControllerContent extends AppControllerRuns {
                     summary: successor.summary ?? null,
                     kind: successor.kind,
                     subtype: successor.subtype ?? null,
+                    timeRange: successor.timeRange ?? null,
+                    keyFacts: successor.keyFacts ?? [],
                     entryIds: successor.entryIds,
                     evidenceEntryIds: successor.evidenceEntryIds,
                     entityIds: successor.entityIds,

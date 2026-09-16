@@ -20,6 +20,7 @@ import {
     type RelatedStory,
 } from "@/lib/related-stories";
 import type { StoryUserStateSnapshot } from "@/components/cosmos/story-panel/user-state-migration";
+import type { StoryEntryOption } from "@/components/cosmos/story-panel/entry-option";
 import {
     client,
     readError,
@@ -35,6 +36,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
     const [entryOptions, setEntryOptions] = useState<
         readonly Pick<EntryListItem, "id" | "title" | "sourceName">[]
     >([]);
+    const [keyFactEntryOptions, setKeyFactEntryOptions] = useState<readonly StoryEntryOption[]>([]);
     const [labels, setLabels] = useState<LabelList>({ items: [] });
     const [collections, setCollections] = useState<CollectionList>({ items: [] });
     const [storyAnnotations, setStoryAnnotations] = useState<readonly Annotation[]>([]);
@@ -78,6 +80,14 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
                 title: item.title,
                 sourceName: item.sourceName,
             })));
+        // 关键事实的出处可以是任何条目、不要求属于本 Story（ADR-0021 决定 3），
+        // 所以这里保留全量已加载条目，只标记成员身份供界面分组排序。
+        setKeyFactEntryOptions(entryPage.items.map((item) => ({
+            id: item.id,
+            title: item.title,
+            sourceName: item.sourceName,
+            isMember: item.storyId === storyDetail.story.id,
+        })));
             // 相关内容是附加区块：先渲染 Story，再后台补齐，读取失败不阻塞阅读。
             openStoryIdRef.current = storyDetail.story.id;
             setRelatedStories([]);
@@ -94,6 +104,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         setStory(null);
         setRelatedStories([]);
         setEntryOptions([]);
+        setKeyFactEntryOptions([]);
     }, []);
 
     /** 证据关系写命令返回 canonical StoryDetail，直接刷新面板即可。 */
@@ -378,6 +389,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         deleteStoryAnnotation,
         detachLabelFromStory,
         entryOptions,
+        keyFactEntryOptions,
         labels,
         linkEntryStory,
         loadStoryUserState,

@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-09-15。
+2026-09-16。
 
 ## 组件定位
 
@@ -226,11 +226,11 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `GET /feed` | query `cursor?`、`limit?` | `FeedPage`。limit 缺省 20；非数字回退 20，随后 clamp 到 1–100；cursor 交给 repository。按更新倒序返回 Story Feed，nextCursor 是偏移字符串或 null。 |
 | `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`labelIds?`、`topicIds?`（逗号分隔 id）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；label/topic 过滤为 any-of 语义（Story 级标签、active Topic 成员）；Zod 解析失败 400。无写副作用。 |
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
-| `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要（含 `status`/`replacedBy`）、可空 `entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）、`entities`（关联 Entity 快照列表）与 `topics`（当前 Topic 成员）。旧 merge id 先解析到 canonical Story；split 历史壳保留自身 id 且可零成员；不存在/无当前 Revision 404。 |
+| `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要（含 `status`/`replacedBy` 与当前表示的 `timeRange`/`keyFacts`）、可空 `entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）、`entities`（关联 Entity 快照列表）与 `topics`（当前 Topic 成员）。旧 merge id 先解析到 canonical Story；split 历史壳保留自身 id 且可零成员；不存在/无当前 Revision 404。 |
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
-| `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，`baseRevisionId` 过期或目标是历史壳 409 conflict，subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。 |
+| `POST /stories/:storyId/revisions` | body `UpdateStoryRevisionCommand` | `StoryDetail`；Schema 失败 400（含 `end` 早于 `start`、事实超 20 条或单条超 500 字），Story 缺失 404，`baseRevisionId` 过期或目标是历史壳 409 conflict，subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。body 的 `timeRange`/`keyFacts` 可选，**省略即清空**（全量提交，ADR-0021 决定 5）；内容无实质变化时 current 指针不动。 |
 | `POST /stories/merges` | body `MergeStoriesCommand` | `StoryDetail`；Schema 失败 400，Story 缺失 404，归并自身/已 merge Story/历史壳 409 conflict。 |
-| `POST /stories/:storyId/splits` | body `SplitStoryCommand` | `StoryDetail`（历史壳）；Schema 失败 400，Story 缺失 404，后继不足 2 个、映射不属于当前关系、跨后继重复、自关联或已是历史壳 409 conflict（ADR-0012），后继 subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。 |
+| `POST /stories/:storyId/splits` | body `SplitStoryCommand` | `StoryDetail`（历史壳）；Schema 失败 400，Story 缺失 404，后继不足 2 个、映射不属于当前关系、跨后继重复、自关联或已是历史壳 409 conflict（ADR-0012），后继 subtype 不是该 kind 的可写注册项 400 `validation_failed`（ADR-0013）。每个后继可带自己的 `timeRange`/`keyFacts`，未带即为空；壳上的两项不复制给后继（ADR-0021 决定 6）。 |
 | `POST /stories/:storyId/user-state-migrations` | body `MigrateStoryUserStateCommand`（目标 Story 与五类对象选择） | `StoryUserStateMigrationResult`（每类 `moved`/`deduped`）；Schema 失败 400，来源或目标 Story 缺失 404，两端不是同一 split 家族、同一 Story、或命名的行不在来源 Story 上 409 conflict（ADR-0020）。来源在 path、目标在 body，形态对齐 `/splits`。 |
 | `GET /story-subtypes` | query `kind?`（核心 kind 枚举） | `StorySubtypePage`：受管理 subtype 目录（`active` + `deprecated`，`retired` 不返回）；未知 `kind` 400。只读，不写任何状态。 |
 | `GET /topics` | query `cursor?`、`limit?` | `TopicPage`；limit 经 clampLimit，按 Topic `updatedAt` 倒序，nextCursor 为偏移字符串或 null。 |
@@ -465,6 +465,10 @@ Repository、catalog、SSE polling 或 Blob 读取异常上抛到全局 filter�
    超过上限，观察一条 `snapshot_required` 且 `latestEventId` 等于存储最新序号。
 10. 在无新事件连接保持至少 10 秒，观察 `keepalive.v1`；取消连接后观察不再新增 poll；
     查询不存在 Story/Entry/Revision/Asset，观察 HTTP 404。
+11. 对一条 Story 提交带 `timeRange`（开始为准确时刻、结束留空）与两条有序 `keyFacts` 的
+    revision 命令，观察返回的 `StoryDetail` 带这两项且 `revisionId` 前进；原样重复提交一次，
+    观察 `revisionId` 不变（no-op）；不带这两项提交，观察两项清空且 `revisionId` 再次前进；
+    用 `end` 早于 `start` 或 21 条事实提交，观察 HTTP 400 且 Story 保持上一次保存的状态。
 
 ## 实现与测试锚点
 

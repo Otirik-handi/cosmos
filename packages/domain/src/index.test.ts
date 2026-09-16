@@ -15,7 +15,10 @@ import {
     fingerprintTopicRevision,
     listStorySubtypes,
     normalizePublisher,
+    normalizeStoryRepresentation,
     projectEntryToStory,
+    storyKeyFactMaxCount,
+    storyKeyFactMaxTextLength,
     storyKinds,
     storySubtypeRegistry,
     targetTypes,
@@ -318,5 +321,182 @@ describe("ingestion identity", () => {
         ]);
         expect(listStorySubtypes({ kind: "event" })).toEqual([]);
         expect(listStorySubtypes({ statuses: ["retired"] })).toEqual([]);
+    });
+});
+
+describe("story representation extension", () => {
+    /**
+     * ADR-0021 decision 4 guard: these six digests were produced by the
+     * `fingerprintStoryRevision` that shipped before timeRange/keyFacts existed
+     * (base 085c217). They are the contract that a Stored Revision written by
+     * the old code is still recognised as unchanged after the upgrade. If this
+     * test fails, every existing Story gains a phantom Revision on its next
+     * no-op edit — do not "fix" it by updating the constants unless a full
+     * fingerprint backfill is planned.
+     */
+    const preExtensionFingerprints: readonly [Record<string, unknown>, string][] = [
+        [
+            { title: "T", summary: null, kind: "event", subtype: null },
+            "45465ac4c76fb9faa01ab135cd3e1ab7f3e4eb34b4ff65dc69fec7c6034b8bb9",
+        ],
+        [
+            {
+                title: "多来源 Story 标题",
+                summary: "摘要文本",
+                kind: "document",
+                subtype: "news",
+            },
+            "e66ef9cf4ed671e0f225c7fc7ef00781b5b054e70cd526a68ee488e5da2e6b76",
+        ],
+        [
+            { title: "", summary: "", kind: "media", subtype: "" },
+            "a51ff841ce7df16a2e8e2542e5658b4df95ee389bde8f6b3e7f7ec19c83292e0",
+        ],
+        [
+            { title: "Thread", summary: null, kind: "thread", subtype: "unknown:weibo" },
+            "1e3e6737a26ac11c597ad5ff0011f5e8adc60920e811d7d102c6dc4a2a653889",
+        ],
+        [
+            {
+                title: '标题 "引号" \\ 反斜杠 🚀',
+                summary: "换行\n制表\t",
+                kind: "event",
+                subtype: null,
+            },
+            "999c4c0700c8db7af0197627bc616bcbe869c40b5d5861aca4b9ac5b545f325d",
+        ],
+        [
+            { title: "  padded  ", summary: "  ", kind: "document", subtype: null },
+            "3d43f370fb0a376e8070d2b9d08ae3bd309e8d6149dffecafd09dce2b2e97d69",
+        ],
+    ];
+
+    it("keeps the pre-extension fingerprint byte-identical when both fields are empty", () => {
+        for (const [input, expected] of preExtensionFingerprints) {
+            expect(fingerprintStoryRevision(input as never)).toBe(expected);
+            expect(fingerprintStoryRevision({
+                ...input,
+                timeRange: null,
+                keyFacts: [],
+            } as never)).toBe(expected);
+            expect(fingerprintStoryRevision({
+                ...input,
+                keyFacts: [{ text: "   ", entryId: null }],
+            } as never)).toBe(expected);
+        }
+    });
+
+    it("appends a revision only when a real extension change survives normalization", () => {
+        const base = {
+            title: "Same event",
+            summary: "summary",
+            kind: "event" as const,
+            subtype: null,
+        };
+        const empty = fingerprintStoryRevision(base);
+        const facts = [{ text: "第一条事实", entryId: "entry-1" }];
+        const range = {
+            start: {
+                exact: "2026-09-16T00:00:00.000Z",
+                exactPrecision: "second" as const,
+                fallback: null,
+            },
+            end: null,
+        };
+
+        expect(fingerprintStoryRevision({ ...base, timeRange: range })).not.toBe(empty);
+        expect(fingerprintStoryRevision({ ...base, keyFacts: facts })).not.toBe(empty);
+
+        // Setting, then clearing, returns to the pre-extension digest: this is
+        // what makes "set -> clear" land back on an equivalent representation.
+        expect(fingerprintStoryRevision({ ...base, timeRange: range, keyFacts: facts }))
+            .not.toBe(empty);
+        expect(fingerprintStoryRevision({ ...base, timeRange: null, keyFacts: [] }))
+            .toBe(empty);
+    });
+
+    it("does not change the digest for whitespace-only or key-order noise", () => {
+        const base = {
+            title: "Same event",
+            summary: "summary",
+            kind: "event" as const,
+            subtype: null,
+        };
+        const range = {
+            start: {
+                exact: "2026-09-16T00:00:00.000Z",
+                exactPrecision: "second" as const,
+                fallback: null,
+            },
+            end: null,
+        };
+
+        expect(fingerprintStoryRevision({
+            ...base,
+            timeRange: range,
+            keyFacts: [{ text: "  第一条事实  ", entryId: "  entry-1  " }],
+        })).toBe(fingerprintStoryRevision({
+            ...base,
+            timeRange: range,
+            keyFacts: [{ text: "第一条事实", entryId: "entry-1" }],
+        }));
+    });
+
+    it("normalizes the shared representation for both fingerprint and persistence", () => {
+        expect(normalizeStoryRepresentation({})).toEqual({ timeRange: null, keyFacts: [] });
+
+        expect(normalizeStoryRepresentation({
+            keyFacts: [
+                { text: "  保留顺序一  ", entryId: " entry-1 " },
+                { text: "   ", entryId: "entry-2" },
+                { text: "保留顺序二", entryId: "   " },
+            ],
+        })).toEqual({
+            timeRange: null,
+            keyFacts: [
+                { text: "保留顺序一", entryId: "entry-1" },
+                { text: "保留顺序二", entryId: null },
+            ],
+        });
+
+        expect(normalizeStoryRepresentation({
+            timeRange: {
+                start: {
+                    exact: null,
+                    exactPrecision: null,
+                    fallback: {
+                        raw: "  昨天下午  ",
+                        lowerBound: " 2026-09-15T00:00:00.000Z ",
+                        precision: "day",
+                        timezone: "  ",
+                        confidence: "uncertain",
+                    },
+                },
+                end: null,
+            },
+        })).toEqual({
+            timeRange: {
+                start: {
+                    exact: null,
+                    exactPrecision: null,
+                    fallback: {
+                        raw: "昨天下午",
+                        lowerBound: "2026-09-15T00:00:00.000Z",
+                        precision: "day",
+                        timezone: null,
+                        confidence: "uncertain",
+                    },
+                },
+                end: null,
+            },
+            keyFacts: [],
+        });
+    });
+
+    it("pins the fact ceilings that the contracts package duplicates", () => {
+        // @cosmos/contracts cannot import these (it is bundled into the browser
+        // and this package pulls in node:crypto), so both sides pin the numbers.
+        expect(storyKeyFactMaxCount).toBe(20);
+        expect(storyKeyFactMaxTextLength).toBe(500);
     });
 });

@@ -92,6 +92,66 @@ describe("AppController story orchestration", () => {
         });
     });
 
+    it("passes the Story time range and key facts through to the repository", async () => {
+        const repository = {
+            updateStoryRevision: vi.fn().mockResolvedValue(storyDetailFixture()),
+        };
+        const timeRange = {
+            start: {
+                exact: "2026-09-14T09:30:00.000Z",
+                exactPrecision: "second",
+                fallback: null,
+            },
+            end: {
+                exact: null,
+                exactPrecision: null,
+                fallback: {
+                    raw: "2026 年",
+                    lowerBound: "2026-01-01T00:00:00.000Z",
+                    precision: "year",
+                    timezone: null,
+                    confidence: "uncertain",
+                },
+            },
+        };
+        const keyFacts = [
+            { text: "上下文窗口 1M", entryId: "entry-a" },
+            { text: "第三方测评认为长文本仍会衰减", entryId: null },
+        ];
+        const result = await createController(repository).updateStoryRevision("story-a", {
+            baseRevisionId: "rev-a-1",
+            title: "Story A",
+            kind: "event",
+            timeRange,
+            keyFacts,
+        });
+
+        expect(result).toMatchObject({ story: { id: "story-a" } });
+        expect(repository.updateStoryRevision).toHaveBeenCalledWith({
+            storyId: "story-a",
+            baseRevisionId: "rev-a-1",
+            title: "Story A",
+            summary: null,
+            kind: "event",
+            subtype: null,
+            timeRange,
+            keyFacts,
+            actor: null,
+            reason: null,
+        });
+
+        // 省略即清空（ADR-0021 决定 5）：命令不带这两项时仓储收到的是空值。
+        const clearing = { updateStoryRevision: vi.fn().mockResolvedValue(storyDetailFixture()) };
+        await createController(clearing).updateStoryRevision("story-a", {
+            baseRevisionId: "rev-a-1",
+            title: "Story A",
+            kind: "event",
+        });
+        expect(clearing.updateStoryRevision).toHaveBeenCalledWith(
+            expect.objectContaining({ timeRange: null, keyFacts: [] }),
+        );
+    });
+
     it("maps a missing Story to 404 and stale revision edits to 409", async () => {
         const moveRepository = {
             moveEntryToStory: vi.fn().mockRejectedValue(
@@ -154,6 +214,8 @@ describe("AppController story orchestration", () => {
                     summary: null,
                     kind: "event",
                     subtype: null,
+                    timeRange: null,
+                    keyFacts: [],
                     entryIds: ["entry-a"],
                     evidenceEntryIds: [],
                     entityIds: [],
@@ -164,6 +226,8 @@ describe("AppController story orchestration", () => {
                     summary: null,
                     kind: "event",
                     subtype: null,
+                    timeRange: null,
+                    keyFacts: [],
                     entryIds: ["entry-b"],
                     evidenceEntryIds: [],
                     entityIds: ["entity-a"],

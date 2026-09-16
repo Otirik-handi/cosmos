@@ -117,6 +117,7 @@ export default function Home() {
         deleteStoryAnnotation,
         detachLabelFromStory,
         entryOptions,
+        keyFactEntryOptions,
         labels,
         linkEntryStory,
         loadStoryUserState,
@@ -704,6 +705,7 @@ export default function Home() {
                     entryOptions={entryOptions.filter((option) => {
                         return !story.evidence.some((item) => item.entryId === option.id);
                     })}
+                    entryCandidates={keyFactEntryOptions}
                     onLinkEntry={linkEntryStory}
                     onUnlinkEntry={unlinkEntryStory}
                     onLoadStoryUserState={loadStoryUserState}
