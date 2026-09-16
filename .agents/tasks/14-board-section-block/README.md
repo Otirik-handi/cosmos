@@ -75,7 +75,7 @@ Non-goals（见 Proposal / ADR-0010）：
 
 Phase 2 收口项之一，维护者 2026-09-15 选定。**Feed Block 独立取数已完成、待验收合并**；改动在分支 `fix/t14-board-feed-blocks`（worktree `.worktree/t14-board-feed-blocks`，基线 `2e46dca`，已 rebase 到合并 split 之后的 master），本目录记录随分支提交。
 
-- 生命周期阶段：Feed Block 独立取数实现与门禁完成，待验收合并；拖拽排序**未开工**。
+- 生命周期阶段：Feed Block 独立取数实现与门禁完成，待验收合并；拖拽排序见下方 2026-09-15 追加切片（已实现）。
 - 连贯目标：让每个阅读流区块按自己的绑定取数，不再由「第一个可见区块」独占页面阅读流；交互式搜索归位页面级。
 - 可观察验收（≤3 条）：
   1. 两个以上「阅读流」区块各自取数、互不干扰：绑定的按该 Saved View 条件显示，未绑定的显示最新内容流，悬空引用显示占位；
@@ -177,10 +177,51 @@ Phase 2 收口项之一，维护者 2026-09-15 选定。**Feed Block 独立取�
 - **合并后在 master 重跑浏览器套件时观察到同一 spec 文件内的间歇失败**（2026-09-15）：整套 17/18，失败的是拆分场景（拆分前已由 API 确认落库的标签/收藏，在拆分后读不到）。本切片的验证结论按「分支内 18/18、合并后 17/18（1 例间歇失败）」如实记录，不按绿灯口径写。该用例的症状、实际观察次数、当前判断（含未查清的部分）与建议的处理次序统一登记在 [`docs/testing/known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md)，本文件不重复维护。**本切片可能加剧了它**：页面现在每个阅读流区块各发一次取数请求，叠加页面级阅读流，单位时间并发读比以前多。
 - 未运行：Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 
+## 追加切片（2026-09-15）：区块拖拽排序
+
+Phase 2 收口尾巴。维护者 2026-09-15 按真人验收结论把拖拽排序从「后置可选」升级为**必做**（原话：用上下按钮排序让人烦躁、容易丢失注意点）。本轮实现落在分支 `feat/t14-board-drag-sort`（worktree `.worktree/t14-board-drag-sort`，基线 `ae180e9`）。
+
+- 生命周期阶段：实现与门禁完成，维护者真人验收通过（分区内拖拽落点、松手无中间态、上移/下移按钮与键盘路径均确认与预期一致）；待合并。跨分区拖拽经维护者裁定为**不做**（理由见 ADR-0010 决定 7）。
+- 连贯目标：编辑模式下可以直接拖动区块排序，分区内与跨分区都行；拖拽不是唯一路径，上移/下移按钮与键盘操作都不回退。
+- 可观察验收（≤3 条）：
+  1. 编辑模式下拖动「来源健康」到「阅读流」上方：服务端返回的新树里两者顺序互换，页面顺序同步；
+  2. 跨分区拖动：**不做**（维护者 2026-09-15 裁定，理由见 ADR-0010 决定 7）——分区是「用户的一个关注方面」的语义容器、区块是分区内的内容细分，把区块拖到别的分区会破坏这两层语义，且拖拽高频易误触。编辑模式下每个分区各自是一个拖拽区，从 A 分区发起的拖动看不到 B 分区的落点，拖过去松手弹回原位（从代码结构推断，未实测）；跨分区重新归类不是拖拽的职责。
+  3. 拖拽只改展示配置：底层内容不受影响；上移/下移按钮仍然存在可用，控制台无错误。
+- 依赖：无新增公共合同依赖——服务端 `moveBlock`（分区内重排 + 跨分区移动 + 两侧 position 连续化）与 `updateSectionPosition` 早就实现，本轮只补界面。
+- 受影响合同：**Web 内部实现**（`board-view.tsx` 编辑模式 + 新组件与纯函数模块）、组件实验室登记；ADR-0010 决定 6 加注记并新增决定 7；`docs/spec/interfaces/0005-web-client.md` 同步。
+- 分类依据：ADR-0010 曾把拖拽排序列为后置项，维护者已明确改判为必做并留下理由，因此按 Task 14 追加切片执行，不需要新 Proposal。
+
+**落地决定（2026-09-15）**：
+
+- 拖拽库选 `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`（新增运行时依赖）。理由：该库自带键盘传感器与屏幕阅读器播报，跨分区拖拽有官方 pattern；备选的原生 HTML5 拖拽在触屏与键盘上支持极差，自研 Pointer Events 要自己补自动滚动、拖拽预览和无障碍播报。
+- 只做 **Block**（分区内 + 跨分区），不做 Section 拖拽：对应维护者原话里的痛点，且 `updateSection` 要求同时回传 `title`，两套拖拽上下文会让无障碍与 E2E 面翻倍。服务端能力保留，界面不开放。（2026-09-15 收窄：跨分区拖拽经维护者裁定**不做**，理由见 ADR-0010 决定 7——分区是「关注方面」的语义容器、区块是分区内的内容细分；跨分区重新归类保留区块编辑条的「移到」下拉框作为显式入口，维护者同日裁定保留。）
+- 落点解析放纯函数模块 `board-drag.ts` 并配单测；拖动中按指针位置判定落点，键盘拖拽回退到 dnd-kit 的碰撞结果。
+- 松手只发**一次** `moveBlock`；不按拖动过程逐步发命令（避免半途状态与大量请求）。
+- 顺手修掉一处既有缺陷：区块「下移」按钮的禁用条件原为 `index === block.position`（数组下标与 position 混用），现在用「是否已在本分区最后一位」判断。
+
+**维护者实测缺陷修复（2026-09-15，同日两轮）**：
+
+*第一轮：落点下标口径用错。* 维护者真人拖拽发现「把 A 拖到 B 下方，结果插到了 C 与 D 之间」。根因：服务端 `moveBlock` 的 `position` 是「**先移除被拖区块**、再在目标分区剩余区块之间插入」的下标（`PrismaCosmosRepository.moveBlock` 先 `filter` 掉被拖区块再 `splice`），而客户端传的是**包含被拖区块的全量数组下标**，向下拖时永远比正确值大 1。这一轮新增纯函数 `dropPositionFor`（按「指针在目标上半 → 插前、下半 → 插后」再加移除位移）修掉了算术，**但没有解决更根本的问题**：它仍然让客户端用指针几何自行判定落点，与服务端/预览各算一套（见第二轮）。
+
+*第二轮：两套判定（本轮返工的真正根因）。* 维护者继续实测，又发现两个现象并给出决定性线索——**「排序结果出错，但排序的预览结果却没有问题」**：① 拖 B 向下、指针靠近 D，落库成了 `[A,C,D,B]`，预览是 `[A,C,B,D]`；② 拖 B 向上、指针靠近 B 原位置，落库成了 `[A,B,C,D]`（no-op，看起来「拖不动」）。预览是 dnd-kit 按碰撞结果 `over` 算出来给用户看的，而提交走的是第一轮保留的指针几何，于是同一动作有两套判定、必然分叉。一次性复算确认旧公式在这两个场景分别得到 `A,C,D,B` 与 `A,B,C,D`，与维护者观察逐字吻合。修复：**删掉指针几何判定（含 `resolveDropTargetFromPointer`、`dropPositionFor`、`onDragMove`/pointerRef 全套），提交只使用 dnd-kit 的 `over`**，按 arrayMove 语义取目标区块下标；`board-drag.ts` 里留下「别再把几何判定加回来」的原因注释。回归护栏是一条**不变量用例**：对 12 组（被拖区块，落点区块）断言「本地落定结果 = arrayMove 预览」，即「所见即所得」结构性成立，而不是靠另算一套去逼近。
+
+*动画（同轮）：松手闪烁。* 维护者反馈排序动画「闪烁了一下」。原因有两处：其一，松手后 dnd-kit 先撤掉位移（画面回到旧顺序），要等服务端返回才跳成新顺序，中间多出一帧旧顺序；其二，`DragOverlay` 的落位回弹动画与已落定的布局打架。按维护者给出的第二个可接受形态修（「松手后预览直接成为实际结果，中间没有动画」）：新增纯函数 `applyLocalMove` 在 `boardCommands.moveBlock` 里**乐观应用**本地顺序（语义与服务端 `moveBlock` 一致，失败回滚并报错），并给 `DragOverlay` 加 `dropAnimation={null}`。选择第二个形态而不是「按曲线从旧位置动画到新位置」，是因为后者要在 dnd-kit 已持有 transform 的同一层上再叠一套 FLIP 动画，成本和回归面都更大；本地落定同样满足「没有中间态」。
+
+## 追加切片验证（区块拖拽排序，2026-09-15，实际运行）
+
+- `bun run typecheck` 全仓 0；`bun run test` **90 文件 / 540 用例**全绿；`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，本次改动文件 0 warning）。
+- focused：`apps/web/src/components/cosmos/board-drag.test.ts` **15/15 通过**——`resolveDropTarget` 5 例（落点取目标区块下标、首位、跨分区、隐藏区块仍占下标、原地/未知返回 null）+ **不变量 1 例**（12 组（被拖区块，落点区块）的本地落定结果都等于 arrayMove 预览）+ 两个实测场景各 1 例（B 落到 C 上得 `[A,C,B,D]`、B 落到 A 上得 `[B,A,C,D]`）+ `applyLocalMove` 6 例（同分区重排后 position 连续化、跨分区并重排两边、缺省目标分区、越界下标收敛、未知区块/分区原样返回）+ `findBlock` 2 例。**红证据**：一次性复算被删除的指针几何公式，两个场景分别得到 `A,C,D,B` 与 `A,B,C,D`，与维护者观察逐字吻合（该公式与临时脚本已删除，不作为资产保留）。
+- `bun run typecheck` 全仓 0；`bun run test` **90 文件 / 542 用例**全绿（`apps/web/src` 为 11 文件 / 71 用例，含组件实验室登记守卫 `registry.test.ts` 12 例）；`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，本次改动文件 0 warning）。
+- 浏览器产品 E2E：**20/20 通过**（本轮含已登记间歇用例 `splits a Story into successors and keeps a historical shell` 也通过，该用例的不稳定性不因本轮改变）。用例 `moves a block to the slot right below its drop target`：自建四个区块的分区，断言每个区块的拖动入口指向自己，并调 `moves` 命令验证「A 落到 B 下方」得到 `[B, A, C, D]`，刷新后顺序保持、上移/下移按钮仍可用。
+- 组件实验室浏览器 **13/13 通过**（新增 `board-sortable-blocks` 登记未破坏既有场景）；`bun run docs:check` 634 文件 `failures=[]`；`git diff --check` 干净；`bun install --frozen-lockfile` 通过（锁文件与 `apps/web/package.json` 一致）。
+- **拖拽手势本身仍未自动化**：坐标方案试了 6 轮都不可靠——看板区块高度从约 230px 到 2400px 不等（内容流与来源健康区块），指针拖拽要求起点与落点同时在视口内，而 `locator.boundingBox()` 内部会先 `scrollIntoViewIfNeeded()`，测量动作本身就把看板挪出视口（实测 scrollY 从 244 跳到 6815，`elementFromPoint` 全部落到 `MAIN` 上）。键盘路径能激活拖拽（Space 后拖动浮层出现），但「放下」按键未被 dnd-kit 键盘传感器接收，代码里没有可靠的替代动作，就没有把这个用例留在套件里（本仓库已有两条登记在案的间歇用例，不再新增一条不稳定的）。**落点语义与本地落定已有单测，服务端往返有 E2E，但「按住拖动松手」这一步仍需真人复核**——本切片的两轮缺陷都来自真人实测，且都是自动化没有覆盖到的那一段。
+- 服务端排序语义此前已有覆盖，无需重复：[`packages/storage-prisma/src/board-domain.test.ts`](../../../packages/storage-prisma/src/board-domain.test.ts) 覆盖跨分区移动 + 两侧 position 连续化。
+- 未运行：Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
+
 ## Follow-ups
 
 - **搜索 FTS5 查询未转义（2026-09-15 发现，未修）**：`packages/storage-prisma/src/repository/search.ts` 把 `parsed.text` 原样放进 `entry_search MATCH ?`，用户搜索含 `-`、`"`、`*`、括号等 FTS5 语法字符的词会触发 SQLite 语法错误 → search 端点返回 500（实测：`GET /api/v1/search?text=绝不匹配-212c82&limit=5`）。这是既有缺陷，与看板切片无关；修法（把用户输入转成短语查询/转义引号）需要单独确认边界并补回归测试。
-- **拖拽排序（维护者 2026-09-15 定为必做）**：真人验收明确「用上下按钮排序让人烦躁、容易丢失注意点」，因此 ADR-0010 里后置的拖拽排序不再是可选。落地时需要记录拖拽库与可访问性取舍（键盘/按钮路径必须保留），并给 ADR-0010 加注记。
+- **拖拽排序（维护者 2026-09-15 定为必做）**：**已实现**（2026-09-15，见「追加切片（2026-09-15）：区块拖拽排序」）。ADR-0010 决定 6 已加注记并新增决定 7。
 - 子切片 B 已完成；本 Task 已在 `2ea8939` 合入并推送 `master`。
 - 后续 Phase 2 切片候选：Story split 完整生命周期、`evidence_for`/`mentions`、自动聚类/Knowledge Workflow、Entity merge/dedup。
 - 后续能力：Phase 4 Spotlight policy（为 `SpotlightPlacement` 加列与写入路径）、Phase 3 Workspace/Artifact Block、Read State「未读」过滤。

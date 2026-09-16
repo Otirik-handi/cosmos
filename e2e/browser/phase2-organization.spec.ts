@@ -566,3 +566,95 @@ test("searches a term carrying FTS5 syntax characters without failing", async ({
 
     expect(consoleErrors).toEqual([]);
 });
+
+/**
+ * 拖动按钮必须指向预期的那个区块；不匹配说明定位器或页面结构不是假设的样子。
+ */
+async function assertHandleBlock(
+    handle: import("@playwright/test").Locator,
+    expectedBlockId: string,
+): Promise<void> {
+    const owner = await handle.evaluate(
+        (element) => element.closest("[data-block-id]")?.getAttribute("data-block-id") ?? null,
+    );
+    expect(owner).toBe(expectedBlockId);
+}
+
+test("moves a block to the slot right below its drop target", async ({ page }) => {
+    test.setTimeout(300_000);
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "编辑看板" }).click();
+    await expect(page.getByRole("button", { name: "完成编辑" })).toBeVisible();
+
+    const blockIds = (section: import("@playwright/test").Locator) =>
+        section.evaluate((element) =>
+            [...element.querySelectorAll("[data-block-id]")].map((block) =>
+                block.getAttribute("data-block-id"),
+            ),
+        );
+
+    // 独立分区 + 四个小区块：顺序断言不受其它 spec 留在看板上的区块影响。
+    const sectionTitle = `拖拽验收-${randomUUID().slice(0, 6)}`;
+    await page.getByLabel("新分区标题").fill(sectionTitle);
+    await page.getByRole("button", { name: "添加分区" }).click();
+    const section = page.getByRole("region", { name: sectionTitle });
+    await expect(section).toBeVisible();
+    for (let index = 0; index < 4; index += 1) {
+        await section.getByLabel("新增区块类型").selectOption("collection");
+        await section.getByRole("button", { name: "添加区块" }).click();
+        await expect(section.locator('[data-block-type="collection"]')).toHaveCount(index + 1);
+    }
+    const [first, second, third, fourth] = await blockIds(section);
+    expect(await blockIds(section)).toEqual([first, second, third, fourth]);
+
+    // 每个区块都有独立拖动入口，且指向它自己（与上移/下移按钮并存）。
+    for (const blockId of [first, second]) {
+        await assertHandleBlock(
+            page.locator(`[data-block-id="${blockId}"] button[aria-label^="拖动排序"]`),
+            blockId!,
+        );
+    }
+
+    // 回归：把 A 拖到 B 下方应落在 B 与 C 之间。
+    // `dropPositionFor`（board-drag.test.ts 钉住）对该场景算出 position=1；这里确认真实
+    // 服务端在该 position 上得到 [B, A, C, D]。旧口径把「全量下标」当 position 用，会
+    // 得到 [B, C, A, D]——即用户报告的「插到 C 和 D 之间」。
+    const moved = await page.evaluate(async (blockId) => {
+        const response = await fetch(`/api/v1/board-blocks/${blockId}/moves`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // 省略 sectionId 表示留在原分区，只改位置（合同里 sectionId 可选）。
+            body: JSON.stringify({ position: 1 }),
+        });
+        return { ok: response.ok, status: response.status, body: await response.json() };
+    }, first);
+    expect(moved.ok, `moves 返回 ${moved.status}`).toBe(true);
+    const tree = moved.body as { sections: { blocks: { id: string }[] }[] };
+    const reordered = tree.sections.find((entry) =>
+        entry.blocks.some((block) => block.id === first),
+    );
+    expect(reordered?.blocks.map((block) => block.id)).toEqual([second, first, third, fourth]);
+
+    // 界面读的是同一份服务端配置：刷新后顺序保持不变。
+    await page.reload();
+    await page.getByRole("button", { name: "编辑看板" }).click();
+    await expect
+        .poll(() => blockIds(page.getByRole("region", { name: sectionTitle })))
+        .toEqual([second, first, third, fourth]);
+
+    // 拖拽不是唯一排序路径：上移/下移按钮仍然保留可用（按钮路径不移除）。
+    await expect(
+        page
+            .getByRole("region", { name: sectionTitle })
+            .locator('[data-block-type="collection"]')
+            .last()
+            .getByRole("button", { name: /^上移区块/ }),
+    ).toBeEnabled();
+
+    expect(consoleErrors).toEqual([]);
+});

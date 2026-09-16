@@ -32,6 +32,7 @@ import {
     renderTopicPanelLab,
     renderEntityPanelLab,
     renderBoardViewLab,
+    renderBoardBlockListLab,
 } from "./product-fixtures";
 
 import type {LabComponentDefinition, LabControlDefinition, LabProps} from "./types";
@@ -609,6 +610,22 @@ export const labComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderBoardViewLab,
+    },
+    {
+        id: "board-sortable-blocks",
+        label: "BoardBlockList",
+        category: "Cosmos",
+        modulePath: "components/cosmos/board-sortable-blocks.tsx",
+        defaultSceneId: "default",
+        controls: [
+            control("state", "State", "select", "default", ["default", "unknown-block"]),
+        ] as const satisfies readonly LabControlDefinition[],
+        scenes: [
+            {id: "default", label: "Default", props: {state: "default"}},
+            {id: "unknown-block", label: "Unknown block", props: {state: "unknown-block"}},
+        ],
+        tokens: sharedTokens,
+        render: renderBoardBlockListLab,
     },
     {
         id: "theme-switcher",
