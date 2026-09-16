@@ -8,6 +8,7 @@ import {
 import {
     type BoardCommands,
 } from "@/components/cosmos/board-view";
+import { applyLocalMove } from "@/components/cosmos/board-drag";
 import {
     client,
     readError,
@@ -66,7 +67,21 @@ export function useBoardWorkspace(ctx: WorkspaceContext, storyApi: StoryApi, top
             }
         },
         moveBlock: async (blockId, sectionId, position) => {
-            setBoard(await client.moveBoardBlock(blockId, { sectionId, position }));
+            // 乐观应用：松手后本地顺序立刻落定，避免先显示旧顺序、等服务端返回后再跳到
+            // 新顺序（实测的闪烁）。服务端返回的树随后覆盖它，失败则回滚并报错。
+            ctx.setError(null);
+            const previous = board;
+            if (previous) {
+                setBoard(applyLocalMove(previous, blockId, sectionId, position));
+            }
+            try {
+                setBoard(await client.moveBoardBlock(blockId, { sectionId, position }));
+            } catch (caught) {
+                if (previous) {
+                    setBoard(previous);
+                }
+                ctx.setError(readError(caught));
+            }
         },
         setBlockVisibility: async (blockId, visible) => {
             setBoard(await client.setBoardBlockVisibility(blockId, { visible }));

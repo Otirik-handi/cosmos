@@ -23,6 +23,7 @@ import type {
 import { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { BoardView } from "@/components/cosmos/board-view";
+import { BoardBlockList } from "@/components/cosmos/board-sortable-blocks";
 import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {RunControl} from "@/components/cosmos/run-control";
@@ -731,8 +732,7 @@ const labBoardClient = Object.assign(new HttpCosmosClient({ baseUrl: "" }), {
     }),
 });
 
-export function renderBoardViewLab(props: LabProps) {
-    const state = optionProp(props, "state", "default", ["default", "unknown-block"] as const);
+function buildBoardFixture(state: "default" | "unknown-block"): BoardDetail {
     const timestamp = fixtureTimestamp;
     const hotBlock: BoardBlock = {
         id: "block-fixture-hot",
@@ -776,7 +776,7 @@ export function renderBoardViewLab(props: LabProps) {
         createdAt: timestamp,
         updatedAt: timestamp,
     };
-    const board: BoardDetail = {
+    return {
         id: "board-fixture",
         name: "默认看板",
         description: null,
@@ -805,6 +805,31 @@ export function renderBoardViewLab(props: LabProps) {
         createdAt: timestamp,
         updatedAt: timestamp,
     };
+}
+
+/** 拖拽排序的实验室场景：真实 DndContext，命令回调只记录不写服务端。 */
+export function renderBoardBlockListLab(props: LabProps) {
+    const state = optionProp(props, "state", "default", ["default", "unknown-block"] as const);
+    const board = buildBoardFixture(state);
+    const section = board.sections[1];
+    return (
+        <BoardBlockList
+            board={board}
+            sectionId={section.id}
+            blocks={section.blocks}
+            onMoveBlock={async () => undefined}
+            renderBlock={(block) => (
+                <div className="rounded-sm border bg-card px-3 py-2 text-sm">
+                    {block.type}（合成区块内容）
+                </div>
+            )}
+        />
+    );
+}
+
+export function renderBoardViewLab(props: LabProps) {
+    const state = optionProp(props, "state", "default", ["default", "unknown-block"] as const);
+    const board = buildBoardFixture(state);
     return (
         <BoardView
             board={board}
@@ -821,7 +846,7 @@ export function renderBoardViewLab(props: LabProps) {
                 purpose: "合成 Topic",
                 scope: null,
                 memberCount: 3,
-                updatedAt: timestamp,
+                updatedAt: fixtureTimestamp,
             }]}
             openingTopicId={null}
             onOpenTopic={() => undefined}

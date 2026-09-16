@@ -195,10 +195,22 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    三种自取数 Block 都按绑定值重挂载（避免 effect 内同步 setState），取数失败或引用悬空只降级占位。未知
    Block type 与悬空引用显示占位文案，不影响其它 Block。
 20. **看板编辑与人工 Spotlight**：看板工具条提供 Board 切换下拉、编辑模式开关与新建看板；
-   编辑模式下分区支持改名/上移/下移/删除，区块支持上移/下移/隐藏/复制/删除/跨分区移动，
+   编辑模式下分区支持改名/上移/下移/删除，区块支持拖拽排序（分区内、跨分区）/上移/下移/隐藏/复制/删除/跨分区移动，
    添加区块时 `feed` 可选绑定 Saved View、`collection` 可选绑定收藏夹（都可先建为未绑定态），
    区块配置可改绑定与条数（写命令统一用返回的 `BoardDetail` 刷新当前树）。Story/Topic 面板提供“固定到看板热点区”
    （`client.pinSpotlight` 到当前 Board），成功后递增 `refreshToken` 触发 Spotlight 区块重新拉取。
+21. **区块拖拽排序**：编辑模式下每个区块带独立拖动按钮（`拖拽排序 <类型>`），用 `@dnd-kit` 的
+   `PointerSensor`（4px 激活阈值，避免点编辑控件时误触）与 `KeyboardSensor`（聚焦拖动按钮后
+   Space 抓取、方向键移动、Space 放下）。提交落点**只使用 dnd-kit 的 `over`**：拖动期间其它区块
+   让位的预览就是按它算的，提交必须用同一个信号，否则同一动作会出现两套判定（实测过：预览
+   `[A,C,B,D]`、落库 `[A,C,D,B]`，以及向上拖时指针靠近原位置被算成 no-op）。落点按 arrayMove
+   语义（把被拖区块移到目标区块当前下标）翻译成一次
+   `client.moveBoardBlock(blockId, { sectionId, position })`；服务端 `position` 是「先移除被拖区块、
+   再在剩余区块之间插入」的下标，`moveBlock` 语义与该口径等价。松手时先按同一语义在本地落定
+   （`applyLocalMove`）再等服务端返回覆盖，失败回滚；`DragOverlay` 关闭 `dropAnimation`，
+   使「预览 → 结果」之间不再插入旧顺序或浮层回弹。拖拽只改展示配置，不触碰底层内容
+   （ADR-0010 决定 1），且**只限分区内**：分区是「用户的一个关注方面」的语义容器、区块是分区内的
+   内容细分，跨分区搬区块不做（ADR-0010 决定 7）。上移/下移按钮与拖拽并存，键盘与按钮路径不回退。
 
 ## 输入
 
@@ -483,7 +495,8 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   展示空、configured（含定时）、untimed（启用无定时）和 disabled 状态及行内启停按钮，
   每行解释启用徽章、定时语义、上次运行与最近错误；
 - `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
-- `BoardView`：接收 `BoardDetail`、transport client、页面持有的 `feedSlot`/`sourceActionsSlot`（ReactNode 插槽）与 Topic 列表/打开回调，按 Section 顺序渲染可见 Block；首个可见 `feed` Block 渲染页面传入的完整阅读流，其余 Block 按 type 分发（`spotlight` 自取本 Board 的固定列表、`source-health` 渲染来源健康插槽、`topic-list` 渲染 Topic 列表、`collection` 自取收藏夹详情并渲染成员 Story）；未知 type 与悬空 `savedViewId`/`collectionId` 降级为占位，不阻断其它 Block（ADR-0010）。`editable` 打开编辑控件：分区标题/上移/下移/删除、区块上移/下移/隐藏/复制/删除/跨分区移动/条数与绑定配置、添加区块与添加分区；非编辑模式下隐藏的 Block 完全不渲染（编辑模式保留“已隐藏”占位以便恢复）；
+- `BoardView`：接收 `BoardDetail`、transport client、页面持有的 `feedSlot`/`sourceActionsSlot`（ReactNode 插槽）与 Topic 列表/打开回调，按 Section 顺序渲染可见 Block；首个可见 `feed` Block 渲染页面传入的完整阅读流，其余 Block 按 type 分发（`spotlight` 自取本 Board 的固定列表、`source-health` 渲染来源健康插槽、`topic-list` 渲染 Topic 列表、`collection` 自取收藏夹详情并渲染成员 Story）；未知 type 与悬空 `savedViewId`/`collectionId` 降级为占位，不阻断其它 Block（ADR-0010）。`editable` 打开编辑控件：分区标题/上移/下移/删除、区块拖拽排序/上移/下移/隐藏/复制/删除/跨分区移动/条数与绑定配置、添加区块与添加分区；非编辑模式下隐藏的 Block 完全不渲染（编辑模式保留“已隐藏”占位以便恢复）；
+- `BoardBlockList`（`components/cosmos/board-sortable-blocks.tsx`）：编辑模式下包裹一个 Section 的区块列表，提供 `DndContext`/`SortableContext`、拖动按钮、拖动浮层与落点解析；落点计算在 `board-drag.ts`（纯函数，含单测）。浏览模式不经过该组件；
 - `StoryPanel`：接收 `StoryDetail`、关闭回调与 `onUpdateStoryRevision`/`onMergeStory`
   回调，展示 revision/observation 元数据与来源成员/操作区；回调由宿主注入（真实页
   面调用 transport client，组件实验室用 stub，不发 Product API 请求）。

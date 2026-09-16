@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import { BoardBlockList } from "./board-sortable-blocks";
+
 const BLOCK_TYPE_LABELS: Record<string, string> = {
     feed: "阅读流",
     spotlight: "热点",
@@ -115,7 +117,7 @@ export function BoardView({
     return (
         <div className="flex flex-col gap-10">
             {board.sections.map((section, sectionIndex) => {
-                const visibleBlocks = section.blocks.filter((block) => block.visible);
+                const hasVisibleBlock = section.blocks.some((block) => block.visible);
                 return (
                     <section
                         key={section.id}
@@ -137,45 +139,24 @@ export function BoardView({
                                 </h2>
                             )}
                         </div>
-                        {visibleBlocks.length === 0 && !editable ? (
+                        {!hasVisibleBlock && !editable ? (
                             <BlockPlaceholder text="该分区还没有可见区块。" />
                         ) : (
-                            section.blocks.map((block, blockIndex) => (
-                                <div
-                                    key={block.id}
-                                    data-block-id={block.id}
-                                    data-block-type={block.type}
-                                    className={block.visible ? "" : "opacity-60"}
-                                >
-                                    {editable && commands ? (
-                                        <BlockEditor
-                                            block={block}
-                                            index={blockIndex}
-                                            sections={board.sections}
-                                            commands={commands}
-                                            savedViews={savedViews}
-                                            collections={collections}
-                                        />
-                                    ) : null}
-                                    {block.visible ? (
-                                        <BoardBlockContent
-                                            block={block}
-                                            client={client}
-                                            boardId={board.id}
-                                            sourceActionsSlot={sourceActionsSlot}
-                                            savedViews={savedViews}
-                                            topics={topics}
-                                            openingTopicId={openingTopicId}
-                                            onOpenTopic={onOpenTopic}
-                                            onOpenStory={onOpenStory}
-                                            refreshToken={refreshToken}
-                                        />
-                                    ) : editable ? (
-                                        // 隐藏只影响浏览视图；编辑模式保留占位，便于恢复。
-                                        <BlockPlaceholder text={`已隐藏：${blockTypeLabel(block.type)}`} />
-                                    ) : null}
-                                </div>
-                            ))
+                            <BlockList
+                                board={board}
+                                section={section}
+                                editable={editable}
+                                commands={commands}
+                                client={client}
+                                sourceActionsSlot={sourceActionsSlot}
+                                savedViews={savedViews}
+                                collections={collections}
+                                topics={topics}
+                                openingTopicId={openingTopicId}
+                                onOpenTopic={onOpenTopic}
+                                onOpenStory={onOpenStory}
+                                refreshToken={refreshToken}
+                            />
                         )}
                         {editable && commands ? (
                             <AddBlockForm
@@ -192,6 +173,98 @@ export function BoardView({
                 <AddSectionForm commands={commands} />
             ) : null}
         </div>
+    );
+}
+
+/**
+ * 分区内的区块渲染。编辑模式走 `BoardBlockList`，浏览模式保持原来的纯渲染——
+ * 拖拽只在编辑模式存在，浏览视图不多包一层拖动容器。
+ */
+function BlockList({
+    board,
+    section,
+    editable,
+    commands,
+    client,
+    sourceActionsSlot,
+    savedViews,
+    collections,
+    topics,
+    openingTopicId,
+    onOpenTopic,
+    onOpenStory,
+    refreshToken,
+}: {
+    board: BoardDetail;
+    section: BoardDetail["sections"][number];
+    editable: boolean;
+    commands?: BoardCommands;
+    client: HttpCosmosClient;
+    sourceActionsSlot: ReactNode;
+    savedViews: readonly SavedView[];
+    collections: readonly CollectionSummary[];
+    topics: readonly TopicSummary[];
+    openingTopicId: string | null;
+    onOpenTopic: (topicId: string) => void;
+    onOpenStory: (storyId: string) => void;
+    refreshToken: number;
+}) {
+    const renderContent = (block: BoardBlock): ReactNode =>
+        block.visible ? (
+            <BoardBlockContent
+                block={block}
+                client={client}
+                boardId={board.id}
+                sourceActionsSlot={sourceActionsSlot}
+                savedViews={savedViews}
+                topics={topics}
+                openingTopicId={openingTopicId}
+                onOpenTopic={onOpenTopic}
+                onOpenStory={onOpenStory}
+                refreshToken={refreshToken}
+            />
+        ) : editable ? (
+            // 隐藏只影响浏览视图；编辑模式保留占位，便于恢复。
+            <BlockPlaceholder text={`已隐藏：${blockTypeLabel(block.type)}`} />
+        ) : null;
+
+    if (editable && commands) {
+        return (
+            <BoardBlockList
+                board={board}
+                sectionId={section.id}
+                blocks={section.blocks}
+                onMoveBlock={commands.moveBlock}
+                renderBlock={(block, index) => (
+                    <>
+                        <BlockEditor
+                            block={block}
+                            index={index}
+                            total={section.blocks.length}
+                            sections={board.sections}
+                            commands={commands}
+                            savedViews={savedViews}
+                            collections={collections}
+                        />
+                        {renderContent(block)}
+                    </>
+                )}
+            />
+        );
+    }
+    return (
+        <>
+            {section.blocks.map((block) => (
+                <div
+                    key={block.id}
+                    data-block-id={block.id}
+                    data-block-type={block.type}
+                    className={block.visible ? "" : "opacity-60"}
+                >
+                    {renderContent(block)}
+                </div>
+            ))}
+        </>
     );
 }
 
@@ -262,6 +335,7 @@ function SectionEditor({
 function BlockEditor({
     block,
     index,
+    total,
     sections,
     commands,
     savedViews,
@@ -269,6 +343,7 @@ function BlockEditor({
 }: {
     block: BoardBlock;
     index: number;
+    total: number;
     sections: BoardDetail["sections"];
     commands: BoardCommands;
     savedViews: readonly SavedView[];
@@ -304,7 +379,7 @@ function BlockEditor({
                 <Button
                     size="xs"
                     variant="outline"
-                    disabled={index === block.position}
+                    disabled={index === total - 1}
                     aria-label={`下移区块 ${blockTypeLabel(block.type)}`}
                     onClick={() => void commands.moveBlock(block.id, block.sectionId, index + 1)}
                 >
