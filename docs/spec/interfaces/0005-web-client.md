@@ -83,6 +83,17 @@ Asset download 中未被 client 封装的部分不由它承担。
   条目（来源、标题、关系类型、理由），支持解除与从最近条目下拉添加；Story 成员列表里
   每条成员还会显示它作为证据关联到的其它 Story（`EntryDetail.relatedStories`），这是反向
   视图、不额外发请求（ADR-0011）。
+- **Story 当前表示**：面板的事件时间行与关键事实块来自 `StoryDetail.story.timeRange`/`keyFacts`，
+  纯客户端投影，不新增读合同。事件时间按本地时刻显示到分钟，任一端只有原文时显示原文并标注
+  「不精确」，两项都空则不渲染该行。关键事实按保存顺序列出并带出处标题；`entryId` 不在当前
+  候选列表里（条目已删除）时显示「出处已删除」。
+- **Story 表示编辑**：时间范围与关键事实和标题/类型/subtype 同属「编辑 Story 表示」表单（仅
+  非历史壳渲染）。每个端点有「未定 / 准确时刻 / 只有原文（不精确）」三种互斥填法：准确时刻走
+  `datetime-local`（存 ISO 秒精度），原文模式填原文再选天/月/年精度（按本地粒度起点算下界、
+  `confidence: "uncertain"`）。两端都空是未定；只填结束、或精确模式下结束早于开始都在本地被拒
+  且不发请求。关键事实逐行编辑，可新增/上移下移/删除并逐条选出处（先列本 Story 成员，再列
+  其它条目）；条数上限由合同把关，保存被拒时把错误显示在面板上。提交经
+  `HttpCosmosClient.updateStoryRevision`，发送前按命令 schema parse。
 
 ## 外部行为
 首次挂载时页面将 `loading=true`，并行调用 `client.feed()`（或 active search）和
@@ -131,8 +142,10 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    只留空列表）、最新正文、Entry id、Revision badges 与 Observation badges。
 9. **Story 编排**：面板“Story 操作”区可编辑标题（`updateStoryRevision`，携带当前
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
-   （`mergeStories`）；成功后页面用返回的 StoryDetail 刷新面板。面板不直接发 API
-   请求，全部经 props 回调上抛。历史壳（`story.status === "split"`）不渲染这一区。
+   （`mergeStories`）；标题/类型/subtype 与时间范围、关键事实在同一个「编辑 Story 表示」
+   表单里提交，两项表示每次全量带上（省略即清空由合同拥有），成功后页面用返回的 StoryDetail
+   刷新面板，并把表单对齐到刚落库的表示。面板不直接发 API 请求，全部经 props 回调上抛。
+   历史壳（`story.status === "split"`）不渲染这一区。
 10. **Story 拆分**：成员数 ≥2 的普通 Story 显示“拆分 Story”表单——2–5 个后继（标题 +
    kind，默认继承当前 Story 的标题与 kind），每个当前成员、证据条目、关联 Entity 与
    Topic 成员各有一个“留在历史壳 / 后继 N”下拉；提交前要求每个后继至少分到一个成员，
@@ -457,6 +470,11 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 - 时间线投影与相关内容组合：[`apps/web/src/lib/story-timeline.ts`](../../../apps/web/src/lib/story-timeline.ts)、
   [`related-stories.ts`](../../../apps/web/src/lib/related-stories.ts) 与同目录
   `story-timeline.test.ts`、`related-stories.test.ts`。
+- Story 表示的表单映射与显示口径：[`apps/web/src/lib/story-time-range-draft.ts`](../../../apps/web/src/lib/story-time-range-draft.ts)、
+  [`story-event-time.ts`](../../../apps/web/src/lib/story-event-time.ts) 与同目录
+  `story-time-range-draft.test.ts`、`story-event-time.test.ts`；渲染与编辑器在
+  [`components/cosmos/story-panel/representation.tsx`](../../../apps/web/src/components/cosmos/story-panel/representation.tsx)、
+  [`representation-form.tsx`](../../../apps/web/src/components/cosmos/story-panel/representation-form.tsx)。
 - 分类/Topic 浏览、时间线与相关内容的浏览器回归：
   [`e2e/browser/phase2-organization.spec.ts`](../../../e2e/browser/phase2-organization.spec.ts)。
 - class merge utility：[`apps/web/src/lib/utils.ts`](../../../apps/web/src/lib/utils.ts)。

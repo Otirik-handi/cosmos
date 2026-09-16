@@ -1,4 +1,4 @@
-import { contentKindSchema, sourceKindSchema, type ContentMetrics, type EntryDetail, type EntryPage, type EntryRelatedStory, type RevisionDetail, type Publisher, type StoryDetail, type TemporalValue, type TopicDetail, type LabelDetail } from "@cosmos/contracts";
+import { contentKindSchema, sourceKindSchema, type ContentMetrics, type EntryDetail, type EntryPage, type EntryRelatedStory, type RevisionDetail, type Publisher, type StoryDetail, type StoryKeyFact, type StoryTimeRange, type TemporalValue, type TopicDetail, type LabelDetail } from "@cosmos/contracts";
 import { type Prisma } from "@prisma/client";
 import { exactTemporalValue, parseCursor, parseJson } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers1 } from "./helpers-1.js";
@@ -240,6 +240,8 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                 revisionId: story.currentRevision.id,
                 title: story.currentRevision.title,
                 summary: story.currentRevision.summary,
+                timeRange: parseJson<StoryTimeRange>(story.currentRevision.timeRangeJson),
+                keyFacts: parseJson<StoryKeyFact[]>(story.currentRevision.keyFactsJson) ?? [],
                 status: shellReplacements.length > 0 ? "split" : "active",
                 replacedBy: shellReplacements.map((replacement) => ({
                     storyId: replacement.successorStoryId,

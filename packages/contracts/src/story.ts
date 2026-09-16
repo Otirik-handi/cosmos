@@ -1,10 +1,46 @@
 import { z } from "zod";
+import { temporalValueSchema } from "./base.js";
 import {
     entryDetailSchema,
     entryStoryLinkProvenanceSchema,
     entryStoryRelationTypeSchema,
     storyEvidenceSchema,
 } from "./entry-relation.js";
+
+// Story representation ceilings (ADR-0021 decision 3). They duplicate the
+// exported `storyKeyFactMaxCount` / `storyKeyFactMaxTextLength` of @cosmos/domain
+// on purpose: this package is bundled into the browser, and @cosmos/domain
+// statically imports node:crypto, so importing it here would break the Web build.
+// Both sides pin the numbers in their own tests.
+const storyKeyFactMaxCount = 20;
+const storyKeyFactMaxTextLength = 500;
+
+// Story time range reuses the Entry-side temporal semantics so precision and
+// "raw text only" survive on both sides; only `start` is required, and a range
+// whose end precedes its start is rejected (ADR-0021 decision 2). Comparison is
+// by instant, not by string: `exact` carries an offset.
+
+export const storyTimeRangeSchema = z.object({
+    start: temporalValueSchema,
+    end: temporalValueSchema.nullable(),
+}).refine((value) => {
+    if (!value.start.exact || !value.end?.exact) {
+        return true;
+    }
+    return Date.parse(value.end.exact) >= Date.parse(value.start.exact);
+}, "Story time range end must not precede its start.");
+
+export type StoryTimeRange = z.infer<typeof storyTimeRangeSchema>;
+
+// One ordered key fact plus its optional single source; the array order is the
+// display order and a missing source is a legitimate value (ADR-0021 decision 3).
+
+export const storyKeyFactSchema = z.object({
+    text: z.string().trim().min(1).max(storyKeyFactMaxTextLength),
+    entryId: z.string().trim().max(300).nullable().default(null),
+});
+
+export type StoryKeyFact = z.infer<typeof storyKeyFactSchema>;
 
 export const storyEntitySummarySchema = z.object({
     entityId: z.string(),
@@ -62,6 +98,11 @@ export const storyDetailSchema = z.object({
         revisionId: z.string(),
         title: z.string(),
         summary: z.string().nullable(),
+        // The other two of the four current-representation fields (ADR-0021
+        // decision 1). Optional on read so payloads written before the
+        // extension still parse; the repository always emits both.
+        timeRange: storyTimeRangeSchema.nullish(),
+        keyFacts: z.array(storyKeyFactSchema).nullish(),
         // "split" means this Story is a historical shell: it keeps its id,
         // revisions and history but no id redirects to a single successor
         // (ADR-0012 decision 1).
@@ -99,6 +140,10 @@ export const updateStoryRevisionCommandSchema = z.object({
     summary: z.string().trim().max(5000).nullish(),
     kind: z.enum(["event", "document", "media", "thread"]),
     subtype: z.string().trim().max(200).nullish(),
+    // Full-representation submit: omitting an extension clears it, there is no
+    // partial update (ADR-0021 decision 5).
+    timeRange: storyTimeRangeSchema.nullish(),
+    keyFacts: z.array(storyKeyFactSchema).max(storyKeyFactMaxCount).nullish(),
     actor: z.string().trim().min(1).max(100).nullish(),
     reason: z.string().trim().min(1).max(1000).nullish(),
 });
@@ -124,6 +169,10 @@ export const storySplitSuccessorSchema = z.object({
     summary: z.string().trim().max(5000).nullish(),
     kind: z.enum(["event", "document", "media", "thread"]),
     subtype: z.string().trim().max(200).nullish(),
+    // Each successor expresses its own representation; the shell's values are
+    // never copied over (ADR-0021 decision 6).
+    timeRange: storyTimeRangeSchema.nullish(),
+    keyFacts: z.array(storyKeyFactSchema).max(storyKeyFactMaxCount).nullish(),
     entryIds: z.array(z.string().trim().min(1).max(300)).min(1).max(500),
     evidenceEntryIds: z.array(z.string().trim().min(1).max(300)).max(500).default([]),
     entityIds: z.array(z.string().trim().min(1).max(300)).max(500).default([]),

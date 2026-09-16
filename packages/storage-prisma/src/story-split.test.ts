@@ -63,6 +63,15 @@ describe("Story split", () => {
                         summary: "A 的摘要",
                         kind: "event",
                         subtype: null,
+                        timeRange: {
+                            start: {
+                                exact: "2026-09-14T00:00:00.000Z",
+                                exactPrecision: "second",
+                                fallback: null,
+                            },
+                            end: null,
+                        },
+                        keyFacts: [{ text: "A 的关键事实", entryId: "entry-a" }],
                         entryIds: ["entry-a"],
                         evidenceEntryIds: ["entry-d"],
                         entityIds: [entityA],
@@ -113,6 +122,10 @@ describe("Story split", () => {
             expect(successorA?.topics.map((membership) => membership.topicId)).toEqual([topicA]);
             expect(successorA?.favorited).toBe(false);
             expect(successorA?.labels).toEqual([]);
+            // Each successor expresses its own representation; the shell's is never
+            // copied over (ADR-0021 decision 6).
+            expect(successorA?.story.timeRange?.start.exact).toBe("2026-09-14T00:00:00.000Z");
+            expect(successorA?.story.keyFacts).toEqual([{ text: "A 的关键事实", entryId: "entry-a" }]);
 
             const successorB = await repository.story(split!.story.replacedBy[1]!.storyId);
             expect(successorB?.story).toMatchObject({ kind: "document", title: "事件 B", status: "active" });
@@ -120,6 +133,8 @@ describe("Story split", () => {
             expect(successorB?.evidence).toEqual([]);
             expect(successorB?.entities).toEqual([]);
             expect(successorB?.topics).toEqual([]);
+            expect(successorB?.story.timeRange ?? null).toBeNull();
+            expect(successorB?.story.keyFacts ?? []).toEqual([]);
 
             // The split is auditable and the successors got their initial Revision.
             const events = await prisma.domainEvent.findMany({

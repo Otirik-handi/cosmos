@@ -470,7 +470,7 @@ export function renderStoryPanelLab(props: LabProps) {
         props,
         "state",
         "revision",
-        ["revision", "empty", "split", "splittable", "legacy-subtype"] as const,
+        ["revision", "empty", "split", "splittable", "legacy-subtype", "representation"] as const,
     );
     const title = textProp(props, "title", "Cosmos fixture story");
     const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
@@ -534,6 +534,36 @@ export function renderStoryPanelLab(props: LabProps) {
             revisionId: "revision-fixture",
             title,
             summary: "A synthetic Story summary.",
+            // 时间范围与关键事实是 Story 当前表示的后两项（ADR-0021 决定 1）；
+            // 场景固定两端：一个准确时刻 + 一个只有原文的结束端，一条挂出处、
+            // 一条无出处、一条指回已不存在的条目，让详情与表单两条路径都能被看到。
+            timeRange: state === "representation"
+                ? {
+                    start: {
+                        exact: "2026-01-02T09:30:00.000Z",
+                        exactPrecision: "second",
+                        fallback: null,
+                    },
+                    end: {
+                        exact: null,
+                        exactPrecision: null,
+                        fallback: {
+                            raw: "昨天下午",
+                            lowerBound: "2026-01-02T00:00:00.000Z",
+                            precision: "day",
+                            timezone: null,
+                            confidence: "uncertain",
+                        },
+                    },
+                }
+                : null,
+            keyFacts: state === "representation"
+                ? [
+                    { text: "上下文窗口 1M", entryId: "entry-fixture" },
+                    { text: "第三方测评认为长文本仍会衰减", entryId: null },
+                    { text: "出处指向一条已经删除的信息条目", entryId: "entry-deleted-fixture" },
+                ]
+                : [],
             status: state === "split" ? "split" : "active",
             replacedBy: state === "split"
                 ? [
@@ -573,6 +603,10 @@ export function renderStoryPanelLab(props: LabProps) {
             onUpdateStoryRevision={async () => undefined}
             onMergeStory={async () => undefined}
             onSplitStory={async () => undefined}
+            entryCandidates={[
+                { id: "entry-fixture", title, sourceName: "Cosmos fixture", isMember: true },
+                { id: "entry-fixture-2", title: "A second fixture member", sourceName: "Cosmos fixture source 2", isMember: true },
+            ]}
             onLoadStoryUserState={async () => ({
                 favorite: true,
                 labels: [{ id: "label-fixture", name: "开发" }],

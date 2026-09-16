@@ -6,7 +6,7 @@
 
 ## 最后更新
 
-2026-08-16。
+2026-09-16。
 
 ## 组件定位
 
@@ -64,7 +64,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 - **Entry Revision** 是 Entry 的追加式内容快照；变化时 revision number 增加，当前指针移动到新快照。
 - **Asset** 是附着在修订上的媒体/附件持久投影；领域输入中的 bytes 在 application/storage 边界外置到 Blob 后才进入持久资产 metadata。
 - **Story** 是稳定、可编排的规范内容单元（ADR-0006）：一个 Story 承载多个 Entry 的主归属，Story 的展示内容通过版本化 StoryRevision 表达。domain 仍提供 `projectEntryToStory` 作为 ingest 自动创建默认单 Entry Story 的确定性门槛（id=`story:${entryId}`），跨来源归并/merge 由 storage 命令执行；domain 只产生纯函数与投影，不执行 Story 事务。
-- **StoryRevisionContent** 是 Story Revision 的展示字段集合（title、可空 summary、核心 kind、可空 subtype）；`fingerprintStoryRevision` 对这四个字段做确定性 SHA-256 指纹，用于判定“实质性变化”与 no-op。
+- **StoryRevisionContent** 是 Story Revision 的当前表示（ADR-0021）：四个基础展示字段（title、可空 summary、核心 kind、可空 subtype）加可选 `timeRange`（`{start: TemporalValue, end: TemporalValue|null}`）与有序 `keyFacts`（`{text, entryId|null}`，上限 `storyKeyFactMaxCount`=20、`storyKeyFactMaxTextLength`=500 字）；`normalizeStoryRepresentation` 是 fingerprint 与持久化共用的归一化（trim、丢弃空文本事实、起点无效则整段为 null）；`fingerprintStoryRevision` 只在扩展非空时追加扩展键，**扩展为空时摘要输入与升级前逐字节相同**，Revision 不做回填。
 - **TopicRevisionContent** 是 Topic Revision 的展示字段集合（title、purpose、可空 scope）；`fingerprintTopicRevision` 对这三个字段做确定性 SHA-256 指纹，用于判定 Topic 展示内容的“实质性变化”与 no-op（ADR-0007 决策 1）。Topic 成员角色、membership revision 与 merge 去重语义由 storage 命令执行，domain 只提供角色枚举与指纹纯函数。
 - **EntityRevisionContent** 是 Entity Revision 的展示字段集合（`name`、受管 `type`）；`fingerprintEntityRevision` 对这两个字段做确定性 SHA-256 指纹，用于判定 Entity 身份表示的“实质性变化”与 no-op（ADR-0008 决策 2）。Entity 名称别名、Story↔Entity/Entity↔Entity 的 provenance 语义由 storage 命令执行，domain 只提供类型枚举与指纹纯函数。
 - **targetTypes** 是用户组织对象的附加目标受管枚举（`story`/`entry`/`topic`），供 Label 附加与后续 Annotation 目标共用；读取侧未知值降级（ADR-0009 决策 1）。**favoriteTargetTypes** 是收藏标记的目标子集（`story`/`entry`）——Topic 本身已是长期容器，不作为收藏目标（ADR-0009 决策 3）。Label/Collection/Favorite 的注册、附加与成员关系由 storage 命令执行，domain 只提供枚举常量，不产生指纹。
@@ -75,7 +75,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 
 所有导出的函数都是同步纯函数，除 `createTemporalValue` 在未提供 now 时读取当前时钟外，不访问外部资源。Connector 先把各来源字段转换为本模型，再由 storage 用 external key 和 fingerprint 判断是否新建、重复或追加修订。
 
-`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段做摘要，`fingerprintTopicRevision` 只对 Topic 展示字段做摘要，`fingerprintEntityRevision` 只对 Entity 的 name/type 做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
+`createTemporalValue` 优先使用 exact；exact 无效时保留原始时间文本并创建 fallback。`deriveExternalKey` 先选稳定 externalId，再选 URL，最后用规范化字段生成 hash。`fingerprintEntryRevision` 对 Entry 修订内容字段做确定性摘要；`fingerprintStoryRevision` 只对 Story 展示字段与归一化后非空的扩展做摘要，`fingerprintTopicRevision` 只对 Topic 展示字段做摘要，`fingerprintEntityRevision` 只对 Entity 的 name/type 做摘要。`projectEntryToStory` 只生成八个字段的最小投影。
 
 ## 输入
 
