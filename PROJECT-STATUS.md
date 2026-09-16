@@ -47,7 +47,8 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **Phase 2 尾巴两项（2026-09-16）**：
 
-- **ORG-017（关键事实 + 时间范围）**：Proposal 与 ADR [`0021`](docs/adr/0021-story-key-facts-and-time-range-v1.md) 已接受，PRD §7.5、信息模型 §4.7 与 ADR-0006 注记已同步；实现在 worktree `feat/t10-story-representation`（base `085c217`）完成——域 + 持久化 + 合同 + API + transport + Web + `docs/spec`，含 forward-only 迁移（两个可空列、不回填老数据）。**完整验证证据、浏览器 20/21 的实测与两处待裁定事项（出处不做写入校验；两个规格文件贴治理警戒线）见 Task [`10`](.agents/tasks/10-story-domain/README.md) walkthrough 的 2026-09-16 两节**。未 commit、未 push、未合并；维护者先自行点验。
+- **ORG-017（关键事实 + 时间范围）：已合并并推送（2026-09-16）**。Proposal 与 ADR [`0021`](docs/adr/0021-story-key-facts-and-time-range-v1.md) 已接受，PRD §7.5、信息模型 §4.7 与 ADR-0006 注记已同步；实现提交 `545f9f4` + 流程文档 `7661f93`，`--no-ff` 合入 master `6809c0b` 并推送 `origin`。**维护者手动验收四条全部通过**（准确时刻显示、原文模式标「不精确」、事实顺序与出处、重复保存版本不变）。master 上重跑 `docs:check` **658 文件 0 失败**、`git diff --check` 干净；切片文件与跑过全部门禁的分支尖端逐字节一致。完整验证数字、浏览器 20/21 实测与两处待裁定事项（出处不做写入校验；两个规格文件已登记进基线）见 Task [`10`](.agents/tasks/10-story-domain/README.md) walkthrough 的两节。
+- **远端 CI 自 2026-09-09 起无运行记录**：`gh` 核验显示 master 最近一次 CI 运行停留在 2026-09-09（此后含 Task 14 合并与本切片的推送均未产生运行），工作流 `CI` 状态为 active。因此本切片**没有远端 CI 结论**；本地已发现**潜在门禁失败**（`--fail-on-new` 口径）：`.agents/tasks/14-board-section-block/README.md`（34.04 KB / 11.3k token，建议拆出 walkthrough）与 `docs/proposals/ui-copy-review-v1.md`（26.10 KB / 9.1k token，建议登记或拆分），两者均非本轮产生、处理方式待维护者决定。
 - **ING-006（跨来源重复/转载关系）**：Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) 已建、**未开工**，按顺序排在 ORG-017 之后。
 - **待裁定**：需求表 §7 仍有 **13 条标 `Phase 2` 而实际未交付或半交付**（两项已进流程，其余 11 条是否改标待定；此前只纠正过 ORG-021）。两项都按准入决策表先评审、后动代码。
 

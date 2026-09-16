@@ -158,3 +158,12 @@ robocopy <empty> .worktree/story-domain /MIR && rm -rf
 - 既有欠账（本切片未改）：`docs/spec/contracts/0001` 的实现锚点仍引用已不存在的 `packages/contracts/src/index.test.ts`（contracts 已拆成 story.ts/topic.ts 等分册），该节测试覆盖描述也与现状不符。
 - 未运行（本切片整体）：`bun run test:property`（独立配置，未单独运行）、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 - 未做（需维护者授权）：commit、push、合并 `master`、清理 worktree 与分支。
+
+## 2026-09-16：合并与推送（切片 4）
+
+- 维护者手动验收：四件事全部通过——准确时刻按本地时间显示、原文模式显示「不精确」、关键事实顺序与出处正确、重复保存后版本不变。这是本切片 UI 行为第一次经过真人确认（自动化用例只覆盖到同一批断言）。
+- 提交：worktree 分支提交 `545f9f4`（36 文件：代码 + `docs/spec` + `docs/testing` + 两个新 e2e 用例）；主工作区流程文档提交 `7661f93`（ADR-0021/0022、两份 Proposal、PRD §7.5/§7.4 注记、Task 10/26、治理基线增补、PROJECT-STATUS）。
+- 合并与推送：`--no-ff` 合入 master `6809c0b` 并推送 `origin`（`085c217..6809c0b`）。核对 `git diff 545f9f4 HEAD -- packages apps e2e docs/spec docs/testing` 为 **0 行**，即 master 上的切片文件与跑过全部门禁的分支尖端逐字节一致，因此分支上的 typecheck / 全量单测 / build / lint / 浏览器结论对 master 成立。
+- master 上实际重跑的门禁：`bun run docs:check` **658 文件 0 失败**；`git diff --check` 干净。未在 master 重跑 typecheck / 全量单测 / build（主工作区未安装依赖），依据是上面的逐字节一致。
+- **远端 CI 没有结论**：`gh` 核验显示 master 最近一次运行停留在 2026-09-09，此后的推送（含 Task 14 合并与本切片）**没有产生运行记录**，而工作流 `CI` 状态为 active。不能声称本切片过了远端 CI；这是仓库当前状态，不是本切片引入。
+- 未做：worktree `.worktree/t10-story-representation` 与分支 `feat/t10-story-representation` 保留（删除需另行授权）；`.agents/learning/` 仍未纳管。
