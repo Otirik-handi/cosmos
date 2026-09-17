@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-17。代码基线 `master` = `aab0748`：Task 27（Prisma CLI 候选位置解析）已合入并推送，CI 自 2026-09-15 起首次真正跑到 typecheck / 测试 / build 及其后的 E2E；G08（CI 门禁分区 + 本文件减负）在分支 `chore/g08-ci-gate-split-status-doc` 上进行。保留 3 个 worktree（`.worktree/t26-entry-duplicate-relations` 未开工、`.worktree/t27-prisma-cli-resolution` 已合入、`.worktree/g08-ci-gate-split-status-doc` 本轮），另有 3 个更早切片的孤儿残留目录未动，删除需另行授权。Phase 2 已收口（完成记录见分册索引首行）；2026-09-11 ~ 09-14 的 G01–G07 治理已收口并暂停，本轮新增 G08；Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-17。代码基线 `master` = `d5b378a`：Task 27（Prisma CLI 候选位置解析）与 G08（CI 门禁分区 + 本文件减负）均已合入并推送，CI 自 2026-09-15 起首次真正跑到 typecheck / 测试 / build 及其后的 E2E。`.worktree/` 下只剩 `.worktree/t26-entry-duplicate-relations`（另一执行者，未开工）与 3 个更早切片的孤儿残留目录（`fix-search-fts5`、`story-user-state-migration`、`t14-board-feed-blocks`），删除需另行授权。Phase 2 已收口（完成记录见分册索引首行）；2026-09-11 起的 G01–G08 治理已收口并暂停；Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
