@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-16。代码基线 `master` = `1dbaf90`（看板区块拖拽排序已合并），本轮状态文档随其后推送 `origin`；工作树干净，保留 2 个 worktree（`.worktree/t14-board-drag-sort` 本切片、`.worktree/ui-surface-ownership` 已作废分支），删除需另行授权。Phase 2 十四切片、平台面四块与**四条验收标准的真人验收**均已完成，Phase 2 收口；ORG-021 改标 Phase 3，收尾范围与真人验收产生的新方向见「当前下一步」。2026-09-11 ~ 09-14 的 G01–G07 代码与文档治理已收口并暂停，见分册索引首行。Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-17。代码基线 `master` = `aab0748`：Task 27（Prisma CLI 候选位置解析）已合入并推送，CI 自 2026-09-15 起首次真正跑到 typecheck / 测试 / build 及其后的 E2E；G08（CI 门禁分区 + 本文件减负）在分支 `chore/g08-ci-gate-split-status-doc` 上进行。保留 3 个 worktree（`.worktree/t26-entry-duplicate-relations` 未开工、`.worktree/t27-prisma-cli-resolution` 已合入、`.worktree/g08-ci-gate-split-status-doc` 本轮），另有 3 个更早切片的孤儿残留目录未动，删除需另行授权。Phase 2 已收口（完成记录见分册索引首行）；2026-09-11 ~ 09-14 的 G01–G07 治理已收口并暂停，本轮新增 G08；Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -9,6 +9,7 @@
 
 | 分册 | 覆盖范围 | 大小 |
 |---|---|---|
+| [history-2026-09-4.md](PROJECT-STATUS/history-2026-09-4.md) | 2026-09-16 ~ 2026-09-15(3 节) | 5.3 KB |
 | [history-2026-09-3.md](PROJECT-STATUS/history-2026-09-3.md) | 2026-09-15 ~ 2026-09-11(2 节,含 2026-08-24 被取代快照原文) | 7.8 KB |
 | [history-2026-09-1.md](PROJECT-STATUS/history-2026-09-1.md) | 2026-09-10 ~ 2026-09-09(9 节) | 22.7 KB |
 | [history-2026-09-2.md](PROJECT-STATUS/history-2026-09-2.md) | 2026-09-09 ~ 2026-09-08(6 节) | 15.5 KB |
@@ -29,27 +30,19 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - `SIGINT`、`SIGTERM` 和 Admin drain 共用 WorkerRuntime shutdown 状态机；正常退出码为 0，force/failed shutdown 为 1。
 - WorkflowRun 的 `sourceInstanceId`、`errorMessage` 是 durable projection 字段；来源查询同时考虑 legacy Run 和 WorkflowRun，不从 Kernel stateJson 猜错误文本。
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
+- 远端 `master` 当前**没有分支保护或 ruleset**（2026-09-17 用 GitHub API 核实，`branches/master/protection` 返回 404、rulesets 为空）：CI 只是事后信号，不阻止直接推送或合并；是否启用 required checks 待维护者决定。
 
 ## 当前下一步
 
-**Phase 2 收口（维护者 2026-09-15 判定）**：
+**Phase 2 收口与尾巴的完成记录（2026-09-15/16）**：Phase 2 收口四条（Story split 用户状态迁移与撤销、看板 UI 缺口与拖拽排序、四条主流程真人验收、ORG-021 改标）、ORG-017、远端 CI 收尾、`db:validate` 阻塞修复与界面职责重划的实现尝试作废，整段移入 [`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；本文只保留仍然有效的当前状态与决定。
 
-- **Story split 用户状态迁移与撤销**：**已合并**（`8388931`，2026-09-15）。Proposal 接受，稳定结论见 ADR [`0020`](docs/adr/0020-story-split-user-state-migration-v1.md)。无 Prisma schema 变更、无 migration；`StoryDetail` 不新增字段。worktree 与分支已按授权清理。
-- **看板 UI 缺口**：**Feed Block 独立取数已合并**。每个阅读流区块按自己的 `config.savedViewId` 取数（绑定后按视图条件调 `search`，未绑定渲染最新内容流，悬空引用渲染占位），交互式搜索与「已保存视图」归位到页面级 section（PRD §8.2）。维护者选定**方案 A**，ADR-0010 决定 5 对 `feed` 收窄为「悬空引用渲染占位」并已加注记。**拖拽排序已合并**（`1dbaf90`，2026-09-16）：编辑模式下分区内可拖拽排序，提交结果与拖动预览恒等（只用 dnd-kit 的碰撞结果，不再自算一套指针几何），松手无中间态，上移/下移按钮与键盘路径保留。**跨分区拖拽经维护者裁定为不做**——分区是「关注方面」的语义容器（人工智能、动漫、体育）、区块是分区内的内容细分，跨区拖拽会破坏这两层语义且高频易误触；跨分区重新归类保留区块编辑条的「移到」下拉框作为显式入口。理由与范围见 ADR-0010 决定 7。
-- **四条主流程真人验收**：**已完成**（维护者 2026-09-15 执行）。四条功能全部通过，PRD Phase 2 第三条验收标准的专问明确回答「删除 Block 后底层信息完好」。结论落在界面：Topic / Entity / 用户组织缺独立操作面板、功能堆在 Story 面板；看板排序按钮让人烦躁；UI 文案过于专业化。记录见 [`.agents/tasks/15-phase2-acceptance/manual-acceptance.md`](.agents/tasks/15-phase2-acceptance/manual-acceptance.md)。
-- **ORG-021 已改标 Phase 3**：登记在 PRD 主文档「分册勘误登记」，ORG-021 的需求文字、验收条件与既有切片注记均未改写。
+**真人验收产生的新方向（有效决定；细节在 Proposal）**：
 
-**真人验收产生的新方向**：
+- **界面职责重划**：Proposal [`docs/proposals/ui-surface-ownership-v1.md`](docs/proposals/ui-surface-ownership-v1.md) 已 **accepted**（维护者 2026-09-15 裁定六项）：三层分工冻结为「首页看 / 独立页面管 / Story 抽屉读」，新页面为 Topic 页、Entity 页、用户组织页，不含 Artifact/Workspace（Phase 3 另议）；接受时未冻结的细节（新建标签 / 新建收藏夹的不对称处理）与 2026-09-15 实现尝试作废的经过分别在 Proposal 的「已裁定（六项）」与 [`attempt-and-void-2026-09-15.md`](docs/proposals/ui-surface-ownership/attempt-and-void-2026-09-15.md)。PRD §8 / 架构 §11.4 / 新 ADR 与 Task 的更新在 `master` 上**尚未执行**。
+- **UI 文案审查**：Proposal [`docs/proposals/ui-copy-review-v1.md`](docs/proposals/ui-copy-review-v1.md) 维持 `reviewing`。判据 R0（展示名必须忠实反映概念的实际意义）已确立，术语对照表 v1（A–E 组；B 组只保留 `Story` 和 `Entity`）已由维护者逐行裁定、可直接执行，E 组等「分类」概念定义；仍未接受的是判据 R1–R5 本身、术语表落点与实施归属。改动需与 5 个浏览器 spec 里 205 处按文案定位的断言同批修改。**推论（未获维护者确认）**：UI 整体重做在前，逐屏文案批次应同批后置。
 
-- **界面职责重划**：Proposal [`docs/proposals/ui-surface-ownership-v1.md`](docs/proposals/ui-surface-ownership-v1.md) 已 **accepted**（维护者 2026-09-15 裁定六项）。三层分工冻结为「首页看 / 独立页面管 / Story 抽屉读」；Story 抽屉只留「读它 + 它自己的关系 + 阅读时顺手做的标记」；新页面为 Topic 页、Entity 页、用户组织页（一页内分区）；不含 Artifact/Workspace（Phase 3 另议）。接受时未冻结一个细节：「新建标签留在 Story 抽屉、新建收藏夹迁出」的不对称处理，实施前需复核。PRD §8 / 架构 §11.4 / 新 ADR 与 Task 的更新在 `master` 上**尚未执行**（分支上曾写过，随该分支作废）。
-  - **实现尝试已作废（2026-09-15）**：三个切片曾在分支 `feat/t25-ui-surface-ownership` 完成并本地合并，维护者本地查看后判定布局有问题（原话「整体布局不合理，导航栏出现在页面下方，侧边栏消失不见」）、要求回退，随后裁定**该分支作废**、**待以后重做 UI**、**当前开发重心以功能为主**；性质为「形状对，页面内部重排」，信息架构决定不变。UI 问题与重做前置条件见分册 [`attempt-and-void-2026-09-15.md`](docs/proposals/ui-surface-ownership/attempt-and-void-2026-09-15.md)；分支与 worktree 保留但不再使用，删除需另行授权。
-- **UI 文案审查**：Proposal [`docs/proposals/ui-copy-review-v1.md`](docs/proposals/ui-copy-review-v1.md) 维持 `reviewing`。维护者给出的判据（`Story`、`Entity` 等是架构术语，**展示名必须忠实反映概念的实际意义**）已确立为规则 R0；术语对照表 **v1 已逐行裁定**——A 组（已定用户词，直接执行：信息条目/话题/热点/时间线/信息流/产物/标签/收藏夹/已保存视图/批注/来源）、B 组（**只保留 `Story` 和 `Entity`**；`Revision`→版本、`kind`/`subtype`→类型/细分类型、`evidence_for`/`mentions`→引用关系）、C 组（六个角色替换为 核心内容/最新进展/背景资料/分析解读/不同看法/使用教程）、D 组（禁用内部词：历史壳/未注册/Spotlight 区块/Story ID 等）、E 组（「分类」概念定义前界面只用「标签」和「已保存视图」）。仍需维护者接受：判据 R1–R5 本身、术语表落点与实施归属（建议 G 系列治理任务）。改动需与 5 个浏览器 spec 里 205 处按文案定位的断言同批修改。**推论（未获维护者确认）**：UI 既然要整体重做，逐屏文案批次同样应等重做之后再排，否则要改两遍；术语表本身已裁定，重做时直接按它写即可。
+**Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
-**Phase 2 尾巴两项（2026-09-16）**：
-
-- **ORG-017（关键事实 + 时间范围）：已合并并推送（2026-09-16）**。Proposal 与 ADR [`0021`](docs/adr/0021-story-key-facts-and-time-range-v1.md) 已接受，PRD §7.5、信息模型 §4.7 与 ADR-0006 注记已同步；实现提交 `545f9f4` + 流程文档 `7661f93`，`--no-ff` 合入 master `6809c0b` 并推送 `origin`。**维护者手动验收四条全部通过**（准确时刻显示、原文模式标「不精确」、事实顺序与出处、重复保存版本不变）。master 上重跑 `docs:check` **658 文件 0 失败**、`git diff --check` 干净；切片文件与跑过全部门禁的分支尖端逐字节一致。完整验证数字、浏览器 20/21 实测与两处待裁定事项（出处不做写入校验；两个规格文件已登记进基线）见 Task [`10`](.agents/tasks/10-story-domain/README.md) walkthrough 的两节。
-- **远端 CI（2026-09-16 收尾）**：仓库远端是 fork `Otirik-handi/cosmos`（先前记的「CI 自 2026-09-09 无运行记录」是查错上游 `notnotype/cosmos`，已作废）。CI 自 2026-09-15 起一直停在「文档体积门禁」，该阻塞**已解除**：`.agents/tasks/14-board-section-block/README.md` 的过程记录拆入同目录 [`walkthrough.md`](.agents/tasks/14-board-section-block/walkthrough.md)（34.04 → 13.2 KB），`docs/proposals/ui-copy-review-v1.md` 登记进 `docs/doc-governance/docs-baseline.json`（定稿搬入 standards 后应缩回并移除该条）；本地按 CI 口径复跑 size 门禁 **PASS**、`docs:check` 659 文件 0 失败。
-- **CI 曾卡在 `bun run db:validate`（2026-09-16 诊断，Task [`27`](.agents/tasks/27-prisma-cli-resolution/README.md) 于 2026-09-17 修复并合入 master）**：`bun install --frozen-lockfile` 生成的布局不保证存在 `packages/storage-prisma/node_modules/prisma`（本机全新安装即复现），而 27 处引用（含 3 处文档描述）硬编码该路径 → `error: Module not found`；对齐 bun 1.4.2（`4a0a5a3`）无效，驱动因素是 lock（G02 `cc97d4c`、G03 `cb2b082`、Task 14 `a270079` 换 npmmirror 源并丢 `configVersion`）。修复 = `resolvePrismaCliPath()` 按候选位置解析（包内 / 工作区根 / bun store，找不到明确报错）替掉全部 27 处，行为等价、不动锁文件与 `BUN_VERSION`。已合入 master `613fe95`：run 35179029322 的 Quality / Node E2E / Windows smoke 绿，Browser E2E 首次红于已登记用例 `ingest.spec.ts:127`、重跑转绿（按 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 不以重跑结案）。
 - **ING-006（跨来源重复/转载关系）**：Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) 已建、**未开工**，按顺序排在 ORG-017 之后。
 - **需求表口径已改标（2026-09-16）**：按内容归属把 AUT-005、ING-013 改标 `Phase 3`，LIB-005、REC-008、BRD-004 改标 `Phase 4`（勘误登记见 PRD 主文档「分册勘误登记」）；§7 中仍标 `Phase 2` 的开放项为 **AUT-004、AUT-010、BRD-006、BRD-007、LIB-004、LIB-008、ING-009（余项）**——Phase 2 不再「字面无法完成」，而是明确留有这些尾巴。清理：已按授权删除 3 个 worktree 与 3 个分支（`t10-story-representation`、`t14-board-drag-sort`、`ui-surface-ownership`）；`.worktree/` 下另有 3 个更早切片的孤儿残留目录未动；`.agents/learning/` 按维护者指示不纳管。
 
@@ -57,7 +50,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - Entity merge/dedup；批注的正文片段字符级锚点；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）。原因：`search` 把用户输入原样交给 `entry_search MATCH ?`，`-` 在 FTS5 里是 NOT 运算符，`绝不匹配-212c82` 因此变成畸形查询、SQLite 返回语法错误。现按维护者裁定「全当字面文本」处理：输入按空白切词、每段作字面短语，多词保持 AND，无词可搜时退回无文本条件。**代价**：搜索框不再是 FTS5 查询接口，`OR`/`NEAR`/前缀通配不再是运算符。
-- **已知不稳定的测试用例**：`e2e/browser/phase2-organization.spec.ts` 的间歇失败（失败点漂移、单跑不复现，机制未查清，不能排除应用并发缺陷）与 `e2e/browser/ingest.spec.ts:127` 的 390px 溢出断言。症状、观察次数、当前判断与建议的处理次序统一登记在 [`docs/testing/known-unstable-cases.md`](docs/testing/known-unstable-cases.md)；维护者 2026-09-15 决定先登记、后续再处理。
+- **已知不稳定的测试用例**：`e2e/browser/phase2-organization.spec.ts` 的间歇失败（失败点漂移、单跑不复现，机制未查清，不能排除应用并发缺陷）与两处 390px 横向溢出断言（`ingest.spec.ts:127`、`theme.spec.ts:164`）。症状、观察次数、当前判断与建议的处理次序统一登记在 [`docs/testing/known-unstable-cases.md`](docs/testing/known-unstable-cases.md)；维护者 2026-09-15 决定先登记、后续再处理。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。

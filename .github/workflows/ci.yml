@@ -20,6 +20,23 @@ env:
     BUN_VERSION: 1.4.2
 
 jobs:
+    # 文档门禁与代码门禁拆成两个 job：这两条命令曾与代码步骤串在同一个 job 里，
+    # 文档一侧失败会让 typecheck / 单测 / property / lint / build 与三个
+    # needs: quality 的 E2E 全部被跳过（2026-09-15 的体积门禁与 09-17 的
+    # db:validate 阻塞即此路径，见 .agents/tasks/governance/G08-ci-gate-split-status-doc/）。
+    # docs 不跑 bun install：这两条命令只依赖 bun 与 python3。
+    docs:
+        name: Docs
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+            - run: bun run docs:check
+            - run: python3 scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new
+
     quality:
         name: Quality
         runs-on: ubuntu-latest
@@ -30,8 +47,6 @@ jobs:
               with:
                   bun-version: ${{ env.BUN_VERSION }}
             - run: bun install --frozen-lockfile
-            - run: bun run docs:check
-            - run: python3 scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new
             - run: bun run db:validate
             - run: bun run db:generate
             - run: bun run typecheck
