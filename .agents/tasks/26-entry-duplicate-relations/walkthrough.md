@@ -92,10 +92,13 @@
 - **未查清的部分（已写进登记条目，不用重跑结案）**：`:539` 失败现场 `role=status` 显示「搜索到 0 条结果。」，页面上却仍有 1 个 `article`（内容是刚录入来源的条目），10 秒内 23 次都读到 1。该 `article` 只能是页面级 `FeedBrowser` 渲染的（全仓只有它渲染 `<article>`），而 `onSearch` 在同一次状态更新里同时写 `activeSearch`、`feed` 与提示语，所以「提示语说 0 条、列表还留着上一次的内容」在代码上无法解释——**不排除应用存在搜索状态不一致**，但本轮没有证据把它归因到本切片，也没有为了让它过而放宽断言。
 - 未运行：Node 进程 E2E（`bun run test:e2e`）、`bun run test:property`、Docker/Compose、Windows Node smoke、真实公网来源验收。
 
-## 未做（需维护者授权）
+## 2026-09-17：手动验收、合并与推送
 
-- commit、push、合并 `master`、清理 worktree 与分支。
-- **`PROJECT-STATUS.md` 未在本分支改动**：它是 master 现状快照，按 ORG-017 的先例（`7661f93` 在主工作区随流程文档一起更新）留到合并时更新，避免分支上的状态文档声称尚未合并的事实。合并时需要更新的两处：Phase 2 尾巴两项里 ING-006 那条（未开工 → 已实现待验收）与「验证边界」的最近一次全量证据。
-- 合并前请维护者手动点验（建议顺序：打开一条双成员 Story → 在成员行标记「转载」→ 看两侧徽章方向相反 → 刷新后仍在 → 解除后消失）。
-- **等维护者裁定的一件事**：浏览器套件在本切片上 4/4 出现 `phase2-organization.spec.ts` 的失败（对照：移走新 spec 后 4 次里 3 次全绿；只做既有行为的诊断 spec 同样能触发）。是否接受「与新增功能无关、属既有共享栈不稳定」这一结论并放行，或先把该文件的共享栈隔离（每场景独立数据根）作为独立任务处理，由维护者决定。
-
+- **维护者手动验收通过**（2026-09-17），并明确选择 (a)：接受「浏览器套件的失败与新增功能无关」这一结论并放行。
+- 提交：worktree 分支提交 `a1f0be2`（45 文件：代码 + `docs/spec` + `docs/testing` + 两个新 e2e 用例 + Task 26 的 README/walkthrough）；`--no-ff` 合入 master `c308733`（`merge: cross-source duplicate relations inside Task 26`），推送 `origin`（`894f47f..c308733`）。worktree `.worktree/t26-entry-duplicate-relations` 与分支 `feat/t26-entry-duplicate-relations` 已按授权清理。
+- **合并期间 master 前进过**：本切片基于 `aab0748`，期间 master 落到 `894f47f`（Task 28「移动端宽度检查暂停 + ingest spec 重试幂等」与 G08「CI 门禁分区 + 状态文档减负」）。合并**无冲突**；45 个文件全部原样落到 master，比对本分支尖端与 master 后，只有两个文件因 master 各自也有改动而不同（`docs/testing/README.md` 1 行、`docs/testing/known-unstable-cases.md` 17 行，都是 Task 28 的追加），无本切片内容丢失。
+- **合并提交上重跑的门禁**（在 worktree 内检出 `c308733` 后运行，因为主工作区的 `node_modules` 与 lockfile 不一致、缺 vitest 可执行文件与 `@dnd-kit/*`，没有擅自修主工作区）：`bun run typecheck` 0；`bun run test` **99 文件 / 599 用例全绿**；`bun run build` 通过；`docs:check` 0 失败。主工作区在 `c308733` 上另跑：`docs:check` **680 文件 0 失败**、size 门禁 **PASS**（6 条基线内文件增长的 warning）、`git diff --check` 干净。
+- **远端 CI（2026-09-17）**：run [35192008223](https://github.com/Otirik-handi/cosmos/actions/runs/35192008223)（`c308733`）**五个 job 全绿**——Docs、Quality、**Browser E2E**、Windows Node smoke、Node process E2E。也就是说本地上文记录的浏览器套件失败**在远端 CI 上没有复现**（CI 配了 retries）；本轮据此不改上文证据，只把这条结果并列记录：本地的 4/4 失败与远端的全绿同时是事实，机制仍未查清。
+- **Task 28 已顺手修掉本切片记下的一个既有欠账**：`e2e/browser/ingest.spec.ts` 现在用随机来源名并把健康看板/阅读流断言限定在自己的来源卡片内，因此它不再依赖「必须排在套件最前」。本切片把新 spec 放到 `ingest` 之后是当时的必要处理，现已不再必要（不影响结论，故未回改文件名）。
+- 合并时同步的状态文档：`PROJECT-STATUS.md`（基线改 `c308733`、ING-006 那条改为已合并、验证边界换成本轮数字、worktree 清单更新）与 Task 26 的 README。
+- 合并后仍然开着的项不在此重复，见 [README.md](README.md) 的 Follow-ups。

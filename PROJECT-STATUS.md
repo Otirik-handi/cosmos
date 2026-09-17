@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-17。代码基线 `master` = `d5b378a`：Task 27（Prisma CLI 候选位置解析）与 G08（CI 门禁分区 + 本文件减负）均已合入并推送，CI 自 2026-09-15 起首次真正跑到 typecheck / 测试 / build 及其后的 E2E。`.worktree/` 下只剩 `.worktree/t26-entry-duplicate-relations`（另一执行者，未开工）与 3 个更早切片的孤儿残留目录（`fix-search-fts5`、`story-user-state-migration`、`t14-board-feed-blocks`），删除需另行授权。Phase 2 已收口（完成记录见分册索引首行）；2026-09-11 起的 G01–G08 治理已收口并暂停；Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-17。代码基线 `master` = `c308733`：Task 27（Prisma CLI 候选位置解析）、G08（CI 门禁分区 + 本文件减负）、Task 28（移动端宽度检查暂停 + ingest spec 重试幂等）与 Task 26（ING-006 跨来源重复/转载关系）均已合入并推送。`.worktree/` 下只剩 `.worktree/t28-mobile-gate-and-retry-isolation`（另一执行者）与 3 个更早切片的孤儿残留目录（`fix-search-fts5`、`story-user-state-migration`、`t14-board-feed-blocks`），删除需另行授权。Phase 2 已收口（完成记录见分册索引首行）；2026-09-11 起的 G01–G08 治理已收口并暂停；Phase 1 后置债仍按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -44,7 +44,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
-- **ING-006（跨来源重复/转载关系）**：Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) 已建、**未开工**，按顺序排在 ORG-017 之后。
+- **ING-006（跨来源重复/转载关系）：已合并并推送（2026-09-17）**。Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；实现提交 `a1f0be2`，`--no-ff` 合入 master `c308733` 并推送 `origin`（`894f47f..c308733`），worktree 与分支已按授权清理。**维护者手动验收通过**。合并后在合并提交上重跑：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`docs:check` 0 失败；主工作区另跑 `docs:check` **680 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净。**浏览器套件整套仍有失败**：`phase2-organization.spec.ts` 是登记在案的共享栈不稳定文件，本轮对照实验（只做既有行为的诊断 spec 同样触发、失败点在 `:103`/`:417`/`:539` 之间漂移）证明与新功能无关，维护者 2026-09-17 接受该结论并放行；完整证据与一条「机制未查清」的搜索状态观察见 Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) walkthrough 与 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
 - **需求表口径已改标（2026-09-16）**：按内容归属把 AUT-005、ING-013 改标 `Phase 3`，LIB-005、REC-008、BRD-004 改标 `Phase 4`（勘误登记见 PRD 主文档「分册勘误登记」）；§7 中仍标 `Phase 2` 的开放项为 **AUT-004、AUT-010、BRD-006、BRD-007、LIB-004、LIB-008、ING-009（余项）**——Phase 2 不再「字面无法完成」，而是明确留有这些尾巴。清理：已按授权删除 3 个 worktree 与 3 个分支（`t10-story-representation`、`t14-board-drag-sort`、`ui-surface-ownership`）；`.worktree/` 下另有 3 个更早切片的孤儿残留目录未动；`.agents/learning/` 按维护者指示不纳管。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
@@ -169,9 +169,10 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 验证边界（历史证据与当前未验证项分开）
 
-**当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移）；本节只留仍然有效的边界与缺口。
+**当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-16，Task 10 切片 4 的 worktree 内）：`bun run typecheck` 0、`bun run test` **93 文件 / 563 用例全绿**、`bun run lint:web` 0 error（83 条既有 warning）、`bun run build` 通过、浏览器产品 E2E 20/21（唯一失败为已登记的间歇用例）。master 上的切片文件与该分支尖端逐字节一致（`545f9f4`），故该结论对 master 成立；master 上另重跑 `docs:check` 658 文件 0 失败、`git diff --check` 干净。
+- 最近一次全量证据（2026-09-17，Task 26 的 worktree 内在**合并提交 `c308733` 上**重跑）：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`docs:check` 0 失败；`bun run lint:web` 0 error / 81 warning（Task 26 改动前 83）。主工作区在 `c308733` 上另跑 `docs:check` **680 文件 0 失败**、size 门禁 PASS（含 6 条基线内文件增长的 warning）、`git diff --check` 干净。主工作区的 `node_modules` 与 lockfile 不一致（缺 vitest 可执行文件与 `@dnd-kit/*`），因此 typecheck/test/build 没有在主工作区重跑，而是在 worktree 内检出合并提交后运行。
+- **浏览器产品 E2E 整套仍有失败**（Task 26 起）：`phase2-organization.spec.ts` 失败点在 `:103`/`:417`/`:539` 之间漂移。对照实验证明与 Task 26 的新功能无关（只做既有行为的诊断 spec 同样触发），维护者 2026-09-17 接受该结论并放行；机制未查清，见 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
 - 当前未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 

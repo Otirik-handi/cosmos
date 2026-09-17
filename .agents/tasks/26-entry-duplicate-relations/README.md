@@ -58,7 +58,7 @@ Non-goals（见 Proposal / ADR-0022）：
 
 ## Current State
 
-- 生命周期阶段：**三个切片均已实现并本地验证，等维护者手动点验与合并授权**（2026-09-17）。过程、偏差与完整验证记录见 [walkthrough.md](walkthrough.md)。
+- 生命周期阶段：**已收口**（2026-09-17）。维护者手动验收通过；分支提交 `a1f0be2`，`--no-ff` 合入 master `c308733` 并推送 `origin`，远端 CI run 35192008223 五个 job 全绿；worktree 与分支已按授权清理。过程、偏差与完整验证记录见 [walkthrough.md](walkthrough.md)。
 - 连贯目标：让两个不同来源的条目能表达「同一篇稿子的重复/转载/近似」关系，同时保留各自来源身份，且不改变既有排序与搜索行为。
 - 可观察验收（≤3 条）：
   1. 标记一条转载后，两侧条目详情都能看到关系与方向（转载方 → 原发方），解除后消失；
@@ -74,14 +74,16 @@ Non-goals（见 Proposal / ADR-0022）：
 - 关系合同放进既有 `packages/contracts/src/entry-relation.ts`（该文件已经是 Entry 相关合同的家），不新建文件。
 - 方向归一化与「一对条目一个当前语义」按 ADR-0022 决定 2/3；`EntityRelation` 的 `(from, to, type)` 形态不照抄（ADR-0022 Alternatives 已记录拒绝理由）。
 - 维护者 2026-09-17 开工前确认三处读法：**409 只覆盖有向类型的反向提交**（对称类型反向即覆盖写）、Web 入口放在 Story 面板来源成员行、worktree/分支/base 不变。
-- 偏差（细节与理由见 walkthrough「偏差与实现取舍」）：合同改动跨了切片 1/2；成员行标注复用 `EntryDetail.relations` 不新增字段；写命令返回 `fromEntryId` 一侧；顺手清掉 `SourceMembersSection` 两个死 props；浏览器 spec 命名 `phase2-entry-relation.spec.ts`（必须排在 `ingest.spec.ts` 之后）。
+- 偏差（细节与理由见 walkthrough「偏差与实现取舍」）：合同改动跨了切片 1/2；成员行标注复用 `EntryDetail.relations` 不新增字段；写命令返回 `fromEntryId` 一侧；顺手清掉 `SourceMembersSection` 两个死 props；浏览器 spec 命名 `phase2-entry-relation.spec.ts`（排在 `ingest.spec.ts` 之后）。
 
 ## Verification / Gate
 
 - 每切片按仓库验证层级：focused（domain/contracts/storage）→ 隔离库 upgrade 两态 → API 集成 → 浏览器；全量门禁至少 typecheck、docs:check、test、build、git diff --check。
 - 迁移类改动在隔离库跑了 fresh + 旧库 upgrade 两态（本切片为全新表，仍跑两态）。
-- 已通过（2026-09-17，worktree 内）：`bun run typecheck` exit 0；`bun run test` **99 文件 / 599 用例全绿**；`bun run build` 通过；`bun run lint:web` 0 error / 81 warning（改动前 83）；组件实验室 **15/15**；新浏览器用例单跑 **1 passed**。
-- **未通过 / 未运行**：整套浏览器套件含本切片时 4/4 出现 `phase2-organization.spec.ts` 的失败（移走本切片 spec 后 4 次里 3 次全绿，且一个只做既有行为的诊断 spec 同样能触发）——失败归属与放行判断待维护者裁定，证据见 walkthrough。未运行：Node 进程 E2E、`test:property`、Docker/Compose、Windows Node smoke、真实公网来源验收。
+- 已通过（2026-09-17）：`bun run typecheck` exit 0；`bun run test` **99 文件 / 599 用例全绿**；`bun run build` 通过；`bun run lint:web` 0 error / 81 warning（改动前 83）；组件实验室 **15/15**；新浏览器用例单跑 **1 passed**；`docs:check` 0 失败；size 门禁 PASS；`git diff --check` 干净。合并提交 `c308733` 上重跑 typecheck / test / build / docs:check 同样通过。
+- **远端 CI**：run [35192008223](https://github.com/Otirik-handi/cosmos/actions/runs/35192008223)（`c308733`）五个 job 全绿（Docs / Quality / Browser E2E / Windows Node smoke / Node process E2E）。
+- **本地整套浏览器套件仍有失败**：含本切片 spec 时 4/4 失败在 `phase2-organization.spec.ts`（移走本切片 spec 后 4 次里 3 次全绿；一个只做既有行为的诊断 spec 同样能触发；远端 CI 未复现）。维护者 2026-09-17 接受「与新功能无关」并放行，证据见 walkthrough。
+- 未运行：`test:property`、Docker/Compose、真实公网来源验收（Node 进程 E2E 与 Windows Node smoke 由远端 CI 覆盖）。
 
 ## Follow-ups
 
@@ -89,5 +91,6 @@ Non-goals（见 Proposal / ADR-0022）：
 - Feed 去重与 Phase 4 推荐若需要消费重复关系，按 ADR-0022 Revisit Gate 重新评估。
 - 传播路径可视化、新关系类型（翻译）、正文片段锚点，均按 Revisit Gate 评估。
 - `apps/web/src/components/cosmos/story-panel.tsx` 改动前已 824 行（超 800 行红线），本切片又加约 12 行；拆出成员行/操作区需要一次行为等价重构，独立处理。
-- `e2e/browser/ingest.spec.ts` 是「空信息库上的第一次录入」写法（取 Feed 第一张卡片与 `items[0]` 当自己的内容），因此浏览器 spec 的排序是隐性契约；把它改成按来源限定可在独立任务里做。
-- `docs/testing/known-unstable-cases.md` 第 1 条新增了 2026-09-17 的观察，其中「搜索提示语说 0 条、列表仍留上一次内容」这一条**机制未查清**，不排除应用存在搜索状态不一致，按独立 Bug 诊断。
+- `docs/spec/storage/0001-prisma-repository.md` 已达 49 KB 量级、贴近 50 KB 红线（基线登记文件，增长只报 warning）；继续往该文件加内容前先拆分。
+- `docs/testing/known-unstable-cases.md` 第 1 条新增了 2026-09-17 的观察，其中「搜索提示语说 0 条、列表仍留上一次内容」这一条**机制未查清**，不排除应用存在搜索状态不一致，按独立 Bug 诊断（优先于隔离每场景数据根，因为可能是真实缺陷）。
+- Task 28 已把 `e2e/browser/ingest.spec.ts` 改成按来源限定、来源名随机，因此「浏览器 spec 排序」不再是隐性契约；本切片当时为规避它而把新 spec 放到 `ingest` 之后，现已不必要（文件名未回改）。
