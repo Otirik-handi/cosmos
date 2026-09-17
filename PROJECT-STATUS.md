@@ -32,6 +32,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
 - 远端 `master` 当前**没有分支保护或 ruleset**（2026-09-17 用 GitHub API 核实，`branches/master/protection` 返回 404、rulesets 为空）：CI 只是事后信号，不阻止直接推送或合并；是否启用 required checks 待维护者决定。
 - 产品当前 **PC 优先、不做移动端适配**（维护者 2026-09-17：移动端等 PC 端做好后再适配）：390px 页面级横向溢出检查**暂停执行**，PC/平板宽度（768/1024/1440px）继续断言；恢复条件写在 `e2e/support/viewports.ts`，恢复前先给两处溢出断言补失败现场打印（见已知不稳定用例表第 2、3 条）。
+- 工具链与依赖源已固定（2026-09-17，Task 29）：bun 版本 **1.4.2** 在 `package.json` 的 `packageManager`、CI 的 `BUN_VERSION`、`docker/Dockerfile` 基础镜像三处一致；依赖源显式写在 `bunfig.toml`（npmmirror，与 `bun.lock` 里 1,026 条地址一致，实测已有条目不会被改写、配置只决定新解析条目写哪个地址）；锁文件仅补回 `configVersion` 一行，依赖解析零变化。Docker 基础镜像的版本切换**未做容器实跑**（本机无 Docker CLI，tag 存在性已用 API 核实）。
 
 ## 当前下一步
 

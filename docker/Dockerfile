@@ -1,4 +1,8 @@
-FROM oven/bun:1.3.14 AS build
+# 与 package.json 的 packageManager 和 CI 的 BUN_VERSION 保持一致：不同 bun 版本为
+# workspace 依赖生成的 node_modules 布局不同（1.3.14 把 Prisma CLI 放在包内、
+# 1.4.2 提到工作区根），三处不一致会让「本机可以、镜像里不行」随机发生。
+# 本机没有 Docker CLI，该版本切换未经容器实跑验证。
+FROM oven/bun:1.4.2 AS build
 
 WORKDIR /app
 ARG COSMOS_API_URL=http://localhost:4310

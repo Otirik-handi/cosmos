@@ -48,6 +48,7 @@ Task 导航：
 - [`26-entry-duplicate-relations/`](26-entry-duplicate-relations/)：Phase 2 尾巴第二切片 Entry 跨来源重复/转载关系 v1（ING-006）——`EntryRelation`（`(fromEntryId, toEntryId)` 唯一 + 受管类型 `duplicate_of`/`syndicated_from`/`near_duplicate_of` + provenance）、对称类型按条目 id 字典序归一化并双向读取、关系挂条目内容身份（`mergeStories`/`splitStory` 不迁移）、只人工写入且不参与 Feed 排序与搜索；「归入同一 Story」由既有归并/引用关系承担；编号 26 由维护者 2026-09-16 分配。
 - [`27-prisma-cli-resolution/`](27-prisma-cli-resolution/)：远端 CI 恢复——Prisma CLI 的 27 处引用（`scripts/prisma.ts`、Docker 入口、3 处文档描述与 21 个 storage/worker 测试夹具）不再假定固定路径，改由 `packages/storage-prisma/src/prisma-cli.ts` 的 `resolvePrismaCliPath()` 按候选位置解析（包内 / 工作区根 / bun store），找不到时明确报错；不改行为、不动 `bun.lock` 与 CI 版本；编号 27 由维护者 2026-09-16 分配。
 - [`28-mobile-gate-and-retry-isolation/`](28-mobile-gate-and-retry-isolation/)：移动端门禁后置（维护者 2026-09-17 裁定 PC 优先）——390px 页面级横向溢出检查暂停执行（PC/平板宽度 768/1024/1440 继续），保留代码、理由与恢复条件；同时修 `e2e/browser/ingest.spec.ts` 的重试不幂等（固定来源名在重试时产生重复卡片，把首次失败放大成硬失败）；编号 28 由维护者 2026-09-17 分配。
+- [`29-toolchain-drift/`](29-toolchain-drift/)：工具链与依赖源固定——新增 `bunfig.toml` 显式声明国内镜像（实测：已有锁条目不会被改写，配置决定新解析条目写哪个地址）；bun 版本在 `packageManager`、CI、Dockerfile 三处统一到 1.4.2；锁文件补回 `configVersion` 一行（零依赖变化）；编号 29 由维护者 2026-09-17 分配。
 
 治理类任务（文档/代码规模治理等）使用**独立编号体系**，位于 [`governance/`](governance/)（`G{NN}` 编号，不占用上述产品 Task 编号），章程与任务索引见 [`governance/README.md`](governance/README.md)。
 

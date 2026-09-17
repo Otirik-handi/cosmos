@@ -14,9 +14,10 @@ concurrency:
     cancel-in-progress: true
 
 env:
-    # 与生成/更新 bun.lock 的工具链对齐；不同 bun 版本为 workspace 依赖生成的
-    # node_modules 布局不同。Prisma CLI 的位置不再由调用方假定（见
-    # packages/storage-prisma/src/prisma-cli.ts），版本对齐只用于避免锁文件漂移。
+    # 与 package.json 的 packageManager、docker/Dockerfile 的基础镜像保持一致
+    # （三处同一个版本）。不同 bun 版本为 workspace 依赖生成的 node_modules 布局
+    # 不同；Prisma CLI 的位置已不再由调用方假定（见
+    # packages/storage-prisma/src/prisma-cli.ts），版本对齐用于避免布局与锁文件漂移。
     BUN_VERSION: 1.4.2
 
 jobs:
