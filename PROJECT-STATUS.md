@@ -50,7 +50,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - Entity merge/dedup；批注的正文片段字符级锚点；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）。原因：`search` 把用户输入原样交给 `entry_search MATCH ?`，`-` 在 FTS5 里是 NOT 运算符，`绝不匹配-212c82` 因此变成畸形查询、SQLite 返回语法错误。现按维护者裁定「全当字面文本」处理：输入按空白切词、每段作字面短语，多词保持 AND，无词可搜时退回无文本条件。**代价**：搜索框不再是 FTS5 查询接口，`OR`/`NEAR`/前缀通配不再是运算符。
-- **已知不稳定的测试用例**：`e2e/browser/phase2-organization.spec.ts` 的间歇失败（失败点漂移、单跑不复现，机制未查清，不能排除应用并发缺陷）与 `e2e/browser/ingest.spec.ts:127` 的 390px 溢出断言。症状、观察次数、当前判断与建议的处理次序统一登记在 [`docs/testing/known-unstable-cases.md`](docs/testing/known-unstable-cases.md)；维护者 2026-09-15 决定先登记、后续再处理。
+- **已知不稳定的测试用例**：`e2e/browser/phase2-organization.spec.ts` 的间歇失败（失败点漂移、单跑不复现，机制未查清，不能排除应用并发缺陷）与两处 390px 横向溢出断言（`ingest.spec.ts:127`、`theme.spec.ts:164`）。症状、观察次数、当前判断与建议的处理次序统一登记在 [`docs/testing/known-unstable-cases.md`](docs/testing/known-unstable-cases.md)；维护者 2026-09-15 决定先登记、后续再处理。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。

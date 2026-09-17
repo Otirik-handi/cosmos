@@ -44,7 +44,7 @@ Non-goals：
 
 | # | 切片 | 可观察验收 | 状态 |
 |---|---|---|---|
-| 1 | `ci.yml` 门禁分区 | ① 分支上 `workflow_dispatch` 后 Doc 与 Quality 并行独立运行；② **负向验证**：临时制造文档门禁失败时，Quality 与三个 E2E 仍照常运行（此前会被跳过）；③ 两门命令与改前逐字一致 | ①③ 达成（run 35182347816 五 job 全绿、Docs 7s 与 Quality 同秒起跑）；② 待跑 |
+| 1 | `ci.yml` 门禁分区 | ① 分支上 `workflow_dispatch` 后 Doc 与 Quality 并行独立运行；② **负向验证**：临时制造文档门禁失败时，Quality 与三个 E2E 仍照常运行（此前会被跳过）；③ 两门命令与改前逐字一致 | ①②③ 全部达成（run 35182347816 五 job 全绿；run 35183363675 探针令 Docs 红而 Quality 273s 成功、三个 E2E 照常执行） |
 | 2 | `PROJECT-STATUS.md` 切分册 | ① 主文档 ≤24 KB / ≤8k token；② 新分册 ≤30 KB；③ 标题、代码围栏、列表项数量拆分前后守恒；④ `docs:check` 与 size 门禁 PASS（worktree 内） | 本地 ①②③④ 全部达成（22,855 B / 7,289 token；分册 5,578 B；逐字一致；659 文件 0 失败）；远端 CI 复核待跑 |
 
 ## Current State

@@ -35,6 +35,22 @@
   `Docs` 与 `Quality` 同一秒各自开始（互不 `needs`）；三个 E2E 在 `Quality` 结束后才开始（`needs: quality` 与改前一致）。`Docs` 只用 7 秒——不跑 `bun install` 的效果。
 - 改前红未另行制造：2026-09-15 体积门禁与 2026-09-17 `db:validate` 两次真实事故就是这条路径的证据。
 
+### 切片 1 负向验证（run 35183363675，2026-09-17）
+
+探针：`docs/tmp-g08-gate-probe.md`（只含一个不存在的相对链接），先本地确认 `docs:check` 会报「相对链接目标不存在」（660 文件），再推送；该文件已在合并前删除。
+
+| job | 结果 | 开始 | 用时 |
+| --- | --- | --- | --- |
+| Docs | **✗**（探针断链） | 12:49:25 | 6s |
+| Quality | ✓ | 12:49:25 | 273s |
+| Browser E2E | ✗（与本探针无关，见下） | 12:54:00 | 166s |
+| Node process E2E | ✓ | 12:54:01 | 87s |
+| Windows Node smoke | ✓ | 12:54:00 | 183s |
+
+**结论**：文档门禁失败时 `Quality` 与三个 E2E **照常执行**。拆分前 `quality` 会在文档步骤处直接终止，三个 E2E 因 `needs: quality` 一并被跳过——正是 2026-09-15 与 09-17 两次事故的形态。负向验证达成。
+
+附带观察（与本切片无关，已登记）：这次 Browser E2E 红的是 `theme.spec.ts:164` 的同类 390px 断言（`Received: 393`，同一 run 内原始 + 2 次 retry 全部 393）；同一内容在 run 35182347816 / 35182872270 全绿，属「未改代码既过又挂」。已按维护者 2026-09-15「先登记、后续再处理」的指示记为 [`docs/testing/known-unstable-cases.md`](../../../../docs/testing/known-unstable-cases.md) 第 3 条，并同步 `PROJECT-STATUS.md` 的对应 bullet。
+
 ## 切片 2：状态文档减负
 
 ### 移动边界（只切历史，不切当前状态与有效决定）
