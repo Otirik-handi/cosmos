@@ -44,7 +44,7 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 | BRD-001 | Phase 1 | 系统提供两块固定的最小看板：最新内容 Feed 与来源健康摘要，以 Story 为展示单位。Phase 1 的 Story 先采用保守 projection，不提前实现完整聚类维护。 | 用户无需数据库工具即可从最新内容打开 Story、查看其当前 Revision 和 Entry/来源，并能看到每个已配置来源的最近运行与成功/失败状态；一个 Story 可以暂时只有一个 Entry。跨来源成员聚合与完整 Story 维护在 Phase 2 验证。 |
 | BRD-002 | Phase 2 | 看板由可配置 Board、Section 和 Block 构成。 | 用户可以调整顺序、隐藏、复制和配置区块；删除区块不删除内容。 |
 | BRD-003 | Phase 2 | 默认看板按热点、精华、普通信息流组织。 | 三个区域可以引用相同 Story、Topic、Workspace 或 Artifact，但使用不同展示策略。 |
-| BRD-004 | Phase 2 | Spotlight Block 可由系统或用户设置，展示事件、话题、状态或大会等高关注目标。 | 用户能固定一个 Topic；系统也能根据明确 policy 推荐 Spotlight。 |
+| BRD-004 | Phase 4 | Spotlight Block 可由系统或用户设置，展示事件、话题、状态或大会等高关注目标。 | 用户能固定一个 Topic；系统也能根据明确 policy 推荐 Spotlight。 |
 | BRD-005 | Phase 3 | Workspace/Artifact Block 支持研究报告、学习任务和交互页面。 | 用户可在看板中打开或完成交互，并在刷新后保留状态。 |
 | BRD-006 | Phase 2 | Feed Block 可绑定 Saved View、查询或推荐策略。 | 开发、硬件、娱乐等分区可以拥有不同来源与排序配置。 |
 | BRD-007 | Phase 2 | Story/Topic 深入页展示多来源、时间线、差异、相关内容、Agent 产物和用户操作。 | 打开热点后能区分同一事件成员、其它相关事件、背景教程和 Agent 分析。 |

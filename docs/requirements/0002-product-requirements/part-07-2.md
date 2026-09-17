@@ -68,7 +68,7 @@ tokens_est: 7017
 | REC-005 | Phase 4 | 系统记录 impression、open、save、hide、not interested、follow topic、annotate 和完成交互。 | 未点击但已展示的内容不会被误判为“用户没见过”。 |
 | REC-006 | Phase 4 | Feed 支持按娱乐、硬件、开发等用户分类和分区。 | 用户可以创建、调整和复用分类视图，不依赖固定内置目录。 |
 | REC-007 | Phase 4 | 推荐结果需要控制同源重复、同事件挤占和主题单一。 | 一个来源或 Story 不能在没有明确配置时占满整个 Feed。 |
-| REC-008 | Phase 2 | Story 详情页可以推荐相关但不同事件的背景、后续、教程和观点。 | “Jeff Dean 创立 Discovery Loop”能关联“Jeff Dean 离开 Google”，同时明确二者不是同一 Story。 |
+| REC-008 | Phase 4 | Story 详情页可以推荐相关但不同事件的背景、后续、教程和观点。 | “Jeff Dean 创立 Discovery Loop”能关联“Jeff Dean 离开 Google”，同时明确二者不是同一 Story。 |
 | REC-009 | Phase 4 | 第一版相关推荐使用 BM25、Entity/关系、时间、引用和用户关注等混合信号，不使用 embedding，并输出主要原因。 | UI 能展示共享实体、前后关系、引用或 Topic 等可验证解释，不由 LLM 临场编造唯一理由。 |
 | REC-010 | Phase 4 | 热度、趋势、重要性和紧急性分别计算，再由 Spotlight Policy 决定展示。 | 很热但不重要的内容与低热度但紧急的服务故障不会被同一分数掩盖。 |
 | REC-011 | Phase 4 | 第一版维护预算使用全局日预算、单次 Run 上限和紧急保留预算。 | 超过运行次数、时间、token 或工具调用上限时降级为确定性规则；复杂对象级继承、公平调度和预算借用后置。 |

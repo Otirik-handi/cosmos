@@ -14,7 +14,7 @@ tokens_est: 6095
 | AUT-002 | Phase 1 | 同一 Workflow 至少支持用户手动触发和定时触发；首版可采用默认定时抓取 30 分钟的实现建议，用户可以修改或关闭定时，测试动作立即执行。 | 两种入口执行同一版本 Workflow，并生成可查询的独立 Run；已排队 Run 使用创建时配置快照；30 分钟默认值及其调度字段合同需实现设计验证。 |
 | AUT-003 | Phase 1 | 系统支持轮询来源并用持久 checkpoint 判断是否有新内容或变化。 | 重启后沿用 checkpoint；没有变化时不执行完整抓取和下游分析；配置修改不改变已经创建 Run 的输入快照。 |
 | AUT-004 | Phase 2 | Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发。 | 每次触发保存触发原因、输入、时间和对应定义版本。 |
-| AUT-005 | Phase 2 | 用户或插件可定义自定义 Trigger 和 Action。 | 扩展通过版本化 SDK 注册配置 schema、能力范围、输入、输出和失败语义，不直接访问核心数据库。 |
+| AUT-005 | Phase 3 | 用户或插件可定义自定义 Trigger 和 Action。 | 扩展通过版本化 SDK 注册配置 schema、能力范围、输入、输出和失败语义，不直接访问核心数据库。 |
 | AUT-006 | Phase 1 | Workflow 可以按顺序、条件和批量 fan-out 编排 Action。 | 同一个采集流程能够表达“拉取 → 标准化 → 去重 → 入库”，失败步骤和已完成步骤可区分。 |
 | AUT-007 | Phase 3 | Action 可以运行受控自定义代码或 Agent。 | Run 明确记录代码/Agent 版本、配置能力范围、预算、输入、输出、超时和产物。 |
 | AUT-008 | 跨阶段 | WorkflowDefinition 和 ActionDefinition 版本化。 | 已执行 Run 始终能定位到当时的定义；修改配置不会改变历史 Run 含义。 |
@@ -73,7 +73,7 @@ tokens_est: 6095
 | ING-010 | Phase 4 | Source 可覆盖平台首页推荐、关注用户、搜索结果、公告、AIHOT 类聚合站和邮件。 | 每种接入分别记录认证、速率、游标、平台限制和真实验收结果。 |
 | ING-011 | Phase 1 | 第一条管线集成切片使用 RSS/RSSHub 和本地 fixture，验证采集、信息库、最小 Story projection、搜索/Feed 和离线访问闭环。 | fixture 能覆盖有 URL、无 URL、重复轮询、来源修订和媒体状态；每个已录入 Entry 至少能投影为一个可打开的 Story；该 fixture 链路不等同于产品可用验收，产品 E2E 必须另行从 Web 填写实际 RSS URL 开始。跨来源聚类、merge、split 和 Topic 维护后置。 |
 | ING-012 | Phase 2 | Connector 可以通过 Cosmos 提供的命名空间化、版本化 StateStore 保存 cursor、ETag、分页 token 和速率状态等非秘密运行状态。 | Adapter 不直接写核心数据库；状态可备份、恢复、迁移并按 Connection/Source/Workflow 范围隔离；Secret 不混入普通状态。 |
-| ING-013 | Phase 2 | Entry → Story 的知识处理可以配置为 Workflow；用户和 Agent 可以选择“批量全量 Agent”或“脚本优先、困难/强相关/重要内容升级 Agent”等策略。 | 事实入库不依赖 LLM；处理 Workflow 有版本、输入批次、输出 Proposal、失败状态和可重跑边界；更换策略不覆盖 Observation。 |
+| ING-013 | Phase 3 | Entry → Story 的知识处理可以配置为 Workflow；用户和 Agent 可以选择“批量全量 Agent”或“脚本优先、困难/强相关/重要内容升级 Agent”等策略。 | 事实入库不依赖 LLM；处理 Workflow 有版本、输入批次、输出 Proposal、失败状态和可重跑边界；更换策略不覆盖 Observation。 |
 | ING-014 | Phase 3 | Research 不与 Ingest 强耦合；知识分析可以产生紧急、需要研究或来源冲突信号，再由 Trigger 启动独立 Research Workflow。 | Research Request/触发原因可追溯；研究结果重新经过 Observation → Entry，不直接写入 Story；研究失败不丢失原始 Entry。 |
 | ING-015 | 跨阶段 | 每个 Connector 必须返回外部稳定 external key；没有外部 ID 时必须由完整 `sourceLocator` 和规范化内容生成 fallback key。 | 同标题、同时间但不同来源位置的无 URL 内容不会被错误合并；key 规则版本化且可回放。 |
 | ING-016 | 跨阶段 | 每个 Observation 必须保存结构化 `originLocator`、`discoveryContext`、原始 payload 引用、媒体保存状态和产生它的 WorkflowRun。 | 能区分关注账号、推荐流、搜索、公告监控、手动导入、Agent 调研和 Research 发现；旧 Observation 不被覆盖。 |
@@ -97,7 +97,7 @@ tokens_est: 6095
 | LIB-002 | Phase 1 | 本地全文检索使用词法相关性排序；当前将原始需求中的“BM5”按 BM25 理解。 | 精确名称、代码和短语无需 LLM 或外网即可搜索。 |
 | LIB-003 | Phase 2 | 用户可以创建 Label、Annotation、Collection 和 Saved View。 | 重新分析、重新索引或刷新 Artifact 后，用户数据不丢失。 |
 | LIB-004 | Phase 2 | Annotation 可绑定 Entry、Story、Topic、Artifact 或正文片段。 | 批注能显示作者、时间、目标版本和可选依据。 |
-| LIB-005 | Phase 2 | Saved View 可保存分类、时间、来源、状态、未读和 Topic 等查询条件。 | 看板 Feed Block 与搜索页可复用同一 Saved View。 |
+| LIB-005 | Phase 4 | Saved View 可保存分类、时间、来源、状态、未读和 Topic 等查询条件。 | 看板 Feed Block 与搜索页可复用同一 Saved View。 |
 | LIB-006 | Phase 4 | 第一版查询组合结构化、BM25、Entity、时间、引用和关系检索；embedding 后置。 | 每类索引可独立重建；结果能说明主要匹配信号，模型不可用时仍工作。 |
 | LIB-007 | 跨阶段 | 每个 Entry、Story、Topic、Artifact 和 Workspace 都有稳定内部地址。 | 无外部 URL 的内容也能从看板、搜索或 Artifact 中跳转。 |
 | LIB-008 | Phase 2 | 用户可以查看、导出和删除自己拥有的持久数据。 | 删除范围、被引用对象和无法恢复的内容在执行前明确展示。 |

@@ -48,9 +48,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 尾巴两项（2026-09-16）**：
 
 - **ORG-017（关键事实 + 时间范围）：已合并并推送（2026-09-16）**。Proposal 与 ADR [`0021`](docs/adr/0021-story-key-facts-and-time-range-v1.md) 已接受，PRD §7.5、信息模型 §4.7 与 ADR-0006 注记已同步；实现提交 `545f9f4` + 流程文档 `7661f93`，`--no-ff` 合入 master `6809c0b` 并推送 `origin`。**维护者手动验收四条全部通过**（准确时刻显示、原文模式标「不精确」、事实顺序与出处、重复保存版本不变）。master 上重跑 `docs:check` **658 文件 0 失败**、`git diff --check` 干净；切片文件与跑过全部门禁的分支尖端逐字节一致。完整验证数字、浏览器 20/21 实测与两处待裁定事项（出处不做写入校验；两个规格文件已登记进基线）见 Task [`10`](.agents/tasks/10-story-domain/README.md) walkthrough 的两节。
-- **远端 CI 自 2026-09-09 起无运行记录**：`gh` 核验显示 master 最近一次 CI 运行停留在 2026-09-09（此后含 Task 14 合并与本切片的推送均未产生运行），工作流 `CI` 状态为 active。因此本切片**没有远端 CI 结论**；本地已发现**潜在门禁失败**（`--fail-on-new` 口径）：`.agents/tasks/14-board-section-block/README.md`（34.04 KB / 11.3k token，建议拆出 walkthrough）与 `docs/proposals/ui-copy-review-v1.md`（26.10 KB / 9.1k token，建议登记或拆分），两者均非本轮产生、处理方式待维护者决定。
+- **远端 CI 在 fork 上持续红灯（2026-09-16 更正）**：仓库远端是 fork `Otirik-handi/cosmos`；CI 每次推送都在运行，但**自 2026-09-15 起每一次都停在「文档体积门禁」这一步**（约 20–26 秒终止），其后 typecheck / 全量单测 / property / lint / build / Node E2E / Browser E2E **全部被跳过**。阻塞项是两个未登记文件进警戒区：`.agents/tasks/14-board-section-block/README.md`（34.04 KB，建议拆出 walkthrough）与 `docs/proposals/ui-copy-review-v1.md`（26.10 KB / 9.1k token，建议登记或拆分）——均非本轮产生，处理方式待维护者决定。先前记的「CI 自 2026-09-09 无运行记录」是查错仓库（上游 `notnotype/cosmos`）所致，已作废。
 - **ING-006（跨来源重复/转载关系）**：Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) 已建、**未开工**，按顺序排在 ORG-017 之后。
-- **待裁定**：需求表 §7 仍有 **13 条标 `Phase 2` 而实际未交付或半交付**（两项已进流程，其余 11 条是否改标待定；此前只纠正过 ORG-021）。两项都按准入决策表先评审、后动代码。
+- **需求表口径已改标（2026-09-16）**：按内容归属把 AUT-005、ING-013 改标 `Phase 3`，LIB-005、REC-008、BRD-004 改标 `Phase 4`（勘误登记见 PRD 主文档「分册勘误登记」）；§7 中仍标 `Phase 2` 的开放项为 **AUT-004、AUT-010、BRD-006、BRD-007、LIB-004、LIB-008、ING-009（余项）**——Phase 2 不再「字面无法完成」，而是明确留有这些尾巴。清理：已按授权删除 3 个 worktree 与 3 个分支（`t10-story-representation`、`t14-board-drag-sort`、`ui-surface-ownership`）；`.worktree/` 下另有 3 个更早切片的孤儿残留目录未动；`.agents/learning/` 按维护者指示不纳管。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
@@ -174,14 +174,11 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 验证边界（历史证据与当前未验证项分开）
 
-**当前验证（2026-09-15 实际运行）**：
+**当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移）；本节只留仍然有效的边界与缺口。
 
-- 合并后在 `master`（`14ce892`）重跑：`bun run typecheck` 全仓 0；`bun run test` **88 文件 / 524 用例**全绿；`bun run docs:check` 625 文件 `failures=[]`。
-- Story split 用户状态迁移（分支内，合并前）：`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，新文件 0）；浏览器产品 E2E **17/17**（含拆分场景新增的迁移与撤销断言）；组件实验室 **13/13**；契约与 application 的导出面快照显式重生成，diff 只有本次新增的 6 + 1 项；API 路由表守卫快照 114 → 115 条。先红后绿：短路迁移事务后 storage 迁移测试 7 例中 4 例失败。
-- 看板 Feed Block 独立取数（分支内，合并前）：`bun run build` 通过；浏览器产品 E2E **18/18**；组件实验室 **13/13**。合并后在 `master` 重跑同一套件为 **17/18**，1 例间歇失败（详见下方开着的项），该结论按实测如实记录，不按绿灯口径写。
-- 看板区块拖拽排序（分支内，合并前实测）：`bun run typecheck` 全仓 0；`bun run test` **90 文件 / 542 用例**全绿；`bun run build`（packages + API + Worker + Next standalone）通过；`bun run lint:web` 0 error（86 个既有 warning，改动文件 0）；浏览器产品 E2E **20/20**；组件实验室 **13/13**；`bun run docs:check` 634 文件 `failures=[]`；`bun install --frozen-lockfile` 与 `git diff --check` 干净。红证据：一次性复算被删除的指针几何公式，复现出维护者报告的两个错误结果（`A,C,D,B` 与 no-op 的 `A,B,C,D`）。**未在 master 工作区重跑**（主工作区未安装依赖），但合并后 `git diff a270079 HEAD` 为空，master 的树与跑过门禁的分支 tip 逐字节一致。未自动化：拖拽手势本身（指针坐标在该布局下不可靠），由维护者真人验收覆盖——本切片的三个缺陷全部由真人实测发现。
-- 本轮未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
-- 分支工作的先红后绿证据：短路迁移事务后，`story-user-state-migration.test.ts` 7 例中 4 例失败（另 3 例断言拒绝与空选择 no-op，本就不需要迁移发生）。
+- 最近一次全量证据（2026-09-16，Task 10 切片 4 的 worktree 内）：`bun run typecheck` 0、`bun run test` **93 文件 / 563 用例全绿**、`bun run lint:web` 0 error（83 条既有 warning）、`bun run build` 通过、浏览器产品 E2E 20/21（唯一失败为已登记的间歇用例）。master 上的切片文件与该分支尖端逐字节一致（`545f9f4`），故该结论对 master 成立；master 上另重跑 `docs:check` 658 文件 0 失败、`git diff --check` 干净。
+- 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
+- 当前未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 
 2026-08-15 之前的历史基线与 Spike 证据（含当时的分册完成记录、Task 05/07 基线与浏览器
 验收数字、Round 7/8 的 worktree 证据）整段移入 [`PROJECT-STATUS/history-2026-08-legacy.md`](PROJECT-STATUS/history-2026-08-legacy.md) 的
