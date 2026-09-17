@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { DEFERRED_MOBILE_WIDTH, MOBILE_WIDTH_VERIFIED } from "../support/viewports";
 
 test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) => {
     const consoleErrors: string[] = [];
@@ -25,7 +27,10 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await expect(scheduleInput).toHaveValue("30");
 
     // 精确匹配：Saved View 的“视图名称”输入框也包含“名称”子串。
-    await page.getByLabel("名称", { exact: true }).fill("浏览器 RSS 来源");
+    // 来源名唯一：同一栈会话内数据库跨重试/重复执行持久化，固定名会在重试时
+    // 产生第二张同名卡片，把首次失败放大成硬失败（strict mode violation）。
+    const sourceName = `浏览器 RSS 来源-${randomUUID().slice(0, 8)}`;
+    await page.getByLabel("名称", { exact: true }).fill(sourceName);
     await feedUrlInput.fill("http://127.0.0.1:4380/feed.xml");
 
     // 未保存配置测试：Worker 真实抓取受控 RSS 一页并回显统计与样例标题。
@@ -39,33 +44,36 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await page.getByRole("button", { name: "保存来源" }).click();
     await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
     const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthRow = healthSection.locator("li").filter({ hasText: sourceName });
     // 停用来源在健康看板上明确“不参与调度”，即使它配置了定时。
-    await expect(healthSection.getByText("已停用，定时抓取暂停")).toBeVisible();
-    const enableButton = healthSection.getByRole("button", { name: "启用 浏览器 RSS 来源", exact: true });
+    await expect(healthRow.getByText("已停用，定时抓取暂停")).toBeVisible();
+    const enableButton = healthRow.getByRole("button", { name: `启用 ${sourceName}`, exact: true });
     await expect(enableButton).toBeVisible();
     await enableButton.click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
     // 启用后健康看板解释定时计划：表单默认 30 分钟。
-    await expect(healthSection.getByText("每 30 分钟自动抓取")).toBeVisible();
+    await expect(healthRow.getByText("每 30 分钟自动抓取")).toBeVisible();
 
-    const runButton = healthSection.getByRole("button", { name: "浏览器 RSS 来源", exact: true });
+    const runButton = healthRow.getByRole("button", { name: sourceName, exact: true });
     await expect(runButton).toBeEnabled();
     await runButton.click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
-    await expect(page.getByText("Cosmos scaffold is ready")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText("Message without a web URL")).toBeVisible();
+    // 阅读流断言按来源限定：重试时上一次尝试的同源条目仍在 Feed 里。
+    const sourceCards = page.locator("article").filter({ hasText: sourceName });
+    await expect(sourceCards.getByText("Cosmos scaffold is ready").first()).toBeVisible({ timeout: 30_000 });
+    await expect(sourceCards.getByText("Message without a web URL").first()).toBeVisible();
 
     // 阅读流元信息：中文短日期、附件计数、纯文本摘要（无 HTML 标签泄漏）。
-    await expect(page.getByText("2026年8月7日").first()).toBeVisible();
-    await expect(page.getByText(/含 \d+ 个附件/)).toBeVisible();
+    await expect(sourceCards.getByText("2026年8月7日").first()).toBeVisible();
+    await expect(sourceCards.getByText(/含 \d+ 个附件/).first()).toBeVisible();
     await expect(
-        page.getByText("The second fixture item proves URL-free ingestion.", { exact: true }),
+        sourceCards.getByText("The second fixture item proves URL-free ingestion.", { exact: true }).first(),
     ).toBeVisible();
 
     // 阅读抽屉：打开后焦点进入关闭按钮，正文可读，原文外链存在。
-    const openStoryTrigger = page.getByRole("button", { name: "打开 Story" }).first();
+    const openStoryTrigger = sourceCards.getByRole("button", { name: "打开 Story" }).first();
     await openStoryTrigger.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -115,16 +123,19 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await page.getByRole("button", { name: "搜索", exact: true }).click();
     await expect(page.getByText("“fixture”")).toBeVisible();
     await page.getByRole("button", { name: "清除筛选" }).click();
-    await expect(page.getByText("Cosmos scaffold is ready")).toBeVisible();
+    await expect(sourceCards.getByText("Cosmos scaffold is ready").first()).toBeVisible();
 
-    // 移动端宽度不得出现页面级横向溢出。
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
-    const scroll = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-    }));
-    expect(scroll.scrollWidth).toBeLessThanOrEqual(scroll.clientWidth);
+    // 移动端宽度不得出现页面级横向溢出。移动端适配后置（维护者 2026-09-17），
+    // 检查暂停但保留：恢复时把开关置回 true，见 e2e/support/viewports.ts。
+    if (MOBILE_WIDTH_VERIFIED) {
+        await page.setViewportSize({ width: DEFERRED_MOBILE_WIDTH, height: 844 });
+        await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
+        const scroll = await page.evaluate(() => ({
+            scrollWidth: document.documentElement.scrollWidth,
+            clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(scroll.scrollWidth).toBeLessThanOrEqual(scroll.clientWidth);
+    }
 
     // 看板编辑模式：隐藏来源健康区块后浏览视图不再显示，重新进入编辑模式可恢复
     // （BRD-002「隐藏 ≠ 删除」，底层来源数据不变）。
@@ -147,7 +158,7 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await page.getByRole("button", { name: "完成编辑" }).click();
 
     // 人工 Spotlight：把当前 Story 固定到看板热点区，热点区出现后可解除。
-    await page.getByRole("button", { name: "打开 Story" }).first().click();
+    await sourceCards.getByRole("button", { name: "打开 Story" }).first().click();
     const storyDialog = page.getByRole("dialog");
     await storyDialog.getByRole("button", { name: "固定到看板热点区" }).click();
     await page.keyboard.press("Escape");

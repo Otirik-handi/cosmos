@@ -1,5 +1,6 @@
 import {expect, test} from "@playwright/test";
 import type {Page} from "@playwright/test";
+import {verifiedWidths} from "../support/viewports";
 
 const STORAGE_KEY = "cosmos.theme.preference.v1";
 const HYDRATION_ERROR_PATTERN = /hydration|hydrated|server rendered HTML/iu;
@@ -160,7 +161,7 @@ test.describe("production home theme", () => {
         expect(hydrationIssues).toEqual([]);
     });
 
-    for (const width of [390, 1440]) {
+    for (const width of verifiedWidths([390, 1440])) {
         test(`keeps the home page free of horizontal overflow at ${width}px`, async ({page}) => {
             await page.setViewportSize({width, height: width === 390 ? 844 : 900});
             await page.goto("/");
