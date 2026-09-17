@@ -100,5 +100,5 @@
 - **合并提交上重跑的门禁**（在 worktree 内检出 `c308733` 后运行，因为主工作区的 `node_modules` 与 lockfile 不一致、缺 vitest 可执行文件与 `@dnd-kit/*`，没有擅自修主工作区）：`bun run typecheck` 0；`bun run test` **99 文件 / 599 用例全绿**；`bun run build` 通过；`docs:check` 0 失败。主工作区在 `c308733` 上另跑：`docs:check` **680 文件 0 失败**、size 门禁 **PASS**（6 条基线内文件增长的 warning）、`git diff --check` 干净。
 - **远端 CI（2026-09-17）**：run [35192008223](https://github.com/Otirik-handi/cosmos/actions/runs/35192008223)（`c308733`）**五个 job 全绿**——Docs、Quality、**Browser E2E**、Windows Node smoke、Node process E2E。也就是说本地上文记录的浏览器套件失败**在远端 CI 上没有复现**（CI 配了 retries）；本轮据此不改上文证据，只把这条结果并列记录：本地的 4/4 失败与远端的全绿同时是事实，机制仍未查清。
 - **Task 28 已顺手修掉本切片记下的一个既有欠账**：`e2e/browser/ingest.spec.ts` 现在用随机来源名并把健康看板/阅读流断言限定在自己的来源卡片内，因此它不再依赖「必须排在套件最前」。本切片把新 spec 放到 `ingest` 之后是当时的必要处理，现已不再必要（不影响结论，故未回改文件名）。
-- 合并时同步的状态文档：`PROJECT-STATUS.md`（基线改 `c308733`、ING-006 那条改为已合并、验证边界换成本轮数字、worktree 清单更新）与 Task 26 的 README。
+- 合并时同步的状态文档：`PROJECT-STATUS.md`（基线改 `c308733`、ING-006 那条改为已合并、验证边界换成本轮数字、worktree 清单更新）与 Task 26 的 README。该记录提交为 `9f22c15` 并推送，其 CI run 35192785400 同样**五个 job 全绿**，即 `master` 的当前位置在远端是绿的。
 - 合并后仍然开着的项不在此重复，见 [README.md](README.md) 的 Follow-ups。
