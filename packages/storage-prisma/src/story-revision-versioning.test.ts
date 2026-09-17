@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { resolvePrismaCliPath } from "./prisma-cli.js";
+
 const roots: string[] = [];
 const clients = new Set<PrismaClient>();
 
@@ -100,10 +102,7 @@ describe("StoryRevision versioning migration", () => {
 
 function deployMigrations(databasePath: string, schemaPath: string): void {
     execFileSync(process.execPath, [
-        resolve(
-            process.cwd(),
-            "packages/storage-prisma/node_modules/prisma/build/index.js",
-        ),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",

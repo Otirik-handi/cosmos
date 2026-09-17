@@ -6,6 +6,7 @@ import { afterEach } from "vitest";
 import { type LoggerPort } from "@cosmos/application";
 import type { SourceSnapshot } from "@cosmos/contracts";
 import { PrismaCosmosRepository } from "./index.js";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 
 
 
@@ -58,10 +59,7 @@ export function prepareDatabase(root: string): void {
         process.cwd(),
         "packages/storage-prisma/prisma/schema.prisma",
     );
-    const prismaCli = resolve(
-        process.cwd(),
-        "packages/storage-prisma/node_modules/prisma/build/index.js",
-    );
+    const prismaCli = resolvePrismaCliPath();
     const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
     writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
     execFileSync(process.execPath, [

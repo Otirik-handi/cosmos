@@ -151,11 +151,7 @@ process.execPath run --cwd <dir> dev[ -- --port <webPort>]
 - 创建数据库文件的父目录。
 - 仅当 `databasePath` 不存在时创建空 SQLite 文件；已有数据库文件原样保留，不清空、不截断。
 - 必须提供命令参数；无命令时抛出 `Usage`。
-- 固定调用：
-
-```text
-packages/storage-prisma/node_modules/prisma/build/index.js
-```
+- 调用 `resolvePrismaCliPath()` 解析 Prisma CLI 入口；候选顺序与失败行为见「配置 → Prisma 配置」。
 
 - 始终追加：
 
@@ -435,7 +431,7 @@ NEXT_PUBLIC_COSMOS_API_URL=http://localhost:<port>
 - Windows 环境下的 `taskkill`。
 - 非 Windows 环境的 `SIGTERM` 进程信号语义。
 - Node TCP server 的 `listen` 和 `close` 能力。
-- `packages/storage-prisma/node_modules/prisma/build/index.js`。
+- 由 `resolvePrismaCliPath()` 解析到的 Prisma CLI 入口；位置随 bun 版本与 lock 生成的 node_modules 布局变化。
 - `packages/storage-prisma/prisma/schema.prisma`。
 - `apps/web`、API package 和 worker package 的 `dev` scripts。
 - PowerShell、`Start-Process` 和 `Stop-Process -Force`，仅供 `scripts/smoke-node.ps1` 验收使用。
@@ -478,11 +474,11 @@ NEXT_PUBLIC_COSMOS_API_URL=http://localhost:<port>
 - `COSMOS_DATA_ROOT` 缺失或 `trim` 后为空：使用 `.cosmos`。
 - `DATABASE_URL`：有值时优先使用。
 - `DATABASE_URL` 缺失时：使用 `file:<databasePath with slash>`。
-- 固定 Prisma CLI：
-
-```text
-packages/storage-prisma/node_modules/prisma/build/index.js
-```
+- Prisma CLI 入口由 `packages/storage-prisma/src/prisma-cli.ts` 的 `resolvePrismaCliPath()` 解析，候选顺序：
+  - 从 `packages/storage-prisma` 出发的 Node 模块解析，覆盖 CLI 落在该包 `node_modules`、被提升到工作区根、或经软链指向 bun store 的布局。
+  - 逐级向上查找 `<目录>/node_modules/prisma/build/index.js`。
+  - 逐级向上查找 `<目录>/node_modules/.bun/prisma@*/node_modules/prisma/build/index.js`；命中多个时取版本号最高的一个。
+- 所有候选都不存在时抛出错误，列出已尝试的位置并提示在仓库根运行 `bun install`。
 
 - 固定 schema：
 

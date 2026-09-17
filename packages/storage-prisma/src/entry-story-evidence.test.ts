@@ -12,6 +12,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 
 const roots: string[] = [];
 const clients = new Set<PrismaClient>();
@@ -421,10 +422,7 @@ async function seedStories(prisma: PrismaClient): Promise<void> {
 
 function deployMigrations(databasePath: string, schemaPath: string): void {
     execFileSync(process.execPath, [
-        resolve(
-            process.cwd(),
-            "packages/storage-prisma/node_modules/prisma/build/index.js",
-        ),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",
