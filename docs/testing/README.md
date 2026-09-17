@@ -60,7 +60,7 @@ Story 表示扩展 v1（ADR-0021）只在 `StoryRevision` 上新增两个可空�
 
 实验室新增或改变交互时必须在真实开发 Web 表面验证 `/dev/components`：组件/场景/视口/主题/配色 URL 可复现，前进后退正确，token 覆盖只影响预览画布，本地草稿可恢复，非法 JSON 导入保持原状态。浏览器验收覆盖 320、768、1024、1440 px、键盘与焦点、console、page error 和失败网络请求。生产 Web 还需在 build/start 后确认 `/dev/components` 返回 404，且实验室没有 Product API、SSE 或用户数据请求；开发态通过不能替代生产隔离验收。
 
-外观主题回归边界：生产表面验证无存储时跟随系统、显式 Night 刷新保持并压过后续系统变化、“跟随系统”清除 key 后即时响应 `prefers-color-scheme`，以及 `<html>` 首帧属性正确；实验室表面验证同一持久偏好驱动 chrome，URL `theme/colorway` 仅控制预览根，token override 不泄漏。两类表面均监听 hydration/server-rendered HTML 匹配的 console/page error，并在 390px 断言无页面级横向溢出。
+外观主题回归边界：生产表面验证无存储时跟随系统、显式 Night 刷新保持并压过后续系统变化、“跟随系统”清除 key 后即时响应 `prefers-color-scheme`，以及 `<html>` 首帧属性正确；实验室表面验证同一持久偏好驱动 chrome，URL `theme/colorway` 仅控制预览根，token override 不泄漏。两类表面均监听 hydration/server-rendered HTML 匹配的 console/page error，并在 PC/平板宽度断言无页面级横向溢出；移动端 390px 随「移动端适配后置」（2026-09-17）暂停，见 `e2e/support/viewports.ts`。
 
 `bun run docs:check` 要求治理入口存在、根 README 可达 Agent 治理入口，并锁定 canonical workflow 同时保留私密安全报告与普通非安全 Bug 的公开 Issue 路由。它检查根目录、`docs/`（排除原始需求与 research）、`.agents/`、`.local/README.md` 和 `.github/` 中活跃 Markdown 的相对目标文件或目录，并拒绝退休路径、反斜杠、仓库越界和 Windows 盘符绝对路径。query 和 fragment 不参与目标路径解析，门禁不校验标题锚点或代码行号是否存在。它不执行应用代码，也不替代类型检查、行为测试、构建或运行时验收；文档迁移和治理规则变更必须运行该命令。Markdown 结构、代码围栏和链接语义由 diff 人工审查，尾随空白由 `git diff --check` 检查。
 

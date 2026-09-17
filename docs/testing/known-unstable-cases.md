@@ -45,13 +45,13 @@
 
 ## 2. `e2e/browser/ingest.spec.ts:127` 的 390px 横向溢出断言
 
-**状态**：已知，尚未修。**详细分析与建议修法**在 `.agents/tasks/governance/G06-redline-code/README.md`，本表不重复维护，只登记它仍在生效。
+**状态**：**暂停（产品决定：移动端适配后置，维护者 2026-09-17），未修**——390px 检查当前不执行。恢复移动端适配时把 `e2e/support/viewports.ts` 的 `MOBILE_WIDTH_VERIFIED` 置回 true，并先按下方建议补失败现场打印。详细分析与建议修法仍在 `.agents/tasks/governance/G06-redline-code/README.md`。
 
 **摘要**：页面级横向溢出检查跨「切换视口 → 立即测量」两步、对时序敏感，已在 CI **三次**失败（重跑即过、本地多次全绿）：最近一次是 2026-09-17 master run 35179029322 的 Browser E2E job，`Expected: <= 390 / Received: 401`，重跑该 job 后 `21 passed`。建议改成 `expect.poll` 有界重试，并在失败信息里带上最宽的溢出元素；不宜继续以重跑应对。
 
 ## 3. `e2e/browser/theme.spec.ts:164` 的 390px 横向溢出断言
 
-**状态**：已知，尚未修（2026-09-17 新观察）。
+**状态**：**暂停（产品决定：移动端适配后置，维护者 2026-09-17），未修**——390px 检查当前不执行；恢复时把 `e2e/support/viewports.ts` 的开关置回 true，并先补最宽溢出元素的现场打印。观察记录保留如下，供恢复时对照。
 
 **实际观察（2026-09-17，同一分支同一内容）**：
 

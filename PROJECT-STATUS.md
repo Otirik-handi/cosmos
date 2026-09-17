@@ -31,6 +31,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - WorkflowRun 的 `sourceInstanceId`、`errorMessage` 是 durable projection 字段；来源查询同时考虑 legacy Run 和 WorkflowRun，不从 Kernel stateJson 猜错误文本。
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
 - 远端 `master` 当前**没有分支保护或 ruleset**（2026-09-17 用 GitHub API 核实，`branches/master/protection` 返回 404、rulesets 为空）：CI 只是事后信号，不阻止直接推送或合并；是否启用 required checks 待维护者决定。
+- 产品当前 **PC 优先、不做移动端适配**（维护者 2026-09-17：移动端等 PC 端做好后再适配）：390px 页面级横向溢出检查**暂停执行**，PC/平板宽度（768/1024/1440px）继续断言；恢复条件写在 `e2e/support/viewports.ts`，恢复前先给两处溢出断言补失败现场打印（见已知不稳定用例表第 2、3 条）。
 
 ## 当前下一步
 
