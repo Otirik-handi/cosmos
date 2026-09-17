@@ -44,15 +44,15 @@ Non-goals：
 
 | # | 切片 | 可观察验收 | 状态 |
 |---|---|---|---|
-| 1 | `ci.yml` 门禁分区 | ① 分支上 `workflow_dispatch` 后 Doc 与 Quality 并行独立运行；② **负向验证**：临时制造文档门禁失败时，Quality 与三个 E2E 仍照常运行（此前会被跳过）；③ 两门命令与改前逐字一致 | 进行中 |
-| 2 | `PROJECT-STATUS.md` 切分册 | ① 主文档 ≤24 KB / ≤8k token；② 新分册 ≤30 KB；③ 标题、代码围栏、列表项数量拆分前后守恒；④ `docs:check` 与 size 门禁 PASS（worktree 内） | 待开工 |
+| 1 | `ci.yml` 门禁分区 | ① 分支上 `workflow_dispatch` 后 Doc 与 Quality 并行独立运行；② **负向验证**：临时制造文档门禁失败时，Quality 与三个 E2E 仍照常运行（此前会被跳过）；③ 两门命令与改前逐字一致 | ①③ 达成（run 35182347816 五 job 全绿、Docs 7s 与 Quality 同秒起跑）；② 待跑 |
+| 2 | `PROJECT-STATUS.md` 切分册 | ① 主文档 ≤24 KB / ≤8k token；② 新分册 ≤30 KB；③ 标题、代码围栏、列表项数量拆分前后守恒；④ `docs:check` 与 size 门禁 PASS（worktree 内） | 本地 ①②③④ 全部达成（22,855 B / 7,289 token；分册 5,578 B；逐字一致；659 文件 0 失败）；远端 CI 复核待跑 |
 
 ## Current State
 
-- 生命周期阶段：**切片 1 进行中**（2026-09-17）。
-- 连贯目标（切片 1）：让「文档门禁红」不再等于「代码检查全部跳过」。
+- 生命周期阶段：**切片 1 已完成、切片 2 本地完成**（2026-09-17）；待做：切片 1 的负向验证、合并前在分支上复跑一次 CI、合并 master。
+- 连贯目标：让「文档门禁红」不再等于「代码检查全部跳过」，并把状态文档的余量恢复到可继续更新的水平。
 - 依赖：无（与 Task 26/27 无文件交叠：本任务只改 `ci.yml`、`PROJECT-STATUS.md`、`PROJECT-STATUS/` 分册与本目录）。
-- 受影响合同：CI 的 job 依赖关系（新增一个 job；现有 job 名与 `needs` 语义不变）。
+- 受影响合同：CI 的 job 依赖关系（新增一个 job；现有 job 名与 `needs` 语义不变）；`PROJECT-STATUS.md` 的分册边界。
 - 验证层级：分支 `workflow_dispatch`（含负向验证）→ 合并后 master 推送触发 CI 复核。
 
 ## Decisions and Deviations
