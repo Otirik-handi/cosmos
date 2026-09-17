@@ -15,6 +15,7 @@ function entry(overrides: Partial<EntryDetail>): EntryDetail {
         revisions: [],
         observations: [],
         relatedStories: [],
+        relations: [],
         ...overrides,
     };
 }

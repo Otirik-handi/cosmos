@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type SourceActivationCommand, type TemporalValue, type SavedView, type BoardBlock, type SpotlightPlacement, blockConfigSchemaFor } from "@cosmos/contracts";
-import { checkStorySubtype, type StoryKind } from "@cosmos/domain";
+import { type SourceActivationCommand, type TemporalValue, type SavedView, type BoardBlock, type SpotlightPlacement, type EntryRelation, blockConfigSchemaFor } from "@cosmos/contracts";
+import { checkStorySubtype, isSymmetricEntryRelationType, type StoryKind } from "@cosmos/domain";
 import { StorySubtypeInvalidError, type HostActionExecutionFence, type JobLease, type WorkflowAttemptSnapshot } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 
@@ -265,6 +265,78 @@ export function parseJson<T>(value: string | null): T | null {
     } catch {
         return null;
     }
+}
+
+/**
+ * Entry↔Entry relations for a set of Entries, keyed by the Entry the caller
+ * reads them from. Both sides of a row are looked up, so a symmetric relation
+ * shows up on each side with its own `direction` — the storage order never
+ * leaks to callers (ADR-0022 decision 3).
+ *
+ * Story members are EntryDetail too, and a relation may point outside the
+ * Story, so the counterpart Entry is joined here rather than read per member.
+ */
+export async function entryRelationIndexByEntry(
+    client: Prisma.TransactionClient,
+    entryIds: readonly string[],
+): Promise<Map<string, EntryRelation[]>> {
+    const index = new Map<string, EntryRelation[]>();
+    if (entryIds.length === 0) {
+        return index;
+    }
+    const wanted = new Set(entryIds);
+    const rows = await client.entryRelation.findMany({
+        where: {
+            OR: [
+                { fromEntryId: { in: [...entryIds] } },
+                { toEntryId: { in: [...entryIds] } },
+            ],
+        },
+        include: {
+            fromEntry: {
+                include: {
+                    sourceInstance: { select: { id: true, name: true } },
+                    currentRevision: { select: { title: true } },
+                },
+            },
+            toEntry: {
+                include: {
+                    sourceInstance: { select: { id: true, name: true } },
+                    currentRevision: { select: { title: true } },
+                },
+            },
+        },
+        orderBy: { createdAt: "asc" },
+    });
+    for (const row of rows) {
+        const symmetric = isSymmetricEntryRelationType(row.relationType);
+        const sides = [
+            { readFrom: row.fromEntryId, other: row.toEntry, direction: "outgoing" as const },
+            { readFrom: row.toEntryId, other: row.fromEntry, direction: "incoming" as const },
+        ];
+        for (const side of sides) {
+            if (!wanted.has(side.readFrom)) {
+                continue;
+            }
+            const relations = index.get(side.readFrom) ?? [];
+            relations.push({
+                entryId: side.other.id,
+                relationType: row.relationType,
+                direction: symmetric ? "symmetric" : side.direction,
+                title: side.other.currentRevision?.title ?? null,
+                sourceId: side.other.sourceInstance.id,
+                sourceName: side.other.sourceInstance.name,
+                producer: row.producer,
+                producerVersion: row.producerVersion,
+                confidence: row.confidence,
+                evidence: row.evidence,
+                actor: row.actorJson == null ? null : parseJson<string>(row.actorJson),
+                reason: row.reason,
+            });
+            index.set(side.readFrom, relations);
+        }
+    }
+    return index;
 }
 
 export function sourceActivationRequestHash(input: SourceActivationCommand & {

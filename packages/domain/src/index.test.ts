@@ -7,13 +7,16 @@ import {
     deriveExternalKey,
     entityRelationTypes,
     entityTypes,
+    entryRelationTypes,
     entryStoryRelationTypes,
     favoriteTargetTypes,
     fingerprintEntityRevision,
     fingerprintEntryRevision,
     fingerprintStoryRevision,
     fingerprintTopicRevision,
+    isSymmetricEntryRelationType,
     listStorySubtypes,
+    normalizeEntryRelationEndpoints,
     normalizePublisher,
     normalizeStoryRepresentation,
     projectEntryToStory,
@@ -111,6 +114,48 @@ describe("entry↔story evidence semantics", () => {
             "evidence_for",
             "mentions",
         ]);
+    });
+});
+
+describe("entry↔entry duplicate semantics", () => {
+    it("keeps the managed relation family to the three frozen words", () => {
+        expect(entryRelationTypes).toEqual([
+            "duplicate_of",
+            "syndicated_from",
+            "near_duplicate_of",
+        ]);
+    });
+
+    it("treats only the two duplicate kinds as symmetric", () => {
+        expect(isSymmetricEntryRelationType("duplicate_of")).toBe(true);
+        expect(isSymmetricEntryRelationType("near_duplicate_of")).toBe(true);
+        // A reprint has an author order, so it must keep the asserted direction.
+        expect(isSymmetricEntryRelationType("syndicated_from")).toBe(false);
+        // Unknown values degrade on read and must not be sorted as symmetric:
+        // guessing an order for an unknown type would invent a direction.
+        expect(isSymmetricEntryRelationType("translated_from")).toBe(false);
+    });
+
+    it("sorts symmetric endpoints by id and leaves directed ones alone", () => {
+        expect(normalizeEntryRelationEndpoints({
+            relationType: "duplicate_of",
+            fromEntryId: "entry-b",
+            toEntryId: "entry-a",
+        })).toEqual({ fromEntryId: "entry-a", toEntryId: "entry-b" });
+
+        // Both input orders must land on the same row, otherwise each side
+        // would read its own copy (ADR-0022 decision 3).
+        expect(normalizeEntryRelationEndpoints({
+            relationType: "near_duplicate_of",
+            fromEntryId: "entry-a",
+            toEntryId: "entry-b",
+        })).toEqual({ fromEntryId: "entry-a", toEntryId: "entry-b" });
+
+        expect(normalizeEntryRelationEndpoints({
+            relationType: "syndicated_from",
+            fromEntryId: "entry-b",
+            toEntryId: "entry-a",
+        })).toEqual({ fromEntryId: "entry-b", toEntryId: "entry-a" });
     });
 });
 

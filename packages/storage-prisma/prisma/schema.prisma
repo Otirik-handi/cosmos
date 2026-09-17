@@ -257,6 +257,8 @@ model Entry {
     observations        Observation[]
     story               Story?         @relation(fields: [storyId], references: [id], onDelete: SetNull)
     storyLinks          EntryStoryLink[]
+    relationsFrom       EntryRelation[] @relation("EntryRelationFrom")
+    relationsTo         EntryRelation[] @relation("EntryRelationTo")
 
     @@unique([sourceInstanceId, canonicalExternalId])
 }
@@ -530,6 +532,29 @@ model EntityRelation {
     toEntity        Entity   @relation("EntityRelationTo", fields: [toEntityId], references: [id], onDelete: Cascade)
 
     @@unique([fromEntityId, toEntityId, relationType])
+}
+
+/// One current duplicate/syndication relation per unordered Entry pair
+/// (ADR-0022 decision 2). Symmetric types are stored in id order, so the
+/// unique key below is a pair key as long as the writer normalizes first.
+model EntryRelation {
+    id              String   @id @default(cuid())
+    fromEntryId     String
+    toEntryId       String
+    relationType    String
+    producer        String   @default("human")
+    producerVersion String?
+    confidence      Float    @default(1)
+    evidence        String?
+    actorJson       String?
+    reason          String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    fromEntry       Entry    @relation("EntryRelationFrom", fields: [fromEntryId], references: [id], onDelete: Cascade)
+    toEntry         Entry    @relation("EntryRelationTo", fields: [toEntryId], references: [id], onDelete: Cascade)
+
+    @@unique([fromEntryId, toEntryId])
+    @@index([toEntryId])
 }
 
 model Label {

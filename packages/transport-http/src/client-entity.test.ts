@@ -91,6 +91,7 @@ describe("HttpCosmosClient entity 与证据", () => {
                             title: "Event",
                             reason: null,
                         }],
+                        relations: [],
                     },
                     entries: [],
                     entities: [],

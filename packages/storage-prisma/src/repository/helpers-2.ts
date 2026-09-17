@@ -1,6 +1,6 @@
-import { contentKindSchema, sourceKindSchema, type ContentMetrics, type EntryDetail, type EntryPage, type EntryRelatedStory, type RevisionDetail, type Publisher, type StoryDetail, type StoryKeyFact, type StoryTimeRange, type TemporalValue, type TopicDetail, type LabelDetail } from "@cosmos/contracts";
+import { contentKindSchema, sourceKindSchema, type ContentMetrics, type EntryDetail, type EntryPage, type EntryRelatedStory, type EntryRelation, type RevisionDetail, type Publisher, type StoryDetail, type StoryKeyFact, type StoryTimeRange, type TemporalValue, type TopicDetail, type LabelDetail } from "@cosmos/contracts";
 import { type Prisma } from "@prisma/client";
-import { exactTemporalValue, parseCursor, parseJson } from "./repository-internals.js";
+import { entryRelationIndexByEntry, exactTemporalValue, parseCursor, parseJson } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers1 } from "./helpers-1.js";
 
 export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelpers1 {
@@ -143,6 +143,12 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
             });
             relatedByEntry.set(link.entryId, related);
         }
+        // The member-row annotation of ADR-0022 decision 7 is the same relation
+        // list EntryDetail already carries, so both projections share it.
+        const relationsByEntry = await entryRelationIndexByEntry(
+            this.prisma,
+            story.entries.map((entry) => entry.id),
+        );
         const toEntryDetail = (entry: (typeof story.entries)[number]): EntryDetail => ({
             id: entry.id,
             sourceId: entry.sourceInstance.id,
@@ -176,6 +182,7 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                 sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
             })),
             relatedStories: relatedByEntry.get(entry.id) ?? [],
+            relations: relationsByEntry.get(entry.id) ?? [],
         });
         const entries = story.entries
             .filter((entry) => entry.currentRevision !== null)
@@ -441,6 +448,7 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
             where: { entryId: entry.id },
             include: { story: { include: { currentRevision: { select: { title: true } } } } },
         });
+        const relationsByEntry = await entryRelationIndexByEntry(this.prisma, [entry.id]);
         return {
             id: entry.id,
             sourceId: entry.sourceInstance.id,
@@ -479,6 +487,7 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                 title: link.story.currentRevision?.title ?? link.storyId,
                 reason: link.reason,
             })),
+            relations: relationsByEntry.get(entry.id) ?? [],
         };
     }
 

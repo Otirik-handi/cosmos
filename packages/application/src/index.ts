@@ -71,6 +71,7 @@ export {
     EntityNotFoundError, EntityRevisionConflictError, EntityRelationConflictError,
     EntityAliasConflictError, LabelNotFoundError, LabelConflictError,
     CollectionNotFoundError, EntryNotFoundError, EntryStoryLinkConflictError,
+    EntryRelationConflictError,
     AnnotationNotFoundError, SavedViewNotFoundError, BoardNotFoundError,
     BoardNameConflictError, BoardSectionNotFoundError, BoardBlockNotFoundError,
     SpotlightPlacementNotFoundError,

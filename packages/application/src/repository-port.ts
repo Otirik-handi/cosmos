@@ -13,7 +13,7 @@ import type {
     BoardDetail, BoardList, SpotlightPlacement, SpotlightPlacementList,
 } from "@cosmos/contracts";
 import type {
-    EntityRelationType, EntityType, EntryStoryRelationType, FavoriteTargetType,
+    EntityRelationType, EntityType, EntryRelationType, EntryStoryRelationType, FavoriteTargetType,
     NormalizedIngestItem, StoryKeyFact, StoryKind, StorySubtypeRegistration, StoryTimeRange,
     TargetType, TopicMemberRole,
     BlockType, SpotlightTargetType,
@@ -394,6 +394,28 @@ export interface CosmosRepository {
         actor?: string | null;
         reason?: string | null;
     }): Promise<StoryDetail | null>;
+    /**
+     * One current relation per unordered Entry pair (ADR-0022 decision 2), so a
+     * repeated write overwrites and the result is the `fromEntryId` side, which
+     * is what the caller just asserted.
+     */
+    linkEntryRelation(input: {
+        fromEntryId: string;
+        toEntryId: string;
+        relationType: EntryRelationType;
+        producer?: string | null;
+        producerVersion?: string | null;
+        confidence?: number | null;
+        evidence?: string | null;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntryDetail | null>;
+    unlinkEntryRelation(input: {
+        fromEntryId: string;
+        toEntryId: string;
+        actor?: string | null;
+        reason?: string | null;
+    }): Promise<EntryDetail | null>;
     createEntityRelation(input: {
         fromEntityId: string;
         toEntityId: string;

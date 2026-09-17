@@ -208,6 +208,53 @@ export const entryStoryRelationTypes = [
 
 export type EntryStoryRelationType = (typeof entryStoryRelationTypes)[number];
 
+/**
+ * Cross-source duplicate/syndication relations between two Entries (ADR-0022
+ * decision 1). One unordered pair of Entries keeps at most one row, so the
+ * reader never sees two competing current assertions about the same pair;
+ * unknown values degrade on read, so the list is additive only.
+ */
+export const entryRelationTypes = [
+    "duplicate_of",
+    "syndicated_from",
+    "near_duplicate_of",
+] as const;
+
+export type EntryRelationType = (typeof entryRelationTypes)[number];
+
+/**
+ * Relation types that make no claim about which Entry came first. They are
+ * stored with the two Entry ids in id order, which is what keeps one unordered
+ * pair down to a single row (ADR-0022 decision 3); `syndicated_from` keeps the
+ * caller's semantic direction instead.
+ */
+export const symmetricEntryRelationTypes = [
+    "duplicate_of",
+    "near_duplicate_of",
+] as const;
+
+export function isSymmetricEntryRelationType(relationType: string): boolean {
+    return (symmetricEntryRelationTypes as readonly string[]).includes(relationType);
+}
+
+/**
+ * Canonical storage order for one Entry↔Entry relation. Both read directions
+ * must land on the same row, so symmetric types are sorted by Entry id while
+ * directed types keep the direction the caller asserted.
+ */
+export function normalizeEntryRelationEndpoints(input: {
+    relationType: string;
+    fromEntryId: string;
+    toEntryId: string;
+}): { fromEntryId: string; toEntryId: string } {
+    if (!isSymmetricEntryRelationType(input.relationType)) {
+        return { fromEntryId: input.fromEntryId, toEntryId: input.toEntryId };
+    }
+    return input.fromEntryId <= input.toEntryId
+        ? { fromEntryId: input.fromEntryId, toEntryId: input.toEntryId }
+        : { fromEntryId: input.toEntryId, toEntryId: input.fromEntryId };
+}
+
 export const contentKinds = [
     "post",
     "article",

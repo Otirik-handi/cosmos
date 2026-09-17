@@ -119,6 +119,7 @@ export default function Home() {
         entryOptions,
         keyFactEntryOptions,
         labels,
+        linkEntryRelation,
         linkEntryStory,
         loadStoryUserState,
         mergeStory,
@@ -137,6 +138,7 @@ export default function Home() {
         storySubtypes,
         toggleStoryCollection,
         toggleStoryFavorite,
+        unlinkEntryRelation,
         unlinkEntryStory,
         updateStoryAnnotation,
         updateStoryRevision,
@@ -708,6 +710,8 @@ export default function Home() {
                     entryCandidates={keyFactEntryOptions}
                     onLinkEntry={linkEntryStory}
                     onUnlinkEntry={unlinkEntryStory}
+                    onLinkEntryRelation={linkEntryRelation}
+                    onUnlinkEntryRelation={unlinkEntryRelation}
                     onLoadStoryUserState={loadStoryUserState}
                     onMigrateStoryUserState={migrateStoryUserState}
                 />

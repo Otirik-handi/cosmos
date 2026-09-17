@@ -52,6 +52,8 @@ Story 用户状态迁移 v1（ADR-0020）无 Prisma schema/migration 变更（�
 
 Story 表示扩展 v1（ADR-0021）只在 `StoryRevision` 上新增两个可空列、不回填。浏览器回归见 `e2e/browser/story-representation.spec.ts`，组件实验室渲染见 `e2e/component-lab/story-panel.spec.ts`。
 
+条目↔条目重复/转载关系 v1（ADR-0022）的迁移为全新表（`20260916140000_entry_relation_v1`），无旧数据 backfill，仍按门禁跑 fresh + 旧库 upgrade 两态。按无序对查找已有行带来的语义（对称类型反向提交命中同一行、改类型是覆盖写、有向反向提交与自关联 409、重复提交不追加事件、Story 成员行两侧方向相反、未知类型读侧降级仍不按对称排序、条目删除级联）以及 `mergeStories`/`splitStory` 前后关系逐字段不变，由 `packages/storage-prisma/src/entry-relation-domain.test.ts` 使用隔离库覆盖（12 例）；枚举与方向归一化由 `packages/domain/src/index.test.ts` 覆盖，命令 schema 与 `EntryDetail.relations` 读取侧放宽由 `packages/contracts/src/entry-relation.test.ts` 覆盖；transport 两条路径与写前拒绝由 `packages/transport-http/src/client-relation.test.ts` 覆盖，API 透传与 400/404/409 映射由 `apps/api/src/app.controller.entry-relation.test.ts` 覆盖，路由表守卫快照由 115 条更新为 117 条；方向措辞与对端候选过滤由 `apps/web/src/lib/entry-relations.test.ts` 覆盖，组件实验室渲染见 `e2e/component-lab/story-panel.spec.ts` 的 `entry-relations` 场景，浏览器侧由 `e2e/browser/phase2-entry-relation.spec.ts` 覆盖（归并出双成员 Story → 成员行标记转载 → 两侧徽章方向相反 → 刷新后仍在 → Feed 顺序与搜索结果不变 → 重复提交/反向/自关联/未知类型的 409、409、409、400 → 解除后两侧消失）。
+
 性能修复使用 Task 记录的确定性 seed 或本地生成器，数据位于 `.agent/tmp/`。修复前后必须使用同一数据形状、规模、环境、命令和测量口径并重复采样；墙钟阈值不进入默认 `bun run test`，优先用查询次数、查询计划/索引、复杂度或有界结果等确定性断言防回归。原始基准输出不入库，Task/PR 记录完整命令、数据规模、环境、样本统计、波动和结论。
 
 ## 文档治理

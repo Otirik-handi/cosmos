@@ -217,6 +217,22 @@ export class EntryStoryLinkConflictError extends Error {
     }
 }
 
+/**
+ * An Entry↔Entry relation cannot be written as asked: an Entry cannot be
+ * related to itself, and two directed assertions pointing the opposite way
+ * about the same pair would be two competing current meanings where ADR-0022
+ * decision 2 allows only one. Symmetric reversals are not conflicts — they
+ * normalize onto the same row.
+ */
+export class EntryRelationConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "EntryRelationConflictError";
+    }
+}
+
 export class AnnotationNotFoundError extends Error {
     readonly code = "not_found" as const;
 

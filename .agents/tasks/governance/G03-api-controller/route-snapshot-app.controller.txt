@@ -1,4 +1,4 @@
-# 共 115 条路由
+# 共 117 条路由
 
 GET       /health                                      health
 GET       /connectors                                  connectors
@@ -67,6 +67,8 @@ POST      /story-entity-links                          linkStoryEntity
 POST      /story-entity-links/removals                 unlinkStoryEntity
 POST      /entry-story-links                           linkEntryStory
 POST      /entry-story-links/removals                  unlinkEntryStory
+POST      /entry-relations                             linkEntryRelation
+POST      /entry-relations/removals                    unlinkEntryRelation
 POST      /entity-relations                            createEntityRelation
 POST      /entity-relations/removals                   removeEntityRelation
 GET       /labels                                      listLabels

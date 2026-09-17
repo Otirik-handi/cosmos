@@ -61,6 +61,9 @@ type	EntryListItem
 type	EntryListQuery
 type	EntryPage
 type	EntryRelatedStory
+type	EntryRelation
+type	EntryRelationProvenance
+type	EntryRelationType
 type	EntryRevisionSnapshot
 type	EntryStoryLinkProvenance
 type	EntryStoryRelationType
@@ -91,6 +94,7 @@ type	LabelList
 type	LabelRef
 type	LibraryIngestInput
 type	LibraryIngestOutput
+type	LinkEntryRelationCommand
 type	LinkEntryStoryCommand
 type	LinkStoryEntityCommand
 type	ManifestHash
@@ -201,6 +205,7 @@ type	TopicSummary
 type	TriggerBinding
 type	TriggerConfig
 type	TriggerKind
+type	UnlinkEntryRelationCommand
 type	UnlinkEntryStoryCommand
 type	UnlinkStoryEntityCommand
 type	UpdateAnnotationCommand
@@ -281,6 +286,9 @@ value	entryListItemSchema
 value	entryListQuerySchema
 value	entryPageSchema
 value	entryRelatedStorySchema
+value	entryRelationProvenanceSchema
+value	entryRelationSchema
+value	entryRelationTypeSchema
 value	entryRevisionSnapshotSchema
 value	entryStoryLinkProvenanceSchema
 value	entryStoryRelationTypeSchema
@@ -310,6 +318,7 @@ value	labelListSchema
 value	labelRefSchema
 value	libraryIngestInputSchema
 value	libraryIngestOutputSchema
+value	linkEntryRelationCommandSchema
 value	linkEntryStoryCommandSchema
 value	linkStoryEntityCommandSchema
 value	manifestHashSchema
@@ -425,6 +434,7 @@ value	triggerBindingSchema
 value	triggerConfigSchema
 value	triggerIntervalSchema
 value	triggerKindSchema
+value	unlinkEntryRelationCommandSchema
 value	unlinkEntryStoryCommandSchema
 value	unlinkStoryEntityCommandSchema
 value	updateAnnotationCommandSchema

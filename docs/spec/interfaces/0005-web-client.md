@@ -140,6 +140,14 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    条目下拉添加）、时间线（成员 Revision 与 Observation 按时间倒序，来源名与事件类型分开
    表达）、相关内容（共享分类或共享 Entity 的其它 Story，先渲染面板再后台补齐，读取失败
    只留空列表）、最新正文、Entry id、Revision badges 与 Observation badges。
+9. **条目重复/转载关系（ADR-0022）**：没有独立的条目详情页，所以 v1 把入口放在来源成员
+   每一行上——行内徽章按「读到的这一侧」显示 `转载自 X`／`被 X 转载`／`重复于 X`／
+   `近似于 X`（读侧宽松类型显示原文），下面一行给出关系类型、对端来源与理由并带「解除」；
+   「标记重复 / 转载」在行内展开对端条目与类型两个下拉（对端候选是面板已加载的条目，
+   排除自己与已挂关系的条目，同 Story 成员是合法对端）后提交 `client.linkEntryRelation`，
+   解除走 `client.unlinkEntryRelation`。写命令返回的是 `fromEntryId` 那一侧的 EntryDetail，
+   不是本 Story，所以成功后重读 `client.story(storyId)` 刷新成员行。React key 用
+   `(entryId, relationType)`，所以改类型后徽章会随新类型重挂。
 9. **Story 编排**：面板“Story 操作”区可编辑标题（`updateStoryRevision`，携带当前
    `baseRevisionId`）或输入 obsolete Story id 把另一个 Story 归并到当前 Story
    （`mergeStories`）；标题/类型/subtype 与时间范围、关键事实在同一个「编辑 Story 表示」

@@ -109,6 +109,7 @@ value	EntityNotFoundError
 value	EntityRelationConflictError
 value	EntityRevisionConflictError
 value	EntryNotFoundError
+value	EntryRelationConflictError
 value	EntryStoryLinkConflictError
 value	FixedRunIdGenerator
 value	IngestionService

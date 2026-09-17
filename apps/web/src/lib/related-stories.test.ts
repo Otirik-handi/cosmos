@@ -25,6 +25,7 @@ const baseStory: StoryDetail = {
         revisions: [],
         observations: [],
         relatedStories: [],
+        relations: [],
     },
     entries: [],
     entities: [],

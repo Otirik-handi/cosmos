@@ -2,9 +2,9 @@ import { type LabelItem, type LabelList } from "@cosmos/contracts";
 import { type TargetType } from "@cosmos/domain";
 import { LabelConflictError, LabelNotFoundError } from "@cosmos/application";
 import { appendDomainEvent, isUniqueConstraintError } from "./repository-internals.js";
-import { PrismaCosmosRepositoryEntityLinks } from "./entity-links.js";
+import { PrismaCosmosRepositoryEntryRelations } from "./entry-relations.js";
 
-export class PrismaCosmosRepositoryLabels extends PrismaCosmosRepositoryEntityLinks {
+export class PrismaCosmosRepositoryLabels extends PrismaCosmosRepositoryEntryRelations {
     async createLabel(input: { name: string }): Promise<LabelItem> {
         const name = input.name.trim();
         const label = await this.prisma.$transaction(async (tx) => {

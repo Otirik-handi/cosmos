@@ -58,31 +58,36 @@ Non-goals（见 Proposal / ADR-0022）：
 
 ## Current State
 
-- 生命周期阶段：**切片已定义、未开工**（2026-09-16：Proposal 与 ADR 已接受，Task 编号与 worktree/分支已获批准；等 Task 10 的 ORG-017 切片完成后开始）。
+- 生命周期阶段：**三个切片均已实现并本地验证，等维护者手动点验与合并授权**（2026-09-17）。过程、偏差与完整验证记录见 [walkthrough.md](walkthrough.md)。
 - 连贯目标：让两个不同来源的条目能表达「同一篇稿子的重复/转载/近似」关系，同时保留各自来源身份，且不改变既有排序与搜索行为。
 - 可观察验收（≤3 条）：
   1. 标记一条转载后，两侧条目详情都能看到关系与方向（转载方 → 原发方），解除后消失；
   2. 同一对条目重复提交幂等；反向提交与自关联返回 409；
   3. `mergeStories`/`splitStory` 后关系保持不变；标记后 Feed 顺序与搜索结果不变。
+- 实现事实：`EntryRelation` 表（`(fromEntryId, toEntryId)` 唯一 + 三个受管类型 + provenance，migration `20260916140000_entry_relation_v1`）；`linkEntryRelation`/`unlinkEntryRelation` 按**无序对**查找已有行（对称类型反向提交是覆盖写，有向方向相反才是 409）；`EntryDetail.relations` 同时承担条目详情与 Story 成员行标注；两个 API 端点与 transport 客户端。
 - 依赖：Task 12（「当前关系 + provenance」形态参照）、Task 16（写路径/投影/错误映射形态参照）、Task 17（split 已存在 → 需要「不迁移」的回归断言）。
-- 受影响合同：domain（新枚举）、Prisma（新表）、contracts（新 schema/命令/两个读取字段）、storage（写命令 + 投影 + merge/split 回归）、api（两个端点）、transport-http、web。
-- 预计核心文件：`packages/storage-prisma/prisma/schema.prisma` + migration、`packages/domain/src/index.ts`、`packages/contracts/src/entry-relation.ts`（既有 Entry 关系合同所在文件）、`packages/storage-prisma/src/repository/`（新命令 + 投影）、`packages/transport-http/src/client-*.ts`、`apps/api/src/app.controller/`、`apps/web/src/components/cosmos/story-panel.tsx`。
+- 受影响合同：domain（新枚举）、Prisma（新表）、contracts（新 schema/命令/读取字段）、storage（写命令 + 投影 + merge/split 回归）、api（两个端点）、transport-http、web。
 - 验证层级：focused（domain/contracts/storage）→ 隔离库 upgrade 两态 → API 集成 → 浏览器 → 全量门禁。
 
 ## Decisions and Deviations
 
 - 关系合同放进既有 `packages/contracts/src/entry-relation.ts`（该文件已经是 Entry 相关合同的家），不新建文件。
 - 方向归一化与「一对条目一个当前语义」按 ADR-0022 决定 2/3；`EntityRelation` 的 `(from, to, type)` 形态不照抄（ADR-0022 Alternatives 已记录拒绝理由）。
-- 待实施时按实际情况补记偏差；本 Task 未开工，暂无实现过程记录。
+- 维护者 2026-09-17 开工前确认三处读法：**409 只覆盖有向类型的反向提交**（对称类型反向即覆盖写）、Web 入口放在 Story 面板来源成员行、worktree/分支/base 不变。
+- 偏差（细节与理由见 walkthrough「偏差与实现取舍」）：合同改动跨了切片 1/2；成员行标注复用 `EntryDetail.relations` 不新增字段；写命令返回 `fromEntryId` 一侧；顺手清掉 `SourceMembersSection` 两个死 props；浏览器 spec 命名 `phase2-entry-relation.spec.ts`（必须排在 `ingest.spec.ts` 之后）。
 
 ## Verification / Gate
 
 - 每切片按仓库验证层级：focused（domain/contracts/storage）→ 隔离库 upgrade 两态 → API 集成 → 浏览器；全量门禁至少 typecheck、docs:check、test、build、git diff --check。
-- 迁移类改动必须在 `.agent/tmp/` 用含旧数据的隔离库验证 upgrade 两态（本切片为全新表，仍跑两态）。
-- 未开工：尚未运行任何实现验证。
+- 迁移类改动在隔离库跑了 fresh + 旧库 upgrade 两态（本切片为全新表，仍跑两态）。
+- 已通过（2026-09-17，worktree 内）：`bun run typecheck` exit 0；`bun run test` **99 文件 / 599 用例全绿**；`bun run build` 通过；`bun run lint:web` 0 error / 81 warning（改动前 83）；组件实验室 **15/15**；新浏览器用例单跑 **1 passed**。
+- **未通过 / 未运行**：整套浏览器套件含本切片时 4/4 出现 `phase2-organization.spec.ts` 的失败（移走本切片 spec 后 4 次里 3 次全绿，且一个只做既有行为的诊断 spec 同样能触发）——失败归属与放行判断待维护者裁定，证据见 walkthrough。未运行：Node 进程 E2E、`test:property`、Docker/Compose、Windows Node smoke、真实公网来源验收。
 
 ## Follow-ups
 
 - 自动判定（ORG-021）落地时，需要定义自动关系的 actor/接受边界与「人工修正不被重分析覆盖」，并复用本表的 provenance 字段（无需迁移）。
 - Feed 去重与 Phase 4 推荐若需要消费重复关系，按 ADR-0022 Revisit Gate 重新评估。
 - 传播路径可视化、新关系类型（翻译）、正文片段锚点，均按 Revisit Gate 评估。
+- `apps/web/src/components/cosmos/story-panel.tsx` 改动前已 824 行（超 800 行红线），本切片又加约 12 行；拆出成员行/操作区需要一次行为等价重构，独立处理。
+- `e2e/browser/ingest.spec.ts` 是「空信息库上的第一次录入」写法（取 Feed 第一张卡片与 `items[0]` 当自己的内容），因此浏览器 spec 的排序是隐性契约；把它改成按来源限定可在独立任务里做。
+- `docs/testing/known-unstable-cases.md` 第 1 条新增了 2026-09-17 的观察，其中「搜索提示语说 0 条、列表仍留上一次内容」这一条**机制未查清**，不排除应用存在搜索状态不一致，按独立 Bug 诊断。
