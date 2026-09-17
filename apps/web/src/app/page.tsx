@@ -225,9 +225,11 @@ export default function Home() {
     const {
         activeSearch,
         applySavedView,
+        beginSearch,
         clearSearch,
         deleteSavedView,
         feed,
+        isSearchWriteCurrent,
         loadMore,
         loadingMore,
         nextCursor,
@@ -376,7 +378,14 @@ export default function Home() {
                 topicIds: topicIds.join(",") || undefined,
                 limit: 20,
             };
+            // 提交新条件即自增搜索版本：此后返回的非本次结果（包括带着旧条件发起的刷新，
+            // 例如搜索提交之后才触发的 SSE 刷新）一律丢弃，否则会出现"提示语说 0 条、
+            // 列表却残留旧内容"。
+            const generation = beginSearch(query);
             const result = await client.search(query);
+            if (!isSearchWriteCurrent(generation)) {
+                return;
+            }
             setActiveSearch(query);
             setFeed(result.items);
             setNextCursor(result.nextCursor);
