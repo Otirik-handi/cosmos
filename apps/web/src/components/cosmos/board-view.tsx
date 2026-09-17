@@ -786,7 +786,8 @@ function BoardFeedBlock({ client, savedView, limit, onOpenStory }: BoardFeedBloc
             )}
             <ul className="grid gap-1">
                 {items.map((item) => (
-                    <li key={item.storyId}>
+                    // 同一 Story 可以有多张成员卡片，key 用条目身份（同 FeedBrowser）。
+                    <li key={item.entryId}>
                         <button
                             type="button"
                             onClick={() => onOpenStory(item.storyId)}

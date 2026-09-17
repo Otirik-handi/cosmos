@@ -168,4 +168,16 @@ test("marks a syndication between two Story members and shows both directions", 
     await reopened.locator(`[data-entry-relation-remove="${reprintId}:${originalId}"]`).click();
     await expect(reopened.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`)).toHaveCount(0);
     await expect(reopened.locator(`[data-entry-relation-badge="${originalId}:${reprintId}"]`)).toHaveCount(0);
+
+    // 归并后的 Story 在 Feed 里有两张成员卡片：同一个 storyId、两个不同 entryId。
+    // 列表 key 用 storyId 会重复，React 只认其中一张，另一张的 DOM 节点不再受它管理，
+    // 列表被整体替换（例如搜索无结果）后仍旧残留，看起来就是「提示语说 0 条、还留着一张卡」。
+    await page.keyboard.press("Escape");
+    const memberCards = await page.locator("article").filter({ hasText: sourceName }).count();
+    expect(memberCards, "归并后同一 Story 在 Feed 里至少有两张成员卡片").toBeGreaterThanOrEqual(2);
+    const searchRegion = page.getByRole("region", { name: "信息库与搜索" });
+    await searchRegion.getByLabel("搜索已保存内容").fill(`绝不匹配-${randomUUID().slice(0, 8)}`);
+    await searchRegion.getByRole("button", { name: "搜索", exact: true }).click();
+    await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();
+    await expect(page.locator("article")).toHaveCount(0);
 });

@@ -334,9 +334,12 @@ export function FeedBrowser({
                             }
                             void onOpenStory(item.storyId);
                         };
+                        // key 必须是条目身份：同一 Story 可以有多张成员卡片同时出现在 Feed 里
+                        // （ADR-0022 决定 4/6 只标记不折叠），storyId 重复会让 React 只认其中
+                        // 一张，另一张的 DOM 节点不再受它管理，列表被替换后残留成"幽灵卡片"。
                         return (
                             <article
-                                key={item.storyId}
+                                key={item.entryId}
                                 className="flex flex-col gap-2 border-b py-5 first:pt-1 last:border-b-0 last:pb-1"
                             >
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
