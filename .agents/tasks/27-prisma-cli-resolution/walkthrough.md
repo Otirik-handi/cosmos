@@ -69,7 +69,7 @@ node_modules/.bun                                           -> 不存在
 ## 未运行项与已知限制
 
 - 远端 CI（push 后才会运行）——本轮结论只到本地等价门禁；`db:validate` 之后的 typecheck / 单测 / property / lint / build / Node E2E / Browser E2E 是否在 CI 真正执行，必须推送后核验。
-- `bun run test:e2e`、`bun run test:browser`、`test:browser:component-lab`、Docker/Compose 运行验收、真实来源联网验收：未运行（本机无 Docker CLI；这些不是本切片的验收面，只由 CI 承担）。
+- 本地未运行、已由远端 CI 承担并全部通过：`test:e2e`、`test:browser`、`test:browser:component-lab`、Windows Node smoke（见下方「远端 CI」节）。仍完全未运行：Docker/Compose 实跑（本机无 Docker CLI）、真实来源联网验收。
 - `docker/start-api.sh` 未在容器内实跑（本机无 Docker CLI）；已做的是静态检查、POSIX shell 实跑解析行与字节校验（见上表）。`set -e` 与原先 `&&` 链在「迁移失败就不启动 API」上等价；`exec` 让 API 成为 PID 1。
 - Windows 上验证，未在 Linux 上执行；布局对照用的是本机两套真实 node_modules 形态。
 - `scripts/**` 不被任何 tsconfig 覆盖（CI 的 typecheck 只跑 packages + apps），`scripts/prisma.ts` 的跨包相对 import 只由 `bun run db:validate` / `db:generate` 在运行时验证；若将来有人用 `tsc` 或 Node 直接执行该脚本会失败。
@@ -101,8 +101,23 @@ node_modules/.bun                                           -> 不存在
 
 五轴结论：正确性/简单性已按上表修正；架构（解析器放包内、不进公共导出）与安全（无外部输入、无 secret、加引号使用）、性能（一次 `require.resolve` + 少量 `existsSync`，相对 `prisma migrate` 子进程可忽略）无 finding。
 
+## 远端 CI（2026-09-17 核验：全绿）
+
+分支 `fix/t27-prisma-cli-resolution`（`5d986a5`）已推送到 fork `Otirik-handi/cosmos`。`ci.yml` 的 `on.push` 只列 `master`，功能分支推送本身不触发 CI，因此用 `gh -R Otirik-handi/cosmos workflow run CI --ref fix/t27-prisma-cli-resolution` 手动触发：run **35178356761**。
+
+| job | 结果 | 关键数字 |
+| --- | --- | --- |
+| Quality | ✓ 4m11s | `docs:check` 656 文件 0 失败；size 门禁 PASS；**`db:validate` schema valid**；`db:generate` ✓；`typecheck` ✓；`test` **570 passed (570)** / 94 文件；`test:property` **4 passed**；`lint:web` 0 error（83 条既有 warning）；`build` ✓ |
+| Node process E2E | ✓ 1m13s | `test:e2e` 4 文件通过 |
+| Browser E2E | ✓ 3m23s | `test:browser` **20 passed + 1 flaky**；`test:browser:component-lab` 14 passed |
+| Windows Node smoke | ✓ 2m48s | `scripts/smoke-node.ps1` 通过 |
+
+- 唯一 flaky 是 `e2e/browser/phase2-organization.spec.ts`（先失败、重试通过），与 [`docs/testing/known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md) 已登记的间歇用例一致，不是本切片引入，也没有新增失败。
+- 这是自 2026-09-15 起 CI 第一次越过 `db:validate` 并真正执行其后全部步骤——维护者验收的第二条据此达成。
+- 操作坑：本 worktree 里 `gh` 会把默认仓库解析到 `upstream`（`notnotype/cosmos`）而不是 `origin`（fork），所有 `gh` 命令都必须带 `-R Otirik-handi/cosmos`；这与 Task 10 记过的同一次误判是同一个原因。
+
 ## 下一步
 
-1. 维护者审查 diff（含独立 code review 结论）。
-2. 授权 commit；授权 push 后观察远端 CI 是否越过 `db:validate`。
-3. 合并授权后 `--no-ff` 合入 master，并按授权清理 worktree 与分支。
+1. `--no-ff` 合入 master 并推送（已获授权）；worktree 与分支按要求保留，清理需另行授权。
+2. 合并后由维护者决定 `PROJECT-STATUS.md` 的 9k token 余量（切历史分册 / 登记基线）与锁文件—工具链漂移两项，见 README 的 Follow-ups。
+3. 仍未验证：Docker/Compose 实跑、真实来源联网验收。

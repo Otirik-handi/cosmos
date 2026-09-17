@@ -56,12 +56,12 @@ Non-goals：
 
 ## Current State
 
-- 生命周期阶段：**实现与本地验证完成**，未 commit / 未 push，远端 CI 结论待推送后核验。
+- 生命周期阶段：**完成**（2026-09-17）。实现提交 `5d986a5` 已推送分支并触发远端 CI，四个 job 全绿；合并 master 已获授权，worktree/分支清理待另行授权。
 - 连贯目标：CI 的质量门禁能越过 `db:validate`，一路跑到 typecheck / 单测 / build。
 - 可观察验收（≤3 条）：
-  1. 在「包内没有 `prisma`、CLI 被提升到工作区根」的布局下，`bun run db:validate` 与 `bun run db:generate` 通过；
-  2. 仓库内不再有调用方引用 `packages/storage-prisma/node_modules/prisma/build/index.js` 这一固定位置；
-  3. 远端 CI 的 `db:validate` 通过且其后步骤真正执行（待 push 后核验）。
+  1. 在「包内没有 `prisma`、CLI 被提升到工作区根」的布局下，`bun run db:validate` 与 `bun run db:generate` 通过；**已达成**（本地两种布局 + CI Linux 均通过）。
+  2. 仓库内不再有调用方引用 `packages/storage-prisma/node_modules/prisma/build/index.js` 这一固定位置；**已达成**（27 处全部替换，`docs/spec/operations/0002` 的两行是候选规则描述）。
+  3. 远端 CI 的 `db:validate` 通过且其后步骤真正执行；**已达成**（run 35178356761：Quality 跑到 build，Node E2E / Browser E2E / Windows smoke 全绿）。
 - 依赖：无（Task 独立；`bun.lock` 现状与 CI 配置是背景，不是前置）。
 - 受影响合同：`scripts/prisma.ts` 的调用方式、Docker/Compose 的 API 启动入口、测试夹具的 Prisma 调用方式。
 - 验证层级：解析器单测（RED→GREEN）→ 真实布局复现（修前红 / 修后绿）→ 聚焦 storage 用例 → 全量门禁 → 远端 CI。
