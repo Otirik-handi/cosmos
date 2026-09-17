@@ -6,6 +6,7 @@ import { canonicalJson, fingerprint, type ActivityExecutionRequest, type Deferre
 import { PrismaClient } from "@prisma/client";
 import type { RetryPolicy } from "@cosmos/contracts";
 import { afterEach } from "vitest";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 
 
@@ -65,7 +66,7 @@ export async function createStore(
 
 export function deployMigrations(databasePath: string, schemaPath: string): void {
     execFileSync(process.execPath, [
-        resolve(process.cwd(), "packages/storage-prisma/node_modules/prisma/build/index.js"),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",

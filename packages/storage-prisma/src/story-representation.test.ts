@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 
 const roots: string[] = [];
 
@@ -172,10 +173,7 @@ describe("Story representation extension persistence", () => {
 
 function deployMigrations(databasePath: string): void {
     execFileSync(process.execPath, [
-        resolve(
-            process.cwd(),
-            "packages/storage-prisma/node_modules/prisma/build/index.js",
-        ),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",

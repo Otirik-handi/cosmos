@@ -21,6 +21,7 @@ import {
     createWorkflowEnvelopeMarker,
     WorkflowStateIntegrityError,
 } from "./workflow-backend.js";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 
 const roots: string[] = [];
@@ -335,7 +336,7 @@ async function createBackend(): Promise<PrismaWorkflowBackend> {
     databasePaths.set(backend, databasePath);
     // Test setup uses the checked-in migration without touching a user's database.
     execFileSync(process.execPath, [
-        resolve(process.cwd(), "packages/storage-prisma/node_modules/prisma/build/index.js"),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",

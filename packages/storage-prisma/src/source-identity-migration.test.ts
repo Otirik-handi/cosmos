@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { resolvePrismaCliPath } from "./prisma-cli.js";
+
 const temporaryRoots: string[] = [];
 
 const legacyMigrations = [
@@ -164,7 +166,7 @@ async function createMigrationWorkspace(root: string, names: readonly string[]):
 
 function deployMigrations(databasePath: string, schemaPath: string): void {
     execFileSync(process.execPath, [
-        resolve(process.cwd(), "packages/storage-prisma/node_modules/prisma/build/index.js"),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",

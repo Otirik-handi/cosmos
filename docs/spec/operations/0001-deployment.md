@@ -191,7 +191,7 @@ GET http://127.0.0.1:4310/api/v1/health
 | exposed Web port | `3000` |
 | exposed API port | `4310` |
 | Prisma schema | `packages/storage-prisma/prisma/schema.prisma` |
-| Dockerfile 默认主进程 | 数据库准备 → Prisma `migrate deploy` → `node apps/api/dist/main.js` |
+| Dockerfile 默认主进程 | `docker/start-api.sh`：数据库准备 → Prisma `migrate deploy` → `node apps/api/dist/main.js` |
 
 **Compose 默认值**
 
@@ -237,7 +237,8 @@ GET http://127.0.0.1:4310/api/v1/health
 
 ## 实现与测试锚点
 
-- [docker/Dockerfile](../../../docker/Dockerfile)：镜像构建、运行时基础镜像、默认环境、构建产物复制、Next standalone 布置、数据目录准备、Prisma 迁移和默认 API 启动命令。
+- [docker/Dockerfile](../../../docker/Dockerfile)：镜像构建、运行时基础镜像、默认环境、构建产物复制、Next standalone 布置、数据目录准备和默认 API 启动命令。
+- [docker/start-api.sh](../../../docker/start-api.sh)：运行时主进程入口；准备数据目录、调用共享解析器（`packages/storage-prisma/src/prisma-cli.ts` 的构建产物）定位 Prisma CLI、执行 `migrate deploy`，迁移成功后才启动 API。
 - [docker/compose.yml](../../../docker/compose.yml)：`web`、`api`、`worker` 三服务命令、环境、端口、健康检查、依赖关系、命名卷和默认网络配置。
 - [API 实现（接口所有者）](../../../apps/api/)：Product API、Feed、Search、SSE 及健康路由的实际接口实现；Compose 只消费健康路由作为就绪信号。
 - [`scripts/smoke-node.ps1`](../../../scripts/smoke-node.ps1)：当前唯一验收锚点，不属于本部署组件。它验证隔离数据根目录中的 Node 生产 API 与 Worker、迁移、持久结果、Feed、Search、SSE 和日志，但不构建或运行容器，也不验证 Compose 服务 DNS、端口映射、健康门槛、镜像文件布局、卷挂载或容器权限。

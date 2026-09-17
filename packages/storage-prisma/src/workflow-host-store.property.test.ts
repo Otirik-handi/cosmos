@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 
 const definition = {
     key: "cosmos.ingest",
@@ -24,7 +25,7 @@ beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), "cosmos-workflow-lease-property-"));
     const databasePath = join(root, "property.sqlite");
     execFileSync(process.execPath, [
-        resolve(process.cwd(), "packages/storage-prisma/node_modules/prisma/build/index.js"),
+        resolvePrismaCliPath(),
         "migrate",
         "deploy",
         "--schema",

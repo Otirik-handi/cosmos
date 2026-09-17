@@ -11,6 +11,7 @@ import {
     PrismaConnectorStateStore,
     PrismaCosmosRepository,
 } from "./index.js";
+import { resolvePrismaCliPath } from "./prisma-cli.js";
 
 const roots: string[] = [];
 
@@ -20,7 +21,7 @@ afterEach(async () => {
 
 function prepareDatabase(root: string): void {
     const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolve(process.cwd(), "packages/storage-prisma/node_modules/prisma/build/index.js");
+    const prismaCli = resolvePrismaCliPath();
     const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
     writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
     execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {

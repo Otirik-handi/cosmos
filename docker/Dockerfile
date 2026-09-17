@@ -46,4 +46,4 @@ RUN mkdir -p /var/lib/cosmos
 
 EXPOSE 3000 4310
 
-CMD ["sh", "-c", "mkdir -p /var/lib/cosmos && touch /var/lib/cosmos/cosmos.sqlite && node packages/storage-prisma/node_modules/prisma/build/index.js migrate deploy --schema packages/storage-prisma/prisma/schema.prisma && node apps/api/dist/main.js"]
+CMD ["sh", "/app/docker/start-api.sh"]

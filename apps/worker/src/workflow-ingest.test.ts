@@ -17,6 +17,7 @@ import {
 } from "../../../packages/application/src/workflow-ingest.js";
 import { IngestWorkflowControlService } from "../../../packages/application/src/workflow-control.js";
 import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
+import { resolvePrismaCliPath } from "../../../packages/storage-prisma/src/prisma-cli.js";
 
 import { createWorkflowHost } from "./workflow-host.js";
 
@@ -826,10 +827,7 @@ async function drainWorkflow(
 
 function prepareDatabase(root: string): void {
     const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolve(
-        process.cwd(),
-        "packages/storage-prisma/node_modules/prisma/build/index.js",
-    );
+    const prismaCli = resolvePrismaCliPath();
     const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
     writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
     execFileSync(process.execPath, [
