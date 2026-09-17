@@ -31,6 +31,8 @@ import {
     unlinkStoryEntityCommandSchema,
     linkEntryStoryCommandSchema,
     unlinkEntryStoryCommandSchema,
+    linkEntryRelationCommandSchema,
+    unlinkEntryRelationCommandSchema,
     createEntityRelationCommandSchema,
     removeEntityRelationCommandSchema,
     updateStoryRevisionCommandSchema,
@@ -512,6 +514,43 @@ export class AppControllerContent extends AppControllerRuns {
             return await this.repository.unlinkEntryStory({
                 entryId: parsed.entryId,
                 storyId: parsed.storyId,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entry-relations")
+    @Bind(Body())
+    async linkEntryRelation(body: unknown) {
+        try {
+            const parsed = linkEntryRelationCommandSchema.parse(body);
+            return await this.repository.linkEntryRelation({
+                fromEntryId: parsed.fromEntryId,
+                toEntryId: parsed.toEntryId,
+                relationType: parsed.relationType,
+                producer: parsed.producer ?? null,
+                producerVersion: parsed.producerVersion ?? null,
+                confidence: parsed.confidence ?? null,
+                evidence: parsed.evidence ?? null,
+                actor: parsed.actor ?? null,
+                reason: parsed.reason ?? null,
+            });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    @Post("entry-relations/removals")
+    @Bind(Body())
+    async unlinkEntryRelation(body: unknown) {
+        try {
+            const parsed = unlinkEntryRelationCommandSchema.parse(body);
+            return await this.repository.unlinkEntryRelation({
+                fromEntryId: parsed.fromEntryId,
+                toEntryId: parsed.toEntryId,
                 actor: parsed.actor ?? null,
                 reason: parsed.reason ?? null,
             });

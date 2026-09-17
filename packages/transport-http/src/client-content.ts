@@ -55,6 +55,8 @@ import {
     unlinkStoryEntityCommandSchema,
     linkEntryStoryCommandSchema,
     unlinkEntryStoryCommandSchema,
+    linkEntryRelationCommandSchema,
+    unlinkEntryRelationCommandSchema,
     createEntityRelationCommandSchema,
     removeEntityRelationCommandSchema,
     type EntityDetail,
@@ -67,6 +69,8 @@ import {
     type UnlinkStoryEntityCommand,
     type LinkEntryStoryCommand,
     type UnlinkEntryStoryCommand,
+    type LinkEntryRelationCommand,
+    type UnlinkEntryRelationCommand,
     type CreateEntityRelationCommand,
     type RemoveEntityRelationCommand,
 } from "@cosmos/contracts";
@@ -375,6 +379,24 @@ export class ContentClient extends SourcesClient {
             method: "POST",
             body: payload,
             schema: storyDetailSchema,
+        });
+    }
+
+    async linkEntryRelation(input: LinkEntryRelationCommand): Promise<EntryDetail> {
+        const payload = linkEntryRelationCommandSchema.parse(input);
+        return this.request("/api/v1/entry-relations", {
+            method: "POST",
+            body: payload,
+            schema: entryDetailSchema,
+        });
+    }
+
+    async unlinkEntryRelation(input: UnlinkEntryRelationCommand): Promise<EntryDetail> {
+        const payload = unlinkEntryRelationCommandSchema.parse(input);
+        return this.request("/api/v1/entry-relations/removals", {
+            method: "POST",
+            body: payload,
+            schema: entryDetailSchema,
         });
     }
 

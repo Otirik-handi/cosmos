@@ -7,6 +7,7 @@ import {
     type Annotation,
     type CollectionList,
     type EntryListItem,
+    type EntryRelationType,
     type EntryStoryRelationType,
     type LabelList,
     type MigrateStoryUserStateCommand,
@@ -132,6 +133,34 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
             storyId: story.story.id,
         });
         setStory(updated);
+    };
+
+    /**
+     * 条目↔条目关系挂在条目内容身份上，不属于本 Story：写命令返回的是
+     * fromEntryId 那一侧的 EntryDetail，所以要重读 Story 面板才能刷新成员行
+     * （ADR-0022 决定 4）。
+     */
+    const linkEntryRelation = async (input: {
+        fromEntryId: string;
+        toEntryId: string;
+        relationType: EntryRelationType;
+    }): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.linkEntryRelation({ ...input, actor: "user" });
+        setStory(await client.story(story.story.id));
+    };
+
+    const unlinkEntryRelation = async (input: {
+        fromEntryId: string;
+        toEntryId: string;
+    }): Promise<void> => {
+        if (!story) {
+            return;
+        }
+        await client.unlinkEntryRelation({ ...input, actor: "user" });
+        setStory(await client.story(story.story.id));
     };
 
     const updateStoryRevision = async (command: UpdateStoryRevisionCommand): Promise<void> => {
@@ -391,6 +420,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         entryOptions,
         keyFactEntryOptions,
         labels,
+        linkEntryRelation,
         linkEntryStory,
         loadStoryUserState,
         mergeStory,
@@ -409,6 +439,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         storySubtypes,
         toggleStoryCollection,
         toggleStoryFavorite,
+        unlinkEntryRelation,
         unlinkEntryStory,
         updateStoryAnnotation,
         updateStoryRevision,

@@ -470,7 +470,7 @@ export function renderStoryPanelLab(props: LabProps) {
         props,
         "state",
         "revision",
-        ["revision", "empty", "split", "splittable", "legacy-subtype", "representation"] as const,
+        ["revision", "empty", "split", "splittable", "legacy-subtype", "representation", "entry-relations"] as const,
     );
     const title = textProp(props, "title", "Cosmos fixture story");
     const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
@@ -511,6 +511,7 @@ export function renderStoryPanelLab(props: LabProps) {
             title: "A fixture event Story this entry is evidence for",
             reason: "同一事件",
         }],
+        relations: [],
     };
     const secondEntry: EntryDetail = {
         ...memberEntry,
@@ -525,6 +526,24 @@ export function renderStoryPanelLab(props: LabProps) {
         })),
         observations: [],
         relatedStories: [],
+        // 场景固定成「第二条转载第一条」：成员行两侧的措辞（转载自 / 被…转载）
+        // 与解除入口都能在实验室里看到（ADR-0022 决定 3/7）。
+        relations: state === "entry-relations"
+            ? [{
+                entryId: "entry-fixture",
+                relationType: "syndicated_from",
+                direction: "outgoing" as const,
+                title,
+                sourceId: "source-fixture",
+                sourceName: "Cosmos fixture",
+                producer: "human",
+                producerVersion: null,
+                confidence: 1,
+                evidence: null,
+                actor: "user",
+                reason: "门户转载官网",
+            }]
+            : [],
     };
     const story: StoryDetail = {
         story: {
@@ -575,7 +594,7 @@ export function renderStoryPanelLab(props: LabProps) {
         entry: state === "split" ? null : memberEntry,
         entries: state === "split"
             ? []
-            : state === "splittable"
+            : state === "splittable" || state === "entry-relations"
                 ? [memberEntry, secondEntry]
                 : [memberEntry],
         entities: [],
@@ -606,7 +625,10 @@ export function renderStoryPanelLab(props: LabProps) {
             entryCandidates={[
                 { id: "entry-fixture", title, sourceName: "Cosmos fixture", isMember: true },
                 { id: "entry-fixture-2", title: "A second fixture member", sourceName: "Cosmos fixture source 2", isMember: true },
+                { id: "entry-relation-candidate", title: "A third fixture entry", sourceName: "Cosmos fixture source 3", isMember: false },
             ]}
+            onLinkEntryRelation={async () => undefined}
+            onUnlinkEntryRelation={async () => undefined}
             onLoadStoryUserState={async () => ({
                 favorite: true,
                 labels: [{ id: "label-fixture", name: "开发" }],

@@ -66,12 +66,16 @@ export {
 } from "./search.js";
 export {
     entryDetailSchema, entryListItemSchema, entryListQuerySchema, entryPageSchema,
-    entryRelatedStorySchema, entryRevisionSnapshotSchema, entryStoryLinkProvenanceSchema,
-    entryStoryRelationTypeSchema, observationSnapshotSchema, revisionDetailSchema,
-    storyEvidenceSchema, type EntryDetail, type EntryListItem, type EntryListQuery,
-    type EntryPage, type EntryRelatedStory, type EntryRevisionSnapshot,
-    type EntryStoryLinkProvenance, type EntryStoryRelationType, type ObservationSnapshot,
-    type RevisionDetail, type StoryEvidence,
+    entryRelatedStorySchema, entryRelationProvenanceSchema, entryRelationSchema,
+    entryRelationTypeSchema, entryRevisionSnapshotSchema, entryStoryLinkProvenanceSchema,
+    entryStoryRelationTypeSchema, linkEntryRelationCommandSchema, observationSnapshotSchema,
+    revisionDetailSchema, storyEvidenceSchema, unlinkEntryRelationCommandSchema,
+    type EntryDetail, type EntryListItem, type EntryListQuery,
+    type EntryPage, type EntryRelatedStory, type EntryRelation,
+    type EntryRelationProvenance, type EntryRelationType, type EntryRevisionSnapshot,
+    type EntryStoryLinkProvenance, type EntryStoryRelationType,
+    type LinkEntryRelationCommand, type ObservationSnapshot,
+    type RevisionDetail, type StoryEvidence, type UnlinkEntryRelationCommand,
 } from "./entry-relation.js";
 export {
     labelRefSchema, linkEntryStoryCommandSchema, mergeStoriesCommandSchema,

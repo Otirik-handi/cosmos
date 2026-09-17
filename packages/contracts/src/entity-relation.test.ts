@@ -89,6 +89,7 @@ describe("entity and relation contracts", () => {
                 revisions: [],
                 observations: [],
                 relatedStories: [],
+                relations: [],
             },
             entries: [],
             entities: [{
@@ -152,6 +153,7 @@ describe("entity and relation contracts", () => {
                     title: "Other Story",
                     reason: null,
                 }],
+                relations: [],
             },
             entries: [],
             entities: [],

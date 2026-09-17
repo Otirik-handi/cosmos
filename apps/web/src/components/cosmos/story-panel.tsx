@@ -7,6 +7,7 @@ import type {
     CollectionSummary,
     EntitySummary,
     EntryListItem,
+    EntryRelationType,
     EntryStoryRelationType,
     LabelRef,
     MigrateStoryUserStateCommand,
@@ -109,6 +110,16 @@ type StoryPanelProps = {
     entryCandidates?: readonly StoryEntryOption[];
     onLinkEntry?: (input: { entryId: string; relationType: EntryStoryRelationType }) => Promise<void>;
     onUnlinkEntry?: (entryId: string) => Promise<void>;
+    /** 条目↔条目重复/转载关系（ADR-0022）：成员行上标记、改类型与解除。 */
+    onLinkEntryRelation?: (input: {
+        fromEntryId: string;
+        toEntryId: string;
+        relationType: EntryRelationType;
+    }) => Promise<void>;
+    onUnlinkEntryRelation?: (input: {
+        fromEntryId: string;
+        toEntryId: string;
+    }) => Promise<void>;
     /** 读取拆分家族某个成员上的 Story 级用户状态（ADR-0020 迁移表单的来源侧）。 */
     onLoadStoryUserState?: (storyId: string) => Promise<StoryUserStateSnapshot>;
     /** 在同一个拆分家族内迁移 Story 级用户状态；反向调用即撤销。 */
@@ -155,6 +166,8 @@ export function StoryPanel({
     entryCandidates,
     onLinkEntry,
     onUnlinkEntry,
+    onLinkEntryRelation,
+    onUnlinkEntryRelation,
     onLoadStoryUserState,
     onMigrateStoryUserState,
 }: StoryPanelProps) {
@@ -750,7 +763,13 @@ export function StoryPanel({
                     </Button>
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-                    <SourceMembersSection story={story} title={title} relatedStories={relatedStories} />
+                    <SourceMembersSection
+                        busy={busy}
+                        candidates={entryCandidates ?? []}
+                        onLinkEntryRelation={onLinkEntryRelation}
+                        onUnlinkEntryRelation={onUnlinkEntryRelation}
+                        story={story}
+                    />
                     <StoryKeyFactsBlock entryOptions={keyFactSources} story={story} />
                     {isShell && <HistoryShellSection busy={busy} kind={kind} onOpenRelatedStory={onOpenRelatedStory} story={story} title={title} />}
                     {isShell && onLoadStoryUserState && onMigrateStoryUserState && (

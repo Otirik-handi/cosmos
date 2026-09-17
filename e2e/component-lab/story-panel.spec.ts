@@ -45,4 +45,31 @@ test.describe("component lab story panel representation", () => {
 
         expect(consoleErrors).toEqual([]);
     });
+
+    /**
+     * 条目↔条目重复/转载关系在成员行上的渲染：标注、方向措辞与标记/解除入口。
+     */
+    test("renders the member-row duplicate relation of the entry-relations scene", async ({page}) => {
+        const consoleErrors: string[] = [];
+        page.on("console", (message) => {
+            if (message.type() === "error") consoleErrors.push(message.text());
+        });
+
+        await page.goto("/dev/components?component=story-panel&scene=entry-relations");
+        const preview = page.locator(PREVIEW_ROOT);
+        await expect(preview).toBeVisible();
+
+        // 第二条成员转载自第一条：两侧措辞相反，且只有转载方那条 fixture 关系。
+        const reprint = preview.locator('[data-story-member-id="entry-fixture-2"]');
+        await expect(reprint.locator('[data-story-member-relations="entry-fixture-2"]'))
+            .toContainText("转载自");
+        const original = preview.locator('[data-story-member-id="entry-fixture"]');
+        await expect(original.locator('[data-story-member-relations="entry-fixture"]')).toHaveCount(0);
+
+        // 标记入口与解除入口都在。
+        await expect(preview.locator('[data-entry-relation-open="entry-fixture"]')).toBeVisible();
+        await expect(preview.locator('[data-entry-relation-remove="entry-fixture-2:entry-fixture"]')).toBeVisible();
+
+        expect(consoleErrors).toEqual([]);
+    });
 });
