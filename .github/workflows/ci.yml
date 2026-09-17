@@ -14,7 +14,10 @@ concurrency:
     cancel-in-progress: true
 
 env:
-    BUN_VERSION: 1.3.14
+    # 与开发者本地/生成 bun.lock 的工具链一致。1.3.14 会为 workspace 依赖生成不同的
+    # node_modules 布局，使仓库里按固定路径调用 Prisma CLI 的脚本与测试找不到它
+    # （见 PROJECT-STATUS 2026-09-16 的 CI 记录）。
+    BUN_VERSION: 1.4.2
 
 jobs:
     quality:
