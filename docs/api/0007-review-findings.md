@@ -284,6 +284,10 @@ Webhook、Publication、备份/恢复/删除和 Docker 边界。
 
 1. 当前 Controller 仍直接返回 Repository projection，`Asset.storageKey`、
    Source passthrough config 和 Job arbitrary result 需要白名单 public DTO。
+   （2026-09-18 注记：`Asset.storageKey` 已剥离——六条公开读路由经 `toPublicAsset` 挑字段、
+   公开读 DTO 改用 `publicAssetSnapshotSchema`，回归锚点
+   `apps/api/src/app.controller.public-projection.test.ts`，见 Task 31；Source passthrough
+   config 与 Job arbitrary result 仍未收敛。）
 2. Run/Probe Transport 尚未完整执行必填 Idempotency-Key、fingerprint replay 和
    `idempotency_conflict`。
 3. Source PATCH/HTTP Client 尚未实现 ETag/If-Match/revision conflict。

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState, type FormEventHandler } from "react";
 
 import type {
     Annotation,
-    AssetSnapshot,
     CollectionSummary,
     EntitySummary,
     EntryListItem,

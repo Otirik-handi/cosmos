@@ -22,7 +22,7 @@ Web -> 首页按 Board 树渲染（只读渲染 -> 编辑模式两步交付）
 Scope：
 
 - `Board`（name 唯一）/ `BoardSection`（title + position）/ `BoardBlock`（type 受管枚举 + 白名单 config + position + visible）。
-- Block 类型：`feed`（必填 `savedViewId`）、`spotlight`（人工固定列表）、`source-health`、`topic-list`、`collection`（必填 `collectionId`）；未知 type 降级占位。
+- Block 类型：`feed`（可选 `savedViewId`，未绑定即渲染最新内容流）、`spotlight`（人工固定列表）、`source-health`、`topic-list`、`collection`（可选 `collectionId`，未绑定渲染占位）；未知 type 降级占位。
 - `SpotlightPlacement`（targetType 受管枚举 story/topic + targetId + boardId 必填 + source=manual + 可空 reason/expiresAt）；`(boardId, targetType, targetId)` 唯一；物理解除。
 - Product API：Board/Section/Block 增删改 + move/set-visibility/duplicate + Spotlight pin/unpin + Board 树读取 + placements 列表（附带目标摘要）。
 - 默认 Board 幂等 seed（应用侧，不进 migration）；Web 首页改造为 Board 树渲染 + 编辑模式 + pin/unpin 交互。

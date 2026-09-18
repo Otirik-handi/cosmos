@@ -342,9 +342,7 @@ describe("Worker Ingest Workflow composition", () => {
             if (!originalSavedAsset || !currentSavedAsset || !currentMetadataAsset) {
                 throw new Error("workflow parity assets were not persisted");
             }
-            expect(originalSavedAsset.storageKey).not.toBeNull();
-            expect(currentSavedAsset.storageKey).not.toBeNull();
-            expect(currentMetadataAsset.storageKey).toBeNull();
+            // 资产是否真的落到 Blob，用读取行为判定：公开读投影不再暴露内部 Blob key。
             const originalAssetContent = await repository.readAsset(originalSavedAsset.id);
             const currentAssetContent = await repository.readAsset(currentSavedAsset.id);
             if (!originalAssetContent || !currentAssetContent) {

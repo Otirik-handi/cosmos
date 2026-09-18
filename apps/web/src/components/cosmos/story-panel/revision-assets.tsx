@@ -3,7 +3,7 @@ import {
     Image as ImageIcon,
 } from "lucide-react";
 import {
-    AssetSnapshot,
+    PublicAssetSnapshot,
 } from "@cosmos/contracts";
 import {
     Badge,
@@ -18,7 +18,7 @@ import {
  * 附件区：已保存媒体用站内图片展示（断网可读），其余状态给出真实降级
  * 文案与原因，并保留原文外链，不伪造离线成功（ADR-0005）。
  */
-export function RevisionAssets({ assets }: { assets: readonly AssetSnapshot[] }) {
+export function RevisionAssets({ assets }: { assets: readonly PublicAssetSnapshot[] }) {
     if (assets.length === 0) {
         return null;
     }

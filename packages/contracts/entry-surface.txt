@@ -120,6 +120,7 @@ type	NormalizedIngestItemContract
 type	ObservationSnapshot
 type	ParsedActionRef
 type	PinSpotlightCommand
+type	PublicAssetSnapshot
 type	Publisher
 type	PublisherKind
 type	PublisherMetrics
@@ -347,6 +348,7 @@ value	observationSnapshotSchema
 value	parseActionRef
 value	pinSpotlightCommandSchema
 value	protocolVersion
+value	publicAssetSnapshotSchema
 value	publisherKindSchema
 value	publisherMetricsSchema
 value	publisherSchema
