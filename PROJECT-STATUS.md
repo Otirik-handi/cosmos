@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-18。代码基线 `da7d656`（Task 30，master 上最后一个功能提交；CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿）。**Task 31（公开 Asset 投影剥离内部 Blob key）随本文件同批合入 master，实现、偏差与验证证据见该 Task**；收尾时 `.worktree/` 清空，除 `master` 外不留任务分支。Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-18。代码基线 `3ded765`（Task 31 合并提交；功能基线 `da7d656`，CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿），其后只有本文件的收尾记录提交。**Task 31（公开 Asset 投影剥离内部 Blob key）已合并且验证证据见该 Task；master 尚未推送（领先 `origin/master` 两个提交）**；`.worktree/` 已清空、无任务分支。Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 

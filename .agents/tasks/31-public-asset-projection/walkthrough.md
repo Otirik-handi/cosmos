@@ -94,6 +94,11 @@ Test Files  11 passed (11)
 
 未运行：`bun run test:property`、`bun run test:e2e`（Node 进程 E2E）、Windows Node smoke、Docker/Compose、真实来源联网验收、发布部署——由远端 CI 覆盖或属既有后置边界，本 Task 不在本机复跑。390px 横向溢出断言按维护者 2026-09-17 决定暂停（与本次改动无关）。
 
-## 审阅与交付状态（2026-09-18）
+## 完结（2026-09-18）
 
-维护者 2026-09-18 逐文件审阅 diff 后回复「没问题」，并要求收尾。**本轮未 commit、未 push、未合并**：按[准入决策表](../../../docs/standards/repository-workflow.md#准入决策表)与根 `AGENTS.md`，这些外部操作各自需要单独授权。工作区状态：分支 `fix/t31-public-asset-projection`、起点 `da7d656`、21 个已跟踪文件改动 + 4 个新文件，未暂存。
+维护者同日逐文件审阅 diff 后回复「没问题」并授权「提交并直接合入 master」，本轮按该授权收尾：
+
+- **提交与合并**：分支提交 `fa0e49e`（25 文件 / +512 −53）；`--no-ff` 合入 master = `3ded765`，合并提交的树与分支 tip 逐字节相同（`git diff` 为空，master 期间无新提交）。
+- **合并结果上重跑全量门禁**（实际运行）：`bun run typecheck` 0、`bun run test` **100 文件 / 606 用例全绿**、`bun run build` 通过、`bun run db:validate` 通过、`bun run lint:web` **0 error / 80 warning**（比改动前少 1 条，即被删掉的无用导入）、`bun run docs:check` **682 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净、`bun run test:browser` **22 passed**、`bun run test:browser:component-lab` **14 passed**。
+- **清理**：`.worktree/` 已为空（Git 注销后残留的空目录在确认路径内清除）；分支用 `git branch -d` 删除——初次被拒是因为 `worktree add -b` 自动挂了 `origin/master` 跟踪，不是未合并，整合关系先用祖先检查与空 diff 证明，再取消跟踪后非强制删除。
+- **未推送**：`master` 领先 `origin/master` 两个提交（`3ded765`、`fa0e49e`）。推送需要单独授权，且本机 `schannel` 取不到凭证。
