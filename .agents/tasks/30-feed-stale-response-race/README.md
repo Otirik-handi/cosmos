@@ -6,7 +6,7 @@
 
 2026-09-17 维护者授权按「先证明、再修、后复测」处理 `e2e/browser/phase2-organization.spec.ts` 里最频繁的那个失败点（`:539` 搜索用例）。编号 30、worktree 与分支 `fix/t30-feed-stale-response-race`。
 
-**记录例外（必须留痕）**：按[准入决策表](../../../docs/standards/repository-workflow.md#准入决策表)，可判定的局部 Bug 需要公开 Issue；但 fork `Otirik-handi/cosmos` 的 Issues 处于关闭状态（`gh issue create` 返回 `the repository has disabled issues`）。因此按准入表原文的例外——「非公开的维护者或用户明确请求可以替代公开 Issue 的记录与实现授权；需要 Task 时必须记录该请求」——本轮以本 Task 承载记录，维护者的授权即上文那条指示。标签 `source: agent` / `type: bug` / `status: investigating` 已建立，Issues 一旦可用即可补开。
+**记录例外（必须留痕）**：按[准入决策表](../../../docs/standards/repository-workflow.md#准入决策表)，可判定的局部 Bug 需要公开 Issue；但修复期间 fork `Otirik-handi/cosmos` 的 Issues 处于关闭状态（`gh issue create` 返回 `the repository has disabled issues`）。因此按准入表原文的例外——「非公开的维护者或用户明确请求可以替代公开 Issue 的记录与实现授权；需要 Task 时必须记录该请求」——本轮以本 Task 承载记录，维护者的授权即上文那条指示。**2026-09-18 补开公开 Issue**：维护者开放 Issues 后已补记 [#4](https://github.com/Otirik-handi/cosmos/issues/4)（标签 `source: agent` / `type: bug` / `status: needs-triage` / `area: board-workspace` / `area: library-search`），正文含根因、修复与验证；例外记录到此闭合。
 
 ## Goal
 
@@ -72,5 +72,5 @@ Non-goals：
 ## Follow-ups
 
 - `:103`、`:417` 与整套慢跑时的 `media-policy` 等待超时仍未归因（后者已按登记规则补记）。
-- fork 的 Issues 处于关闭状态：若要让 Bug 有公开记录，需要维护者打开 fork 的 Issues，或指定在上游 `notnotype/cosmos` 开。
+- 公开记录已补：[#4](https://github.com/Otirik-handi/cosmos/issues/4)（Open，待维护者确认后关闭）。
 - `docs/testing/known-unstable-cases.md` 第 1 条里"失败点漂移、单跑不复现"的其余部分需要在 `:539` 修掉后重新观察，才能判断是否还有独立机制。
