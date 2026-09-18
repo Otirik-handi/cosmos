@@ -47,7 +47,7 @@
 - 记录默认值、空值、版本、幂等键、游标、lease/fence 和时间语义；这些跨组件约束不能靠调用者猜。
 - 先实现正常路径，再实现可观察失败、重试/降级、旧 owner 拒写和幂等重放。
 - 持久状态只由其 owner 写入；通知、SSE、日志和内存索引不能成为第二份 durable truth。
-- 任何公开投影都使用白名单。当前实现的 API/存储投影已排除 lease token、Secret 和绝对路径，但 Asset snapshot 仍可能包含 `storageKey`（见第 4 节）；因此“公开投影不得含 `storageKey`”是尚未满足的安全目标，不能写成当前实现事实。
+- 任何公开投影都使用白名单。API/存储投影已排除 lease token、Secret、绝对路径和内部 Blob key（`storageKey`）：公开读路由在 API 边界剥离，公开读 DTO 用 `publicAssetSnapshotSchema` 校验（见第 4 节）。仓储内部的 Asset snapshot 仍可携带 `storageKey`，那不是公开面。
 - 测试锚点验证行为边界，不用源码字符串匹配代替合同；没有现成测试的行为必须在规格中明确验收办法。
 
 ### 1.5 统一组件模板
@@ -149,17 +149,17 @@
 - **Host 权威：** Kernel 只拥有脚本/journal 语义；SQL TaskStore 拥有 Run/Job/lease/retry/Completion 状态。Wakeup、HTTP 连接、内存 Registry、SSE 和日志都不能另立终态。
 - **双 fencing：** 写领域数据或 Domain Event 前同时验证 Workflow Run lease、Activity Job lease 和所需 kernel revision；token 仅用于内部校验，不能进入 Job payload、Kernel state、Manifest、Product API 或 Worker Admin 投影。旧 owner 的 heartbeat/complete/write 必须 fail closed。
 - **幂等与 at-least-once：** Envelope、Activity、Completion、Observation、Domain Event 和外部 Action 都以显式 idempotency key/receipt 或 CAS 处理重复；不能宣称 exactly-once。
-- **Projection：** Product Run 将内部 `waiting` 映射为公开 `running`，`completed` 映射为公开 `succeeded`；Source 公开配置由 Controller 白名单化。当前实现的 Asset snapshot 事实不同：`AssetSnapshot` schema 包含可空 `storageKey`，`PrismaCosmosRepository.toAssetSnapshot` 直接复制它，Feed/Entry/Revision 等查询投影和当前 AppController 响应未将其移除。因此当前实现**可能返回 `storageKey`**；“公开 Asset 投影不得含 `storageKey`”的安全目标当前**未满足/验收失败**，后续代码修复前不得把它写成已实现约束。其余 lease token、Secret、绝对路径和任意 payload 的边界仍以对应组件正文与实际投影为准，不因该未满足项被掩盖或扩大。该事实来自 [`packages/contracts/src/index.ts`](../../packages/contracts/src/index.ts)、[`packages/storage-prisma/src/index.ts`](../../packages/storage-prisma/src/index.ts) 和 [`apps/api/src/app.controller.ts`](../../apps/api/src/app.controller.ts)。
+- **Projection：** Product Run 将内部 `waiting` 映射为公开 `running`，`completed` 映射为公开 `succeeded`；Source 公开配置由 Controller 白名单化。Asset 的公开投影在 API 边界剥离内部 Blob key：feed、search、entries、story、entry、revision 六条读路由都经 `toPublicAsset` 逐个挑字段（`apps/api/src/app.controller/public-projection.ts`），公开读 DTO 由 contracts 的 `publicAssetSnapshotSchema` 校验，该 schema 从 `assetSnapshotSchema` 省略 `storageKey`。仓储内部的 Asset snapshot（`PrismaCosmosRepository.toAssetSnapshot`）仍带 `storageKey`，只服务 Blob 读写与内部用例，不是公开面。其余 lease token、Secret、绝对路径和任意 payload 的边界仍以对应组件正文与实际投影为准。
 - **Blob/Value：** Blob Root 和 Data Root 必须 containment；Blob key 为 SHA-256 内容寻址。Workflow Value 使用 canonical JSON 和 `application/json`，读取时同时验证 key、hash、byteSize、mediaType，再返回 structured clone。
 - **默认运行路径：** Worker 默认启用 Durable Host；只有显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退 legacy path。空 definitions 或 actions 的 Host 组合必须拒绝启动，不能以“空目录”伪装成功。
 - **本地默认值：** `COSMOS_DATA_ROOT` 默认 `.cosmos`，Blob Root 默认 `.cosmos/blobs`；API 默认 `127.0.0.1:4310`，Worker Admin 默认 `127.0.0.1:9091`；Worker poll 默认 30,000 ms、lease 默认 120,000 ms。环境覆盖、取值范围和安全约束由相应组件 spec 详述。
 - **Catalog 边界：** Product API 只读取 manifest、schema 和 capability；executable Action/Connector 由 Worker 执行面加载。Source probe 可校验 manifest 与 config，但不能因为 probe 改写领域数据。
 - **日志边界：** `log.v1` 结构化记录传递 request/run/job/activity context；Secret、token、query、payload、正文和外部输出必须脱敏/截断。日志不是 Domain Event，也不是业务账本。
-- **Migration 顺序：** 当前 SQLite 路径按 `20260808003247_phase1_foundation`、`20260808150000_collector_jobs`、`20260810020829_normalized_content_model`、`20260813160000_workflow_run_backend`、`20260814090000_workflow_activity_host`、`20260815090000_workflow_ingest`、`20260818000000_workflow_run_source_projection`、`20260824000000_source_identity_revision`、`20260824100000_source_activation_result_snapshot`、`20260907120000_story_revision_versioning`、`20260907130000_story_merge_alias`、`20260908000000_topic_domain_v1`、`20260908120000_entity_relation_v1`、`20260908140000_user_organization_v1`、`20260908160000_annotation_v1`、`20260908180000_saved_view_v1`、`20260909100000_board_section_block_v1`、`20260909120000_spotlight_placement_v1`、`20260909140000_entry_story_evidence_v1`、`20260909160000_story_split_v1` 顺序应用；组件 spec 只说明其拥有的模型和转移，不复制完整 SQL。
+- **Migration 顺序：** 当前 SQLite 路径按 `20260808003247_phase1_foundation`、`20260808150000_collector_jobs`、`20260810020829_normalized_content_model`、`20260813160000_workflow_run_backend`、`20260814090000_workflow_activity_host`、`20260815090000_workflow_ingest`、`20260818000000_workflow_run_source_projection`、`20260824000000_source_identity_revision`、`20260824100000_source_activation_result_snapshot`、`20260907120000_story_revision_versioning`、`20260907130000_story_merge_alias`、`20260908000000_topic_domain_v1`、`20260908120000_entity_relation_v1`、`20260908140000_user_organization_v1`、`20260908160000_annotation_v1`、`20260908180000_saved_view_v1`、`20260909100000_board_section_block_v1`、`20260909120000_spotlight_placement_v1`、`20260909140000_entry_story_evidence_v1`、`20260909160000_story_split_v1`、`20260909200000_media_retry_retention_v1`、`20260910120000_connection_state_store_v1`、`20260910140000_trigger_binding_v1`、`20260916120000_story_representation_v1`、`20260916140000_entry_relation_v1` 顺序应用；组件 spec 只说明其拥有的模型和转移，不复制完整 SQL。
 
 ### 4.1 当前公开投影安全验收事实
 
-对 Feed、Entry、Revision 及其 Asset snapshot 的代码路径检查可观察到：`storageKey` 由 contracts schema 定义、由 repository mapper 填充，并可能经 API 直接返回。因此 storageKey omission 这一安全验收项当前**未满足**。这不是对未来修复的设计声明，也不把其余未验证边界（Docker、browser/e2e、真实来源、跨进程 recovery 等）改写成已验证。
+`storageKey` 由 contracts 的 `assetSnapshotSchema` 定义、由 repository mapper 填充，公开面已剥离：六条公开读路由经 `toPublicAsset` 挑字段后返回，公开读 DTO 使用 `publicAssetSnapshotSchema`，因此该字段不出现在这些 HTTP 响应里。回归锚点是 [`apps/api/src/app.controller.public-projection.test.ts`](../../apps/api/src/app.controller.public-projection.test.ts)——逐路由断言整份响应 JSON 不含该字段名。仓储内部的 Asset snapshot 仍携带它，属内部投影，不是公开泄露。这一条成立不代表其它未验证边界（Docker、browser/e2e、真实来源、跨进程 recovery 等）已验证。
 
 ## 5. 当前非目标与未验证边界
 

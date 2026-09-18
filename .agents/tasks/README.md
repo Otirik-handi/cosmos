@@ -50,6 +50,7 @@ Task 导航：
 - [`28-mobile-gate-and-retry-isolation/`](28-mobile-gate-and-retry-isolation/)：移动端门禁后置（维护者 2026-09-17 裁定 PC 优先）——390px 页面级横向溢出检查暂停执行（PC/平板宽度 768/1024/1440 继续），保留代码、理由与恢复条件；同时修 `e2e/browser/ingest.spec.ts` 的重试不幂等（固定来源名在重试时产生重复卡片，把首次失败放大成硬失败）；编号 28 由维护者 2026-09-17 分配。
 - [`29-toolchain-drift/`](29-toolchain-drift/)：工具链与依赖源固定——新增 `bunfig.toml` 显式声明国内镜像（实测：已有锁条目不会被改写，配置决定新解析条目写哪个地址）；bun 版本在 `packageManager`、CI、Dockerfile 三处统一到 1.4.2；锁文件补回 `configVersion` 一行（零依赖变化）；编号 29 由维护者 2026-09-17 分配。
 - [`30-feed-stale-response-race/`](30-feed-stale-response-race/)：首页 Feed 的两个已修缺陷——①`phase2-organization.spec.ts:539` 的真实根因是卡片列表用 `storyId` 当 React key：同一 Story 可以有多张成员卡片（ADR-0022 决定 4/6），重复 key 让其中一张卡的 DOM 节点脱离 React，列表整体替换后残留成"幽灵卡片"（改用条目身份 `entryId`，回归断言在 `phase2-entry-relation.spec.ts` 红→绿）；②搜索提交后、早于它发起的陈旧刷新会覆盖搜索结果（版本号丢弃，回归用例 `feed-search-race.spec.ts`）。已合并 master `699ff5a`，公开记录 [#4](https://github.com/Otirik-handi/cosmos/issues/4)；编号 30 由维护者 2026-09-17 分配。
+- [`31-public-asset-projection/`](31-public-asset-projection/)：公开 Asset 投影剥离内部 Blob key——六条公开读路由经 `toPublicAsset` 逐个挑字段，contracts 新增 `publicAssetSnapshotSchema`（公开读 DTO 用它，客户端同 schema 校验不会因字段缺失失败），回归测试逐路由断言整份响应 JSON 不含该字段名；同时校准 BRD-006 口径、spec 的 migration 顺序与 `PROJECT-STATUS` 的基线/未实现清单；编号 31 由维护者 2026-09-18 分配。按[准入决策表](../../docs/standards/repository-workflow.md#准入决策表)第 25 行（违反当前安全合同）处理：不开公开 Issue，记录只写脱敏结论。
 
 治理类任务（文档/代码规模治理等）使用**独立编号体系**，位于 [`governance/`](governance/)（`G{NN}` 编号，不占用上述产品 Task 编号），章程与任务索引见 [`governance/README.md`](governance/README.md)。
 

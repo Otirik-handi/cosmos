@@ -3,7 +3,7 @@ import {
     sourceKindSchema,
 } from "./base.js";
 import {
-    assetSnapshotSchema,
+    publicAssetSnapshotSchema,
 } from "./source.js";
 
 export const searchQuerySchema = z.object({
@@ -32,7 +32,7 @@ export const feedItemSchema = z.object({
     sourceKind: sourceKindSchema,
     revisionId: z.string(),
     publishedAt: z.string().nullable(),
-    assets: assetSnapshotSchema.array(),
+    assets: publicAssetSnapshotSchema.array(),
 });
 
 export type FeedItem = z.infer<typeof feedItemSchema>;

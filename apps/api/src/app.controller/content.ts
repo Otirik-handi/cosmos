@@ -40,22 +40,28 @@ import {
 import "reflect-metadata";
 import { AppControllerRuns } from "./runs.js";
 import { validationError, sourceCommandError, clampLimit, catalogPage } from "./internals.js";
+import {
+    toPublicEntryDetail,
+    toPublicPage,
+    toPublicRevisionDetail,
+    toPublicStoryDetail,
+} from "./public-projection.js";
 
 export class AppControllerContent extends AppControllerRuns {
     @Get("feed")
     @Bind(Query("cursor"), Query("limit"))
     async feed(cursor?: string, limit?: string) {
-        return this.repository.feed({
+        return toPublicPage(await this.repository.feed({
             cursor,
             limit: clampLimit(limit),
-        });
+        }));
     }
 
     @Get("search")
     @Bind(Query())
     async search(query: Record<string, unknown>) {
         try {
-            return await this.repository.search(searchQuerySchema.parse(query));
+            return toPublicPage(await this.repository.search(searchQuerySchema.parse(query)));
         } catch (error) {
             validationError(error);
         }
@@ -66,11 +72,11 @@ export class AppControllerContent extends AppControllerRuns {
     async entries(query: Record<string, unknown>) {
         try {
             const parsed = entryListQuerySchema.parse(query);
-            return await this.repository.entries({
+            return toPublicPage(await this.repository.entries({
                 sourceId: parsed.sourceId,
                 cursor: parsed.cursor,
                 limit: parsed.limit,
-            });
+            }));
         } catch (error) {
             validationError(error);
         }
@@ -87,7 +93,7 @@ export class AppControllerContent extends AppControllerRuns {
                 retryable: false,
             });
         }
-        return result;
+        return toPublicStoryDetail(result);
     }
 
     @Post("stories/:storyId/entry-moves")
@@ -608,7 +614,7 @@ export class AppControllerContent extends AppControllerRuns {
                 retryable: false,
             });
         }
-        return result;
+        return toPublicEntryDetail(result);
     }
 
     @Get("revisions/:revisionId")
@@ -622,7 +628,7 @@ export class AppControllerContent extends AppControllerRuns {
                 retryable: false,
             });
         }
-        return result;
+        return toPublicRevisionDetail(result);
     }
 
     @Get("assets/:assetId")

@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-17。代码基线 `master` = `c308733`：Task 27（Prisma CLI 候选位置解析）、G08（CI 门禁分区 + 本文件减负）、Task 28（移动端宽度检查暂停 + ingest spec 重试幂等）与 Task 26（ING-006 跨来源重复/转载关系）均已合入并推送。`.worktree/` 下只剩 `.worktree/t28-mobile-gate-and-retry-isolation`（另一执行者）与 3 个更早切片的孤儿残留目录（`fix-search-fts5`、`story-user-state-migration`、`t14-board-feed-blocks`），删除需另行授权。Phase 2 已收口（完成记录见分册索引首行）；2026-09-11 起的 G01–G08 治理已收口并暂停；Phase 1 后置债仍按 2026-09-07 划线保留。
+> 更新于 2026-09-18。代码基线 `da7d656`（Task 30，master 上最后一个功能提交；CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿）。**Task 31（公开 Asset 投影剥离内部 Blob key）随本文件同批合入 master，实现、偏差与验证证据见该 Task**；收尾时 `.worktree/` 清空，除 `master` 外不留任务分支。Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -36,6 +36,8 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 当前下一步
 
+**2026-09-18 复核与决定**：先清文档口径、并修掉唯一被判定为验收失败的公开投影安全项（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)）；Phase 2 需求表尾巴、Phase 1 产品缺口与已 accepted 的界面职责重划之间的先后顺序**尚未排定**。
+
 **Phase 2 收口与尾巴的完成记录（2026-09-15/16）**：Phase 2 收口四条（Story split 用户状态迁移与撤销、看板 UI 缺口与拖拽排序、四条主流程真人验收、ORG-021 改标）、ORG-017、远端 CI 收尾、`db:validate` 阻塞修复与界面职责重划的实现尝试作废，整段移入 [`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；本文只保留仍然有效的当前状态与决定。
 
 **真人验收产生的新方向（有效决定；细节在 Proposal）**：
@@ -46,7 +48,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
 - **ING-006（跨来源重复/转载关系）：已合并并推送（2026-09-17）**。Proposal 与 ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md) 已接受，PRD §7.4 与信息模型 §4.2 注记已同步；实现提交 `a1f0be2`，`--no-ff` 合入 master `c308733` 并推送 `origin`（`894f47f..c308733`），worktree 与分支已按授权清理。**维护者手动验收通过**。合并后在合并提交上重跑：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`docs:check` 0 失败；主工作区另跑 `docs:check` **680 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净。**浏览器套件整套仍有失败**：`phase2-organization.spec.ts` 是登记在案的共享栈不稳定文件，本轮对照实验（只做既有行为的诊断 spec 同样触发、失败点在 `:103`/`:417`/`:539` 之间漂移）证明与新功能无关，维护者 2026-09-17 接受该结论并放行；完整证据与一条「机制未查清」的搜索状态观察见 Task [`26`](.agents/tasks/26-entry-duplicate-relations/README.md) walkthrough 与 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
-- **需求表口径已改标（2026-09-16）**：按内容归属把 AUT-005、ING-013 改标 `Phase 3`，LIB-005、REC-008、BRD-004 改标 `Phase 4`（勘误登记见 PRD 主文档「分册勘误登记」）；§7 中仍标 `Phase 2` 的开放项为 **AUT-004、AUT-010、BRD-006、BRD-007、LIB-004、LIB-008、ING-009（余项）**——Phase 2 不再「字面无法完成」，而是明确留有这些尾巴。清理：已按授权删除 3 个 worktree 与 3 个分支（`t10-story-representation`、`t14-board-drag-sort`、`ui-surface-ownership`）；`.worktree/` 下另有 3 个更早切片的孤儿残留目录未动；`.agents/learning/` 按维护者指示不纳管。
+- **需求表口径已改标（2026-09-16）**：按内容归属把 AUT-005、ING-013 改标 `Phase 3`，LIB-005、REC-008、BRD-004 改标 `Phase 4`（勘误登记见 PRD 主文档「分册勘误登记」）；§7 中仍标 `Phase 2` 的开放项为 **AUT-004、AUT-010、BRD-007、LIB-004、LIB-008、ING-009（余项）**——Phase 2 不再「字面无法完成」，而是明确留有这些尾巴。**BRD-006 于 2026-09-18 复核后移出该清单，改记「部分交付」**：Feed Block 绑定 Saved View 已随看板切片落地（ADR-0010、Task 14 的 `14ce892`，Web 按 `savedViewId` 独立取数并有浏览器 E2E），缺的只是验收条件里的「排序配置」（`SavedViewConditions` 没有排序字段）；PRD 勘误表与 Task 13 的历史注记同批更正。清理：已按授权删除 3 个 worktree 与 3 个分支（`t10-story-representation`、`t14-board-drag-sort`、`ui-surface-ownership`）；`.worktree/` 下另有 3 个更早切片的孤儿残留目录未动；`.agents/learning/` 按维护者指示不纳管。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
@@ -156,26 +158,28 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 真实 RSS/RSSHub 网络来源验收、跨平台 Node 验收和更长时间的 Worker 重启演练。
 - Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E，Run 成功且 `itemCount=20`。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
+- **Phase 1 需求表里仍无实现证据的三处**：删除 SourceInstance（AUT-001 只有启停与 revision CAS 激活，没有删除端点）；检索的「作者、媒体类型、录入状态」过滤（LIB-001，`search` 现支持关键词/时间/来源/分类/Topic）；条目级「发现原因」（ING-004，Observation 只写触发类型 manual/schedule，需求要求的关注账号/推荐/搜索词/邮箱/相关链接/Agent 调研没有落库）。
 - Activity Host 的跨进程 durable recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline 和完整生产 executable registration 验收；当前代码/测试已有部分 Activity Job、lease、completion 和 direct loopback 证据，不能替代这些边界。
 - 固定 `cosmos.ingest@1` parity、Source snapshot/checkpoint 的完整矩阵验收；Worker Host 默认入口已统一开启，显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才关闭。
 - manifest-only API、executable-only Worker 和独立 Migrator 的完整生产验收；相应代码路径已有 Node smoke/focused 证据，但尚未完成 Docker、browser 和真实来源验收。
 - API/DTO Draft v0.2 的 Zod schema、Product/Application/Transport 迁移、Gateway fake conformance、owner handoff、late evidence、Receipt CAS 和真实 bootstrap identity。
 - SQLite WAL/busy timeout 的显式配置与并发行为验收。
-- Connection/Secret/State 统一管理和 Adapter 登录生命周期。
+- 真实认证 Adapter 的登录生命周期；Connection/SecretStore/ConnectorStateStore 地基已由 Task 22 交付，Checkpoint 迁移与加密-at-rest 未做。
 - 可配置多采集计划、通用 Workflow 插件/管理产品面、LLM 子任务和
   Proposal/Provenance。
-- 去重、Story 归并、Topic 成员、分类、关系和推荐系统。
+- 推荐系统（Admission/Ranking/Impression/Feedback、推荐页、相关内容的服务端排序）；跨来源重复/转载关系只做人工标记与展示，不参与排序和去重（ADR-0022）。
 - Agent 分析、Artifact、Workspace 和交互状态。
-- 看板、推送、摘要图片和网页发布。
+- 推送、摘要图片和网页发布（Phase 5）；看板已随 Phase 2 交付（可配置 Board/Section/Block、Spotlight 人工固定、区块拖拽排序）。
 
 ## 验证边界（历史证据与当前未验证项分开）
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-18，Task 30 的 worktree 内，分支 `2c822d2` / 合并提交 `699ff5a`）：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`bun run lint:web` 0 error / 81 warning、`bun run docs:check` **678 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；`bun run test:browser` **22 passed**、`bun run test:browser:component-lab` **14 passed**。合并后 master CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640)（head `699ff5a`）五个 job 全绿——此前 master `47689d2` 的 run `35193865031` 正是失败在 `phase2-organization.spec.ts:539`。上一轮（2026-09-17，Task 26 的 `c308733` 上重跑）为：typecheck 0、99 文件 599 用例、lint 0 error / 81 warning。主工作区的 `node_modules` 与 lockfile 不一致（缺 vitest 可执行文件与 `@dnd-kit/*`），因此 typecheck/test/build 仍只在 worktree 内跑。
-- **浏览器产品 E2E 整套仍有失败**（Task 26 起）：`phase2-organization.spec.ts` 失败点在 `:103`/`:417`/`:539` 之间漂移。对照实验证明与 Task 26 的新功能无关（只做既有行为的诊断 spec 同样触发），维护者 2026-09-17 接受该结论并放行。**2026-09-17 更新**：`:539` 的机制已查明并修复（重复 React key 使列表替换后残留一张卡；同批还修掉陈旧刷新覆盖搜索结果的竞态），Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md) 有确定性红→绿证据；修复后连续两轮整套浏览器套件里 `:539` 均通过。`:103`、`:417` 与整套慢跑时的 `media-policy` 等待超时仍未归因，见 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
+- 最近一次全量证据（2026-09-18，Task [`31`](.agents/tasks/31-public-asset-projection/README.md) 的 worktree 内，分支 `fix/t31-public-asset-projection`，基线 `da7d656`）：`bun run typecheck` 0、`bun run test` **100 文件 / 606 用例全绿**、`bun run build` 通过、`bun run db:validate` 通过、`bun run lint:web` 0 error / 81 warning、`bun run docs:check` **682 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；浏览器产品套件同一 build 连跑 2 次（22 passed；另一次 21 passed，失败在 `:186`，同 build 单跑通过）、组件实验室 **14 passed**（首轮有 1 次单例失败）。主工作区的 `node_modules` 与 lockfile 不一致，因此 typecheck/test/build 只在 worktree 内跑。
+- **公开 Asset 投影的内部 Blob key 已剥离**（同批，Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，未合并）：泄漏的是内部 Blob 内容寻址 key（非绝对路径、没有可直接利用的路径），按[准入决策表](docs/standards/repository-workflow.md#准入决策表)第 25 行当安全合同修复处理，**不开公开 Issue**；六条公开读路由经 `toPublicAsset` 挑字段，公开读 DTO 改用 contracts 的 `publicAssetSnapshotSchema`，过程与回归锚点在 Task 31。
+- **浏览器产品 E2E 整套仍有失败**（Task 26 起，`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 的根因已查明并修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；其余失败点与整套慢跑时 `media-policy` 的等待超时仍未归因。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
-- 本机未运行：property、`db:validate`、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收；前四项由远端 CI 覆盖（2026-09-18 run `35313175640` 全绿），本机没有复跑。
+- 本机未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收（前三项由远端 CI 覆盖）；`db:validate` 本轮已在本机通过。
 
 2026-08-15 之前的历史基线与 Spike 证据（含当时的分册完成记录、Task 05/07 基线与浏览器
 验收数字、Round 7/8 的 worktree 证据）整段移入 [`PROJECT-STATUS/history-2026-08-legacy.md`](PROJECT-STATUS/history-2026-08-legacy.md) 的

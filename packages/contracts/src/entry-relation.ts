@@ -7,7 +7,7 @@ import {
     temporalValueSchema,
 } from "./base.js";
 import {
-    assetSnapshotSchema,
+    publicAssetSnapshotSchema,
 } from "./source.js";
 
 export const entryRevisionSnapshotSchema = z.object({
@@ -23,7 +23,7 @@ export const entryRevisionSnapshotSchema = z.object({
     updatedAt: temporalValueSchema.nullable(),
     sourcePublishedAt: z.string().nullable(),
     createdAt: z.string(),
-    assets: assetSnapshotSchema.array(),
+    assets: publicAssetSnapshotSchema.array(),
 });
 
 export type EntryRevisionSnapshot = z.infer<typeof entryRevisionSnapshotSchema>;
@@ -214,7 +214,7 @@ export const entryListItemSchema = z.object({
     updatedAt: z.string(),
     revisionCount: z.number().int().nonnegative(),
     observationCount: z.number().int().nonnegative(),
-    assets: assetSnapshotSchema.array(),
+    assets: publicAssetSnapshotSchema.array(),
 });
 
 export type EntryListItem = z.infer<typeof entryListItemSchema>;

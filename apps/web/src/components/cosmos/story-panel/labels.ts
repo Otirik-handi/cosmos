@@ -1,5 +1,5 @@
 import {
-    AssetSnapshot,
+    PublicAssetSnapshot,
 } from "@cosmos/contracts";
 
 export const RELATION_TYPE_LABELS: Record<string, string> = {
@@ -38,7 +38,7 @@ export const STORY_KIND_LABELS: Record<string, string> = {
     thread: "讨论串",
 };
 
-export const STATUS_LABELS: Record<AssetSnapshot["status"], string> = {
+export const STATUS_LABELS: Record<PublicAssetSnapshot["status"], string> = {
     saved: "已保存",
     metadata_only: "仅记录元数据",
     skipped: "未保存",

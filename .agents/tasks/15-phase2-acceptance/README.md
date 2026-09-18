@@ -118,7 +118,7 @@ Non-goals：
 - **界面职责重划（新方向，待 Proposal）**：Topic、Entity 与用户组织（Label/Collection/Annotation/Saved View）各自需要独立操作面板，Story 面板只保留与该 Story 直接相关的操作。这改变用户可观察行为、跨 Web 模块并涉及 PRD §8 的界面职责，按准入决策表先出 Proposal。
 - **UI 文案审查（新方向，待 Proposal 或治理任务）**：把过于专业化的措辞改成普通用户一眼能懂的表述，同时不牺牲准确性（例如 Topic 的六个成员角色名、Entity 的类型与关系名）。需要先定审查范围与判据，避免变成无边界改写。
 - 看板拖拽排序已由维护者升级为**必做**（原为 ADR-0010 的后置项），与本轮 Feed Block 独立取数同属 Task 14 的追加切片。
-- 相关内容的服务端排序与更大候选集并入 Phase 4 推荐体系；ORG-017 的 Story Revision「时间范围」字段仍未落地。
+- 相关内容的服务端排序与更大候选集并入 Phase 4 推荐体系。（2026-09-18 更正：本行原写「ORG-017 的 Story Revision『时间范围』字段仍未落地」，该结论已过期——时间范围与关键事实随 `20260916120000_story_representation_v1` 落地，含 Web 编辑表单。）
 - Phase 2 需求清单其余条目按 [`PROJECT-STATUS.md`](../../../PROJECT-STATUS.md)「当前下一步」排序；ORG-021（自动聚类/Knowledge Workflow）已于 2026-09-15 改标 Phase 3。
-- 看板「Feed Block 绑定分类/Topic 条件」的独立配置、Read State「未读」过滤仍待后续切片。
+- Read State「未读」过滤仍待后续切片。（2026-09-18 更正：本行原与「看板 Feed Block 绑定分类/Topic 条件」并列——后者已由 Task 14 追加切片落地，`14ce892`，阅读流区块按 `savedViewId` 独立取数并有浏览器 E2E。）
 - 第四条验收标准「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，Phase 3 的 Knowledge Workflow 落地后必须重新回归。

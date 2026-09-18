@@ -63,7 +63,7 @@
 - **JobKind**：`source-ingest`、`source-probe`、`workflow-activity`。
 - **AssetStatus**：`saved`、`metadata_only`、`skipped`、`failed`。
 - **JobSnapshot**：`id`、`kind`、可空 `sourceId`/`runId`、`status`、非负整数 `attempts`、正整数 `maxAttempts`、可空 `errorCode`/`error`、`createdAt`、`updatedAt` 和可空的 `result: unknown`。
-- **AssetSnapshot**：`id`、`kind`、`status`、可空 `sourceUrl`、可空 `storageKey`、可空 `mimeType` 、可空数值 `byteSize`、可选可空 `errorMessage`（有界 500 字符，降级原因说明；saved 可为空，见 ADR-0005）、可选可空 `errorCode`（机器可读降级原因，读取侧放宽，见 ADR-0015）与可选非负整数 `attemptCount`（已完成的下载尝试次数，含首次）。这是 contracts 的共享/内部资产元数据投影，不是领域层带 `Uint8Array` 的 Asset input，也不是自动脱敏层。当前 `PrismaCosmosRepository.toAssetSnapshot` 会填充 `storageKey`，而 Product API 的 feed、search、entries、story、entry、revision 路由当前直接返回 repository 投影；因此 `storageKey` 非空时会出现在当前这些 HTTP JSON 响应中。本文件不宣称已经剥离该字段；`GET /assets/:assetId` 另行读取 bytes。
+- **AssetSnapshot**：`id`、`kind`、`status`、可空 `sourceUrl`、可空 `storageKey`、可空 `mimeType` 、可空数值 `byteSize`、可选可空 `errorMessage`（有界 500 字符，降级原因说明；saved 可为空，见 ADR-0005）、可选可空 `errorCode`（机器可读降级原因，读取侧放宽，见 ADR-0015）与可选非负整数 `attemptCount`（已完成的下载尝试次数，含首次）。这是 contracts 的共享/内部资产元数据投影，不是领域层带 `Uint8Array` 的 Asset input。`PrismaCosmosRepository.toAssetSnapshot` 会填充 `storageKey`；公开读 DTO 不使用这一份，而是 `publicAssetSnapshotSchema`（由本 schema 省略 `storageKey`），并由 Product API 的 feed、search、entries、story、entry、revision 路由在返回前经 `toPublicAsset` 逐个挑字段，因此这六条路由的 HTTP JSON 不含 `storageKey`。`GET /assets/:assetId` 另行读取 bytes。
 - **MediaCleanupCommand**（ADR-0015）：strict 的可选 `sourceId` 与可选布尔 `dryRun`（缺省 true）。**MediaCleanupReport**：`dryRun`、可空 `sourceId`、`candidateCount`、`candidateBytes`、`cleanedCount`、`cleanedBytes`、`sharedKeyCount`、最多 20 条 `samples`（assetId/sourceId/sourceName/title/byteSize/createdAt/expiredAt）与 `startedAt`/`finishedAt`。**MediaCleanupRunSnapshot**：`runId`、`status`、可空 `report` 与可空 `error`。
 - **RunSnapshot**：`id`、可空 `sourceId`、`triggerKind`、`status`、`createdAt`、可空 `startedAt`/`finishedAt`、`itemCount`、`createdEntryCount`、`revisedEntryCount` 和可空 `error`。
 - **Run 控制（ADR-0016）**：`CancelRunCommand`/`RecoverRunCommand` 为 strict 的可选 `reason`（trim ≤500）；`RerunRunCommand` 为 strict 空对象。**RunControlResult**：`action`（`cancelled`/`recovered`/`rerun`）、复用 `RunSnapshot` 的 `run`、面向用户的 `reuse` 与 `sideEffects` 字符串。公共 `RunStatus` 五态不变。
@@ -132,7 +132,7 @@ Action 的 executable 定义可以携带运行时 Zod schema，但公共 Descrip
 
 ## 输出
 
-- 输出是 Zod parse 后的结构化 DTO 或 manifest-safe 投影。状态数组和 enum 只返回列出的值；分页 DTO 的 nextCursor 可空。`AssetSnapshot` 输出明确包含可空 `storageKey`；当前 API 直返 repository 结果时也会透传该字段，不应把 contracts schema 误读成已经安全剥离的 Product API DTO。Action Descriptor/Manifest 可被 `JSON.stringify` 后再次解析为同值，且不包含 executable Zod schema。BlobRef/ValueRef 只代表受控内容或 Workflow JSON 的引用，不代表内联 bytes。
+- 输出是 Zod parse 后的结构化 DTO 或 manifest-safe 投影。状态数组和 enum 只返回列出的值；分页 DTO 的 nextCursor 可空。Asset 输出走 `publicAssetSnapshotSchema`（不含 `storageKey`）：仓储内部的 `AssetSnapshot` 带该字段，Product API 在返回前剥离，因此客户端拿到的公开读 DTO 与 `AssetSnapshot` 不是同一个形状。Action Descriptor/Manifest 可被 `JSON.stringify` 后再次解析为同值，且不包含 executable Zod schema。BlobRef/ValueRef 只代表受控内容或 Workflow JSON 的引用，不代表内联 bytes。
 
 并非所有 DTO 字段都由本包深度验证：`JobSnapshot.result`、`EventSnapshot.payload` 和 `SseEvent.payload` 明确为 `unknown`。因此“schema parse 成功”不等于这些字段的业务内容或 JSON 编码已经通过校验。
 
@@ -206,5 +206,5 @@ Action 的 executable 定义可以携带运行时 Zod schema，但公共 Descrip
 - 不把 ActionDefinition 当作可传输 manifest；executable Zod schema 不能进入 Descriptor、Workflow JSON、Catalog 或 SSE。
 - 不定义 Action handler 的 dispatch、Host fence、lease、retry 执行、Connector 网络访问或 Workflow 状态机；这些由 application/runtime spec 拥有。
 - 不定义 NormalizedIngestItem 的内容生成、Publisher 归一化、时间解析、external key、fingerprint 或 Story 投影算法；唯一规范见[规范化内容](../domain/0001-normalized-content.md)。
-- 不把 `unknown` payload/result 宣称为已校验的 JSON 业务对象。`AssetSnapshot` 的 `storageKey` 是当前 schema 和 repository/API 直返事实，本组件不宣称已剥离或提供授权/脱敏；具体 Product API 行为由消费者实现。
+- 不把 `unknown` payload/result 宣称为已校验的 JSON 业务对象。`AssetSnapshot` 仍带内部 `storageKey`（仓储投影事实），公开读 DTO 用 `publicAssetSnapshotSchema` 表达不含该字段的形状；真正的剥离动作由 Product API 出口负责，不在本包内完成。
 - 不声称 contracts 包自身提供 ValueStore、Blob Store、Database、SSE 连接或持久恢复；BlobRef/ValueRef 只是本包拥有的 wire shape，真实 bytes、canonical JSON 和引用完整性由对应 storage owner 负责。

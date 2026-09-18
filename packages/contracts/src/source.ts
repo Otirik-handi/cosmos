@@ -234,6 +234,18 @@ export const assetSnapshotSchema = z.object({
 
 export type AssetSnapshot = z.infer<typeof assetSnapshotSchema>;
 
+
+/**
+ * Product API 公开投影用的 Asset 形状：共享 AssetSnapshot 去掉内部 Blob key。
+ *
+ * 仓储内部的 Asset snapshot 仍可携带 `storageKey`（见
+ * `docs/spec/storage/0001-prisma-repository.md`），公开读 DTO 与客户端响应校验改用这一份，
+ * 因此「公开响应不含 storageKey」由 schema 保证，而不是靠调用方记得剥离。
+ */
+export const publicAssetSnapshotSchema = assetSnapshotSchema.omit({ storageKey: true });
+
+export type PublicAssetSnapshot = z.infer<typeof publicAssetSnapshotSchema>;
+
 /** Explicit retention cleanup command; `dryRun` defaults to true (ADR-0015 decision 7). */
 
 export const mediaCleanupCommandSchema = z.object({

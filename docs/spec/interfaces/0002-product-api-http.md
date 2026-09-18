@@ -53,9 +53,9 @@ CapabilitiesResponse 和 AttemptSnapshot/AttemptPage。本文件是这些 HTTP �
   固定 `nextCursor: null` 返回。
 - **公开投影**：由 Controller 或 Repository 当前返回的 DTO。Source 会白名单选择配置展示
   字段；Run、Job、Attempt 和内容查询不把 Worker lease token、Secret、Blob Root、绝对文件
-  路径或任意内部执行 payload 作为 HTTP 控制输入。Asset 的 `storageKey` 是当前 contracts
-  和存储投影确实会返回的例外，见 Asset 小节；它不是绝对路径，但其公开本身是安全/封装缺口，
-  不能写成“已禁止”。
+  路径或任意内部执行 payload 作为 HTTP 控制输入。Asset 的 `storageKey` 也不再外发：六条公开
+  读路由在返回前经 `toPublicAsset` 逐个挑字段，公开读 DTO 用 `publicAssetSnapshotSchema`
+  描述；仓储内部的 `AssetSnapshot` 仍带该字段，见 Asset 小节。
 - **SSE cursor**：客户端通过 `Last-Event-ID` header 或 `after` query 指定的非负事件序号；
   事件 id 是持久 Domain Event 的 sequence 字符串。
 
@@ -348,12 +348,13 @@ JSON DTO 的 canonical shape、枚举和序列化规则只见 [Public Contracts]
 Attempt HTTP 局部投影，因为 contracts 当前没有它们的 schema。
 
 成功响应不返回 Controller 内部的 workflow input snapshot、Kernel journal、lease
-identity、lease token、Connector executable、Secret 或文件系统绝对路径。**当前 Feed、Search、
-Entry 和 Revision/Story 内部 revision 的 AssetSnapshot 确实包含可空 `storageKey`**，因为
-`packages/contracts/src/index.ts` 的 `assetSnapshotSchema` 和
-`PrismaCosmosRepository.toAssetSnapshot` 都保留该字段；这是真实的公开投影安全缺口，不能在
-当前规格中宣称 storage key 已被禁止或已脱敏。`storageKey` 是 Blob store 的相对内容寻址
-键而非绝对路径，但 API 没有为它建立稳定的公开安全封装，调用方不应把它当可写路径。
+identity、lease token、Connector executable、Secret 或文件系统绝对路径。**Feed、Search、
+Entry 和 Revision/Story 内部 revision 的 Asset 投影不含 `storageKey`**：六条公开读路由在
+返回前经 `apps/api/src/app.controller/public-projection.ts` 的 `toPublicAsset` 逐个挑字段，
+公开读 DTO 由 contracts 的 `publicAssetSnapshotSchema` 描述（从 `assetSnapshotSchema` 省略
+`storageKey`）。仓储内部的 `AssetSnapshot`（`PrismaCosmosRepository.toAssetSnapshot`）仍保留
+该字段，只服务 Blob 读写与内部用例；回归锚点是
+`apps/api/src/app.controller.public-projection.test.ts`。
 `GET /assets/:assetId` 不返回 JSON Asset DTO，也不回显 storage key：Controller 调用
 `readAsset`，成功时返回 `StreamableFile` 的原始 bytes 和保存的 `mimeType`（缺失 mime 时
 repository 使用 `application/octet-stream`）；Asset 没有 storageKey 或 Blob 读取失败/不可读
@@ -461,8 +462,8 @@ Repository、catalog、SSE polling 或 Blob 读取异常上抛到全局 filter�
    `AttemptPage`，字段没有 leaseToken；请求 malformed/unknown `/attempts/:id` 观察 404，
    并记录当前 `Number.parseInt` 对带数字前缀脏后缀的未严格拒绝缺口。
 8. 请求 `/api/v1/feed?limit=0`、超大 limit、非法 limit，分别观察 clamp 到 1、100、20；
-   请求非法 Search/Entries query，观察 HTTP 400。检查 Feed/Entry/Revision 资产投影仍有
-   `storageKey`，并确认 Asset download 返回 bytes/mime 而非 JSON。
+   请求非法 Search/Entries query，观察 HTTP 400。检查 Feed/Entry/Revision 资产投影不含
+   `storageKey`（整份响应 JSON 都搜不到该字段名），并确认 Asset download 返回 bytes/mime 而非 JSON。
 9. 用 `after=0` 建立 SSE，观察持久事件按 id 升序到达；设置 replay limit 为 1 并使窗口
    超过上限，观察一条 `snapshot_required` 且 `latestEventId` 等于存储最新序号。
 10. 在无新事件连接保持至少 10 秒，观察 `keepalive.v1`；取消连接后观察不再新增 poll；

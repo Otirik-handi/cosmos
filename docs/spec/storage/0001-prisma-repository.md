@@ -115,7 +115,7 @@ Raw payload/Asset Blob 写入发生在数据库事务前；数据库事务失败
 
 ## 输出
 
-成功输出是 contracts/application 端口定义的快照、页和事件白名单；内部 Prisma row、数据库 URL、绝对路径、secret 不作为公开 API 输出。仓储内部的 Asset snapshot 可能携带 storageKey，Product API 的公开投影另行剥离。Feed/Search/Entries 使用 `nextCursor = offset + limit` 或 `null`；DomainEvent replay 的 id 为 sequence 字符串。
+成功输出是 contracts/application 端口定义的快照、页和事件白名单；内部 Prisma row、数据库 URL、绝对路径、secret 不作为公开 API 输出。仓储内部的 Asset snapshot 携带 storageKey，Product API 的公开投影另行剥离（`toPublicAsset` + `publicAssetSnapshotSchema`，见 [`interfaces/0002-product-api-http.md`](../interfaces/0002-product-api-http.md)）。Feed/Search/Entries 使用 `nextCursor = offset + limit` 或 `null`；DomainEvent replay 的 id 为 sequence 字符串。
 
 ## 状态与持久化
 

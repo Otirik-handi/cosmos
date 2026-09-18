@@ -28,6 +28,7 @@
 | 2026-09-17 Task 26 worktree：整套连跑 4 次（移走该新 spec，其余不变） | 3 次 21/21 通过；1 次失败在 `media-policy.spec.ts:89`（耗时 5.1 分钟，像是卡死而非断言失败） |
 | 2026-09-17 Task 26 worktree：整套跑，额外加一个**只做既有行为**的诊断 spec（录入一个来源 + 归并两条 Story，完全不碰新功能） | 20/22，失败在 `:103` 与 `:417`（后者耗时 5.1 分钟） |
 | 2026-09-17 Task 26 worktree：整套跑，额外加一个只录入来源、不归并的诊断 spec | 22/22 通过 |
+| 2026-09-18 Task 31 worktree：同一 build 整套连跑 2 次（`bun run test:browser`） | 第 1 轮 **22/22 通过**；第 2 轮 **21/22**，失败在 `:186`「拆分场景」，同 build 单跑该用例 **1 passed (3.2s)** |
 
 **2026-09-17 关于 `:539` 的补充观察（Task 26 期间）**：失败现场 `role=status` 显示「搜索到 0 条结果。」，页面上却仍有 1 个 `article`（内容是刚录入来源的条目），于是 `expect(page.locator("article")).toHaveCount(0)` 10 秒内 23 次都读到 1。该 `article` 只能是页面级 `FeedBrowser` 渲染的（全仓只有它渲染 `<article>`；看板阅读流区块用 `<ul><li><button>`），而 `onSearch` 在同一次状态更新里同时写 `activeSearch`、`feed` 与提示语，所以「提示语说 0 条、列表还留着上一次的内容」在代码上无法解释——**这是一个未查清的观察，不排除应用存在搜索状态不一致**。没有改这条断言，也没有用重跑结案。
 
@@ -87,3 +88,15 @@
 | 单跑 `bunx playwright test e2e/browser/media-policy.spec.ts` | **3 passed (15.2s)** |
 
 **当前判断**：失败点集中在"等一个刚创建/刚启用的来源在来源健康列表里出现或变为可点"，且都发生在整轮耗时约为正常 3 倍的那些运行里；环境争用与应用在慢速下的更新时序问题都没有被排除。这两条用例都不碰搜索框，与 Task 30 的改动无关。第 1 条建议的诊断（SQLite WAL/`busy_timeout` 显式配置 + 记录请求与提交顺序）对它同样适用。
+
+## 5. `e2e/component-lab/source-form.spec.ts:67` 的单次失败
+
+**状态（2026-09-18，一次观察，未归因）**：源表单「恢复的 token 在字段 blur 但未编辑时保留」用例在整套组件实验室里失败一次，随后两次复跑（单文件、整套）都通过。
+
+| 跑法 | 结果 |
+|---|---|
+| Task 31 worktree，整套组件实验室（`bun run test:browser:component-lab`） | 13 passed / 1 failed：`source-form.spec.ts:67 preserves a restored token when its field blurs without editing` |
+| 单跑该文件（`bunx playwright test --config playwright.component-lab.config.ts e2e/component-lab/source-form.spec.ts`） | **6 passed**（含该用例） |
+| 同内容整套再跑一次 | **14 passed (16.8s)** |
+
+**当前判断**：一次观察、两次复跑均通过，符合环境抖动；机制未查清。与 Task 31 的改动（公开 Asset 投影与相关类型）没有可解释的因果关系——该用例不消费内容查询投影，也不碰媒体展示。**建议**：再出现时先看 trace 里失败步骤与同一 worker 上前一个用例是否共享状态（组件实验室是 1 worker 串行、共用同一个 dev server）。
