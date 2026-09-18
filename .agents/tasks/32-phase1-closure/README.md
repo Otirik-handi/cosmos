@@ -40,7 +40,7 @@
 
 ## Current State
 
-生命周期阶段：切片 1 完成（实现 + 三层验证），切片 2–5 未开始。分支 `feat/t32-phase1-closure`，worktree `.worktree/t32-phase1-closure`，基线 `bdfee86`（本地 master；注意 `origin/master` 仍停在 `da7d656`，本地领先 4 个未推送提交）。
+生命周期阶段：**切片 1–4 完成**（实现 + 规格 + 全量门禁，各自独立提交），切片 5（OPS-002 Job/Attempt 产品面）未开始。分支 `feat/t32-phase1-closure`，worktree `.worktree/t32-phase1-closure`，基线 `bdfee86`（本地 master；注意 `origin/master` 仍停在 `da7d656`，本地领先 4 个未推送提交）。
 
 ## 验证
 
