@@ -13,6 +13,23 @@ export const contentKindSchema = z.enum([
 ]);
 export type ContentKind = z.infer<typeof contentKindSchema>;
 
+/**
+ * 发现渠道（ING-004）的 wire 形状。语义 owner 是 `@cosmos/domain` 的 `discoveryChannels`
+ * （由连接器在域层声明），这里只负责跨 HTTP / Workflow JSON 边界的取值校验。
+ */
+export const discoveryChannelSchema = z.enum([
+    "account",
+    "recommendation",
+    "search",
+    "announcement",
+    "email",
+    "manual",
+    "related",
+    "agent",
+    "unknown",
+]);
+export type DiscoveryChannel = z.infer<typeof discoveryChannelSchema>;
+
 export const publisherKindSchema = z.enum([
     "user",
     "channel",

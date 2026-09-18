@@ -33,6 +33,8 @@ describe("RSS connector", () => {
         expect(items).toHaveLength(2);
         expect(items[0].webUrl).toBe("https://example.test/one");
         expect(items[0].kind).toBe("article");
+        // RSS 是订阅式来源（ING-004）。
+        expect(items[0].discoveryChannel).toBe("account");
         expect(items[0].publisher).toMatchObject({
             platformId: null,
             name: "RSS author",

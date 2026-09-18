@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
     contentKindSchema,
     contentMetricsSchema,
+    discoveryChannelSchema,
     publisherSchema,
     sourceKindSchema,
     temporalValueSchema,
@@ -37,6 +38,8 @@ export const observationSnapshotSchema = z.object({
     webUrl: z.string().nullable(),
     capturedAt: z.string(),
     sourcePublishedAt: z.string().nullable(),
+    /** 发现渠道（ING-004）。升级前写入的 Observation 没有这个值，读取侧按 unknown 处理。 */
+    discoveryChannel: discoveryChannelSchema.optional(),
 });
 
 export type ObservationSnapshot = z.infer<typeof observationSnapshotSchema>;

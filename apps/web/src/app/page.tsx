@@ -213,6 +213,9 @@ export default function Home() {
             publishedBefore: "",
             labelIds: [],
             topicIds: [],
+            author: "",
+            contentKind: "",
+            assetStatus: "",
         },
     });
 
@@ -366,6 +369,9 @@ export default function Home() {
         publishedBefore,
         labelIds = [],
         topicIds = [],
+        author,
+        contentKind,
+        assetStatus,
     }) => {
         setError(null);
         try {
@@ -376,6 +382,9 @@ export default function Home() {
                 publishedBefore: toBoundaryIso(publishedBefore, true),
                 labelIds: labelIds.join(",") || undefined,
                 topicIds: topicIds.join(",") || undefined,
+                author: author || undefined,
+                contentKind: contentKind || undefined,
+                assetStatus: assetStatus || undefined,
                 limit: 20,
             };
             // 提交新条件即自增搜索版本：此后返回的非本次结果（包括带着旧条件发起的刷新，
@@ -392,6 +401,7 @@ export default function Home() {
             setNotice(
                 text || sourceId || publishedAfter || publishedBefore
                     || labelIds.length > 0 || topicIds.length > 0
+                    || author || contentKind || assetStatus
                     ? `搜索到 ${result.items.length} 条结果。`
                     : "已恢复 Feed。",
             );

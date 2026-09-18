@@ -118,6 +118,16 @@ export class ContentClient extends SourcesClient {
         if (query.topicIds) {
             params.set("topicIds", query.topicIds);
         }
+        // LIB-001 的三个过滤维度。
+        if (query.author) {
+            params.set("author", query.author);
+        }
+        if (query.contentKind) {
+            params.set("contentKind", query.contentKind);
+        }
+        if (query.assetStatus) {
+            params.set("assetStatus", query.assetStatus);
+        }
         if (query.cursor) {
             params.set("cursor", query.cursor);
         }

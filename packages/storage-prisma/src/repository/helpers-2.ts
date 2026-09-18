@@ -1,7 +1,17 @@
-import { contentKindSchema, sourceKindSchema, type ContentMetrics, type EntryDetail, type EntryPage, type EntryRelatedStory, type EntryRelation, type RevisionDetail, type Publisher, type StoryDetail, type StoryKeyFact, type StoryTimeRange, type TemporalValue, type TopicDetail, type LabelDetail } from "@cosmos/contracts";
+import { contentKindSchema, discoveryChannelSchema, sourceKindSchema, type ContentMetrics, type DiscoveryChannel, type EntryDetail, type EntryPage, type EntryRelatedStory, type EntryRelation, type RevisionDetail, type Publisher, type StoryDetail, type StoryKeyFact, type StoryTimeRange, type TemporalValue, type TopicDetail, type LabelDetail } from "@cosmos/contracts";
 import { type Prisma } from "@prisma/client";
 import { entryRelationIndexByEntry, exactTemporalValue, parseCursor, parseJson } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers1 } from "./helpers-1.js";
+
+/**
+ * 读取 Observation 的发现渠道（ING-004）。这个字段是后加的：升级前写入的行没有它，
+ * 未声明渠道的连接器也可能写入未知值，两种情况都按 `unknown` 降级，读取侧不抛错。
+ */
+function observationDiscoveryChannel(discoveryContextJson: string | null): DiscoveryChannel {
+    const parsed = parseJson<{ channel?: unknown }>(discoveryContextJson);
+    const channel = discoveryChannelSchema.safeParse(parsed?.channel);
+    return channel.success ? channel.data : "unknown";
+}
 
 export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelpers1 {
     async entries(input: {
@@ -180,6 +190,7 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                 webUrl: observation.webUrl,
                 capturedAt: observation.capturedAt.toISOString(),
                 sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
+                discoveryChannel: observationDiscoveryChannel(observation.discoveryContextJson),
             })),
             relatedStories: relatedByEntry.get(entry.id) ?? [],
             relations: relationsByEntry.get(entry.id) ?? [],
@@ -480,6 +491,7 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                 webUrl: observation.webUrl,
                 capturedAt: observation.capturedAt.toISOString(),
                 sourcePublishedAt: observation.sourcePublishedAt?.toISOString() ?? null,
+                discoveryChannel: observationDiscoveryChannel(observation.discoveryContextJson),
             })),
             relatedStories: entryLinks.map((link) => ({
                 storyId: link.storyId,

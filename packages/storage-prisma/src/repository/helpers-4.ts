@@ -150,6 +150,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                     sourceLocatorJson: JSON.stringify(input.item.sourceLocator),
                     discoveryContextJson: JSON.stringify({
                         kind: input.triggerKind ?? "manual",
+                        channel: input.item.discoveryChannel ?? "unknown",
                     }),
                     webUrl: input.item.webUrl,
                     payloadBlobKey: rawPayload.key,

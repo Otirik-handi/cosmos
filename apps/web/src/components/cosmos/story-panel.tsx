@@ -61,6 +61,7 @@ import {
 } from "@/lib/story-time-range-draft";
 
 import {
+    DISCOVERY_CHANNEL_LABELS,
     STORY_KIND_LABELS,
     relationTypeLabel,
 } from "./story-panel/labels";
@@ -819,7 +820,7 @@ export function StoryPanel({
                                 ))}
                                 {story.entry.observations.map((observation) => (
                                     <Badge key={observation.id} variant="outline">
-                                        Observation · {observation.webUrl ?? "无网页 URL"}
+                                        Observation · {DISCOVERY_CHANNEL_LABELS[observation.discoveryChannel ?? "unknown"]} · {observation.webUrl ?? "无网页 URL"}
                                     </Badge>
                                 ))}
                             </div>

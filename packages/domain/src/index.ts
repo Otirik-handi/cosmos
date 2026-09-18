@@ -267,6 +267,25 @@ export const contentKinds = [
 
 export type ContentKind = (typeof contentKinds)[number];
 
+/**
+ * 「内容为什么被发现」（ING-004）。连接器在抓取时最清楚这一点，所以在域层由连接器声明：
+ * Bilibili 的 hot 与 feed 是同一个 manifest 下的两种发现方式，manifest 表达不了这个差别。
+ * 取值覆盖需求验收列出的八类渠道，`unknown` 表示未声明（旧数据或未标注的连接器）。
+ */
+export const discoveryChannels = [
+    "account",
+    "recommendation",
+    "search",
+    "announcement",
+    "email",
+    "manual",
+    "related",
+    "agent",
+    "unknown",
+] as const;
+
+export type DiscoveryChannel = (typeof discoveryChannels)[number];
+
 export const publisherKinds = [
     "user",
     "channel",
@@ -365,6 +384,8 @@ export interface NormalizedIngestItem {
     publishedAt: TemporalValue | null;
     updatedAt?: TemporalValue | null;
     sourceLocator: Record<string, unknown>;
+    /** 发现渠道（ING-004）。不属于内容指纹：同一条内容换一种发现方式不产生新 Revision。 */
+    discoveryChannel?: DiscoveryChannel;
     rawPayload: string;
     rawPayloadMimeType?: string;
     assets: readonly NormalizedAssetInput[];

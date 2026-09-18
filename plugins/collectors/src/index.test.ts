@@ -102,6 +102,8 @@ describe("built-in collectors", () => {
             summary: null,
             contentText: "一个 B 站视频",
             kind: "listing",
+            // hot 是平台推荐流（ING-004）。
+            discoveryChannel: "recommendation",
             publisher: {
                 platformId: null,
                 name: "Cosmos",
@@ -162,6 +164,8 @@ describe("built-in collectors", () => {
 
         expect(result.items[0]).toMatchObject({
             kind: "video",
+            // feed 是关注账号的动态（ING-004）。
+            discoveryChannel: "account",
             publisher: {
                 platformId: "9988",
                 name: "Feed author",
@@ -269,6 +273,8 @@ describe("built-in collectors", () => {
             title: "AI HOT 条目",
             summary: "来自公开 API 的摘要。",
             webUrl: "https://example.com/original",
+            // AI HOT 是公开聚合推荐流（ING-004）。
+            discoveryChannel: "recommendation",
         });
     });
 

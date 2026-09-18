@@ -517,6 +517,8 @@ function normalizeBilibiliOutput(
                 rank: index + 1,
                 externalId,
             },
+            // hot 是平台推荐流、feed 是关注的动态（ING-004）：同一个 manifest 下两种发现方式。
+            discoveryChannel: mode === "hot" ? "recommendation" : "account",
             rawPayload: JSON.stringify(row),
             rawPayloadMimeType: "application/json",
             assets: asset ? [asset] : [],
@@ -601,6 +603,8 @@ function normalizeAiHotItem(
             sourceName: firstText(source?.name) || null,
             links,
         },
+        // AI HOT 是公开聚合榜：内容因为进入聚合推荐流而被发现（ING-004）。
+        discoveryChannel: "recommendation",
         rawPayload: JSON.stringify(item),
         rawPayloadMimeType: "application/json",
         assets: imageUrl

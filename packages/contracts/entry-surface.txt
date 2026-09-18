@@ -47,6 +47,7 @@ type	CreateSavedViewCommand
 type	CreateSectionCommand
 type	CreateSourceCommand
 type	CreateTopicCommand
+type	DiscoveryChannel
 type	Entity
 type	EntityDetail
 type	EntityLinkProvenance
@@ -273,6 +274,7 @@ value	createSavedViewCommandSchema
 value	createSectionCommandSchema
 value	createSourceCommandSchema
 value	createTopicCommandSchema
+value	discoveryChannelSchema
 value	entityDetailSchema
 value	entityLinkProvenanceSchema
 value	entityPageSchema

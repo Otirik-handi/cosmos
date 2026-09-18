@@ -1,10 +1,24 @@
 import {
     PublicAssetSnapshot,
+    type DiscoveryChannel,
 } from "@cosmos/contracts";
 
 export const RELATION_TYPE_LABELS: Record<string, string> = {
     evidence_for: "证据",
     mentions: "提及",
+};
+
+/** 发现渠道的用户可读文案（ING-004）：与需求验收列出的八类渠道一一对应。 */
+export const DISCOVERY_CHANNEL_LABELS: Record<DiscoveryChannel, string> = {
+    account: "关注账号",
+    recommendation: "首页推荐",
+    search: "搜索词",
+    announcement: "公告监控",
+    email: "邮箱",
+    manual: "手动导入",
+    related: "相关链接",
+    agent: "Agent 调研",
+    unknown: "未知渠道",
 };
 
 export function relationTypeLabel(type: string): string {

@@ -320,6 +320,8 @@ export function parseRssXml(
                 ...locator,
                 externalId,
             },
+            // RSS 是订阅式来源：内容因为用户订阅了这个来源而被发现（ING-004）。
+            discoveryChannel: "account",
             assets,
         };
     });
