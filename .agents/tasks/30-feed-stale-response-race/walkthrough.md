@@ -175,3 +175,12 @@ run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175
 删除前对六个目录做了守卫检查：**0 个文件、7704 个 junction 全部指向各自目录内部、0 个指向目录外**，因此清理只删掉 bun 的链接壳，不会穿透到主仓库源码。三个分支的 SHA 记在上表，需要时可 `git push origin <sha>:refs/heads/<name>` 重建。
 
 清理后状态：本地只剩 `master`（`699ff5a`，与 `origin/master` 一致）；`upstream`（`notnotype/cosmos`）的分支未触碰；主工作区有一条**不属于本 Task**的未跟踪目录 `.agents/learning/`，未处理。
+
+## 完结（2026-09-18）
+
+维护者确认「Task 30 内容已完成」并要求收尾，不再追 CI 状态。本 Task 到此结束：
+
+- 交付：两个缺陷各有一条确定性红→绿证据（`phase2-entry-relation.spec.ts` 的重复 key 残留、`feed-search-race.spec.ts` 的陈旧响应覆盖），既有断言一字未改；合并 `699ff5a`、master CI run `35313175640` 五 job 全绿。
+- 记录：`docs/testing/known-unstable-cases.md` 第 1 条（`:539` 归因更正 + 结论段）与第 4 条（慢跑等待超时）、`PROJECT-STATUS.md` 的「尚未实现」与「当前验证」、本 Task README/walkthrough、`.agents/tasks/README.md` 索引行。
+- 公开记录：Issue [#4](https://github.com/Otirik-handi/cosmos/issues/4)（Open，关闭与否由维护者决定）。
+- 追记（与本 Task 的改动无关，按维护者指示不深挖、不作为本 Task 的未完成项）：最后一个只改文档的记录提交 `bd58f76` 的 CI 首轮在 `apps/worker/src/workflow-ingest.test.ts` 撞到该用例自带的 15 秒预算（`Test timed out in 15000ms`）而失败——同一代码本地 599 用例全绿、上一轮 master CI 的 Quality 也全绿；整轮复跑后 Quality、Node process E2E、Windows Node smoke 均通过。该抖动**没有**登记进 `known-unstable-cases.md`（没有覆盖它的 Task）；若它在 CI 再次复现，应登记并把预算与 `vitest.config.ts` 的 `testTimeout: 60_000` 对齐。

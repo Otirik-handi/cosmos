@@ -53,7 +53,7 @@ Non-goals：
 
 ## Current State
 
-- 生命周期阶段：**切片 7 进行中**（2026-09-17）。两个缺陷都已修好，并各有一条确定性红→绿证据。
+- 生命周期阶段：**已完结（2026-09-18，维护者确认内容完成后收尾）**。两个缺陷都已修好、各有一条确定性红→绿证据；`--no-ff` 合并为 master `699ff5a` 并推送，master CI run `35313175640` 五个 job 全绿（Browser E2E `22 passed`、组件实验室 `14 passed`）；worktree 与任务分支（本地 + 远端）已清理，公开记录补为 [#4](https://github.com/Otirik-handi/cosmos/issues/4)。
 - 关键结论（判据见 walkthrough）：`:539` 的失败**不是**状态竞态——失败现场 `feed.length === 0`、页头无"N 篇内容"、React 渲染的是空状态分支，残留的 `<article>` 是重复 key 造成的孤儿 DOM 节点。
 - 依赖：无（与 Task 26/29 无文件交叠；`use-feed-workspace.ts`、`page.tsx`、两个列表组件由本 Task 独占写入）。
 - 验证层级：两条定向回归（RED→GREEN）→ 整套浏览器 + 组件实验室 → 全量单测 / lint / typecheck / build → 文档门禁 → 合并后 master CI。
@@ -73,4 +73,5 @@ Non-goals：
 
 - `:103`、`:417` 与整套慢跑时的 `media-policy` 等待超时仍未归因（后者已按登记规则补记）。
 - 公开记录已补：[#4](https://github.com/Otirik-handi/cosmos/issues/4)（Open，待维护者确认后关闭）。
+- 追记（与本 Task 的改动无关，按维护者 2026-09-18 指示不再深挖）：最后一个记录提交 `bd58f76`（只改 README）的 CI 首轮在 `apps/worker/src/workflow-ingest.test.ts` 撞到该用例自带的 15 秒预算（`Test timed out in 15000ms`，同代码本地与上一轮 master CI 均通过），整轮复跑后 Quality 通过。该观察**没有**登记进 `docs/testing/known-unstable-cases.md`（没有覆盖它的 Task）；若在 CI 再次复现，应登记并把预算与 `vitest.config.ts` 的 `testTimeout: 60_000` 对齐。
 - `docs/testing/known-unstable-cases.md` 第 1 条里"失败点漂移、单跑不复现"的其余部分需要在 `:539` 修掉后重新观察，才能判断是否还有独立机制。
