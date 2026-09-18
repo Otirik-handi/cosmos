@@ -52,7 +52,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - Entity merge/dedup；批注的正文片段字符级锚点；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）。原因：`search` 把用户输入原样交给 `entry_search MATCH ?`，`-` 在 FTS5 里是 NOT 运算符，`绝不匹配-212c82` 因此变成畸形查询、SQLite 返回语法错误。现按维护者裁定「全当字面文本」处理：输入按空白切词、每段作字面短语，多词保持 AND，无词可搜时退回无文本条件。**代价**：搜索框不再是 FTS5 查询接口，`OR`/`NEAR`/前缀通配不再是运算符。
-- **已知不稳定的测试用例**：`e2e/browser/phase2-organization.spec.ts` 的间歇失败（失败点漂移、单跑不复现，机制未查清，不能排除应用并发缺陷）与两处 390px 横向溢出断言（`ingest.spec.ts:127`、`theme.spec.ts:164`）。症状、观察次数、当前判断与建议的处理次序统一登记在 [`docs/testing/known-unstable-cases.md`](docs/testing/known-unstable-cases.md)；维护者 2026-09-15 决定先登记、后续再处理。
+- **已知不稳定的测试用例**（2026-09-17 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**——根因是 Feed 卡片列表用 `storyId` 当 React key，而同一 Story 可以有多张成员卡片（ADR-0022 决定 4/6「只标记、不折叠」），重复 key 让其中一张卡的 DOM 节点脱离 React 管理、列表整体替换后残留成"幽灵卡片"；`key` 改用条目身份 `entryId` 后，确定性回归断言（`phase2-entry-relation.spec.ts` 归并场景内）由必挂转为 14.9 秒通过。同一次排查还确认并修复了另一个真实竞态（搜索之后才返回的陈旧刷新覆盖搜索结果，回归用例 `e2e/browser/feed-search-race.spec.ts`）。过程与证据见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。**仍未归因**：同文件 `:103`（证据关系反向视图等待超时）、`:417`（用户组织场景耗时异常）与整套慢跑时 `media-policy.spec.ts` 的来源健康行等待超时。两处 390px 横向溢出断言（`ingest.spec.ts:127`、`theme.spec.ts:164`）随移动端适配后置**暂停执行**。症状、观察次数与建议次序统一登记在 [`docs/testing/known-unstable-cases.md`](docs/testing/known-unstable-cases.md)。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
@@ -173,7 +173,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
 - 最近一次全量证据（2026-09-17，Task 26 的 worktree 内在**合并提交 `c308733` 上**重跑）：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`docs:check` 0 失败；`bun run lint:web` 0 error / 81 warning（Task 26 改动前 83）。主工作区在 `c308733` 上另跑 `docs:check` **680 文件 0 失败**、size 门禁 PASS（含 6 条基线内文件增长的 warning）、`git diff --check` 干净。主工作区的 `node_modules` 与 lockfile 不一致（缺 vitest 可执行文件与 `@dnd-kit/*`），因此 typecheck/test/build 没有在主工作区重跑，而是在 worktree 内检出合并提交后运行。
-- **浏览器产品 E2E 整套仍有失败**（Task 26 起）：`phase2-organization.spec.ts` 失败点在 `:103`/`:417`/`:539` 之间漂移。对照实验证明与 Task 26 的新功能无关（只做既有行为的诊断 spec 同样触发），维护者 2026-09-17 接受该结论并放行；机制未查清，见 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
+- **浏览器产品 E2E 整套仍有失败**（Task 26 起）：`phase2-organization.spec.ts` 失败点在 `:103`/`:417`/`:539` 之间漂移。对照实验证明与 Task 26 的新功能无关（只做既有行为的诊断 spec 同样触发），维护者 2026-09-17 接受该结论并放行。**2026-09-17 更新**：`:539` 的机制已查明并修复（重复 React key 使列表替换后残留一张卡；同批还修掉陈旧刷新覆盖搜索结果的竞态），Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md) 有确定性红→绿证据；修复后连续两轮整套浏览器套件里 `:539` 均通过。`:103`、`:417` 与整套慢跑时的 `media-policy` 等待超时仍未归因，见 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
 - 当前未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
 

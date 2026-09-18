@@ -1,5 +1,6 @@
 import {
     useCallback,
+    useRef,
     useState,
 } from "react";
 import {
@@ -32,16 +33,36 @@ export function useFeedWorkspace(
     const [feed, setFeed] = useState<readonly FeedItem[]>([]);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [activeSearch, setActiveSearch] = useState<SearchQuery | null>(null);
+    /**
+     * 当前生效的搜索条件与它的版本号。Feed 状态有多个异步写入者（首次加载、SSE 触发的
+     * refresh、搜索、套用视图、分页），判定"这次响应还算不算数"不能只看谁最后发起：
+     * SSE 触发的 refresh 可能在搜索提交之后才发起，却因为读的是旧闭包而带着旧条件。
+     * 所以把当前查询与版本号放进 ref——提交新条件时同步自增，响应返回时比对版本，
+     * 条件已变就丢弃结果。这样"提示语说 0 条、列表却残留旧内容"不再可能出现。
+     */
+    const activeSearchRef = useRef<SearchQuery | null>(null);
+    const searchGeneration = useRef(0);
+    /** 提交新的搜索条件：同步更新 ref 与版本号，并返回本次写入应比对的版本。 */
+    const beginSearch = useCallback((query: SearchQuery | null): number => {
+        activeSearchRef.current = query;
+        searchGeneration.current += 1;
+        return searchGeneration.current;
+    }, []);
+    const isSearchWriteCurrent = useCallback(
+        (generation: number): boolean => generation === searchGeneration.current,
+        [],
+    );
     const [savedViews, setSavedViews] = useState<readonly SavedView[]>([]);
     const [savedViewName, setSavedViewName] = useState("");
     const [loadingMore, setLoadingMore] = useState(false);
     const refresh = useCallback(async (): Promise<void> => {
+        const generation = searchGeneration.current;
         ctx.setError(null);
         ctx.setLoading(true);
         try {
             const [nextFeed, nextSources, nextLabels, nextCollections, nextSavedViews] = await Promise.all([
-                activeSearch
-                    ? client.search(activeSearch)
+                activeSearchRef.current
+                    ? client.search(activeSearchRef.current)
                     : client.feed(),
                 client.listSources(),
                 client.listLabels(),
@@ -49,18 +70,26 @@ export function useFeedWorkspace(
                 client.listCollections(storyApi.story ? { storyId: storyApi.story.story.id } : {}),
                 client.listSavedViews(),
             ]);
-            setFeed(nextFeed.items);
-            setNextCursor(nextFeed.nextCursor);
+            // 来源/分类/集合/已保存视图与搜索条件无关，任何一次刷新都可以写；
+            // 只有 Feed 与游标属于"当前搜索条件"，陈旧响应必须丢弃——否则会出现
+            // 提示语说 0 条、列表却还留着旧内容。
             setSources(nextSources);
             storyApi.setLabels(nextLabels);
             storyApi.setCollections(nextCollections);
             setSavedViews(nextSavedViews.items);
+            if (!isSearchWriteCurrent(generation)) {
+                return;
+            }
+            setFeed(nextFeed.items);
+            setNextCursor(nextFeed.nextCursor);
         } catch (caught) {
-            ctx.setError(readError(caught));
+            if (isSearchWriteCurrent(generation)) {
+                ctx.setError(readError(caught));
+            }
         } finally {
             ctx.setLoading(false);
         }
-    }, [activeSearch, storyApi.story]);
+    }, [storyApi.story, isSearchWriteCurrent]);
 
     /**
      * SSE 与首次加载只跑一次：refresh 经 latest-ref 读取，
@@ -68,17 +97,23 @@ export function useFeedWorkspace(
      */
     const clearSearch = useCallback(async (): Promise<void> => {
         searchForm.reset();
+        const generation = beginSearch(null);
         setActiveSearch(null);
         ctx.setError(null);
         try {
             const result = await client.feed();
+            if (!isSearchWriteCurrent(generation)) {
+                return;
+            }
             setFeed(result.items);
             setNextCursor(result.nextCursor);
             ctx.setNotice("已恢复 Feed。");
         } catch (caught) {
-            ctx.setError(readError(caught));
+            if (isSearchWriteCurrent(generation)) {
+                ctx.setError(readError(caught));
+            }
         }
-    }, [searchForm]);
+    }, [searchForm, beginSearch, isSearchWriteCurrent]);
 
     /** 保存视图记录当前搜索表单的全部条件，包括分类（Label）与 Topic 多选。 */
     const saveCurrentSearchAsView = async (name: string): Promise<void> => {
@@ -129,7 +164,11 @@ export function useFeedWorkspace(
                 topicIds: view.topicIds.join(",") || undefined,
                 limit: 20,
             };
+            const generation = beginSearch(query);
             const result = await client.search(query);
+            if (!isSearchWriteCurrent(generation)) {
+                return;
+            }
             setActiveSearch(query);
             setFeed(result.items);
             setNextCursor(result.nextCursor);
@@ -160,17 +199,23 @@ export function useFeedWorkspace(
         }
         setLoadingMore(true);
         ctx.setError(null);
+        const generation = searchGeneration.current;
         try {
-            const page = activeSearch
+            const page = activeSearchRef.current
                 ? await client.search({
-                    ...activeSearch,
+                    ...activeSearchRef.current,
                     cursor: nextCursor,
                 })
                 : await client.feed({ cursor: nextCursor });
+            if (!isSearchWriteCurrent(generation)) {
+                return;
+            }
             setFeed((current) => [...current, ...page.items]);
             setNextCursor(page.nextCursor);
         } catch (caught) {
-            ctx.setError(readError(caught));
+            if (isSearchWriteCurrent(generation)) {
+                ctx.setError(readError(caught));
+            }
         } finally {
             setLoadingMore(false);
         }
@@ -180,9 +225,11 @@ export function useFeedWorkspace(
     return {
         activeSearch,
         applySavedView,
+        beginSearch,
         clearSearch,
         deleteSavedView,
         feed,
+        isSearchWriteCurrent,
         loadMore,
         loadingMore,
         nextCursor,
