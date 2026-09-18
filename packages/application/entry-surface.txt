@@ -13,6 +13,7 @@ type	CompleteActivityResult
 type	ConnectorErrorCode
 type	ConnectorResolver
 type	ConnectorStateEntry
+type	ConnectorStateHandle
 type	ConnectorStateStorePort
 type	CosmosRepository
 type	CreateWorkflowEnvelopeInput

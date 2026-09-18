@@ -38,6 +38,9 @@ import {
 import {
     ConnectorExecutionError,
 } from "./connector-ports.js";
+import type {
+    SourceSnapshot,
+} from "@cosmos/contracts";
 import {
     acquireItemsSkippingUnchanged,
     mediaDownloadCapability,
@@ -48,6 +51,7 @@ import {
 } from "./media-acquisition.js";
 import type {
     ConnectorResolver,
+    ConnectorStateHandle,
     IngestConnector,
 } from "./connector-ports.js";
 import type {
@@ -144,6 +148,11 @@ export interface IngestActionOptions {
     /** Retry pass over already-stored degraded Assets (ADR-0015). */
     mediaRetrier?: MediaRetrier;
     retryCandidates?: Pick<CosmosRepository, "listRetryableMediaAssets">;
+    /**
+     * 按来源解析出的连接器状态句柄（ADR-0017/0018，命名空间取自 manifest 的
+     * `stateStoreNamespace`）。没接状态存储时为 undefined，连接器退化成无状态抓取。
+     */
+    connectorState?: (source: SourceSnapshot) => ConnectorStateHandle | undefined;
     logger?: LoggerPort;
 }
 
@@ -405,6 +414,7 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                         cursor: parsed.cursor,
                         idempotencyKey: context.idempotencyKey,
                         signal: context.signal,
+                        state: options.connectorState?.(source),
                     });
                 } catch (error) {
                     throw mapConnectorError(error, connector.id, "fetch");

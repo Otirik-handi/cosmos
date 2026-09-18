@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createLogger } from "@cosmos/logging";
+import type { ConnectorStateHandle } from "@cosmos/application";
 
 import {
     createRssConnector,
@@ -27,6 +28,107 @@ const firstPage = `<?xml version="1.0"?>
 const revisedPage = firstPage.replace("First item.", "Revised item.");
 
 describe("RSS connector", () => {
+    it("sends stored validators and skips the body on 304 (AUT-003)", async () => {
+        const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+        const connector = createRssConnector({
+            fetch: async (input, init) => {
+                requests.push({
+                    url: String(input),
+                    headers: (init?.headers ?? {}) as Record<string, string>,
+                });
+                return requests.length === 1
+                    ? new Response(firstPage, {
+                        status: 200,
+                        headers: {
+                            etag: 'W/"feed-v1"',
+                            "last-modified": "Fri, 07 Aug 2026 12:00:00 GMT",
+                        },
+                    })
+                    : new Response(null, { status: 304 });
+            },
+        });
+        const source = {
+            id: "source-rss",
+            name: "RSS",
+            sourceDefinitionRef: "source.rss@1",
+            operationId: "fetch",
+            connectorId: "rss",
+            kind: "rss",
+            config: { feedUrl: "https://example.test/feed.xml" },
+            enabled: true,
+            revisionId: "source-rss:1",
+            createdAt: "2026-08-08T00:00:00.000Z",
+            updatedAt: "2026-08-08T00:00:00.000Z",
+            lastRunAt: null,
+            lastError: null,
+        } as const;
+        // 宿主注入的命名空间化状态句柄：这里用内存版记录读写。
+        const entries = new Map<string, { value: unknown; version: number }>();
+        const state: ConnectorStateHandle = {
+            get: async (key) => {
+                const entry = entries.get(key);
+                return entry ? { value: entry.value as never, version: entry.version } : null;
+            },
+            put: async (key, value, expectedVersion) => {
+                expect(expectedVersion).toBe(entries.get(key)?.version ?? null);
+                const version = (expectedVersion ?? 0) + 1;
+                entries.set(key, { value, version });
+                return { version };
+            },
+        };
+
+        const first = await connector.fetchItems({ source, cursor: null, state });
+        expect(first.items).toHaveLength(2);
+        expect(entries.get("http-cache")?.value).toEqual({
+            etag: 'W/"feed-v1"',
+            lastModified: "Fri, 07 Aug 2026 12:00:00 GMT",
+        });
+
+        const second = await connector.fetchItems({
+            source,
+            cursor: first.nextCursor,
+            state,
+        });
+        // 304 = 没有变化：不下载正文、不解析、cursor 不变。
+        expect(second.items).toHaveLength(0);
+        expect(second.nextCursor).toBe(first.nextCursor);
+        expect(requests[1]?.headers["If-None-Match"]).toBe('W/"feed-v1"');
+        expect(requests[1]?.headers["If-Modified-Since"]).toBe("Fri, 07 Aug 2026 12:00:00 GMT");
+    });
+
+    it("falls back to an unconditional fetch when no state handle is injected", async () => {
+        const requests: Array<Record<string, string>> = [];
+        const connector = createRssConnector({
+            fetch: async (_input, init) => {
+                requests.push((init?.headers ?? {}) as Record<string, string>);
+                return new Response(firstPage, { status: 200 });
+            },
+        });
+
+        const page = await connector.fetchItems({
+            source: {
+                id: "source-rss",
+                name: "RSS",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                connectorId: "rss",
+                kind: "rss",
+                config: { feedUrl: "https://example.test/feed.xml" },
+                enabled: true,
+                revisionId: "source-rss:1",
+                createdAt: "2026-08-08T00:00:00.000Z",
+                updatedAt: "2026-08-08T00:00:00.000Z",
+                lastRunAt: null,
+                lastError: null,
+            },
+            cursor: null,
+        });
+
+        expect(page.items).toHaveLength(2);
+        expect(requests[0]?.["If-None-Match"]).toBeUndefined();
+        expect(requests[0]?.["If-Modified-Since"]).toBeUndefined();
+    });
+
     it("normalizes URL and URL-free RSS items", () => {
         const items = parseRssXml(firstPage, { provider: "fixture-rss" });
 

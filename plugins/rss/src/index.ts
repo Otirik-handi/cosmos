@@ -43,6 +43,22 @@ export interface RssConnectorOptions {
     logger?: LoggerPort;
 }
 
+/** 条件请求验证器在来源状态存储里的键；命名空间由宿主按 manifest 解析（ADR-0018）。 */
+const rssCacheStateKey = "http-cache";
+
+function readRssValidators(value: unknown): { etag?: string; lastModified?: string } {
+    if (typeof value !== "object" || value === null) {
+        return {};
+    }
+    const record = value as { etag?: unknown; lastModified?: unknown };
+    return {
+        ...(typeof record.etag === "string" && record.etag !== "" ? { etag: record.etag } : {}),
+        ...(typeof record.lastModified === "string" && record.lastModified !== ""
+            ? { lastModified: record.lastModified }
+            : {}),
+    };
+}
+
 export function createRssConnector(
     options: RssConnectorOptions = {},
 ): IngestConnector {
@@ -58,7 +74,7 @@ export function createRssConnector(
                 throw new Error("RSS source is missing config.feedUrl.");
             }
         },
-        async fetchItems({ source, signal }) {
+        async fetchItems({ source, cursor, signal, state }) {
             const feedUrl = source.config.feedUrl;
             if (!feedUrl) {
                 throw new Error("RSS source is missing config.feedUrl.");
@@ -69,9 +85,24 @@ export function createRssConnector(
                 sourceKind: source.kind,
                 host: safeHost(feedUrl),
             });
+            // 条件请求（AUT-003）：上次抓到的 ETag / Last-Modified 存在来源的状态存储里，
+            // 这次带上；服务端说 304 就说明没有新内容，不再下载与解析正文。宿主没接状态
+            // 存储时（legacy 路径）这里退化为无条件抓取。
+            const cached = state ? await state.get(rssCacheStateKey) : null;
+            const validators = readRssValidators(cached?.value);
+            const headers: Record<string, string> = {};
+            if (validators.etag) {
+                headers["If-None-Match"] = validators.etag;
+            }
+            if (validators.lastModified) {
+                headers["If-Modified-Since"] = validators.lastModified;
+            }
             let response: Response;
             try {
-                response = await fetcher(feedUrl, signal ? { signal } : undefined);
+                response = await fetcher(feedUrl, {
+                    ...(signal ? { signal } : {}),
+                    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+                });
             } catch (error) {
                 options.logger?.error("connector.transport.failed", {
                     connectorId: rssConnectorId,
@@ -80,6 +111,18 @@ export function createRssConnector(
                     durationMs: Date.now() - startedAt,
                 }, error);
                 throw error;
+            }
+            if (response.status === 304) {
+                options.logger?.info("connector.transport.not_modified", {
+                    connectorId: rssConnectorId,
+                    sourceKind: source.kind,
+                    host: safeHost(feedUrl),
+                    durationMs: Date.now() - startedAt,
+                });
+                return {
+                    items: [],
+                    nextCursor: cursor,
+                };
             }
             if (!response.ok) {
                 options.logger?.warn("connector.transport.failed", {
@@ -140,6 +183,25 @@ export function createRssConnector(
                 responseBytes: Buffer.byteLength(xml, "utf8"),
                 durationMs: Date.now() - startedAt,
             });
+            // 记下这次的验证器，供下次条件请求使用。写入失败（并发抓取的 CAS 冲突）只是
+            // 少一次 304 优化，不该让已经成功的采集失败。
+            const etag = response.headers.get("etag");
+            const lastModified = response.headers.get("last-modified");
+            if (state && (etag || lastModified)) {
+                try {
+                    await state.put(
+                        rssCacheStateKey,
+                        { etag, lastModified },
+                        cached?.version ?? null,
+                    );
+                } catch (error) {
+                    options.logger?.debug("connector.state.write_skipped", {
+                        connectorId: rssConnectorId,
+                        sourceKind: source.kind,
+                        reason: error instanceof Error ? error.name : "unknown",
+                    });
+                }
+            }
             return {
                 items,
                 nextCursor: hashCursor(xml),
