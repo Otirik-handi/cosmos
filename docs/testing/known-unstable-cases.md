@@ -100,3 +100,14 @@
 | 同内容整套再跑一次 | **14 passed (16.8s)** |
 
 **当前判断**：一次观察、两次复跑均通过，符合环境抖动；机制未查清。与 Task 31 的改动（公开 Asset 投影与相关类型）没有可解释的因果关系——该用例不消费内容查询投影，也不碰媒体展示。**建议**：再出现时先看 trace 里失败步骤与同一 worker 上前一个用例是否共享状态（组件实验室是 1 worker 串行、共用同一个 dev server）。
+
+## 6. 组件实验室整套在紧跟浏览器套件后启动 dev server 超时
+
+**状态（2026-09-18，一次观察，未归因）**：整套组件实验室没有跑到任何用例——`config.webServer` 等待 120 秒仍没就绪，报 `Timed out waiting 120000ms from config.webServer`。
+
+| 跑法 | 结果 |
+|---|---|
+| Task 32 worktree，全量门禁里紧接 `bun run test:browser` 之后跑 `bun run test:browser:component-lab` | **启动超时失败**（0 用例执行）；同一轮 `test:browser` 22 passed |
+| 紧接着单独复跑 `bun run test:browser:component-lab` | **14 passed (17.6s)** |
+
+**当前判断**：与第 5 条不同，这次失败发生在任何断言之前，形态是"dev server 没起来"，更像端口/进程残留或资源争用（前一轮浏览器套件刚用过同一批端口）。与 Task 32 的改动没有可解释的因果关系——本片只动了来源行与运行记录的渲染。**建议**：再出现时先看组件实验室配置里的端口是否与浏览器套件重叠、以及上一轮是否留下了未退出的 server 进程。

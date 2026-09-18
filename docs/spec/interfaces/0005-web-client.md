@@ -71,6 +71,11 @@ Asset download 中未被 client 封装的部分不由它承担。
   确认态并显示“只移除配置与定时，已录入内容保留”，第二次点击才发
   `POST /api/v1/sources/:id/removals`（带 `baseRevisionId` 与 `Idempotency-Key`，actor 记 `user`）。
   成功后来源从看板消失、调度停止，已录入的条目与来源历史保留；409 提示版本冲突并刷新。
+- **运行记录里的任务（OPS-002）**：运行记录列表选中某个 Run 时，除元数据与控制动作外还会取
+  `GET /api/v1/runs/:id/jobs` 并列出该 Run 的 Job（状态、`attempts/maxAttempts` 重试次数、
+  `errorCode`/`error`）；结果带 `runId` 并在渲染时比对，避免切换选中后旧响应覆盖。
+  没有登记任务时显示“这个 Run 没有登记任务”；读取失败显示可读错误。**Attempt 明细
+  （租约窗口、owner 等）仍只在 API**，本面板不展示。
 - **保留期清理**：来源健康区底部提供“预览过期媒体 → 确认清理”两步操作，走
   `POST /api/v1/media-cleanups`（`dryRun: true` 预览、`false` 确认）并轮询
   `GET /api/v1/media-cleanups/:runId` 到终态；预览展示候选条数/字节与最多 5 条样例，

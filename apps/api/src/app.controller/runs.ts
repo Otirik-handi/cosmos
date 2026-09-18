@@ -181,6 +181,13 @@ export class AppControllerRuns extends AppControllerSources {
         return this.toMediaCleanupSnapshot(envelope);
     }
 
+    /** 某个 Run 的 Job 列表（OPS-002）：产品面从 Run 走到 Job 的唯一入口。 */
+    @Get("runs/:runId/jobs")
+    @Bind(Param("runId"))
+    async runJobs(runId: string) {
+        return { items: await this.repository.listRunJobs(runId) };
+    }
+
     @Get("jobs/:jobId")
     @Bind(Param("jobId"))
     async job(jobId: string) {

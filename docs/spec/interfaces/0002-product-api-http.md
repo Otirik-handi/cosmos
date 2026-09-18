@@ -181,6 +181,7 @@ contracts 的 `getSourceConfigurationSchema(ref)` strict Zod schema 校验——
 | --- | --- | --- |
 | `GET /runs` | 可选 `sourceId`、`limit` | 运行记录：按创建时间倒序返回最近 durable `RunSnapshot[]`（缺省 20 条、上界 100）；只含 durable `WorkflowRun`，不含 legacy Run 泳道。 |
 | `GET /runs/:runId` | path `runId` | 先查 Workflow Host envelope，存在则返回 Product Run；否则查 legacy `RunSnapshot`；两者都不存在 404。 |
+| `GET /runs/:runId/jobs` | path `runId` | `{ items: JobSnapshot[] }`（按 createdAt 升序，OPS-002）：`runId` 同时匹配 legacy `Job.runId` 与 durable `Job.workflowRunId`，因为两种 Run 共用同一个 Run 读端点。未知 Run 返回空列表而不是 404。这是产品面从 Run 走到 Job 的唯一入口；Attempt 明细仍由 `/jobs/:jobId/attempts` 提供。 |
 | `GET /workflow-runs/:runId` | path `runId` | 当前实现别名，调用同一 `/runs/:runId` 查询和投影；不存在 404。 |
 | `POST /runs/:runId/cancellations` | body 可选 `reason` | Run 控制 v1：非终态 Run 终态化 `cancelled` + fence；不存在 404，终态/并发 409；返回 `RunControlResult`（`run` + `reuse`/`sideEffects`）。 |
 | `POST /runs/:runId/recoveries` | body 可选 `reason` | Run 控制 v1：无活动 lease 的非终态 Run 置 `resumeRequired` 送回恢复队列；活动 lease/终态 409，不存在 404。 |

@@ -103,6 +103,8 @@ export interface CosmosRepository {
     startRun(runId: string, lease?: JobLease): Promise<RunSnapshot>;
     getRun(runId: string): Promise<RunSnapshot | null>;
     getJob(jobId: string): Promise<JobSnapshot | null>;
+    /** 某个 Run 的 Job（OPS-002）；`runId` 兼容 legacy Run 与 durable WorkflowRun。 */
+    listRunJobs(runId: string): Promise<readonly JobSnapshot[]>;
     listWorkflowAttempts(jobId: string): Promise<readonly WorkflowAttemptSnapshot[]>;
     getWorkflowAttempt(attemptId: string): Promise<WorkflowAttemptSnapshot | null>;
     getCheckpoint(sourceId: string): Promise<string | null>;

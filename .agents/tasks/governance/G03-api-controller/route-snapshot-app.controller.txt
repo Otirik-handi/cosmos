@@ -30,6 +30,7 @@ POST      /backups/:backupId/restores                  restoreBackup
 POST      /sources/:sourceId/runs                      runSource
 GET       /runs                                        listRuns
 GET       /runs/:runId                                 run
+GET       /runs/:runId/jobs                            runJobs
 GET       /workflow-runs/:runId                        workflowRun
 POST      /runs/:runId/cancellations                   cancelRun
 POST      /runs/:runId/recoveries                      recoverRun

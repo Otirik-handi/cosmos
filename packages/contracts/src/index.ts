@@ -35,7 +35,7 @@ export {
 
 export {
     assetSnapshotSchema, assetStatusSchema, connectorDescriptorSchema, ingestResultSchema,
-    jobKindSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
+    jobKindSchema, jobListSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
     mediaCleanupCommandSchema, mediaCleanupEntrySchema, mediaCleanupReportSchema,
     mediaCleanupRunSnapshotSchema, publicAssetSnapshotSchema, sourceAuthSchema,
     sourceConfigProbeCommandSchema,

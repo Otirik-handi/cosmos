@@ -220,6 +220,51 @@ Test Files  1 passed (1)
 - 实施中两次手滑删错行（API 的 `@HttpCode(202)`、客户端的 `testSource` 函数体），都当场读回现场修复，`typecheck` 与相关测试通过后才继续。
 - 存储测试首版三处断言写错：`createFixtureSource` 会顺手激活来源（revision 变 2）、`EntryDetail` 没有顶层 `title`（标题在 revision 上）、导出面快照需要重生成；都已修正。
 
-## 待办（本 Task 剩余）
+## 切片 5：OPS-002 Run → Job 产品面
 
-- **切片 5**（OPS-002 Job/Attempt 产品面；「预算」收窄为媒体预算）未开始。
+### 实施前的口径与边界
+
+- **需求解释**：「Job/Attempt 的状态、重试次数」由 Job 行（状态 + `attempts/maxAttempts` + 错误码）表达；**Attempt 明细（租约窗口、owner 等）保持 API-only**，产品面不展示。这是本片的口径边界，不是遗漏。
+- **前置发现**：Run 投影里没有 job 引用，API 也没有"列出某个 Run 的 Job"的端点——所以从 Run 走到 Job 在产品面上本来是断的，必须先补一个读端点。
+
+### 实现
+
+- **合同**：`jobListSchema`（`{ items: JobSnapshot[] }`）+ 导出面重生成（459 导出）。
+- **仓储**：`listRunJobs(runId)`——`OR: [{ runId }, { workflowRunId }]`，因为 legacy Run 与 durable WorkflowRun 共用同一个 Run 读端点；未知 Run 返回空列表而不是报错。
+- **API**：`GET /runs/:runId/jobs`；G03 路由快照同步。
+- **客户端**：`client.listRunJobs(runId)`。
+- **Web**：运行记录选中某个 Run 时列出其 Job（状态、重试次数、错误码/错误）；结果带 `runId` 并在渲染时比对，避免切换选中后旧响应覆盖；无任务显示"这个 Run 没有登记任务"。
+
+### 验证
+
+| 命令 | 结果 |
+|---|---|
+| `bunx vitest run packages/storage-prisma/src/run-jobs.test.ts` | 1 passed（新增）：legacy `runId` 归属可查、其它 Run 的 Job 不混入、未知 Run 返回空列表 |
+| `bunx vitest run packages/transport-http` | 10 文件 / 25 用例全绿（新增 1 例：URL 与 `attempts/maxAttempts` 投影） |
+| `bunx vitest run apps/api packages/transport-http packages/contracts apps/web` | 46 文件 / 264 用例全绿（含路由表零变化守卫） |
+| `bun run typecheck` | 0 |
+| `bun run lint:web` | 0 error / 80 warning |
+| `bun run docs:check` | 690 文件 0 失败 |
+| size 门禁 | PASS |
+| 全量门禁 | `bun run test` **105 文件 / 624 用例全绿**；`build` 通过；`db:validate` 通过；`diff --check` 干净；`test:browser` **22 passed**；`test:browser:component-lab` 首轮 dev server 启动超时、**单独复跑 14 passed**（登记为 [`known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md) 第 6 条） |
+
+### 偏差
+
+- 实施中第三次手滑用半行锚点插入，删掉了 `RunControl` 的 `run={selected}` 属性；读回现场修好。**教训**：插入新代码时必须用完整代码块作锚点，不用"某行的前半段"。
+- 三处断言/类型写错并修正：Job 状态枚举实际是 `failed_terminal`/`retry_wait`（不是 `failed`/`uncertain`）；`JobSnapshot` 投影没有 `idempotencyKey`；测试里 Job 的 `runId` 是外键，必须先造 Run 行。
+
+## Phase 1 收口结果（Task 32）
+
+| 需求 | 结论 |
+|---|---|
+| LIB-001 搜索三过滤 | 已交付（切片 1） |
+| ING-004 发现渠道 | 已交付（切片 2） |
+| AUT-003 条件请求 | 已交付（切片 3），顺带补上 ING-012 缺的一半 |
+| AUT-001 删除来源 | 已交付（切片 4，墓碑语义） |
+| OPS-002 Run→Job 产品面 | 已交付（切片 5） |
+| ING-008 音视频验收 | 走勘误收窄（ADR-0005 已冻结媒体边界），登记进 PRD 勘误表 |
+| RUN-010/011、OPS-010（Gateway） | 维护者 2026-09-18 裁定排除、单独排期 |
+
+**Phase 1 表内不再有未闭合项**（Gateway 三行按裁定排除、ING-008 按勘误收窄）。分支上的改动**未推送、未合并**；`PROJECT-STATUS.md` 的 Phase 1 结论与验证数字在合并时一并更新（该文件描述 master，不在本分支提前改）。
+
+未运行（全 Task）：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、真实公网来源验收、真实 Agent 验收（由远端 CI 覆盖或属后续阶段/既有后置边界）。

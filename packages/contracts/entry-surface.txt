@@ -313,6 +313,7 @@ value	ingestCommandSchema
 value	ingestResultSchema
 value	ingestTriggerKindSchema
 value	jobKindSchema
+value	jobListSchema
 value	jobSnapshotSchema
 value	jobStatusSchema
 value	jsonSchemaRefSchema
