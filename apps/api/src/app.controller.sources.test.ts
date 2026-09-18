@@ -11,6 +11,7 @@ import {
     NotFoundException,
 } from "@nestjs/common";
 import { AppController } from "./app.controller.js";
+import { SourceNotFoundError } from "@cosmos/application";
 describe("AppController source run gating", () => {    function sourceFixture(enabled: boolean) {
         return {
             id: "source-1",
@@ -61,6 +62,86 @@ describe("AppController source run gating", () => {    function sourceFixture(en
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
         expect(workflowControl.enqueue).not.toHaveBeenCalled();
+    });
+});
+
+describe("AppController source removal (AUT-001)", () => {
+    const sourceFixture = {
+        id: "source-1",
+        name: "Fixture",
+        sourceDefinitionRef: "source.rss@1",
+        operationId: "fetch",
+        connectorId: "rss",
+        kind: "rss",
+        config: { feedUrl: "https://example.test/feed.xml" },
+        enabled: false,
+        revisionId: "source-1:3",
+        createdAt: "2026-08-08T00:00:00.000Z",
+        updatedAt: "2026-08-08T00:00:00.000Z",
+        lastRunAt: null,
+        lastError: null,
+    };
+
+    it("passes the removal command through with the idempotency key", async () => {
+        const repository = { deleteSource: vi.fn().mockResolvedValue(sourceFixture) };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+
+        const removed = await controller.deleteSource("source-1", {
+            baseRevisionId: "source-1:2",
+            actor: "user",
+            reason: "不再关注",
+        }, "removal-1");
+
+        expect(repository.deleteSource).toHaveBeenCalledWith({
+            sourceId: "source-1",
+            baseRevisionId: "source-1:2",
+            idempotencyKey: "removal-1",
+            actor: "user",
+            reason: "不再关注",
+        });
+        expect(removed).toMatchObject({ id: "source-1", revisionId: "source-1:3" });
+    });
+
+    it("rejects a removal without an idempotency key", async () => {
+        const repository = { deleteSource: vi.fn() };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+
+        const error = await controller
+            .deleteSource("source-1", { baseRevisionId: "source-1:2" }, undefined)
+            .catch((value) => value);
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
+        expect(repository.deleteSource).not.toHaveBeenCalled();
+    });
+
+    it("maps an unknown source to 404", async () => {
+        const repository = {
+            deleteSource: vi.fn().mockRejectedValue(new SourceNotFoundError("source-404")),
+        };
+        const controller = new AppController(
+            repository as never,
+            {} as never,
+            undefined,
+            {} as never,
+        );
+
+        const error = await controller
+            .deleteSource("source-404", { baseRevisionId: "source-404:1" }, "removal-2")
+            .catch((value) => value);
+
+        expect(error).toBeInstanceOf(NotFoundException);
+        expect(error.getResponse()).toMatchObject({ code: "not_found" });
     });
 });
 

@@ -1,5 +1,6 @@
 import {
     createSourceCommandSchema,
+    deleteSourceCommandSchema,
     jobSnapshotSchema,
     mediaCleanupCommandSchema,
     mediaCleanupRunSnapshotSchema,
@@ -16,6 +17,7 @@ import {
     createConnectionCommandSchema,
     updateConnectionCommandSchema,
     type CreateSourceCommand,
+    type DeleteSourceCommand,
     type JobSnapshot,
     type RunSnapshot,
     type CancelRunCommand,
@@ -161,6 +163,21 @@ export class SourcesClient extends PlatformClient {
     ): Promise<SourceSnapshot> {
         const payload = sourceActivationCommandSchema.parse(input);
         return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}/activation-commands`, {
+            method: "POST",
+            headers: { "idempotency-key": idempotencyKey },
+            body: payload,
+            schema: sourceSnapshotSchema,
+        });
+    }
+
+    /** 删除来源（AUT-001）：墓碑语义，已录入历史保留；重复调用返回同一份结果。 */
+    async deleteSource(
+        sourceId: string,
+        input: DeleteSourceCommand,
+        idempotencyKey: string,
+    ): Promise<SourceSnapshot> {
+        const payload = deleteSourceCommandSchema.parse(input);
+        return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}/removals`, {
             method: "POST",
             headers: { "idempotency-key": idempotencyKey },
             body: payload,

@@ -256,6 +256,8 @@ export default function Home() {
         checkService,
         checkingService,
         definitionState,
+        deleteSource,
+        deletingSourceId,
         health,
         loadDefinitions,
         probeConfigKeyRef,
@@ -504,10 +506,12 @@ export default function Home() {
         <SourceActions
             onRun={runSource}
             onToggleActivation={toggleActivation}
+            onDelete={deleteSource}
             onSaveMediaPolicy={saveMediaPolicy}
             onPreviewMediaCleanup={() => runMediaCleanup(true)}
             onConfirmMediaCleanup={() => runMediaCleanup(false)}
             activatingSourceId={activatingSourceId}
+            deletingSourceId={deletingSourceId}
             runningSourceId={runningSourceId}
             sources={sources}
         />

@@ -317,6 +317,17 @@ export const sourceActivationCommandSchema = z.object({
 }).strict();
 export type SourceActivationCommand = z.infer<typeof sourceActivationCommandSchema>;
 
+/**
+ * 删除来源（AUT-001）。删除只移除来源配置与调度绑定：已录入的 Entry/Observation/Revision
+ * 保留（需求验收把「删除凭据、停用来源、删除历史数据」定为三个独立动作）。
+ */
+export const deleteSourceCommandSchema = z.object({
+    baseRevisionId: sourceRevisionIdSchema,
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+}).strict();
+export type DeleteSourceCommand = z.infer<typeof deleteSourceCommandSchema>;
+
 export const sourceProbeResultSchema = z.object({
     sourceId: z.string(),
     connectorId: z.string(),

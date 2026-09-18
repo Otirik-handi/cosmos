@@ -54,7 +54,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS entry_search USING fts5(
 
 ### Source、legacy Run/Step/Job
 
-- `createSource` 将 config JSON 化后创建 Source，`enabled` 缺省为 `true`；`listSources` 按 `createdAt ASC`；`getSource` 缺失返回 `null`；`setSourceEnabled` 只更新 enabled。
+- `createSource` 将 config JSON 化后创建 Source，`enabled` 缺省为 `true`；`listSources` 按 `createdAt ASC` 且**排除墓碑**（`deletedAt` 非空）；`getSource` 对缺失或墓碑返回 `null`；`setSourceEnabled` 只更新 enabled。
+- **删除来源是墓碑（AUT-001）**：`deleteSource` 在同一事务里把 `deletedAt` 置为当前时间、`enabled` 置 false、revision 加一，删除该来源的 `TriggerBinding`，并写 `source.deleted.v1` 事件（含 actor/reason）。**不删除** Entry/Observation/EntryRevision/Asset——`Entry.sourceInstanceId` 是必填级联外键，硬删会连带删掉全部历史。命令幂等：已删除的来源再次调用直接返回墓碑快照，不重复写事件；过期 `baseRevisionId` 抛 revision 冲突；墓碑来源对 `updateSource`/`activateSource` 等同不存在；`listScheduleTriggers` 也跳过墓碑来源。
 - Source snapshot 会解析 `kind/config`，并额外查询最新 Run：`lastRunAt` 优先取 `finishedAt`，否则取该 Run 的 `createdAt`；`lastError` 取最新 Run 的 `errorMessage`。
 - `createRun` 在同一事务内创建 `running` Run、position 0 的 `running` Step 和 `leased` 的 `source-ingest` Job；Job owner 为 `synchronous-ingest`、attempts 为 1、lease 为当前时间后五分钟，并写 `run.queued.v1`。
 - `createQueuedRun` 在同一事务内创建 `queued` Run、`queued` Step 和 `queued` 的 `source-ingest` Job，并写 `run.queued.v1`。有 idempotency key 时，若同 key 已存在且关联 Run，则直接返回原 Run；新 Job 的 payload 至少包含 `sourceId`。
@@ -123,7 +124,7 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 
 | 模型 | 代码可证的关键字段/约束 | 关系/删除边界 |
 | --- | --- | --- |
-| `SourceInstance` | id、name、kind、configJson、enabled、createdAt、updatedAt | 拥有 observations、runs、checkpoint、entries；Observation/Entry/Checkpoint 级联，Run 外键为 RESTRICT |
+| `SourceInstance` | id、name、kind、configJson、enabled、可空 deletedAt（墓碑，AUT-001）、createdAt、updatedAt | 拥有 observations、runs、checkpoint、entries；Observation/Entry/Checkpoint 级联，Run 外键为 RESTRICT |
 | `Checkpoint` | sourceInstanceId 唯一、cursor、revision、workflowRunId、updatedAt | 属于 Source；WorkflowRun 删除时 workflowRunId SET NULL |
 | `Run` | source、triggerKind、status、created/started/finishedAt、item/created/revised/duplicate 计数、errorCode/errorMessage | 拥有 Step/Job/Observation/DomainEvent；子记录按 schema 级联或 SET NULL |
 | `Step` | runId、position 唯一、kind/status/attempts、input/output/error/时间 | 属于 Run，删除级联；Job 可关联 Step |

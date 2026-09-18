@@ -67,6 +67,10 @@ Asset download 中未被 client 封装的部分不由它承担。
   行内“媒体策略”入口打开一个表单（图片下载开关 + 单文件/单次上限 + 失败重试次数 + 保留天数，
   留空表示跟随默认/永久保留），保存走 `PATCH /api/v1/sources/:id`（带 `baseRevisionId`），
   超默认值在本地就被拒绝，409 提示版本冲突并刷新（ADR-0014/0015）。
+- **删除来源（AUT-001）**：来源健康行内还有一个删除按钮，**两段确认**——第一次点击把该行切到
+  确认态并显示“只移除配置与定时，已录入内容保留”，第二次点击才发
+  `POST /api/v1/sources/:id/removals`（带 `baseRevisionId` 与 `Idempotency-Key`，actor 记 `user`）。
+  成功后来源从看板消失、调度停止，已录入的条目与来源历史保留；409 提示版本冲突并刷新。
 - **保留期清理**：来源健康区底部提供“预览过期媒体 → 确认清理”两步操作，走
   `POST /api/v1/media-cleanups`（`dryRun: true` 预览、`false` 确认）并轮询
   `GET /api/v1/media-cleanups/:runId` 到终态；预览展示候选条数/字节与最多 5 条样例，

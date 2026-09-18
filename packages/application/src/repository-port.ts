@@ -56,6 +56,14 @@ export interface CosmosRepository {
         sourceId: string;
         idempotencyKey: string;
     }): Promise<SourceSnapshot>;
+    /** 删除来源 = 墓碑 + 移除调度绑定；已录入历史保留（AUT-001）。 */
+    deleteSource(input: {
+        sourceId: string;
+        baseRevisionId: string;
+        idempotencyKey: string;
+        actor: string | null;
+        reason: string | null;
+    }): Promise<SourceSnapshot>;
     createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance>;
     listConnections(): Promise<readonly ConnectionInstance[]>;
     getConnection(connectionId: string): Promise<ConnectionInstance | null>;

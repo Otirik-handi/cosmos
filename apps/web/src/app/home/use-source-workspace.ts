@@ -51,6 +51,7 @@ export function useSourceWorkspace(
     /** 共享加载态:入队/探测/看板等操作都会用到。 */
     const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
     const [activatingSourceId, setActivatingSourceId] = useState<string | null>(null);
+    const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
     const [runRefreshToken, setRunRefreshToken] = useState(0);
     const [checkingService, setCheckingService] = useState(false);
     const [showSourceForm, setShowSourceForm] = useState(false);
@@ -223,6 +224,34 @@ export function useSourceWorkspace(
         }
     };
 
+    /**
+     * 删除来源（AUT-001）。墓碑语义：来源从看板消失、调度停止，但已录入的条目与来源历史
+     * 全部保留（Entry.sourceInstanceId 是必填级联外键，硬删会带走历史）。二次确认在
+     * `SourceActions` 的两段按钮里，这里只负责发命令与刷新。
+     */
+    const deleteSource = async (source: SourceSnapshot): Promise<void> => {
+        setDeletingSourceId(source.id);
+        ctx.setError(null);
+        try {
+            await client.deleteSource(source.id, {
+                baseRevisionId: source.revisionId,
+                actor: "user",
+                reason: "用户在看板删除来源",
+            }, `web-deletion:${source.id}:${source.revisionId}`);
+            ctx.setNotice(`来源 ${source.name} 已删除；已录入内容与来源历史保留。`);
+            await feedApi.refresh();
+        } catch (caught) {
+            if (caught instanceof CosmosTransportError && caught.status === 409) {
+                ctx.setError("来源已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                await feedApi.refresh();
+            } else {
+                ctx.setError(readError(caught));
+            }
+        } finally {
+            setDeletingSourceId(null);
+        }
+    };
+
     const checkService = async (): Promise<void> => {
         if (checkingService) {
             return;
@@ -265,6 +294,8 @@ export function useSourceWorkspace(
         checkService,
         checkingService,
         definitionState,
+        deleteSource,
+        deletingSourceId,
         health,
         loadDefinitions,
         probeConfigKeyRef,

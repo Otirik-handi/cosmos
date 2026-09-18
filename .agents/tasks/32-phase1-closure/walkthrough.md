@@ -156,8 +156,70 @@ Test Files  1 passed (1)
 
 未运行：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、真实公网来源验收（由远端 CI 覆盖或属既有后置边界）。
 
+## 切片 4：AUT-001 删除来源（**部分完成**）
+
+### 实施前发现的关键约束
+
+`Entry.sourceInstanceId` 是**必填 + `onDelete: Cascade`**——硬删来源会连带删除 Entry、Observation、EntryRevision 与 Asset，正好违反维护者裁定的「保留已录入历史」。所以删除落成**墓碑（软删除）**：来源行保留（历史仍可溯源），`deletedAt` 非空的行从列表、读取、编辑与调度中排除。这是本片唯一的产品语义推论，依据是 AUT-001 的验收文字本身（「删除凭据、停用来源和删除历史数据是三个独立动作」）。
+
+### 已完成的部分
+
+- **Schema + 迁移**：`SourceInstance.deletedAt DateTime?`（可空、expand-only、不回填）；迁移 [`20260918120000_source_soft_delete_v1`](../../../packages/storage-prisma/prisma/migrations/20260918120000_source_soft_delete_v1/migration.sql)。
+- **仓储**：`deleteSource()`（墓碑 + 删 TriggerBinding + `source.deleted.v1` DomainEvent 记 actor/reason）；`listSources`/`getSource` 过滤墓碑；`updateSource`/`activateSource` 对墓碑等同不存在；`listScheduleTriggers` 再挡一次。
+- **合同**：`deleteSourceCommandSchema`（baseRevisionId + 可选 actor/reason）+ 导出面重生成（458 导出，+2）。
+- **API**：`POST /sources/:sourceId/removals`（Idempotency-Key + `sourceCommandError` 漏斗）；G03 路由快照同步。
+- **客户端**：`client.deleteSource(sourceId, input, idempotencyKey)`。
+
+### 验证（已跑）
+
+| 命令 | 结果 |
+|---|---|
+| `bunx vitest run packages/storage-prisma/src/source-deletion.test.ts` | 2 passed（新增）：删除后来源从列表消失、调度绑定移除、Entry/Revision/Observation 保留且仍溯源到来源、审计事件带 reason、重复删除幂等且只写一条事件、旧 revision 冲突、墓碑拒绝编辑 |
+| `bun run typecheck` | 0 |
+| `bunx vitest run packages/contracts apps/api` | 23 文件 / 146 用例全绿（含路由表零变化守卫） |
+| 聚焦套件 `packages/storage-prisma packages/contracts packages/transport-http apps/api apps/worker packages/application` | 80 文件 / 441 用例（首轮 1 挂是导出面快照没重生成，已修） |
+
+### 本片收尾（同日补齐）
+
+1. **Web 入口**：来源健康行内新增删除按钮，**两段确认**（第一次点击切确认态并说明"只移除配置与定时，已录入内容保留"，第二次才发命令）；`use-source-workspace.deleteSource` 发 `POST /sources/:id/removals`（actor=`user`、幂等键含来源 revision），409 走版本冲突提示并刷新。
+2. **API 层测试**：`app.controller.sources.test.ts` 新增 3 例——命令透传（含 actor/reason 与幂等键）、缺 `Idempotency-Key` 400、来源不存在 404。
+3. **客户端层测试**：`client-sources.test.ts` 新增 1 例——URL/方法/幂等头/请求体逐项断言。
+4. **规格同步**：`interfaces/0002`（新路由行）、`interfaces/0005`（行内删除入口与两段确认）、`storage/0001`（墓碑语义、幂等、墓碑拒绝编辑、调度跳过）、`spec/README.md` §4 迁移顺序补 `20260918120000_source_soft_delete_v1`。
+
+### 验证（本片最终）
+
+| 命令 | 结果 |
+|---|---|
+| `bunx vitest run packages/storage-prisma/src/source-deletion.test.ts` | 2 passed（新增） |
+| `bunx vitest run apps/api packages/transport-http` | 20 文件 / 104 用例全绿（含新增 4 例） |
+| `bun run typecheck` | 0 |
+| `bun run lint:web` | 0 error / 80 warning |
+| `bun run docs:check` | 689 文件 0 失败 |
+| size 门禁 | PASS |
+| 全量门禁（typecheck/test/build/db:validate/lint/docs/size/diff/browser/component-lab） | 见下方「切片 4 全量门禁」节 |
+
+### 切片 4 全量门禁（worktree 内实际运行）
+
+| 命令 | 结果 |
+|---|---|
+| `bun run typecheck` | 0 |
+| `bun run test` | **104 文件 / 622 用例全绿** |
+| `bun run build` | 通过 |
+| `bun run db:validate` | schema valid（新迁移可应用） |
+| `bun run lint:web` | 0 error / 80 warning |
+| `bun run docs:check` | **689 文件 0 失败** |
+| size 门禁 | PASS |
+| `git diff --check` | 干净 |
+| `bun run test:browser` | **22 passed** |
+| `bun run test:browser:component-lab` | **14 passed** |
+
+未运行：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、真实来源验收（由远端 CI 覆盖或属既有后置边界）。**Web 的删除入口没有新增浏览器用例**——新按钮的端到端可用性只有类型/组件层证据与既有套件回归，剩余风险记在此。
+
+### 偏差
+
+- 实施中两次手滑删错行（API 的 `@HttpCode(202)`、客户端的 `testSource` 函数体），都当场读回现场修复，`typecheck` 与相关测试通过后才继续。
+- 存储测试首版三处断言写错：`createFixtureSource` 会顺手激活来源（revision 变 2）、`EntryDetail` 没有顶层 `title`（标题在 revision 上）、导出面快照需要重生成；都已修正。
+
 ## 待办（本 Task 剩余）
 
-- 切片 4（AUT-001 删除来源，口径：只删来源配置与调度绑定、保留已录入历史）未开始。
-- 切片 5（OPS-002 Job/Attempt 产品面；「预算」收窄为媒体预算）未开始。
-- 五片完成后需要再跑一次全量门禁并同步本片新增行为的规格（切片 4/5 会动 API 与 Web 合同）。
+- **切片 5**（OPS-002 Job/Attempt 产品面；「预算」收窄为媒体预算）未开始。
