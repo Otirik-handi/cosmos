@@ -74,6 +74,11 @@ Asset download 中未被 client 封装的部分不由它承担。
 - **分类（Label）与 Topic 筛选**：搜索表单把已加载的 Label 与 Topic 渲染成可多选的筛选
   chip；选中项以 id 数组存在表单状态里，提交时拼成 `search` 的 `labelIds`/`topicIds`
   逗号串。它不新增合同，只是把既有 search 过滤条件接出编辑入口。
+- **作者 / 媒体类型 / 录入状态筛选（LIB-001）**：搜索表单另有「作者」输入与「媒体类型」
+  「录入状态」两个单值下拉（受管枚举，表单 schema 用 `contentKindSchema`/`assetStatusSchema`
+  收窄），提交时作为 `author`/`contentKind`/`assetStatus` 传给 `search`，命中条件在筛选区
+  回显为 chip。这三个条件**存不进 Saved View**（视图条件形状属 LIB-005，Phase 4）：当前搜索
+  带了它们时保存视图会被拒绝并说明原因，套用视图时也会被清空——不允许静默丢条件。
 - **Story 时间线**：由 `StoryDetail.entries` 的全部 Revision 与 Observation 展平成按时间
   倒序的事件流（来源名、事件类型、标题、时间），纯客户端投影，不新增读合同。
 - **Story 相关内容**：与本 Story 共享分类或共享 Entity 的其它 Story，纯读组合

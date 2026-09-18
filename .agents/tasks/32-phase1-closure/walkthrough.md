@@ -76,3 +76,88 @@ Test Files  1 passed (1)
 | `bun scripts/entry-export-surface.ts packages/contracts/src/index.ts --out packages/contracts/entry-surface.txt` | 456 个导出（+2：`discoveryChannelSchema` / `DiscoveryChannel`） |
 
 未运行（本片）：浏览器产品套件；新徽标文案没有新增浏览器断言。剩余风险：渠道在界面上的展示只有类型与组件层证据。
+
+## 切片 3：AUT-003 条件请求（RSS 无变化时不重新抓正文）
+
+### 实施前发现的前置条件
+
+`ConnectorStateStorePort` 在 Task 22 就建好了，但**全仓没有任何连接器消费它**——连接器的 `fetchItems` 端口拿不到状态。所以本片先把状态接到连接器上（这同时补上 ING-012「StateStore 没被内置连接器使用」缺的那一半）。
+
+### 实现
+
+- [`packages/application/src/connector-ports.ts`](../../../packages/application/src/connector-ports.ts)：新增 `ConnectorStateHandle`（只剩键的命名空间化视图：`get`/`put`），`fetchItems` 入参加可选 `state`；注释写明宿主没接状态存储时（legacy 采集路径）为 `undefined`，连接器必须退化成无状态抓取。
+- [`workflow-ingest.ts`](../../../packages/application/src/workflow-ingest.ts)：`IngestActionOptions` 增加 `connectorState?: (source) => ConnectorStateHandle | undefined`，`source.fetch@1` 把它传给连接器。
+- [`apps/worker/src/main.ts`](../../../apps/worker/src/main.ts)：组合根构造 `PrismaConnectorStateStore`，并按 manifest 的 `stateStoreNamespace` 解析命名空间（`{id}` 替换为来源 id；声明为 null 就不给句柄）——命名空间由合同拥有，不在 Worker 里硬编码来源分支。
+- [`plugins/rss/src/index.ts`](../../../plugins/rss/src/index.ts)：上次的 `ETag`/`Last-Modified` 存在来源状态里（键 `http-cache`），这次带上 `If-None-Match`/`If-Modified-Since`；服务端 304 时**不下载正文、不解析**，`nextCursor` 保持不变。状态写入失败（并发抓取的 CAS 冲突）只记 debug，不让已成功的采集失败。
+
+### RED → GREEN
+
+```text
+# 临时把 plugins/rss/src/index.ts 回退（git stash push -- 该文件）
+bunx vitest run plugins/rss
+Test Files  1 failed (1)
+     Tests  1 failed | 8 passed (9)
+
+# 恢复实现（git stash pop）
+bunx vitest run plugins/rss
+Test Files  1 passed (1)
+     Tests  9 passed (9)
+```
+
+新增两个用例：① 第一次抓取存下验证器、第二次带条件头且 304 时返回空结果与不变的 cursor；② 没有注入状态句柄时退化为无条件抓取（不带条件头）。
+
+### 偏差
+
+- **测试写在实现之后**：本片先改了端口类型（测试要编译就必须先有 `ConnectorStateHandle`），随后才写测试；RED 是用 `git stash` 回退实现文件补出来的，不是先红后绿的自然顺序。记录在此以免被读成"先红后绿"。
+- 测试里的内存状态句柄首版把 `value` 写成 `unknown`，与 `ConnectorStateHandle.put` 的 `JsonValue` 不兼容，`bun run typecheck` 报错；改成显式标注句柄类型后通过。
+
+### 验证
+
+| 命令 | 结果 |
+|---|---|
+| `bunx vitest run plugins/rss` | 9 passed（新增 2 例） |
+| `bunx vitest run plugins packages/application apps/worker packages/storage-prisma apps/api packages/transport-http apps/web packages/contracts` | 95 文件 / 547 用例全绿 |
+| `bun run typecheck` | 0 |
+| `bun scripts/entry-export-surface.ts packages/application/src/index.ts --out packages/application/entry-surface.txt` | 150 个导出（+1：`ConnectorStateHandle`） |
+
+未运行（本片）：真实公网 RSS 的条件请求验收（需要真实来源，属既有后置边界）；浏览器套件。
+
+## 切片 1–3 的规格同步与全量门禁（2026-09-18）
+
+维护者选定「先收口 1–3（文档 + 全量门禁），再做 4–5」后完成：
+
+规格同步（8 处，只写当前实现事实）：
+
+| 文件 | 同步内容 |
+|---|---|
+| [`docs/spec/domain/0001-normalized-content.md`](../../../docs/spec/domain/0001-normalized-content.md) | `NormalizedIngestItem.discoveryChannel`（含"不进 fingerprint"）、`discoveryChannels` 锚点 |
+| [`docs/spec/contracts/0001-public-contracts.md`](../../../docs/spec/contracts/0001-public-contracts.md) | `ObservationSnapshot.discoveryChannel`（可选，升级前数据按 unknown） |
+| [`docs/spec/interfaces/0002-product-api-http.md`](../../../docs/spec/interfaces/0002-product-api-http.md) | `GET /search` 的三个新参数与语义（单值等值、彼此 AND、assetStatus 命中"当前 Revision 存在该状态"） |
+| [`docs/spec/interfaces/0005-web-client.md`](../../../docs/spec/interfaces/0005-web-client.md) | 表单三个新控件、chip 回显、与 Saved View 的边界（拒绝保存而不是静默丢条件） |
+| [`docs/spec/connectors/0001-rss.md`](../../../docs/spec/connectors/0001-rss.md) | 条件请求语义（验证器存 `http-cache`、304 短路、CAS 冲突只记日志、无状态句柄时退化）+ 发现渠道 `account` |
+| [`docs/spec/connectors/0002-managed-collectors.md`](../../../docs/spec/connectors/0002-managed-collectors.md) | Bilibili `hot`→`recommendation`、`feed`→`account`；AI HOT→`recommendation` |
+| [`docs/spec/application/0001-connector-runtime.md`](../../../docs/spec/application/0001-connector-runtime.md) | `fetchItems` 的 `state?` 参数、`ConnectorStateHandle` 的边界与注入路径 |
+| [`docs/spec/storage/0001-prisma-repository.md`](../../../docs/spec/storage/0001-prisma-repository.md) | discovery JSON 的 `kind`/`channel` 形状与缺省 |
+
+全量门禁（worktree 内实际运行）：
+
+| 命令 | 结果 |
+|---|---|
+| `bun run typecheck` | 0 |
+| `bun run test` | **103 文件 / 616 用例全绿** |
+| `bun run build` | 通过（API + Worker + Next standalone） |
+| `bun run db:validate` | schema valid |
+| `bun run lint:web` | 0 error / 80 warning（全部既有） |
+| `bun run docs:check` | **687 文件 0 失败** |
+| `python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` | PASS（含既有基线内文件增长 warning） |
+| `git diff --check` | 干净 |
+| `bun run test:browser` | **22 passed** |
+| `bun run test:browser:component-lab` | **14 passed** |
+
+未运行：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、真实公网来源验收（由远端 CI 覆盖或属既有后置边界）。
+
+## 待办（本 Task 剩余）
+
+- 切片 4（AUT-001 删除来源，口径：只删来源配置与调度绑定、保留已录入历史）未开始。
+- 切片 5（OPS-002 Job/Attempt 产品面；「预算」收窄为媒体预算）未开始。
+- 五片完成后需要再跑一次全量门禁并同步本片新增行为的规格（切片 4/5 会动 API 与 Web 合同）。

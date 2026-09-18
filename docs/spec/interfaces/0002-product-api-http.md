@@ -224,7 +224,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | Method/path | 输入 | 成功输出与分页 |
 | --- | --- | --- |
 | `GET /feed` | query `cursor?`、`limit?` | `FeedPage`。limit 缺省 20；非数字回退 20，随后 clamp 到 1–100；cursor 交给 repository。按更新倒序返回 Story Feed，nextCursor 是偏移字符串或 null。 |
-| `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`labelIds?`、`topicIds?`（逗号分隔 id）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；label/topic 过滤为 any-of 语义（Story 级标签、active Topic 成员）；Zod 解析失败 400。无写副作用。 |
+| `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`labelIds?`、`topicIds?`（逗号分隔 id）、`author?`（最多 200，按发布者 name/handle 子串、大小写不敏感）、`contentKind?`（受管内容形态）、`assetStatus?`（受管资产四态）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；label/topic 过滤为 any-of 语义（Story 级标签、active Topic 成员），`author`/`contentKind`/`assetStatus` 为单值等值条件、彼此 AND；`assetStatus` 命中「当前 Revision 的资产里存在该状态」的条目；Zod 解析失败 400。无写副作用。 |
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
 | `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要（含 `status`/`replacedBy` 与当前表示的 `timeRange`/`keyFacts`）、可空 `entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）、`entities`（关联 Entity 快照列表）与 `topics`（当前 Topic 成员）。旧 merge id 先解析到 canonical Story；split 历史壳保留自身 id 且可零成员；不存在/无当前 Revision 404。 |
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |
