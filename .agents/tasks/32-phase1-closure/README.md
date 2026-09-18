@@ -40,7 +40,7 @@
 
 ## Current State
 
-生命周期阶段：**切片 1–4 完成**（实现 + 规格 + 全量门禁，各自独立提交），切片 5（OPS-002 Job/Attempt 产品面）未开始。分支 `feat/t32-phase1-closure`，worktree `.worktree/t32-phase1-closure`，基线 `bdfee86`（本地 master；注意 `origin/master` 仍停在 `da7d656`，本地领先 4 个未推送提交）。
+生命周期阶段：**五个切片全部完成**（实现 + 规格 + 全量门禁，各自独立提交），Phase 1 表内不再有未闭合项（Gateway 三行按维护者裁定排除、ING-008 按勘误收窄）。分支 `feat/t32-phase1-closure`，worktree `.worktree/t32-phase1-closure`，基线 `bdfee86`（本地 master；`origin/master` 仍停在 `da7d656`，本分支未推送、未合并）。合并时需一并更新 `PROJECT-STATUS.md` 的 Phase 1 结论与验证数字。
 
 ## 验证
 
