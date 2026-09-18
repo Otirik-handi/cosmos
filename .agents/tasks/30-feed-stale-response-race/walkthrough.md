@@ -130,3 +130,20 @@ bunx playwright test e2e/browser/phase2-entry-relation.spec.ts
 - `docs/testing/known-unstable-cases.md` 第 1 条：`:539` 的状态段落按新根因改写；第 32 行那条"未查清"的观察后追加结论段（保留原文对照）。
 - `PROJECT-STATUS.md`：「尚未实现」里的已知不稳定条目与「当前验证」里的浏览器整套条目同步更正。
 - 本 Task README 改为以两个缺陷为主线的当前摘要（授权原文保留）。
+
+## 远端 CI（2026-09-18，分支 `fix/t30-feed-stale-response-race`）
+
+维护者批准后 `git push -u origin fix/t30-feed-stale-response-race`（基线 `47689d2`，推送 `8096c4d`）。fork 的 CI 只在 `master` 收到 push 时自动跑，所以手动触发：
+
+```text
+gh -R Otirik-handi/cosmos workflow run CI --ref fix/t30-feed-stale-response-race
+```
+
+run [`35312050392`](https://github.com/Otirik-handi/cosmos/actions/runs/35312050392)，head `8096c4d`，五个 job 全部 success：Docs、Quality、Browser E2E、Windows Node smoke、Node process E2E。
+
+| 远端证据 | 数值 |
+| --- | --- |
+| Browser E2E 的 `bun run test:browser` | **22 passed (1.3m)** |
+| Browser E2E 的 `bun run test:browser:component-lab` | **14 passed (26.6s)** |
+
+这是 `:539` 在远端第一次整套通过——此前 master run `35193865031` 正是失败在该用例。
