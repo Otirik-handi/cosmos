@@ -147,3 +147,31 @@ run [`35312050392`](https://github.com/Otirik-handi/cosmos/actions/runs/35312050
 | Browser E2E 的 `bun run test:browser:component-lab` | **14 passed (26.6s)** |
 
 这是 `:539` 在远端第一次整套通过——此前 master run `35193865031` 正是失败在该用例。
+
+## 合并、master CI 与清理（2026-09-18）
+
+维护者批准合并后，在主工作区用 `--no-ff` 合并（不改写分支上的 SHA，所以分支上验证过的提交在 master 里仍是同一个 SHA）：
+
+```text
+git fetch origin                        # 本地 master 与 origin/master 均为 47689d2
+git merge --no-ff fix/t30-feed-stale-response-race \
+  -m "merge: key Feed cards by entry identity and drop stale Feed responses (Task 30)"
+git push origin master                  # 47689d2..699ff5a
+```
+
+合并提交 `699ff5a`（11 文件 / +386 −15）。push 到 `master` 会自动触发 CI，无需手动 dispatch：
+
+run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640)，head `699ff5a`，五个 job 全部 success（Docs、Quality、Browser E2E、Windows Node smoke、Node process E2E）；Browser E2E 的 `test:browser` **22 passed (1.3m)**、`component-lab` **14 passed (26.7s)**。对照：上一个 master head `47689d2` 的 run `35193865031` 失败在 `phase2-organization.spec.ts:539`——本次是它之后第一次全绿。
+
+### 清理（同一轮，授权后执行）
+
+| 动作 | 结果 |
+| --- | --- |
+| 删 worktree `t28-mobile-gate-and-retry-isolation` / `t29-toolchain-drift` / `t30-feed-stale-response-race` | `git worktree list` 只剩主工作区 |
+| 删 `.worktree/` 下三个无 git 元数据的残留目录 `fix-search-fts5` / `story-user-state-migration` / `t14-board-feed-blocks` | `.worktree/` 已空 |
+| 删本地分支（`-d`，git 自行确认已合并） | `fix/t30-feed-stale-response-race`（was `2c822d2`）、`chore/t29-toolchain-drift`（was `3489a0a`）、`test/t28-mobile-gate-and-retry-isolation`（was `ca0eb60`） |
+| 删远端分支（`git push origin --delete`） | 三条均已删除；`git ls-remote --heads origin` 现在只有 `master` = `699ff5a` |
+
+删除前对六个目录做了守卫检查：**0 个文件、7704 个 junction 全部指向各自目录内部、0 个指向目录外**，因此清理只删掉 bun 的链接壳，不会穿透到主仓库源码。三个分支的 SHA 记在上表，需要时可 `git push origin <sha>:refs/heads/<name>` 重建。
+
+清理后状态：本地只剩 `master`（`699ff5a`，与 `origin/master` 一致）；`upstream`（`notnotype/cosmos`）的分支未触碰；主工作区有一条**不属于本 Task**的未跟踪目录 `.agents/learning/`，未处理。

@@ -172,10 +172,10 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-17，Task 26 的 worktree 内在**合并提交 `c308733` 上**重跑）：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`docs:check` 0 失败；`bun run lint:web` 0 error / 81 warning（Task 26 改动前 83）。主工作区在 `c308733` 上另跑 `docs:check` **680 文件 0 失败**、size 门禁 PASS（含 6 条基线内文件增长的 warning）、`git diff --check` 干净。主工作区的 `node_modules` 与 lockfile 不一致（缺 vitest 可执行文件与 `@dnd-kit/*`），因此 typecheck/test/build 没有在主工作区重跑，而是在 worktree 内检出合并提交后运行。
+- 最近一次全量证据（2026-09-18，Task 30 的 worktree 内，分支 `2c822d2` / 合并提交 `699ff5a`）：`bun run typecheck` 0、`bun run test` **99 文件 / 599 用例全绿**、`bun run build` 通过、`bun run lint:web` 0 error / 81 warning、`bun run docs:check` **678 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；`bun run test:browser` **22 passed**、`bun run test:browser:component-lab` **14 passed**。合并后 master CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640)（head `699ff5a`）五个 job 全绿——此前 master `47689d2` 的 run `35193865031` 正是失败在 `phase2-organization.spec.ts:539`。上一轮（2026-09-17，Task 26 的 `c308733` 上重跑）为：typecheck 0、99 文件 599 用例、lint 0 error / 81 warning。主工作区的 `node_modules` 与 lockfile 不一致（缺 vitest 可执行文件与 `@dnd-kit/*`），因此 typecheck/test/build 仍只在 worktree 内跑。
 - **浏览器产品 E2E 整套仍有失败**（Task 26 起）：`phase2-organization.spec.ts` 失败点在 `:103`/`:417`/`:539` 之间漂移。对照实验证明与 Task 26 的新功能无关（只做既有行为的诊断 spec 同样触发），维护者 2026-09-17 接受该结论并放行。**2026-09-17 更新**：`:539` 的机制已查明并修复（重复 React key 使列表替换后残留一张卡；同批还修掉陈旧刷新覆盖搜索结果的竞态），Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md) 有确定性红→绿证据；修复后连续两轮整套浏览器套件里 `:539` 均通过。`:103`、`:417` 与整套慢跑时的 `media-policy` 等待超时仍未归因，见 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 1 条。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
-- 当前未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收。
+- 本机未运行：property、`db:validate`、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收；前四项由远端 CI 覆盖（2026-09-18 run `35313175640` 全绿），本机没有复跑。
 
 2026-08-15 之前的历史基线与 Spike 证据（含当时的分册完成记录、Task 05/07 基线与浏览器
 验收数字、Round 7/8 的 worktree 证据）整段移入 [`PROJECT-STATUS/history-2026-08-legacy.md`](PROJECT-STATUS/history-2026-08-legacy.md) 的
