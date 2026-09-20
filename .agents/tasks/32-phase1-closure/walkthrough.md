@@ -160,3 +160,9 @@ COSMOS_E2E_WEB_PORT=4183 bunx playwright test --config playwright.config.ts
 | `bun run docs:check` / size 门禁 / `git diff --check` | 见提交前门禁 |
 
 未运行：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、组件实验室套件、AI HOT 与 Bilibili 真实来源（本轮只授权并执行了 RSS 一项）。
+
+### 远端 CI（推送后补记）
+
+推送 `af302f7` 后 fork 远端 CI 运行 [35497299186](https://github.com/Otirik-handi/cosmos/actions/runs/35497299186) **五个 job 全绿**：Docs 8s、Quality 4m27s、Windows Node smoke 2m58s、Browser E2E 3m31s、Node process E2E 1m12s。
+
+因此上表「未运行」里的 **Node 进程 E2E 与 Windows Node smoke 已由远端 CI 覆盖并通过**（这两项本地一直未跑）。首次查询时用了 `gh run list` 的默认仓库解析，读到的是上游 `notnotype/cosmos` 的历史运行；本仓库 CI 在 fork `Otirik-handi/cosmos`，需用 `-R Otirik-handi/cosmos` 指定。

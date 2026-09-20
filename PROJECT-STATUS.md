@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-18。代码基线 `b9e596f`（Task 32 合并与状态记录；功能基线 `da7d656`，CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿）。**Task 31 与 Task 32 均已合并并推送（本地 = `origin/master` = `b9e596f`）**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口，见下），Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-20。代码基线 `af302f7`（Phase 1 缺口收口；功能基线 `da7d656`，CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿，本轮推送的 run [`35497299186`](https://github.com/Otirik-handi/cosmos/actions/runs/35497299186) 同样五个 job 全绿）。**Task 31、Task 32 与本次收口均已合并并推送（本地 = `origin/master` = `af302f7`）**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口，见下），Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -185,7 +185,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - **公开 Asset 投影的内部 Blob key 已剥离**（同批，Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，已 `--no-ff` 合入 `3ded765`）：泄漏的是内部 Blob 内容寻址 key（非绝对路径、没有可直接利用的路径），按[准入决策表](docs/standards/repository-workflow.md#准入决策表)第 25 行当安全合同修复处理，**不开公开 Issue**；六条公开读路由经 `toPublicAsset` 挑字段，公开读 DTO 改用 contracts 的 `publicAssetSnapshotSchema`，过程与回归锚点在 Task 31。
 - **浏览器产品 E2E 整套仍有失败**（Task 26 起，`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 的根因已查明并修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；其余失败点与整套慢跑时 `media-policy` 的等待超时仍未归因。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
-- 本机未运行：property、Node 进程 E2E、Windows Node smoke、Docker/Compose、发布部署、真实来源联网验收（前三项由远端 CI 覆盖）；`db:validate` 本轮已在本机通过。
+- 本机未运行：property、Docker/Compose、发布部署、真实来源联网验收（本轮已跑 RSS 一项）；`db:validate` 本轮已在本机通过。**Node 进程 E2E 与 Windows Node smoke 本轮由 fork 远端 CI 覆盖并通过**（run [`35497299186`](https://github.com/Otirik-handi/cosmos/actions/runs/35497299186)，五个 job 全绿：Docs 8s / Quality 4m27s / Windows Node smoke 2m58s / Browser E2E 3m31s / Node process E2E 1m12s）。
 
 2026-08-15 之前的历史基线与 Spike 证据（含当时的分册完成记录、Task 05/07 基线与浏览器
 验收数字、Round 7/8 的 worktree 证据）整段移入 [`PROJECT-STATUS/history-2026-08-legacy.md`](PROJECT-STATUS/history-2026-08-legacy.md) 的
