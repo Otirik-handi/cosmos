@@ -1,5 +1,4 @@
-# 共 117 条路由
-
+# 共 120 条路由
 GET       /health                                      health
 GET       /connectors                                  connectors
 GET       /source-definitions                          sourceDefinitions
@@ -27,6 +26,7 @@ GET       /storage-stats                               storageStats
 GET       /backups                                     listBackups
 POST      /backups                                     createBackup
 POST      /backups/:backupId/restores                  restoreBackup
+GET       /exports/user-data                           exportUserData
 POST      /sources/:sourceId/runs                      runSource
 GET       /runs                                        listRuns
 GET       /runs/:runId                                 run

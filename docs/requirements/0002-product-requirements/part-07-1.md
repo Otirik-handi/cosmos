@@ -3,7 +3,7 @@ parent: docs/requirements/0002-product-requirements.md
 range: §7.1–7.4 采集、运行时与检索
 sealed_at: 2026-09-14
 tags: [requirements, prd, functional]
-tokens_est: 6095
+tokens_est: 7100
 ---
 
 ### 7.1 Source、Trigger、Workflow 与 Action
@@ -109,3 +109,5 @@ tokens_est: 6095
 **Phase 2 第四切片注记（2026-09-08，[`label-annotation-collection-saved-view-v1` Proposal](../../proposals/label-annotation-collection-saved-view-v1.md) accepted）**：LIB-003/004/005/008 的 v1 实施顺序按 Proposal 冻结——先交付用户组织四类（Label 分类标签 + Collection 命名收藏夹 + Story/Entry 轻量收藏标记、Annotation 批注、Saved View 持久查询视图），分三个子切片逐片合入（Label+Collection → Annotation → Saved View）；Annotation 目标 = Story/Entry/Topic，Artifact 与正文片段字符级锚点后置（片段暂用可选 quote 文本表达）；Saved View 只存查询条件不存快照，`search` 扩展 `labelIds`/`topicIds` 过滤。LIB-004 的 Artifact 目标、LIB-005 的「未读/状态」条件（依赖 Read State）与 Feed Block 绑定（BRD-006，依赖可配置看板）、LIB-008 的批量导出/删除后置。上述注记只排定实现顺序，不改变本表最终验收条件。
 
 **Phase 2 尾巴第二切片注记（2026-09-16，[`entry-duplicate-relations-v1` Proposal](../../proposals/entry-duplicate-relations-v1.md) accepted）**：ING-006 的 v1 实施顺序按 Proposal 与 [ADR-0022](../../adr/0022-entry-duplicate-relations-v1.md) 冻结——关系族直接用信息模型 §4.2 已冻结的三个词：`duplicate_of`（完全重复，对称）、`syndicated_from`（转载，有向：转载方 → 原发方）、`near_duplicate_of`（近重复，对称）；新建 `EntryRelation` 表（`(fromEntryId, toEntryId)` 唯一 + relationType + provenance），对称类型按 id 字典序归一化存储并双向读取，反向与自关联返回 409；关系挂**条目内容身份**，`mergeStories`/`splitStory` 不迁移不修改、条目删除级联；**只人工写入**（自动判定属 ORG-021）；v1 **只做标记与展示，不参与 Feed 排序、搜索与去重，也不折叠来源身份**；`EntryDetail` 返回关系列表，Story 成员行标注「转载自/重复于」但不带对端 Story 链接；跨 Story 的「同一事件提示」不做（已由人工归并与引用关系覆盖）。「归入同一 Story」这半边继续由既有归并/引用关系承担。上述注记只排定实现顺序，不改变本表最终验收条件。
+
+**LIB-008 导出注记（2026-09-20，[`user-data-export-v1` Proposal](../../proposals/user-data-export-v1.md) accepted）**：LIB-008 记为 **Phase 2 已交付**——查看与单对象删除已随用户组织切片交付，「导出」由本片补齐：`GET /exports/user-data` 返回一份 JSON 附件，内容是七类用户真相对象（Label、Collection、Favorite、Annotation、Saved View、Board 树、Spotlight）加一份被引用目标的摘要（标题与条目的 `webUrl`），Web 存储面板提供下载入口。导出只含用户创作与配置的数据，不含采集内容、运行记录、连接配置与 Secret；需要整库副本时用 `POST /backups`。第四切片注记里的「批量删除」仍后置，它是切片排序项而非本行验收条件（验收要求的是删除前明确展示范围与不可恢复内容，已交付）。决策见 [ADR-0019](../../adr/0019-ops-storage-v1.md) 决策 5。

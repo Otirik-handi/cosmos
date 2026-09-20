@@ -223,6 +223,8 @@ type	UpdateSourceCommand
 type	UpdateStoryRevisionCommand
 type	UpdateTopicCommand
 type	UpdateTopicMemberRoleCommand
+type	UserDataExport
+type	UserDataExportTarget
 type	UserOrganizationAck
 value	actionDefinitionSchema
 value	actionDescriptorSchema
@@ -456,4 +458,6 @@ value	updateSourceCommandSchema
 value	updateStoryRevisionCommandSchema
 value	updateTopicCommandSchema
 value	updateTopicMemberRoleCommandSchema
+value	userDataExportSchema
+value	userDataExportTargetSchema
 value	userOrganizationAckSchema

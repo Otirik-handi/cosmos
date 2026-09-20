@@ -2,6 +2,17 @@ import { z } from "zod";
 import {
     protocolVersion,
 } from "./base.js";
+import {
+    annotationSchema,
+    collectionDetailSchema,
+    favoriteItemSchema,
+    labelDetailSchema,
+    savedViewSchema,
+} from "./user-organization.js";
+import {
+    boardDetailSchema,
+    spotlightPlacementSchema,
+} from "./board.js";
 
 export const storageStatsSchema = z.object({
     databaseBytes: z.number().int().nonnegative(),
@@ -32,6 +43,53 @@ export const backupSnapshotSchema = z.object({
 }).strict();
 
 export type BackupSnapshot = z.infer<typeof backupSnapshotSchema>;
+
+/**
+ * 用户数据导出件（LIB-008 / OPS-004）：用户真相对象（ADR-0009/0010）的可带走副本。
+ *
+ * 只收录用户创作与配置的数据，以及它们引用的目标摘要；采集内容、运行记录、Secret
+ * 与内部存储键都不在其中——需要内容库时用 `POST /backups` 的数据库副本。字段直接
+ * 复用各对象的公开读投影，导出不新造第二套对象定义。
+ */
+
+export const userDataExportTargetSchema = z.object({
+    targetType: z.string(),
+    targetId: z.string(),
+    // 目标已被删除时为 null，引用本身仍然保留，导出件不因悬空引用失败。
+    title: z.string().nullable(),
+    webUrl: z.string().nullable(),
+});
+
+export type UserDataExportTarget = z.infer<typeof userDataExportTargetSchema>;
+
+
+export const userDataExportSchema = z.object({
+    // 唯一版本位：新增分区或改变字段含义时升版本，不改已有字段语义。
+    schemaVersion: z.literal(1),
+    exportedAt: z.string(),
+    counts: z.object({
+        labels: z.number().int().nonnegative(),
+        collections: z.number().int().nonnegative(),
+        favorites: z.number().int().nonnegative(),
+        annotations: z.number().int().nonnegative(),
+        savedViews: z.number().int().nonnegative(),
+        boards: z.number().int().nonnegative(),
+        spotlightPlacements: z.number().int().nonnegative(),
+        targets: z.number().int().nonnegative(),
+    }).strict(),
+    data: z.object({
+        labels: labelDetailSchema.array(),
+        collections: collectionDetailSchema.array(),
+        favorites: favoriteItemSchema.array(),
+        annotations: annotationSchema.array(),
+        savedViews: savedViewSchema.array(),
+        boards: boardDetailSchema.array(),
+        spotlightPlacements: spotlightPlacementSchema.array(),
+        targets: userDataExportTargetSchema.array(),
+    }).strict(),
+}).strict();
+
+export type UserDataExport = z.infer<typeof userDataExportSchema>;
 
 
 

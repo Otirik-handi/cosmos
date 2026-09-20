@@ -389,6 +389,38 @@ const storagePanelLabClient = {
         createdAt: "2026-09-10T08:00:00.000Z",
     }),
     restoreBackup: async () => ({ ok: true, id: "backup-new.sqlite", action: "backup.restored" }),
+    exportUserData: async () => ({
+        schemaVersion: 1,
+        exportedAt: "2026-09-10T08:00:00.000Z",
+        counts: {
+            labels: 1,
+            collections: 0,
+            favorites: 0,
+            annotations: 0,
+            savedViews: 0,
+            boards: 0,
+            spotlightPlacements: 0,
+            targets: 1,
+        },
+        data: {
+            labels: [{
+                id: "label-lab",
+                name: "关注",
+                createdAt: "2026-09-10T08:00:00.000Z",
+                updatedAt: "2026-09-10T08:00:00.000Z",
+                assignedStories: [{ id: "story-lab", title: "示例 Story" }],
+                assignedEntries: [],
+                assignedTopics: [],
+            }],
+            collections: [],
+            favorites: [],
+            annotations: [],
+            savedViews: [],
+            boards: [],
+            spotlightPlacements: [],
+            targets: [{ targetType: "story", targetId: "story-lab", title: "示例 Story", webUrl: null }],
+        },
+    }),
 } as unknown as HttpCosmosClient;
 
 export function renderStoragePanelLab() {

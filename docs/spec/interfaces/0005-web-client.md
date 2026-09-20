@@ -246,6 +246,13 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    使「预览 → 结果」之间不再插入旧顺序或浮层回弹。拖拽只改展示配置，不触碰底层内容
    （ADR-0010 决定 1），且**只限分区内**：分区是「用户的一个关注方面」的语义容器、区块是分区内的
    内容细分，跨分区搬区块不做（ADR-0010 决定 7）。上移/下移按钮与拖拽并存，键盘与按钮路径不回退。
+22. **存储面板（OPS-003/004）**：侧栏“存储”区的 `StoragePanel` 挂载时并行 `client.storageStats()`
+    与 `client.listBackups()`，展示数据库/Blob/缓存/可清理媒体的占用与备份数量；“新建备份”调
+    `client.createBackup()`，“恢复”调 `client.restoreBackup(backupId)` 并提示需重启 API/Worker
+    才生效。“导出用户数据”调 `client.exportUserData()`，把返回的 `UserDataExport` 序列化成 JSON
+    文件交给浏览器下载（文件名 `cosmos-user-data-<exportedAt>.json`，与 API 的
+    `Content-Disposition` 用同一约定），并显示各类对象的条数。导出只读、不落盘，内容不含采集内容、
+    连接配置与 Secret（ADR-0019 决策 5）。
 
 ## 输入
 

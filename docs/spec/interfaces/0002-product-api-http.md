@@ -154,6 +154,9 @@ Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 S
 | `GET /backups` | 无 | HTTP 200 返回 `BackupSnapshot[]`（数据根 `backups/` 下的数据库备份，按时间升序）。 |
 | `POST /backups` | 无 | HTTP 201 返回 `BackupSnapshot`；用 `VACUUM INTO` 生成一致快照到 `backups/backup-<timestamp>.sqlite`（不依赖源码 checkout，Blob 不随备份）。 |
 | `POST /backups/:backupId/restores` | path `backupId` | HTTP 200 返回 ack；恢复前生成 `pre-restore-*.sqlite` 保护备份后覆盖当前 SQLite；不存在 404；需重启 API/Worker 生效。 |
+| `GET /exports/user-data` | 无 | HTTP 200 返回 JSON 附件（`UserDataExport`，`Content-Disposition: attachment; filename="cosmos-user-data-<exportedAt>.json"`，文件名里的 `:` 换成 `-`）；只读、不落盘、不改状态。 |
+
+`GET /exports/user-data` 的内容是七类用户真相对象（Label、Collection、Favorite、Annotation、Saved View、Board 树、Spotlight）加一份被引用目标的摘要（`targets`：目标类型、id、标题、条目的 `webUrl`）；字段直接复用各对象的公开读投影。它**不含**采集内容与派生投影、运行记录、连接与来源配置、Secret 字节、`ConnectorState` 与 `storageKey`；整库副本由 `POST /backups` 承担（ADR-0019 决策 5）。导出读取不加事务，是尽力而为的一致快照，`exportedAt` 是它的时间标记。
 
 Catalog page 当前固定 `nextCursor: null`，`snapshotAt` 是响应生成时的 ISO 时间。Builtin
 catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions，Workflow
@@ -474,6 +477,10 @@ Repository、catalog、SSE polling 或 Blob 读取异常上抛到全局 filter�
     revision 命令，观察返回的 `StoryDetail` 带这两项且 `revisionId` 前进；原样重复提交一次，
     观察 `revisionId` 不变（no-op）；不带这两项提交，观察两项清空且 `revisionId` 再次前进；
     用 `end` 早于 `start` 或 21 条事实提交，观察 HTTP 400 且 Story 保持上一次保存的状态。
+12. 先建一个 Label 并挂到一个 Story 上，再请求 `GET /api/v1/exports/user-data`：观察响应带
+    `Content-Disposition: attachment` 与 `cosmos-user-data-<exportedAt>.json` 文件名，body 通过
+    `userDataExportSchema`，`data.labels` 含该 Label 且 `data.targets` 含被引用的 Story（标题来自
+    当前 revision）；整份响应 JSON 搜不到 `secretRef`、`storageKey`、连接名或来源名。
 
 ## 实现与测试锚点
 
