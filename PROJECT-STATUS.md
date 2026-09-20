@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-18。代码基线 `3ded765`（Task 31 合并提交；功能基线 `da7d656`，CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿），其后只有本文件的收尾记录提交。**Task 31（公开 Asset 投影剥离内部 Blob key）已合并且验证证据见该 Task；master 尚未推送（领先 `origin/master` 两个提交）**；`.worktree/` 已清空、无任务分支。Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-18。代码基线 `cd7f7bb`（Task 32 合并提交；功能基线 `da7d656`，CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿）。**Task 31 与 Task 32 均已合并且证据见各自 Task；master 尚未推送（领先 `origin/master` 十二个提交）**；`.worktree/` 已清空。**Phase 1 表内不再有未闭合项**（见下），Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -158,7 +158,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 真实 RSS/RSSHub 网络来源验收、跨平台 Node 验收和更长时间的 Worker 重启演练。
 - Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E，Run 成功且 `itemCount=20`。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
-- **Phase 1 需求表里仍无实现证据的三处**：删除 SourceInstance（AUT-001 只有启停与 revision CAS 激活，没有删除端点）；检索的「作者、媒体类型、录入状态」过滤（LIB-001，`search` 现支持关键词/时间/来源/分类/Topic）；条目级「发现原因」（ING-004，Observation 只写触发类型 manual/schedule，需求要求的关注账号/推荐/搜索词/邮箱/相关链接/Agent 调研没有落库）。
+- **Phase 1 收口（2026-09-18，Task [`32`](.agents/tasks/32-phase1-closure/README.md) 五切片，已合并 `cd7f7bb`）**：AUT-001 删除来源（墓碑，历史保留）、LIB-001 三个过滤维度、ING-004 发现渠道、AUT-003 条件请求（顺带补上 ING-012 的一半）、OPS-002 的 Run→Job 产品面均已交付；ING-008 按 ADR-0005 走勘误收窄。**Gateway（RUN-010/011、OPS-010）按 2026-09-18 裁定排除、单独排期**；OPS-002 的「预算」收窄为媒体预算。
 - Activity Host 的跨进程 durable recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline 和完整生产 executable registration 验收；当前代码/测试已有部分 Activity Job、lease、completion 和 direct loopback 证据，不能替代这些边界。
 - 固定 `cosmos.ingest@1` parity、Source snapshot/checkpoint 的完整矩阵验收；Worker Host 默认入口已统一开启，显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才关闭。
 - manifest-only API、executable-only Worker 和独立 Migrator 的完整生产验收；相应代码路径已有 Node smoke/focused 证据，但尚未完成 Docker、browser 和真实来源验收。
@@ -175,7 +175,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-18，Task [`31`](.agents/tasks/31-public-asset-projection/README.md) 的 worktree 内，分支 `fix/t31-public-asset-projection`，基线 `da7d656`）：`bun run typecheck` 0、`bun run test` **100 文件 / 606 用例全绿**、`bun run build` 通过、`bun run db:validate` 通过、`bun run lint:web` 0 error / 81 warning、`bun run docs:check` **682 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；浏览器产品套件同一 build 连跑 2 次（22 passed；另一次 21 passed，失败在 `:186`，同 build 单跑通过）、组件实验室 **14 passed**（首轮有 1 次单例失败）。主工作区的 `node_modules` 与 lockfile 不一致，因此 typecheck/test/build 只在 worktree 内跑。
+- 最近一次全量证据（2026-09-18，Task [`32`](.agents/tasks/32-phase1-closure/README.md) 的 worktree 内，分支 `feat/t32-phase1-closure`，基线 `bdfee86`）：`bun run typecheck` 0、`bun run test` **105 文件 / 624 用例全绿**、`bun run build` 通过、`bun run db:validate` 通过、`bun run lint:web` 0 error / 80 warning、`bun run docs:check` **690 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；`bun run test:browser` **22 passed**、`bun run test:browser:component-lab` **14 passed**（首轮 dev server 启动超时、复跑通过，见 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 第 6 条）。上一轮为 Task 31 的 `fa0e49e`（100 文件 / 606 用例）。主工作区的 `node_modules` 与 lockfile 不一致，因此 typecheck/test/build 只在 worktree 内跑。
 - **公开 Asset 投影的内部 Blob key 已剥离**（同批，Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，未合并）：泄漏的是内部 Blob 内容寻址 key（非绝对路径、没有可直接利用的路径），按[准入决策表](docs/standards/repository-workflow.md#准入决策表)第 25 行当安全合同修复处理，**不开公开 Issue**；六条公开读路由经 `toPublicAsset` 挑字段，公开读 DTO 改用 contracts 的 `publicAssetSnapshotSchema`，过程与回归锚点在 Task 31。
 - **浏览器产品 E2E 整套仍有失败**（Task 26 起，`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 的根因已查明并修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；其余失败点与整套慢跑时 `media-policy` 的等待超时仍未归因。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
