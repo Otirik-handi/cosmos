@@ -6,6 +6,8 @@ export interface ControlledRssRequest {
     method: string;
     url: string;
     receivedAt: string;
+    /** 收到的请求头（键统一小写）。条件请求验收要断言 Worker 真的带上了 If-None-Match。 */
+    headers: Record<string, string>;
 }
 
 export interface ControlledRssServer {
@@ -50,6 +52,7 @@ export async function createControlledRssServer(
             method: request.method ?? "GET",
             url: request.url ?? "/",
             receivedAt: new Date().toISOString(),
+            headers: requestHeaders(request),
         };
         requests.push(observed);
         for (const waiter of [...waiters]) {
@@ -146,4 +149,17 @@ function writeResponse(
     if (response.writableEnded || response.destroyed) return;
     response.writeHead(status, headers);
     response.end(body);
+}
+
+/** 只保留单值头；重复头按逗号连接，与本仓库连接器读取方式一致。 */
+function requestHeaders(request: IncomingMessage): Record<string, string> {
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(request.headers)) {
+        if (typeof value === "string") {
+            headers[key.toLowerCase()] = value;
+        } else if (Array.isArray(value)) {
+            headers[key.toLowerCase()] = value.join(", ");
+        }
+    }
+    return headers;
 }

@@ -166,3 +166,38 @@ COSMOS_E2E_WEB_PORT=4183 bunx playwright test --config playwright.config.ts
 推送 `af302f7` 后 fork 远端 CI 运行 [35497299186](https://github.com/Otirik-handi/cosmos/actions/runs/35497299186) **五个 job 全绿**：Docs 8s、Quality 4m27s、Windows Node smoke 2m58s、Browser E2E 3m31s、Node process E2E 1m12s。
 
 因此上表「未运行」里的 **Node 进程 E2E 与 Windows Node smoke 已由远端 CI 覆盖并通过**（这两项本地一直未跑）。首次查询时用了 `gh run list` 的默认仓库解析，读到的是上游 `notnotype/cosmos` 的历史运行；本仓库 CI 在 fork `Otirik-handi/cosmos`，需用 `-R Otirik-handi/cosmos` 指定。
+
+## 三项验证缺口的补齐（2026-09-20）
+
+上一轮列出的验证缺口逐个关闭。
+
+### AUT-003 的 304 短路（此前只有 `plugins/rss` 的 fixture 证据）
+
+真实公网验收只跑一次抓取、观察不到第二次的 304，所以改用受控服务把服务端行为钉死：
+
+- [`scripts/e2e/controlled-rss.ts`](../../../scripts/e2e/controlled-rss.ts)：`ControlledRssRequest` 增加 `headers`（键小写），测试才能断言 Worker 真的带上了条件头。既有用例不受影响。
+- 新增 [`e2e/conditional-fetch.e2e.test.ts`](../../../e2e/conditional-fetch.e2e.test.ts)（2 例，真实 API/Worker/SQLite 隔离栈）：
+  1. 受控服务返回 200 + `ETag`/`Last-Modified`；第一次抓取**不带**条件头，抓完后**直读 `ConnectorState` 表**断言 `http-cache` 里的验证器与响应一致。
+  2. 受控服务改为 304；第二次抓取**真的带上** `If-None-Match`/`If-Modified-Since`，Worker 记录 `connector.transport.not_modified`，条目数不变（短路、不重新解析正文）。
+
+**两处实施中修正**：首版把 `waitForRequest(1)` 放在排队 Run 之前——抓取由 Run 触发，请求还没发生就等，必然超时；改为先排队再等。另：`test:e2e` 在 Windows 需要 `BUN_BINARY` 指向真实 bun.exe（既有已知前置，见 `docs/testing/README.md`）。
+
+### `test:property` 与组件实验室套件
+
+两项此前一直记「本机未运行」，本轮实际跑通（数字见下表）。
+
+### 验证（第五轮，全部实际运行）
+
+| 命令 | 结果 |
+|---|---|
+| `bunx vitest run --config vitest.e2e.config.ts`（含新增用例） | **5 文件 / 6 用例全绿** |
+| `bun run test:property` | **3 文件 / 4 用例全绿** |
+| `bun run test:browser:component-lab` | **14 passed** |
+| `bun run typecheck` | 全仓 0 |
+| `bun run test` | **106 文件 / 632 用例全绿** |
+| `bun run docs:check` / size 门禁 / `git diff --check` | 见提交前门禁 |
+
+### 关闭后的剩余（都不是 Phase 1 缺口）
+
+- **后置债**：Docker/Compose 容器验收、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke（由 CI 覆盖）、长时 Worker 重启演练。
+- **真实来源**：AI HOT 与 Bilibili 本轮未跑（授权范围只到 RSS）。

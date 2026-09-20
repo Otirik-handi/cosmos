@@ -52,6 +52,6 @@ Phase 1 需求表内不再有未闭合项（Gateway 三行按维护者裁定排�
 
 - Gateway（RUN-010/RUN-011/OPS-010）：已改标 `Phase 3`，随插件运行时/Agent 执行位置排期；本 Task 不再承接。
 - 未运行的验收按 2026-09-07 划线保留：Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复；`EXT-008` 的「独立构建/部署实跑」并入其中的「manifest-only API、executable-only Worker 与独立 Migrator 完整生产验收」。
-- AUT-003 的条件请求（ETag/304）已有真实公网 RSS 验收（2026-09-18，Run `run_b562e08e…`，item count 3），但该脚本只跑一次抓取，304 短路本身仍只有 fixture 证据。
+- AUT-003 的条件请求已补**真实 Worker 进程验收**（[`e2e/conditional-fetch.e2e.test.ts`](../../../e2e/conditional-fetch.e2e.test.ts)：验证器落盘、条件头真的带上、304 短路与条目数不变）；真实公网 RSS 单次验收也已通过（2026-09-18，Run `run_b562e08e…`）。
 - 浏览器用例缺口已补：新增 [`e2e/browser/source-lifecycle-and-search-filters.spec.ts`](../../../e2e/browser/source-lifecycle-and-search-filters.spec.ts) 覆盖删除来源两段确认与 LIB-001 三个过滤维度；整套 **24 passed**。
-- 未运行（既有后置边界）：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、组件实验室套件、AI HOT/Bilibili 真实来源。
+- 未运行（既有后置边界）：Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时 Worker 重启演练、AI HOT/Bilibili 真实来源。
