@@ -7,6 +7,7 @@ import {
     Param,
     Patch,
     Post,
+    StreamableFile,
     Body,
     Headers,
 } from "@nestjs/common";
@@ -25,6 +26,11 @@ import {
 import "reflect-metadata";
 import { AppControllerBase } from "./base.js";
 import { requireIdempotencyKey, sourceCommandError, connectionError, catalogPage, parsePositiveInteger, toPublicSource, toPublicWorkflowRun } from "./internals.js";
+
+/** 导出文件名：时间戳里的 `:` 在 Windows 上是非法字符，统一换成 `-`。 */
+function exportFileName(exportedAt: string): string {
+    return `cosmos-user-data-${exportedAt.replaceAll(":", "-")}.json`;
+}
 
 export class AppControllerSources extends AppControllerBase {
     @Get("health")
@@ -365,6 +371,22 @@ export class AppControllerSources extends AppControllerBase {
             }
             throw error;
         }
+    }
+
+    /**
+     * 用户数据导出（LIB-008 / OPS-004）。以附件下载返回：文件名带导出时间，
+     * 用户存下来即可长期保存；这是只读 Query，不落盘、不改状态。
+     */
+    @Get("exports/user-data")
+    async exportUserData() {
+        const payload = await this.repository.exportUserData();
+        return new StreamableFile(
+            Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, "utf8"),
+            {
+                type: "application/json",
+                disposition: `attachment; filename="${exportFileName(payload.exportedAt)}"`,
+            },
+        );
     }
 
     @Post("sources/:sourceId/runs")

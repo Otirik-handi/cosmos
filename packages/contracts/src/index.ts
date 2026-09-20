@@ -60,9 +60,10 @@ export {
 export {
     backupSnapshotSchema, eventSnapshotSchema, healthResponseSchema, serviceErrorCodeSchema,
     serviceErrorSchema, snapshotRequiredPayloadSchema, sseEventSchema, storageStatsSchema,
+    userDataExportSchema, userDataExportTargetSchema,
     type BackupSnapshot, type EventEnvelope, type EventSnapshot, type HealthResponse,
     type ServiceError, type ServiceErrorCode, type SnapshotRequiredPayload, type SseEvent,
-    type StorageStats,
+    type StorageStats, type UserDataExport, type UserDataExportTarget,
 } from "./platform.js";
 export {
     feedItemSchema, feedPageSchema, searchPageSchema, searchQuerySchema, searchResultSchema,

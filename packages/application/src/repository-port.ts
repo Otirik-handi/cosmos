@@ -11,6 +11,7 @@ import type {
     CollectionDetail, CollectionList, CollectionSummary, FavoriteList,
     Annotation, AnnotationList, SavedView, SavedViewList,
     BoardDetail, BoardList, SpotlightPlacement, SpotlightPlacementList,
+    UserDataExport,
 } from "@cosmos/contracts";
 import type {
     EntityRelationType, EntityType, EntryRelationType, EntryStoryRelationType, FavoriteTargetType,
@@ -83,6 +84,8 @@ export interface CosmosRepository {
     createBackup(): Promise<BackupSnapshot>;
     /** Restore a backup over the current database (creates a pre-restore backup). */
     restoreBackup(backupId: string): Promise<void>;
+    /** 用户真相对象的可带走副本（LIB-008 / OPS-004）；只读，不落盘。 */
+    exportUserData(): Promise<UserDataExport>;
     createRun(input: {
         sourceId: string;
         triggerKind: "manual" | "schedule";

@@ -26,7 +26,13 @@ OPS-003 要求用户能查看 Blob/Artifact/缓存/数据库占用并分层归�
 
 ### 4. 清理沿用 media-cleanup「预览 → 确认」模式
 
-占用统计只读；清理入口复用 Task 20 的 `media-cleanup`（保留期清理，dryRun 预览），本切片不新增第二个清理命令。Artifact/Cache 清理与导出后置（LIB-008 完整形态）。
+占用统计只读；清理入口复用 Task 20 的 `media-cleanup`（保留期清理，dryRun 预览），本切片不新增第二个清理命令。Artifact/Cache 清理后置（LIB-008 完整形态）。
+
+### 5. 导出 = 只读 JSON 下载，不落盘（2026-09-20 补）
+
+`GET /exports/user-data` 返回一份 JSON 附件（`Content-Disposition: attachment`），内容是七类用户真相对象（Label/Collection/Favorite/Annotation/Saved View/Board 树/Spotlight）加一份被引用目标的摘要（标题、条目的 `webUrl`），字段直接复用各对象的公开读投影。只读、无副作用、不写数据根，也不引入导出文件的保留与清理问题；需要落盘的整库副本仍由 `POST /backups` 承担。导出**不含**采集内容与派生投影、运行记录、连接与来源配置、Secret 字节、`ConnectorState` 与内部存储键（`storageKey`）。
+
+**备选**：落盘到 `dataRoot/exports/` 并加 `POST/GET /exports` 列表与下载（镜像 `backups/` 模式）。拒绝（v1）：OPS-004 要的是「明确的导出入口」，不是导出文件管理；备份已提供落盘产物，再建一个相似目录会带来第二个「何时清理」问题。
 
 ## Consequences
 
@@ -41,6 +47,8 @@ OPS-003 要求用户能查看 Blob/Artifact/缓存/数据库占用并分层归�
 - `VACUUM INTO` 依赖 SQLite；恢复是文件级覆盖，绕过了 Prisma 连接，需重启才生效（高风险，端点返回影响说明）。
 - 备份只含数据库、不含 Blob；Blob 损坏无法从备份恢复（可重新下载/可重建）。
 - 恢复覆盖当前数据库，若备份本身损坏会导致数据丢失（已用「恢复前保护」降低风险）。
+- 导出件只含用户真相对象与引用目标摘要，**不是**可移植的全量副本：采集内容、运行记录与连接配置不在其中，离开 Cosmos 后引用目标只剩标题与链接；需要整库副本时用备份。
+- 导出读取不加事务（SQLite 单写者下是尽力而为的一致快照），`exportedAt` 是它的时间标记。
 
 ## Alternatives considered
 
@@ -60,10 +68,19 @@ OPS-003 要求用户能查看 Blob/Artifact/缓存/数据库占用并分层归�
 
 拒绝（v1）。media-cleanup 已实现「预览 → 确认 + 引用检查」，复用即可。
 
+### 导出落盘到数据根 `exports/`（决策 5）
+
+拒绝（v1）。见决策 5：导出要的是入口，不是导出文件管理；落盘会带来第二个「何时清理」问题。
+
+### 导出包含完整内容库（决策 5）
+
+拒绝（v1）。内容库可重新采集、派生投影可重建，且与备份重叠；要做「可移植全量导出」时需要先定正文/媒体的脱敏与体积预算。
+
 ## Revisit Gate
 
 满足以下任一条件时重新评估本 ADR：
 
-- 引入导出（JSON/归档）或 Artifact/Cache 清理（LIB-008 完整形态）；
+- 引入 Artifact/Cache 清理（LIB-008 完整形态的剩余半边）；
+- 导出需要包含内容库、需要落盘产物或需要导入/恢复导出件；
 - 引入增量/云端备份、备份加密、跨机迁移或 Blob 备份；
 - 数据库改用 WAL 模式或引入多进程并发写，`VACUUM INTO`/文件复制的一致性假设需重评。

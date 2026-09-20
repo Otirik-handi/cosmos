@@ -7,6 +7,7 @@ import {
     sourceDefinitionPageSchema,
     storageStatsSchema,
     backupSnapshotSchema,
+    userDataExportSchema,
     type ConnectorDescriptor,
     type HealthResponse,
     type JobSnapshot,
@@ -14,6 +15,7 @@ import {
     type SourceDefinitionManifest,
     type StorageStats,
     type BackupSnapshot,
+    type UserDataExport,
     userOrganizationAckSchema,
     type UserOrganizationAck,
 } from "@cosmos/contracts";
@@ -67,6 +69,13 @@ export class PlatformClient extends HttpCosmosClientBase {
         return this.request(`/api/v1/backups/${encodeURIComponent(backupId)}/restores`, {
             method: "POST",
             schema: userOrganizationAckSchema,
+        });
+    }
+
+    /** 用户数据导出（LIB-008 / OPS-004）；存储面板据此生成下载文件。 */
+    async exportUserData(): Promise<UserDataExport> {
+        return this.request("/api/v1/exports/user-data", {
+            schema: userDataExportSchema,
         });
     }
 

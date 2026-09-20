@@ -3,7 +3,7 @@ parent: docs/requirements/0002-product-requirements.md
 range: §7.7–7.11 Agent、看板、发布、运维与扩展
 sealed_at: 2026-09-14
 tags: [requirements, prd, functional]
-tokens_est: 5039
+tokens_est: 5500
 ---
 
 ### 7.7 Agent、Artifact 与 Workspace
@@ -80,9 +80,11 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 | OPS-008 | Phase 1 | 服务器、客户端和客户端与服务分离模式共用稳定的 Service Endpoint 与 Transport 合同。 | Web UI 可以连接本地 API 或远端 API；Command/Query/Event/流式更新使用版本化 payload；SSE 断线、恢复、健康检查、版本不兼容和服务不可用都有可识别状态；UI 不直接依赖 Prisma/SQLite。 |
 | OPS-009 | 跨阶段 | SecretStore、ConnectorStateStore、Blob/Artifact Root 和普通数据库状态必须有清晰的所有权与生命周期边界。 | 备份、删除、撤销连接、重建索引和清理缓存不会误删其它类别的数据；敏感状态不进入普通日志和事件 payload。 |
 | OPS-010 | Phase 1C | Product Service API、Worker Admin API 和 Worker Gateway 使用独立路径、版本与责任边界。 | Product API 不返回 lease/Secret 或执行插件；Worker Admin 只提供 health/readiness/status/capability/metrics/drain；Gateway 面向主动连接的远程 Worker，不提供同步反向 execute。 |
-
-**Phase 1 收口排除注记（2026-09-18）**：OPS-010 与 RUN-010、RUN-011 被维护者排除在 Phase 1 收口之外，并改标 `Phase 3`（与插件运行时、Agent 执行位置同批）。因此本表 `Phase 1C` 行不再属于 Phase 1；改标理由见勘误台账 [`ERRATA.md`](ERRATA.md)。
 | OPS-011 | Phase 1C | API liveness、API readiness、产品健康和 Worker readiness 分开表达。 | Worker 停止时 API 仍可 ready 并读取已保存内容；Product health 显示 Worker unavailable；draining Worker 的进程仍 alive 但 execution readiness 为 false。 |
+
+**Phase 1 收口排除注记（2026-09-18）**：OPS-010 与 RUN-010、RUN-011 被维护者排除在 Phase 1 收口之外，并改标 `Phase 3`（与插件运行时、Agent 执行位置同批）。因此本表 `Phase 1C` 行不再属于 Phase 1；改标理由见勘误台账 [`ERRATA.md`](ERRATA.md)。（本条原插在 OPS-010 与 OPS-011 两行之间，会把 OPS-011 挤出表格；2026-09-20 移到表后，文字未改。）
+
+**OPS-004 导出注记（2026-09-20，[`user-data-export-v1` Proposal](../../proposals/user-data-export-v1.md) accepted）**：OPS-004 记为 **Phase 2 已交付**——备份、恢复、清理入口随 Task 24 交付，「导出」由本片补齐：`GET /exports/user-data` 只读返回 JSON 附件（七类用户真相对象 + 被引用目标摘要），Web 存储面板提供下载入口。导出不落盘、不含内容库与 Secret，整库副本仍走 `POST /backups`。决策见 [ADR-0019](../../adr/0019-ops-storage-v1.md) 决策 5。
 
 ### 7.11 扩展与插件
 

@@ -92,6 +92,49 @@ describe("HttpCosmosClient 平台面", () => {
         }]);
     });
 
+    it("downloads the user data export through the versioned endpoint (LIB-008 / OPS-004)", async () => {
+        const requests: string[] = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input) => {
+                requests.push(String(input));
+                return new Response(JSON.stringify({
+                    schemaVersion: 1,
+                    exportedAt: "2026-09-20T12:30:00.000Z",
+                    counts: {
+                        labels: 0,
+                        collections: 0,
+                        favorites: 0,
+                        annotations: 0,
+                        savedViews: 0,
+                        boards: 0,
+                        spotlightPlacements: 0,
+                        targets: 0,
+                    },
+                    data: {
+                        labels: [],
+                        collections: [],
+                        favorites: [],
+                        annotations: [],
+                        savedViews: [],
+                        boards: [],
+                        spotlightPlacements: [],
+                        targets: [],
+                    },
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const payload = await client.exportUserData();
+
+        expect(requests).toEqual(["http://localhost:4310/api/v1/exports/user-data"]);
+        expect(payload.schemaVersion).toBe(1);
+        expect(payload.counts.labels).toBe(0);
+    });
+
     it("opens the versioned SSE endpoint and validates event envelopes", () => {
         let instance: CosmosEventSource | undefined;
         let openedUrl = "";

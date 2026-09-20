@@ -1,7 +1,7 @@
-import { PrismaCosmosRepositoryBoardContent } from "./repository/board-content.js";
+import { PrismaCosmosRepositoryUserDataExport } from "./repository/user-data-export.js";
 import type { CosmosRepository } from "@cosmos/application";
 
-export class PrismaCosmosRepository extends PrismaCosmosRepositoryBoardContent implements CosmosRepository {}
+export class PrismaCosmosRepository extends PrismaCosmosRepositoryUserDataExport implements CosmosRepository {}
 
 export { PrismaWorkflowBackend } from "./workflow-backend.js";
 export { PrismaWorkflowHostStore } from "./workflow-host-store.js";

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { BackupSnapshot, StorageStats } from "@cosmos/contracts";
+import type { BackupSnapshot, StorageStats, UserDataExport } from "@cosmos/contracts";
 import type { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { Button } from "@/components/ui/button";
@@ -20,13 +20,30 @@ function formatBytes(bytes: number): string {
     return `${value.toFixed(value >= 10 || unit === "B" ? 0 : 1)} ${unit}`;
 }
 
+/**
+ * 把导出件作为文件交给用户保存。文件名与 API 的 `Content-Disposition` 用同一约定
+ * （时间戳里的 `:` 换成 `-`，否则在 Windows 上是非法字符）。
+ */
+function downloadExport(payload: UserDataExport): void {
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cosmos-user-data-${payload.exportedAt.replaceAll(":", "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
+
 type StoragePanelProps = {
     client: HttpCosmosClient;
 };
 
 /**
  * 存储面板（ADR-0019 / OPS-003/004）：展示数据库/Blob/缓存等占用，提供备份
- * 列表、新建备份与恢复。恢复会覆盖当前数据库，故先做一次「恢复前保护备份」。
+ * 列表、新建备份、恢复与用户数据导出。恢复会覆盖当前数据库，故先做一次
+ * 「恢复前保护备份」。
  */
 export function StoragePanel({ client }: StoragePanelProps) {
     const [stats, setStats] = useState<StorageStats | null>(null);
@@ -88,6 +105,22 @@ export function StoragePanel({ client }: StoragePanelProps) {
             .finally(() => setBusy(false));
     };
 
+    const exportUserData = (): void => {
+        setBusy(true);
+        setMessage(null);
+        client.exportUserData()
+            .then((payload) => {
+                downloadExport(payload);
+                const { labels, collections, annotations, savedViews, boards } = payload.counts;
+                setMessage(
+                    `已导出：标签 ${labels}、收藏夹 ${collections}、批注 ${annotations}、`
+                    + `查询视图 ${savedViews}、看板 ${boards}。`,
+                );
+            })
+            .catch(() => setMessage("导出失败。"))
+            .finally(() => setBusy(false));
+    };
+
     return (
         <div className="flex flex-col gap-2">
             <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -98,6 +131,7 @@ export function StoragePanel({ client }: StoragePanelProps) {
             </ul>
             <div className="flex items-center gap-2">
                 <Button size="xs" variant="outline" disabled={busy} onClick={createBackup}>新建备份</Button>
+                <Button size="xs" variant="outline" disabled={busy} onClick={exportUserData}>导出用户数据</Button>
                 <span className="text-xs text-muted-foreground">{backups.length} 个备份</span>
             </div>
             {backups.length > 0 && (

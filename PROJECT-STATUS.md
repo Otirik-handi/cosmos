@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-20。代码基线 `e6b86f4`（Phase 1 缺口收口 + 验证缺口补齐；功能基线 `da7d656`；本轮三次推送的 CI run `35497299186`、`35500878226`、`35503536120` 均五个 job 全绿）。**本地 = `origin/master` = `e6b86f4`**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，但需求表仍有未闭合行**：AUT-004、AUT-010、ING-012、LIB-004、LIB-008、OPS-004、EXT-006（见下「Phase 2 尾巴遗留状态」），另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-20。代码基线 `e6b86f4`（Phase 1 缺口收口 + 验证缺口补齐；功能基线 `da7d656`；本轮三次推送的 CI run `35497299186`、`35500878226`、`35503536120` 均五个 job 全绿）。**本地 = `origin/master` = `e6b86f4`**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，但需求表仍有未闭合行**：AUT-004、AUT-010、ING-012、LIB-004、EXT-006（见下「Phase 2 尾巴遗留状态」；LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口），另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -50,7 +50,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
 - **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。
-- **Phase 2 仍未闭合的 7 行（2026-09-20 逐条核对并登记进勘误台账）**：未交付 AUT-004（事件触发）、AUT-010（多采集计划，EXT-007 同源）、LIB-008（导出/批量删除）；部分交付 ING-012（StateStore 已交付且被 RSS 消费，缺备份/恢复/迁移）、OPS-004（备份/恢复/清理已交付，缺导出）、EXT-006（manifest 声明面已交付，内置 manifest 仍只有单个 `fetch`，缺真实认证 Adapter 的登录状态展示）；延后到 Phase 3 的 LIB-004 正文片段字符级锚点。逐条证据在勘误台账。
+- **Phase 2 仍未闭合的 5 行（2026-09-20 逐条核对并登记进勘误台账；同日导出收口后更新）**：未交付 AUT-004（事件触发）、AUT-010（多采集计划，EXT-007 同源）；部分交付 ING-012（StateStore 已交付且被 RSS 消费，缺备份/恢复/迁移）、EXT-006（manifest 声明面已交付，内置 manifest 仍只有单个 `fetch`，缺真实认证 Adapter 的登录状态展示）；延后到 Phase 3 的 LIB-004 正文片段字符级锚点。**LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口**（`GET /exports/user-data` + Web 存储面板下载入口，ADR-0019 决策 5；未 commit，见下）。逐条证据在勘误台账。
 - **Phase 2 第四条验收条件尚无写入路径可考**：「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，未被真正考验；Phase 3 的 Knowledge Workflow 落地后需重新回归。
 - **真人验收暴露的三条界面方向**（维护者 2026-09-15，尚未排期）：Topic/Entity/用户组织缺独立操作面板、看板需要拖拽、文案过于专业化。前两条对应已 accepted 的 [`ui-surface-ownership-v1`](docs/proposals/ui-surface-ownership-v1.md)（PRD §8 / 架构 §11.4 / 新 ADR 与 Task 在 `master` 上尚未执行）；第三条对应仍 `reviewing` 的 [`ui-copy-review-v1`](docs/proposals/ui-copy-review-v1.md)。
 
