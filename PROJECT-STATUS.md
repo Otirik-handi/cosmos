@@ -36,13 +36,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 当前下一步
 
-**2026-09-18 复核与决定**：先清文档口径、并修掉唯一被判定为验收失败的公开投影安全项（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，已合入）；Phase 2 需求表尾巴、Phase 1 产品缺口与已 accepted 的界面职责重划之间的先后顺序**尚未排定**。
+**2026-09-18 复核与决定**：先清文档口径与唯一被判定为验收失败的公开投影安全项（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)）——两项均已完成并推送；Phase 2 需求表尾巴、Phase 1 产品缺口与已 accepted 的界面职责重划之间的先后顺序**尚未排定**。
 
-**Phase 1 缺口复核的收口（2026-09-18，本次）**：对 PRD §7 所有 `Phase 1`/`Phase 1B`/`Phase 1C` 行与 §12 验收逐条核对后，已交付与已划线分开登记（勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)）；**Phase 1 表内已无未闭合项**，三项原待裁定已由维护者 2026-09-18 裁定并落地：
-
-- **Gateway 三行（RUN-010/RUN-011/OPS-010）**：排除出 Phase 1 并改标 `Phase 3`（与插件运行时、Agent 执行位置同批）。
-- **`EXT-008`**：记为 Phase 1 已交付（前两条验收条件已有行为测试与结构性证据）；「独立构建/部署实跑」并入既有的「manifest-only API、executable-only Worker 与独立 Migrator 完整生产验收」一条。
-- **AUT-001「删除凭据」**：补实现——删除 Connection 时连带删除 SecretStore 中的密钥字节；同批修掉 `FileSecretStore` 把 `secret:` 前缀误判为路径逃逸的缺陷（该缺陷会让任何真实凭据都写不进去）。
+**Phase 1 缺口复核的收口（2026-09-18）**：PRD §7 所有 `Phase 1`/`Phase 1B`/`Phase 1C` 行与 §12 验收已逐条核对，**表内无未闭合项**；三项裁定（Gateway 改标 `Phase 3`、`EXT-008` 收口、AUT-001「删除凭据」补实现）与逐条证据见勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 与 Task [`32`](.agents/tasks/32-phase1-closure/README.md)。
 
 **Phase 2 收口与尾巴的完成记录（2026-09-15/16）**：Phase 2 收口四条（Story split 用户状态迁移与撤销、看板 UI 缺口与拖拽排序、四条主流程真人验收、ORG-021 改标）、ORG-017、远端 CI 收尾、`db:validate` 阻塞修复与界面职责重划的实现尝试作废，整段移入 [`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；本文只保留仍然有效的当前状态与决定。
 
@@ -160,13 +156,13 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 ## 尚未实现
 
 - Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；当前环境没有 Docker CLI。
-- 真实 RSS/RSSHub 网络来源验收、跨平台 Node 验收和更长时间的 Worker 重启演练。
+- 真实 RSS/RSSHub 的**长时定时抓取**与更长时间的 Worker 重启演练。真实公网 RSS 的完整采集链路已于 2026-09-18 通过验收（阮一峰源，item count 3）；跨平台 Node 由远端 CI 的 Windows Node smoke job 覆盖。
 - Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E，Run 成功且 `itemCount=20`。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
 - **Phase 1 收口（2026-09-18，Task [`32`](.agents/tasks/32-phase1-closure/README.md) 五切片，已合并 `cd7f7bb`）**：AUT-001 删除来源（墓碑，历史保留）、LIB-001 三个过滤维度、ING-004 发现渠道、AUT-003 条件请求（顺带补上 ING-012 的一半）、OPS-002 的 Run→Job 产品面均已交付；ING-008 按 ADR-0005 走勘误收窄。**Gateway（RUN-010/011、OPS-010）改标 `Phase 3`**；OPS-002 的「预算」收窄为媒体预算。`EXT-008` 与 AUT-001「删除凭据」按同日裁定收口（见「当前下一步」）。
 - Activity Host 的跨进程 durable recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline 和完整生产 executable registration 验收；当前代码/测试已有部分 Activity Job、lease、completion 和 direct loopback 证据，不能替代这些边界。
 - 固定 `cosmos.ingest@1` parity、Source snapshot/checkpoint 的完整矩阵验收；Worker Host 默认入口已统一开启，显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才关闭。
-- manifest-only API、executable-only Worker 和独立 Migrator 的完整生产验收；相应代码路径已有 Node smoke/focused 证据，但尚未完成 Docker、browser 和真实来源验收。**`EXT-008` 的验收条件「在没有 Connector executable 的 API 构建中仍可工作」既无测试也无独立构建实跑。**
+- manifest-only API、executable-only Worker 和独立 Migrator 的完整生产验收；相应代码路径已有 Node smoke/focused 证据与行为测试（`packages/application/src/catalog-manifest-only.test.ts` 覆盖 EXT-008 的前两条验收条件），但尚未完成 Docker 与独立构建/部署实跑——EXT-008 的第三条验收条件并入本条，不在需求表单独计。
 - API/DTO Draft v0.2 的 Zod schema、Product/Application/Transport 迁移、Gateway fake conformance、owner handoff、late evidence、Receipt CAS 和真实 bootstrap identity。
 - SQLite WAL/busy timeout 的显式配置与并发行为验收。
 - 真实认证 Adapter 的登录生命周期；Connection/SecretStore/ConnectorStateStore 地基已由 Task 22 交付，Checkpoint 迁移与加密-at-rest 未做。
