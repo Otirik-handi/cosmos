@@ -46,7 +46,7 @@ Non-goals（见 Proposal / ADR-0019）：
 
 ## Current State
 
-- 生命周期阶段：**活跃（追加切片 2：用户数据导出）**。切片 1（占用统计与备份/恢复）已实现、验证并合并 `master`（commit `27f249b`，无 PR，单开发者仓库）；其 worktree `.worktree/ops-storage` 与分支 `feat/t24-ops-storage` 已清理。切片 2 在 worktree `.worktree/user-data-export` / 分支 `feat/t24-user-data-export` 上实现，未 commit、未 push。
+- 生命周期阶段：**活跃（追加切片 2：用户数据导出）**。切片 1（占用统计与备份/恢复）已实现、验证并合并 `master`（commit `27f249b`，无 PR，单开发者仓库）；其 worktree `.worktree/ops-storage` 与分支 `feat/t24-ops-storage` 已清理。切片 2 在 worktree `.worktree/user-data-export` / 分支 `feat/t24-user-data-export` 上实现，`--no-ff` 合入 `master`（merge `d7af0cc`）并推送（CI run `35515892820` 五个 job 全绿）；worktree 与分支（含远端）已清理。
 - 连贯目标：用户能查看占用、做数据库备份/恢复，并把自己创作的数据带走。
 - 可观察验收（切片 1，≤3 条）：
   1. `GET /storage-stats` 返回非负字节与分层归类（cleanable = `saved` Asset 字节合计）；
@@ -108,6 +108,9 @@ Non-goals（见 Proposal / ADR-0019）：
 - 路由快照守卫 `app.controller.route-table.test.ts` 3/3（含 120 条路由的方法+路径集合与 handler 名比对）。
 - `entry-contract.test.ts`（contracts/storage-prisma/transport-http）全绿：contracts 的导出面变化是显式重生成的结果。
 - `bun run build` 通过（`test:browser` 的前置）；浏览器产品套件 **25 passed**（24 条既有 + 新增 1 条），组件实验室套件 **14 passed**——均无回归。
+- `bun run test:e2e`（Node 进程 E2E）5 文件 / 6 用例全绿；`bun run test:property` 3 文件 / 4 用例全绿。
+- 合并后复核（主工作区，merge `d7af0cc`）：`bun run docs:check` 708 文件 0 失败；三个受影响测试文件 7/7 通过。
+- 远端 CI（fork `Otirik-handi/cosmos`，run `35515892820`）：Quality、Docs、Browser E2E、Node process E2E、Windows Node smoke **五个 job 全绿**。
 - 未运行：Docker/Compose、发布部署（既有后置边界）。
 
 ## Follow-ups
