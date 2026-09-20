@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-20。代码基线 `af302f7`（Phase 1 缺口收口；功能基线 `da7d656`，CI run [`35313175640`](https://github.com/Otirik-handi/cosmos/actions/runs/35313175640) 五个 job 全绿，本轮推送的 run [`35497299186`](https://github.com/Otirik-handi/cosmos/actions/runs/35497299186) 同样五个 job 全绿）。**Task 31、Task 32 与本次收口均已合并并推送（本地 = `origin/master` = `af302f7`）**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口，见下），Phase 2 已收口（见分册索引首行），G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-20。代码基线 `e6b86f4`（Phase 1 缺口收口 + 验证缺口补齐；功能基线 `da7d656`；本轮三次推送的 CI run `35497299186`、`35500878226`、`35503536120` 均五个 job 全绿）。**本地 = `origin/master` = `e6b86f4`**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，但需求表仍有未闭合行**：AUT-004、AUT-010、ING-012、LIB-004、LIB-008、OPS-004、EXT-006（见下「Phase 2 尾巴遗留状态」），另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -49,7 +49,10 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
-- **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。改标后 §7 中仍标 `Phase 2` 而未闭合的是 **AUT-004、AUT-010、ING-012、LIB-004、LIB-008、OPS-004**，EXT-006 的「登录状态展示」等真实认证 Adapter。
+- **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。
+- **Phase 2 仍未闭合的 7 行（2026-09-20 逐条核对并登记进勘误台账）**：未交付 AUT-004（事件触发）、AUT-010（多采集计划，EXT-007 同源）、LIB-008（导出/批量删除）；部分交付 ING-012（StateStore 已交付且被 RSS 消费，缺备份/恢复/迁移）、OPS-004（备份/恢复/清理已交付，缺导出）、EXT-006（manifest 声明面已交付，内置 manifest 仍只有单个 `fetch`，缺真实认证 Adapter 的登录状态展示）；延后到 Phase 3 的 LIB-004 正文片段字符级锚点。逐条证据在勘误台账。
+- **Phase 2 第四条验收条件尚无写入路径可考**：「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，未被真正考验；Phase 3 的 Knowledge Workflow 落地后需重新回归。
+- **真人验收暴露的三条界面方向**（维护者 2026-09-15，尚未排期）：Topic/Entity/用户组织缺独立操作面板、看板需要拖拽、文案过于专业化。前两条对应已 accepted 的 [`ui-surface-ownership-v1`](docs/proposals/ui-surface-ownership-v1.md)（PRD §8 / 架构 §11.4 / 新 ADR 与 Task 在 `master` 上尚未执行）；第三条对应仍 `reviewing` 的 [`ui-copy-review-v1`](docs/proposals/ui-copy-review-v1.md)。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
@@ -176,10 +179,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-18，主工作区，HEAD `b9e596f` + 本轮未提交改动；先执行 `bun install` 补齐缺失依赖、`bun.lock` 无改动）：`bun run typecheck` **全仓 0**、`bun run test` **106 文件 / 632 用例全绿**、`bun run build` 通过、`bun run docs:check` **701 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；`bunx playwright test --config playwright.config.ts`（`COSMOS_E2E_WEB_PORT=4183`）**24 passed**；`COSMOS_REAL_RSS_URL=https://www.ruanyifeng.com/blog/atom.xml COSMOS_ALLOW_REAL_NETWORK=true bun run test:real:rss` 通过（item count 3，见 Task 32 walkthrough）。上一轮为 Task 32 worktree 内的 105 文件 / 624 用例。**主工作区的 `node_modules` 与 lockfile 不一致问题已由本轮 `bun install` 解除**，typecheck/test/build 不再需要在 worktree 内跑。
-- **Phase 1 交付项的验证缺口（2026-09-18 登记，2026-09-20 补齐）**：AUT-001 删除来源 Web 入口与 LIB-001 三个新过滤控件已补浏览器用例（[`e2e/browser/source-lifecycle-and-search-filters.spec.ts`](e2e/browser/source-lifecycle-and-search-filters.spec.ts)）；**AUT-003 的 304 短路已补真实 Worker 进程验收**（[`e2e/conditional-fetch.e2e.test.ts`](e2e/conditional-fetch.e2e.test.ts)：受控服务第一次 200+验证器、第二次 304，断言验证器落盘、条件头真的带上、短路日志与条目数不变），`test:property` 与组件实验室套件也已在本机跑通。三项缺口均已关闭，见 Task 32 walkthrough。
-- **公开 Asset 投影的内部 Blob key 已剥离**（同批，Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，已 `--no-ff` 合入 `3ded765`）：泄漏的是内部 Blob 内容寻址 key（非绝对路径、没有可直接利用的路径），按[准入决策表](docs/standards/repository-workflow.md#准入决策表)第 25 行当安全合同修复处理，**不开公开 Issue**；六条公开读路由经 `toPublicAsset` 挑字段，公开读 DTO 改用 contracts 的 `publicAssetSnapshotSchema`，过程与回归锚点在 Task 31。
-- **浏览器产品 E2E 整套仍有失败**（Task 26 起，`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 的根因已查明并修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；其余失败点与整套慢跑时 `media-policy` 的等待超时仍未归因。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
+- 最近一次全量证据（2026-09-20，主工作区，HEAD `fc7867f`）：`bun run typecheck` **全仓 0**、`bun run test` **106 文件 / 632 用例全绿**、`bun run build` 通过、`docs:check` **703 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；`bunx playwright test`（`COSMOS_E2E_WEB_PORT=4183`）**24 passed**、组件实验室 **14 passed**、`test:property` **4 用例全绿**、Node 进程 E2E **6 用例全绿**；真实公网 RSS 验收通过（item count 3）。逐项数字与未运行项见 Task 32 walkthrough。**主工作区的 `node_modules` 与 lockfile 不一致问题已由 `bun install` 解除**。
+- **公开 Asset 投影的内部 Blob key 已剥离**（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，已 `--no-ff` 合入 `3ded765`）：按[准入决策表](docs/standards/repository-workflow.md#准入决策表)第 25 行当安全合同修复处理，**不开公开 Issue**；过程与回归锚点在 Task 31。
+- **浏览器产品 E2E 仍有间歇失败**（`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 根因已修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；其余仍未归因。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护（含 2026-09-20 新增的 CI Quality 单用例超时观察）。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
 - 本机未运行：Docker/Compose、发布部署、长时定时抓取与长时 Worker 重启演练；`test:property`、Node 进程 E2E、组件实验室套件已于 2026-09-20 在本机跑通，Windows Node smoke 由远端 CI 覆盖。
 
