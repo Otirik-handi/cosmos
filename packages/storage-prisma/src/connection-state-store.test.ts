@@ -101,6 +101,41 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
             await repository.close();
         }
     });
+    it("deletes the stored secret bytes when the connection is removed (AUT-001)", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({
+                name: "带凭据的连接",
+                connectorId: "bilibili",
+                secretRef: "secret:conn-delete",
+            });
+            await repository.secrets.put("secret:conn-delete", "token-value");
+            await expect(repository.secrets.read("secret:conn-delete")).resolves.toBe("token-value");
+
+            await expect(repository.deleteConnection(connection.id)).resolves.toBe(true);
+
+            // 连接行与密钥字节一起消失：删除凭据是删除动作的一部分，不是只解引用。
+            await expect(repository.getConnection(connection.id)).resolves.toBeNull();
+            await expect(repository.secrets.read("secret:conn-delete")).resolves.toBeNull();
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("removes a connection without a secretRef and stays idempotent", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({
+                name: "无凭据的连接",
+                connectorId: "bilibili",
+            });
+
+            await expect(repository.deleteConnection(connection.id)).resolves.toBe(true);
+            await expect(repository.getConnection(connection.id)).resolves.toBeNull();
+        } finally {
+            await repository.close();
+        }
+    });
 });
 
 describe("PrismaConnectorStateStore (ADR-0017)", () => {

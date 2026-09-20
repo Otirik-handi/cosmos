@@ -80,6 +80,8 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 | OPS-008 | Phase 1 | 服务器、客户端和客户端与服务分离模式共用稳定的 Service Endpoint 与 Transport 合同。 | Web UI 可以连接本地 API 或远端 API；Command/Query/Event/流式更新使用版本化 payload；SSE 断线、恢复、健康检查、版本不兼容和服务不可用都有可识别状态；UI 不直接依赖 Prisma/SQLite。 |
 | OPS-009 | 跨阶段 | SecretStore、ConnectorStateStore、Blob/Artifact Root 和普通数据库状态必须有清晰的所有权与生命周期边界。 | 备份、删除、撤销连接、重建索引和清理缓存不会误删其它类别的数据；敏感状态不进入普通日志和事件 payload。 |
 | OPS-010 | Phase 1C | Product Service API、Worker Admin API 和 Worker Gateway 使用独立路径、版本与责任边界。 | Product API 不返回 lease/Secret 或执行插件；Worker Admin 只提供 health/readiness/status/capability/metrics/drain；Gateway 面向主动连接的远程 Worker，不提供同步反向 execute。 |
+
+**Phase 1 收口排除注记（2026-09-18）**：OPS-010 与 RUN-010、RUN-011 被维护者排除在 Phase 1 收口之外，并改标 `Phase 3`（与插件运行时、Agent 执行位置同批）。因此本表 `Phase 1C` 行不再属于 Phase 1；改标理由见勘误台账 [`ERRATA.md`](ERRATA.md)。
 | OPS-011 | Phase 1C | API liveness、API readiness、产品健康和 Worker readiness 分开表达。 | Worker 停止时 API 仍可 ready 并读取已保存内容；Product health 显示 Worker unavailable；draining Worker 的进程仍 alive 但 execution readiness 为 false。 |
 
 ### 7.11 扩展与插件
@@ -94,3 +96,5 @@ Agent 记忆 + Cosmos 观察到的用户行为 + 未来可能的其它信号
 | EXT-006 | Phase 2 | 插件 manifest 可以声明多个 Source Operation、认证方式、配置/状态 schema、Action、能力、预算和错误/恢复语义。 | Web/API 可以根据声明展示配置和登录状态；增加新 Adapter 不需要修改核心数据库表或 Worker 的专用分支。 |
 | EXT-007 | Phase 2 | Adapter manifest 必须声明 Source Operation 的输入/输出、稳定 external key、discovery context、媒体状态、SecretRef、StateStore 命名空间和 Action 能力。 | Adapter 不自行持久化 Secret 或核心领域状态；Cosmos 可以校验能力、版本、预算和恢复语义，并通过同一合同支持多个采集计划。 |
 | EXT-008 | Phase 1C | API 只加载 Plugin/Source/Workflow/Action manifest、schema 和 capability；Worker 独占 executable。 | `/source-definitions` 等 Catalog Query 在没有 Connector executable 的 API 构建中仍可工作；Worker 注册精确 manifest evidence；API 不访问外部平台。 |
+
+**Phase 1 收口注记（2026-09-18）**：本行记为 Phase 1 已交付——边界已有实现，第一、二条验收条件已由 `packages/application/src/catalog-manifest-only.test.ts` 覆盖；第三条「独立构建/部署实跑」并入既有 Phase 1 后置债的「manifest-only API、executable-only Worker 与独立 Migrator 完整生产验收」，不在本行单独计。理由见勘误台账 [`ERRATA.md`](ERRATA.md)。

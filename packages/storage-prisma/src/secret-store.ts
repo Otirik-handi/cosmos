@@ -1,5 +1,5 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import type { SecretStorePort } from "@cosmos/application";
 
@@ -7,16 +7,26 @@ export interface FileSecretStoreConfig {
     root: string;
 }
 
+/**
+ * 解析不透明 SecretRef 对应的文件路径，并拒绝逃出 SecretStore 根的引用。
+ *
+ * 不能用「含 `:` 就拒绝」来判断逃逸：产品侧写入的 ref 形态是 `secret:conn-1`
+ * （API 与仓储测试都用这个形态），冒号只是名字的一部分。逃逸改由 `isAbsolute`
+ * 与「解析后仍在根内」判断——它同时覆盖 `../` 与 Windows 盘符绝对路径。
+ */
 function resolveSecretPath(config: FileSecretStoreConfig, secretRef: string): string {
     const resolvedRoot = resolve(config.root);
+    if (secretRef.length === 0) {
+        throw new Error("Secret ref must not be empty.");
+    }
     const resolvedPath = resolve(resolvedRoot, secretRef);
     const relativePath = relative(resolvedRoot, resolvedPath);
 
     if (
-        relativePath.startsWith("..")
-        || relativePath.includes(`..${sep}`)
-        || relativePath.includes(":")
-        || resolve(resolvedRoot, relativePath) !== resolvedPath
+        isAbsolute(secretRef)
+        || relativePath === ""
+        || relativePath.startsWith("..")
+        || isAbsolute(relativePath)
     ) {
         throw new Error("Secret ref escapes the configured SecretStore root.");
     }

@@ -40,13 +40,18 @@
 
 ## Current State
 
-生命周期阶段：**五个切片全部完成**（实现 + 规格 + 全量门禁，各自独立提交），Phase 1 表内不再有未闭合项（Gateway 三行按维护者裁定排除、ING-008 按勘误收窄）。分支 `feat/t32-phase1-closure`，worktree `.worktree/t32-phase1-closure`，基线 `bdfee86`（本地 master；`origin/master` 仍停在 `da7d656`，本分支未推送、未合并）。合并时需一并更新 `PROJECT-STATUS.md` 的 Phase 1 结论与验证数字。
+生命周期阶段：**已收口并合并**。五个切片全部完成（实现 + 规格 + 全量门禁，各自独立提交），分支 `feat/t32-phase1-closure` 由 `--no-ff` 合入 master `cd7f7bb`，随后以 `b9e596f` 更新 `PROJECT-STATUS.md`；worktree 与分支已按授权清理，本地 = `origin/master` = `b9e596f`。
+
+Phase 1 需求表内不再有未闭合项（Gateway 三行按维护者裁定排除并改标 `Phase 3`、ING-008 按勘误收窄）。**2026-09-18 复核与裁定收口**：Gateway 三行改标 `Phase 3`、`EXT-008` 记为已交付（独立构建实跑并入既有生产验收清单）、AUT-001「删除凭据」补实现；三条的裁定与证据登记在勘误台账 [`ERRATA.md`](../../../docs/requirements/0002-product-requirements/ERRATA.md)。
 
 ## 验证
 
-见 [`walkthrough.md`](walkthrough.md)：逐切片的 RED→GREEN 证据、命令与结果、未运行项。
+见 [`walkthrough.md`](walkthrough.md)：逐切片的 RED→GREEN 证据、命令与结果、未运行项（切片 1–5 的逐片证据在分册 [`walkthrough/slices-1-5.md`](walkthrough/slices-1-5.md)）。
 
 ## Follow-ups
 
-- 五个切片完成后统一跑全量门禁（typecheck / test / build / browser / docs:check / size / db:validate）。
-- commit / push / 合并待维护者逐次授权。
+- Gateway（RUN-010/RUN-011/OPS-010）：已改标 `Phase 3`，随插件运行时/Agent 执行位置排期；本 Task 不再承接。
+- 未运行的验收按 2026-09-07 划线保留：Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复；`EXT-008` 的「独立构建/部署实跑」并入其中的「manifest-only API、executable-only Worker 与独立 Migrator 完整生产验收」。
+- AUT-003 的条件请求（ETag/304）已有真实公网 RSS 验收（2026-09-18，Run `run_b562e08e…`，item count 3），但该脚本只跑一次抓取，304 短路本身仍只有 fixture 证据。
+- 浏览器用例缺口已补：新增 [`e2e/browser/source-lifecycle-and-search-filters.spec.ts`](../../../e2e/browser/source-lifecycle-and-search-filters.spec.ts) 覆盖删除来源两段确认与 LIB-001 三个过滤维度；整套 **24 passed**。
+- 未运行（既有后置边界）：`test:property`、Node 进程 E2E、Windows Node smoke、Docker/Compose、组件实验室套件、AI HOT/Bilibili 真实来源。

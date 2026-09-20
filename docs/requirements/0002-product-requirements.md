@@ -29,6 +29,7 @@
 | [part-08-09.md](0002-product-requirements/part-08-09.md) | §8 主要产品界面、§9 关键用户场景与验收 | 5.9 KB |
 | [part-10-12.md](0002-product-requirements/part-10-12.md) | §10 非功能需求、§11 数据保留与所有权、§12 实施范围与阶段验收 | 9.6 KB |
 | [part-14-15.md](0002-product-requirements/part-14-15.md) | §14 原始需求追踪、§15 当前解释与勘误候选 | 12.8 KB |
+| [ERRATA.md](0002-product-requirements/ERRATA.md) | 分册勘误登记（追加型台账，2026-09-18 自主文档拆出） | 13.4 KB |
 
 ## 0. 文档职责
 
@@ -220,17 +221,4 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 
 ## 分册勘误登记
 
-分册封口后只读；对已封口分册的更正登记在此，不改写分册正文。
-
-| 日期 | 位置 | 更正 | 理由与决策 |
-| --- | --- | --- | --- |
-| 2026-09-15 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-021 的「阶段」列 | 由 `Phase 2` 更正为 `Phase 3` | ORG-021 要求 Entry → Story 的组织允许确定性算法、传统模型与 LLM 协同，并提出分类、聚类、实体、关系、重要性和紧急性建议；其落地依赖 Agent 调用边界、Agent 候选 Revision 与确认策略、第一版预算模型，而这三者都是 Phase 3 的交付物，§12「Phase 3：Agent Artifact 与 Workspace」的范围也已含 Knowledge Workflow。原表将 ORG-021 标为 `Phase 2`，与 §7.5 各切片注记一致记的「自动聚类与 Knowledge Workflow（ORG-021）后置」自相矛盾，并使 Phase 2 按需求表字面无法完成；该矛盾此前未暴露，是因为 Phase 2 的四条验收标准（§12）不要求自动聚类。维护者 2026-09-15 裁定改标 Phase 3；ORG-021 的需求文字、验收条件与既有切片注记均不改写。 |
-| 2026-09-15 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-014/020 的切片注记（2026-09-09）中「用户状态的显式迁移与撤销后置」 | 该项已实现，不再是后置项：见 ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md) 与下文 §13 待决定事项 10 的注记 | ADR-0012 的 Revisit Gate 首项被触发并已处理。ADR-0020 固定：只迁移以 Story 为 target 的用户状态、迁移是独立命令、撤销 = 同命令反向调用、作用域限定同一 split 家族、冲突按唯一键让目标侧优先；迁移是历史壳上唯一允许的写操作。分册正文与既有注记不改写。 |
-| 2026-09-16 | §7.4 的行 AUT-005、ING-013、LIB-005（[`part-07-1.md`](0002-product-requirements/part-07-1.md)）、§7.5 的行 REC-008（[`part-07-2.md`](0002-product-requirements/part-07-2.md)）、§7.6 的行 BRD-004（[`part-07-3.md`](0002-product-requirements/part-07-3.md)）的「阶段」列 | AUT-005、ING-013 由 `Phase 2` 更正为 `Phase 3`；LIB-005、REC-008、BRD-004 由 `Phase 2` 更正为 `Phase 4` | 与 ORG-021 同类问题：这五条的**验收条件本身**依赖后续阶段的交付物，把它们留在 `Phase 2` 会让 Phase 2 按需求表字面无法完成。AUT-005 的自定义 Trigger/Action 插件运行时需要扩展 SDK 与插件运行时（Task 23 已记为 Phase 3）；ING-013 的可配置 Entry → Story 知识处理依赖 Knowledge Workflow（Phase 3）；LIB-005 的「未读」条件依赖 Read State（REC-015，Phase 4）；REC-008 的相关内容推荐属推荐体系（Phase 4）；BRD-004 的「系统按 policy 推荐 Spotlight」由 REC-014（Phase 4）承载（v1 已交付的人工固定部分不受影响）。需求文字、验收条件与既有的切片排序注记均不改写。改标后 §7 中仍标 `Phase 2` 而未交付的是**真正属于 Phase 2 的尾巴**：AUT-004（webhook/内部事件等触发形态）、AUT-010（一个连接下的多采集计划）、BRD-006（Feed Block 的查询条件绑定）、BRD-007（多来源差异与用户操作）、LIB-004（正文片段字符级锚点）、LIB-008（导出）、ING-009（余项按 ADR-0015 Revisit Gate）；Phase 2 因此不再自相矛盾，而是明确留有开放项。维护者 2026-09-16 指令「改标」。 |
-| 2026-09-18 | 本表 2026-09-16 行里「BRD-006（Feed Block 的查询条件绑定）」属于未交付尾巴的表述 | BRD-006 由「未交付」改为「部分交付」：Feed Block 绑定 Saved View 已实现，缺的是验收条件里的「排序配置」 | 2026-09-18 复核发现该表述与实现证据冲突：ADR-0010 与架构 §5/§7 的看板 v1 注记都写「Feed Block 绑定 Saved View（BRD-006）在本片落地」；Task 14 的追加切片 `14ce892` 让阅读流区块按 `savedViewId` 独立取数并有浏览器 E2E；`apps/web/src/components/cosmos/board-view.tsx` 消费该绑定。BRD-006 的验收条件还要求「开发、硬件、娱乐等分区可以拥有不同来源与排序配置」，而 `SavedViewConditions`（`packages/contracts/src/user-organization.ts`）只有关键词/来源/时间/分类/Topic 条件、没有排序字段，所以按完整验收条件只能记为部分交付。维护者 2026-09-18 裁定改口径；需求文字、验收条件与既有切片注记均不改写。 |
-| 2026-09-18 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-003、ORG-004、ORG-022 的「阶段」列 | 三条的**自动半边**（自动识别、自动归并、成员候选/接受/拒绝）随 ORG-021 归 `Phase 3`；**人工半边**（手动 Entity 与关系、人工 merge/split/成员修正、证据关系）记为 Phase 2 已交付 | 与 ORG-021 同一理由（该行已于 2026-09-15 改标）：自动路径依赖 Knowledge Workflow、Agent 候选 Revision 与确认策略、第一版预算，三者都是 Phase 3 交付物；三条的需求文字与验收条件不改写。维护者 2026-09-18 采纳。 |
-| 2026-09-18 | [`part-07-3.md`](0002-product-requirements/part-07-3.md) §7.8 BRD-006 的「阶段」列 | 绑定 Saved View 记为 Phase 2 已交付；验收条件里的「排序配置」归 `Phase 4` | 绑定已随看板切片落地（ADR-0010、Task 14 的 `14ce892`，Web 按 `savedViewId` 独立取数并有浏览器 E2E）；`SavedViewConditions` 只有关键词/来源/时间/分类/Topic 条件、没有排序字段，而排序属 Phase 4 推荐体系（与 REC-008/REC-014 同批）。维护者 2026-09-18 裁定。 |
-| 2026-09-18 | [`part-07-3.md`](0002-product-requirements/part-07-3.md) §7.8 BRD-007 的「阶段」列 | 多来源、时间线、相关内容记为 Phase 2 已交付；「差异」对比与 Agent 产物归 `Phase 3` | 前两项已由 Task 15 交付并有浏览器 E2E；「差异」对比与 Agent 产物都落在深入页重做范围（[`ui-surface-ownership-v1`](../proposals/ui-surface-ownership-v1.md) 已 accepted、实现待重做），且 Agent 产物本身是 Phase 3 对象。维护者 2026-09-18 裁定。 |
-| 2026-09-18 | [`part-07-1.md`](0002-product-requirements/part-07-1.md) §7.3 ING-009 的「阶段」列 | 按来源的媒体策略（图片开关、单文件/单次预算、保留期、失败重试）记为 Phase 2 已交付；剩余五项逐项定归属：历史媒体回填**冻结（不做）**、音频/视频下载实体→`Phase 4`、单条目媒体数量上限→`Phase 3`、全局默认值 env 化→`Phase 3`、媒体类型配置维持 v1 的图片范围 | 前四项已由 ADR-0014/0015 与 Task 19/20 交付；历史回填与 ADR-0005「无历史回填」一致，冻结不改变既有合同；音视频实体属渠道广度（Phase 4）；数量上限与 env 化属媒体策略精细化（Phase 3）。维护者 2026-09-18 裁定。 |
-| 2026-09-18 | [`part-07-2.md`](0002-product-requirements/part-07-2.md) §7.5 ORG-015 的「阶段」列 | 判为 Phase 2 已满足；并注明 v1 由标签与看板承担 Topic 组织角色，Topic↔Topic 类型化关系后置 | 需求文字是「用带类型的 Relation、标签**或** Workspace/Board 组织」——三支取其一即可；验收条件只要求「不把展示层级误当成父子关系」，v1 不建层级已满足。维护者 2026-09-18 裁定按宽松读法。 |
-| 2026-09-18 | [`part-07-1.md`](0002-product-requirements/part-07-1.md) §7.3 ING-008 的验收条件 | 验收里的「断网后可查看已保存图片、**音频或视频**」按 ADR-0005 已冻结的媒体边界收窄为：图片下载为本地实体，音频/视频与其它类型只保存元数据与原文外链；ING-008 记为 Phase 1 已交付 | 验收文字写于媒体边界冻结之前；ADR-0005（[`media-boundary-v1`](../proposals/media-boundary-v1.md) accepted）已把 v1 定为「图片实体 + 音视频元数据」，音视频下载实体在 ING-009 的剩余项里改标 Phase 4。维护者 2026-09-18 在 Phase 1 收口计划里裁定走勘误而不实现音视频实体。需求文字与其它验收条件不改写。 |
+分册封口后只读；对已封口分册的更正登记在独立台账 [`ERRATA.md`](0002-product-requirements/ERRATA.md)（2026-09-18 从本文件拆出，只搬位置、不改写条目），不改写分册正文。新增勘误追加到该台账末尾。

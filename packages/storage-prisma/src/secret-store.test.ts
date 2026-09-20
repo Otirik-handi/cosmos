@@ -27,11 +27,24 @@ describe("FileSecretStore", () => {
         await expect(store.delete("secret-1")).resolves.toBe(false);
     });
 
+    it("accepts the product ref shape with a colon", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-secret-store-"));
+        roots.push(root);
+        const store = new FileSecretStore({ root: join(root, "secrets") });
+
+        // 产品侧写入的 ref 形态就是 `secret:<id>`；冒号是名字的一部分，不是路径分隔。
+        await store.put("secret:conn-1", "token-value");
+        await expect(store.read("secret:conn-1")).resolves.toBe("token-value");
+        await expect(store.delete("secret:conn-1")).resolves.toBe(true);
+    });
+
     it("rejects a secret ref that escapes the root", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-secret-store-"));
         roots.push(root);
         const store = new FileSecretStore({ root: join(root, "secrets") });
 
         await expect(store.put("../escape", "x")).rejects.toThrow(/escapes/);
+        await expect(store.put(join(root, "absolute"), "x")).rejects.toThrow(/escapes/);
+        await expect(store.put("", "x")).rejects.toThrow(/must not be empty/);
     });
 });

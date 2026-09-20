@@ -1,12 +1,14 @@
-import { createBuiltinManifestCatalog, type CatalogPort, type LoggerPort } from "@cosmos/application";
+import { createBuiltinManifestCatalog, type CatalogPort, type LoggerPort, type SecretStorePort } from "@cosmos/application";
 import { FileBlobStore } from "@cosmos/blob-store";
 import { PrismaClient } from "@prisma/client";
+import { FileSecretStore } from "../secret-store.js";
 import { type StorageRoots, createPrismaClient, resolveStorageRoots } from "../storage-root.js";
 
 export class PrismaCosmosRepositoryBase {
     readonly roots: StorageRoots;
     readonly prisma: PrismaClient;
     readonly blobs: FileBlobStore;
+    readonly secrets: SecretStorePort;
     protected readonly logger?: LoggerPort;
     protected readonly catalog: CatalogPort;
 
@@ -14,6 +16,7 @@ export class PrismaCosmosRepositoryBase {
         dataRoot?: string;
         prisma?: PrismaClient;
         blobs?: FileBlobStore;
+        secrets?: SecretStorePort;
         logger?: LoggerPort;
         catalog?: CatalogPort;
     } = {}) {
@@ -22,6 +25,7 @@ export class PrismaCosmosRepositoryBase {
         this.blobs = options.blobs ?? new FileBlobStore({
             root: this.roots.blobRoot,
         });
+        this.secrets = options.secrets ?? new FileSecretStore({ root: this.roots.secretRoot });
         this.logger = options.logger;
         this.catalog = options.catalog ?? createBuiltinManifestCatalog();
     }

@@ -223,7 +223,19 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         return this.toConnectionSnapshot(updated);
     }
 
+    /**
+     * 删除 Connection（AUT-001 的「删除凭据」）：来源回退 `connectionId: null`、连接行删除，
+     * 并在同一动作里删除 SecretStore 中该 `secretRef` 的密钥字节。
+     *
+     * 顺序是「先删行、后删密钥」：行删掉后这次删除就已经完成，密钥字节残留只是可清理的垃圾；
+     * 反过来先删密钥、行删失败会留下一个指向空密钥的活连接，反而更难发现。密钥删除失败只记
+     * warn、不让删除失败（重试删除是幂等的）。
+     */
     async deleteConnection(connectionId: string): Promise<boolean> {
+        const connection = await this.prisma.connectionInstance.findUnique({
+            where: { id: connectionId },
+            select: { secretRef: true },
+        });
         await this.prisma.$transaction(async (tx) => {
             await tx.sourceInstance.updateMany({
                 where: { connectionId },
@@ -231,6 +243,18 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
             });
             await tx.connectionInstance.delete({ where: { id: connectionId } });
         });
+        const secretRef = connection?.secretRef;
+        if (secretRef) {
+            try {
+                await this.secrets.delete(secretRef);
+            } catch (error) {
+                this.logger?.warn("connection.secret.delete_failed", {
+                    connectionId,
+                    secretRef,
+                    message: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
         return true;
     }
 

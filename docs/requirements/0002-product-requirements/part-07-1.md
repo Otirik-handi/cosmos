@@ -31,6 +31,8 @@ tokens_est: 6095
 
 `ActionDefinition` 是可复用能力的版本化合同，不是某一次执行任务。它声明输入/输出、能力范围、幂等、超时、取消和恢复语义；具体调用记录为 Workflow Activity，需要外部执行时由 Host 创建 Job，每次 Worker 执行形成带 lease 的 Attempt。Step 只在需要命名逻辑分组或 UI 投影时出现。
 
+**AUT-001 收口注记（2026-09-18）**：三项全部交付——「停用来源」与「删除历史数据」见 Task 32 切片 4（删除落成墓碑、保留历史）；「**删除凭据**」按维护者 2026-09-18 裁定补实现：删除 Connection 时连带删除 SecretStore 中的密钥字节（`PrismaCosmosRepository.deleteConnection`）。实现细节与同批修掉的 `FileSecretStore` 路径校验缺陷见勘误台账 [`ERRATA.md`](ERRATA.md)。
+
 当前产品把以下对象都视为同一 Runtime 下的 Workflow：
 
 - `Ingest Workflow`：把外部来源事实编排进入 Cosmos。
@@ -56,6 +58,8 @@ tokens_est: 6095
 | RUN-009 | 跨阶段 | Job 必须保存 priority、lane、budget、waiting reason、lease token、heartbeat 和 retry 状态。 | urgent、interactive、ingestion、analysis 和 maintenance 任务有可观察的调度与恢复边界，不因普通采集长期阻塞紧急研究或用户交互。 |
 | RUN-010 | Phase 1C | 远程 Worker 通过独立 Worker Gateway Session、HTTPS long-poll claim、Attempt heartbeat、Receipt 和幂等 Result API 执行任务。 | Gateway 先在 SQL TaskStore 原子 claim 再返回 Job；Session heartbeat 不代替 Attempt lease；旧 token、过期 Session 和迟到结果不能覆盖当前 owner；Gateway 不保存第二份 Job 终态。 |
 | RUN-011 | Phase 1C | Direct Worker 和 Gateway Worker 必须通过同一 TaskStore/Attempt/Receipt conformance 行为套件。 | 两种 Transport 使用同一 Job 状态机、retry policy、manifest/schema 校验、lease fencing、取消和 external-result-unknown 语义；Transport 差异不会产生两套 canonical logic。 |
+
+**Phase 1 收口排除注记（2026-09-18）**：RUN-010、RUN-011 与 OPS-010 被维护者排除在 Phase 1 收口之外，并改标 `Phase 3`（与插件运行时、Agent 执行位置同批）。因此本表 `Phase 1C` 行不再属于 Phase 1；改标理由见勘误台账 [`ERRATA.md`](ERRATA.md)。
 
 ### 7.3 信息采集与本地保存
 

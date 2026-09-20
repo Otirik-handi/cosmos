@@ -89,19 +89,27 @@ export class StaticCatalog implements CatalogPort {
     private readonly actionDefinitions: readonly ActionDefinitionManifest[];
     private readonly connectors: readonly ConnectorDescriptor[];
 
+    /**
+     * catalog 是进程级共享单例（API 的 `cosmosCatalog`、Worker 的 manifest evidence 都读它），
+     * 读接口按值返回：调用方拿到的是副本，改不动共享的 manifest、schema 与 capability。
+     */
+    private copySourceDefinition(item: SourceDefinitionManifest): SourceDefinitionManifest {
+        return {
+            ...item,
+            operationIds: [...item.operationIds],
+            capabilities: [...item.capabilities],
+            operations: item.operations.map((operation) => ({ ...operation })),
+            auth: { ...item.auth },
+        };
+    }
+
     constructor(input: {
         sourceDefinitions: readonly SourceDefinitionManifest[];
         workflowDefinitions: readonly WorkflowDefinitionManifest[];
         actionDefinitions: readonly ActionDefinitionManifest[];
         connectors: readonly ConnectorDescriptor[];
     }) {
-        this.sourceDefinitions = input.sourceDefinitions.map((item) => ({
-            ...item,
-            operationIds: [...item.operationIds],
-            capabilities: [...item.capabilities],
-            operations: item.operations.map((operation) => ({ ...operation })),
-            auth: { ...item.auth },
-        }));
+        this.sourceDefinitions = input.sourceDefinitions.map((item) => this.copySourceDefinition(item));
         this.workflowDefinitions = input.workflowDefinitions.map((item) => ({
             ...item,
             requiredActionRefs: [...item.requiredActionRefs],
@@ -117,35 +125,51 @@ export class StaticCatalog implements CatalogPort {
     }
 
     listSourceDefinitions(): readonly SourceDefinitionManifest[] {
-        return this.sourceDefinitions;
+        return this.sourceDefinitions.map((item) => this.copySourceDefinition(item));
     }
 
     getSourceDefinition(id: string, version?: number): SourceDefinitionManifest | null {
-        return this.sourceDefinitions.find((item) => item.id === id && (version === undefined || item.version === version)) ?? null;
+        const found = this.sourceDefinitions.find(
+            (item) => item.id === id && (version === undefined || item.version === version),
+        );
+        return found ? this.copySourceDefinition(found) : null;
     }
 
     getSourceDefinitionByRef(ref: string): SourceDefinitionManifest | null {
-        return this.sourceDefinitions.find((item) => item.ref === ref) ?? null;
+        const found = this.sourceDefinitions.find((item) => item.ref === ref);
+        return found ? this.copySourceDefinition(found) : null;
     }
 
     listWorkflowDefinitions(): readonly WorkflowDefinitionManifest[] {
-        return this.workflowDefinitions;
+        return this.workflowDefinitions.map((item) => ({
+            ...item,
+            requiredActionRefs: [...item.requiredActionRefs],
+        }));
     }
 
     getWorkflowDefinition(id: string, version: number): WorkflowDefinitionManifest | null {
-        return this.workflowDefinitions.find((item) => item.id === id && item.version === version) ?? null;
+        const found = this.workflowDefinitions.find(
+            (item) => item.id === id && item.version === version,
+        );
+        return found ? { ...found, requiredActionRefs: [...found.requiredActionRefs] } : null;
     }
 
     listActionDefinitions(): readonly ActionDefinitionManifest[] {
-        return this.actionDefinitions;
+        return this.actionDefinitions.map((item) => ({
+            ...item,
+            requiredCapabilities: [...item.requiredCapabilities],
+        }));
     }
 
     getActionDefinition(id: string, version: number): ActionDefinitionManifest | null {
-        return this.actionDefinitions.find((item) => item.id === id && item.version === version) ?? null;
+        const found = this.actionDefinitions.find(
+            (item) => item.id === id && item.version === version,
+        );
+        return found ? { ...found, requiredCapabilities: [...found.requiredCapabilities] } : null;
     }
 
     listConnectors(): readonly ConnectorDescriptor[] {
-        return this.connectors;
+        return this.connectors.map((item) => ({ ...item, capabilities: [...item.capabilities] }));
     }
 }
 
