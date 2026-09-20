@@ -1,11 +1,17 @@
 /** Connector 端口、租约、错误码与解析器。 */
 
 import type {
+    JsonValue,
+} from "@notnotype/nb-workflow";
+import type {
     SourceSnapshot,
 } from "@cosmos/contracts";
 import type {
     NormalizedIngestItem,
 } from "@cosmos/domain";
+import type {
+    ConnectorStateEntry,
+} from "./connector-state-store.js";
 
 export interface JobLease {
     jobId: string;
@@ -31,10 +37,22 @@ export interface IngestConnector {
         cursor: string | null;
         idempotencyKey?: string;
         signal?: AbortSignal;
+        /**
+         * 已按来源命名空间限定的非秘密状态句柄（ADR-0017/0018）。命名空间、版本与并发由宿主
+         * 决定，连接器只看到 get/put；宿主没有接状态存储时（legacy 采集路径）为 undefined，
+         * 连接器必须退化成无状态抓取，不能假定它一定存在。
+         */
+        state?: ConnectorStateHandle;
     }): Promise<{
         items: readonly NormalizedIngestItem[];
         nextCursor: string | null;
     }>;
+}
+
+/** 命名空间已固定、只剩键的连接器状态视图。 */
+export interface ConnectorStateHandle {
+    get(key: string): Promise<ConnectorStateEntry | null>;
+    put(key: string, value: JsonValue, expectedVersion: number | null): Promise<{ version: number }>;
 }
 
 export type ConnectorErrorCode =

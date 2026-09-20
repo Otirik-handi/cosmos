@@ -50,11 +50,15 @@ fetchItems(input: {
   cursor: string | null;
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /** 命名空间已固定的非秘密状态句柄（ADR-0017/0018）；宿主没接状态存储时为 undefined。 */
+  state?: ConnectorStateHandle;
 }): Promise<{
   items: readonly NormalizedIngestItem[];
   nextCursor: string | null;
 }>;
 ```
+
+`ConnectorStateHandle` 只暴露 `get(key)`/`put(key, value, expectedVersion)`——命名空间由宿主按 manifest 的 `stateStoreNamespace` 解析（`{id}` 替换为来源 id，声明为 null 就不给句柄），连接器不接触命名空间与并发控制。Ingest Workflow 的 `source.fetch@1` 通过 `IngestActionOptions.connectorState` 注入它；legacy 采集路径不注入，连接器必须退化成无状态抓取。
 
 `validate` 接收 Source 对象本身，绝不是 `{ source }` 包装对象；只有 `fetchItems` 使用对象参数。`validate` 不返回连接器结果，验证失败通过抛出异常表示。
 

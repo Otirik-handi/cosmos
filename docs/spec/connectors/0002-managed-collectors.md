@@ -206,6 +206,7 @@ AI HOT 不允许通过 config 指定 endpoint、header 或认证信息。固定 
 | content URL | `url`、`link`、`web_url`；否则由 BV ID 推导 `https://www.bilibili.com/video/BV...` |
 | published time | `published_at`、`publishedAt`、`pubdate`、`time`，按 `Asia/Shanghai` 解释 |
 | kind | `hot` 模式为 `listing`；`feed` 模式为 `video` |
+| discoveryChannel | `hot` 模式为 `recommendation`；`feed` 模式为 `account`（ING-004：同一个 manifest 下的两种发现方式由连接器按 mode 声明） |
 | raw payload | `JSON.stringify(row)` |
 | raw MIME | `application/json` |
 
@@ -240,6 +241,7 @@ source locator 包含 provider `bilibili`、mode、从 `1` 开始的 rank 和 ex
 | content | `content`、`text`、`summary`、`title` |
 | content URL | `links.original`、`links.url`、`item.url`；否则 `links.aihot` |
 | kind | `article` |
+| discoveryChannel | `recommendation`（AI HOT 是公开聚合推荐流，ING-004） |
 | published time | `publishedAt`、`published_at`、`discoveredAt`，按 UTC 解释 |
 | raw payload | `JSON.stringify(item)` |
 | raw MIME | `application/json` |

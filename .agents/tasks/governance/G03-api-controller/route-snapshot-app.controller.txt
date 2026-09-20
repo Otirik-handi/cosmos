@@ -14,6 +14,7 @@ GET       /sources/:sourceId                           source
 POST      /sources                                     createSource
 PATCH     /sources/:sourceId                           updateSource
 POST      /sources/:sourceId/activation-commands       activateSource
+POST      /sources/:sourceId/removals                  deleteSource
 POST      /sources/:sourceId/test                      testSource
 POST      /source-config-probes                        createSourceConfigProbe
 GET       /source-config-probes/:jobId                 sourceConfigProbe
@@ -29,6 +30,7 @@ POST      /backups/:backupId/restores                  restoreBackup
 POST      /sources/:sourceId/runs                      runSource
 GET       /runs                                        listRuns
 GET       /runs/:runId                                 run
+GET       /runs/:runId/jobs                            runJobs
 GET       /workflow-runs/:runId                        workflowRun
 POST      /runs/:runId/cancellations                   cancelRun
 POST      /runs/:runId/recoveries                      recoverRun

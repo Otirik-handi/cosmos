@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
+    contentKindSchema,
     sourceKindSchema,
 } from "./base.js";
 import {
+    assetStatusSchema,
     publicAssetSnapshotSchema,
 } from "./source.js";
 
@@ -14,6 +16,12 @@ export const searchQuerySchema = z.object({
     // User-organization filters (ADR-0009 decision 5): comma-separated ids.
     labelIds: z.string().optional(),
     topicIds: z.string().optional(),
+    // LIB-001 的三个过滤维度：作者按发布者 name/handle 子串匹配，媒体类型取内容形态，
+    // 录入状态取该 Entry 当前 Revision 的本地媒体状态。「未读」是 Read State（LIB-005，
+    // Phase 4），不在这里表达。
+    author: z.string().trim().max(200).optional(),
+    contentKind: contentKindSchema.optional(),
+    assetStatus: assetStatusSchema.optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
 });

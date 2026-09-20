@@ -20,13 +20,39 @@ import {
 import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import { createLogger } from "@cosmos/logging";
 import { createBuiltInConnectorRegistry } from "@cosmos/plugin-collectors";
-import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
+import { PrismaConnectorStateStore, PrismaCosmosRepository } from "@cosmos/storage-prisma";
 import { createWorkerAdminServer, type ComponentHealth, type WorkerAdminServer } from "@cosmos/worker-admin";
+import type { ConnectorStateHandle, ConnectorStateStorePort } from "@cosmos/application";
+import type { CatalogPort } from "@cosmos/application/catalog";
+import type { SourceSnapshot } from "@cosmos/contracts";
 import { parseWorkerRuntimeConfig } from "./config.js";
 import { WorkerRuntime } from "./runtime.js";
 import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
 import { createScheduleQueue } from "./scheduling.js";
 import { createWorkflowHost } from "./workflow-host.js";
+
+/**
+ * 把来源解析成连接器状态句柄：命名空间取自 manifest 的 `stateStoreNamespace`
+ * （ADR-0018，声明为 null 就不给句柄，连接器退化成无状态抓取），`{id}` 换成来源 id。
+ */
+function resolveConnectorStateHandle(
+    store: ConnectorStateStorePort,
+    catalog: CatalogPort,
+    source: SourceSnapshot,
+): ConnectorStateHandle | undefined {
+    const definition = catalog.getSourceDefinitionByRef(source.sourceDefinitionRef);
+    const namespace = definition?.operations
+        .find((operation) => operation.operationId === source.operationId)
+        ?.stateStoreNamespace;
+    if (!namespace) {
+        return undefined;
+    }
+    const resolved = namespace.replaceAll("{id}", source.id);
+    return {
+        get: (key) => store.getState(resolved, key),
+        put: (key, value, expectedVersion) => store.putState(resolved, key, value, expectedVersion),
+    };
+}
 
 async function bootstrap(): Promise<void> {
     // Parse all untrusted numeric configuration before constructing any
@@ -51,6 +77,7 @@ async function bootstrap(): Promise<void> {
         logger,
         fetch: createProxyFetch(),
     });
+    const connectorStateStore = new PrismaConnectorStateStore(repository.prisma);
     const mediaAcquirer = createMediaAcquirer({
         fetch: createProxyFetch(),
         allowedHosts: parseAllowedHosts(process.env.COSMOS_MEDIA_ALLOWED_HOSTS),
@@ -106,6 +133,8 @@ async function bootstrap(): Promise<void> {
                         mediaAcquirer,
                         mediaRetrier: mediaAcquirer,
                         retryCandidates: repository,
+                        connectorState: (source) =>
+                            resolveConnectorStateHandle(connectorStateStore, catalog, source),
                         logger,
                     }),
                     ...createMediaCleanupActions({ domain: repository, logger }),

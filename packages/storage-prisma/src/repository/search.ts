@@ -23,6 +23,17 @@ function toFtsMatchQuery(text: string): string | null {
     return phrases.length > 0 ? phrases.join(" ") : null;
 }
 
+/**
+ * 作者是子串匹配，所以必须转义 LIKE 的通配符：用户输入的 `%` / `_` 要当字面字符，
+ * 否则 `a_b` 会意外匹配 `axb`。
+ */
+function escapeLikePattern(value: string): string {
+    return value
+        .replaceAll("\\", "\\\\")
+        .replaceAll("%", "\\%")
+        .replaceAll("_", "\\_");
+}
+
 export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
     async search(input: SearchQuery): Promise<SearchPage> {
         const parsed = {
@@ -38,6 +49,9 @@ export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
             limit: Number(input.limit ?? 20),
             labelIds: parseIdList(input.labelIds),
             topicIds: parseIdList(input.topicIds),
+            author: input.author?.trim() ?? "",
+            contentKind: input.contentKind,
+            assetStatus: input.assetStatus,
         };
         if (
             (parsed.publishedAfter && Number.isNaN(parsed.publishedAfter.getTime()))
@@ -79,6 +93,26 @@ export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
                 `EXISTS (SELECT 1 FROM TopicMembership tm JOIN TopicMembershipRevision tmr ON tmr.id = tm.currentRevisionId WHERE tm.storyId = e.storyId AND tmr.tombstone = 0 AND tm.topicId IN (${parsed.topicIds.map(() => "?").join(", ")}))`,
             );
             parameters.push(...parsed.topicIds);
+        }
+        // LIB-001：作者匹配发布者的 name 或 handle；没有发布者的条目在 SQL 里是 NULL，
+        // 不会命中任何作者条件。
+        if (parsed.author) {
+            const pattern = `%${escapeLikePattern(parsed.author)}%`;
+            conditions.push(
+                "(json_extract(r.publisherJson, '$.name') LIKE ? ESCAPE '\\' OR json_extract(r.publisherJson, '$.handle') LIKE ? ESCAPE '\\')",
+            );
+            parameters.push(pattern, pattern);
+        }
+        if (parsed.contentKind) {
+            conditions.push("r.contentKind = ?");
+            parameters.push(parsed.contentKind);
+        }
+        // 录入状态取当前 Revision 的媒体状态：任一资产处于该状态即命中。
+        if (parsed.assetStatus) {
+            conditions.push(
+                "EXISTS (SELECT 1 FROM Asset a WHERE a.entryRevisionId = r.id AND a.status = ?)",
+            );
+            parameters.push(parsed.assetStatus);
         }
         const fromClause = hasText
             ? "FROM entry_search JOIN Entry e ON e.id = entry_search.entry_id"

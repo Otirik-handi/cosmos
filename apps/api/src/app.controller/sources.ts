@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { createHealthSnapshot, WorkflowHostConflictError } from "@cosmos/application";
 import {
     createSourceCommandSchema,
+    deleteSourceCommandSchema,
     sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
     updateSourceCommandSchema,
@@ -185,6 +186,28 @@ export class AppControllerSources extends AppControllerBase {
                 ...command,
                 sourceId,
                 idempotencyKey: key,
+            }));
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    /**
+     * 删除来源（AUT-001）。墓碑语义：来源从列表/读取/调度中消失，已录入的
+     * Entry/Observation/Revision 保留。命令天然幂等，重复调用返回同一份结果。
+     */
+    @Post("sources/:sourceId/removals")
+    @Bind(Param("sourceId"), Body(), Headers("idempotency-key"))
+    async deleteSource(sourceId: string, body: unknown, idempotencyKey?: string) {
+        try {
+            const key = requireIdempotencyKey(idempotencyKey);
+            const command = deleteSourceCommandSchema.parse(body);
+            return toPublicSource(await this.repository.deleteSource({
+                sourceId,
+                baseRevisionId: command.baseRevisionId,
+                idempotencyKey: key,
+                actor: command.actor ?? null,
+                reason: command.reason ?? null,
             }));
         } catch (error) {
             sourceCommandError(error);

@@ -1,4 +1,4 @@
-import { Play, Power, PowerOff, SlidersHorizontal } from "lucide-react";
+import { Play, Power, PowerOff, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -20,12 +20,15 @@ import {
 type SourceActionsProps = {
     onRun: (source: SourceSnapshot) => Promise<void>;
     onToggleActivation: (source: SourceSnapshot, enabled: boolean) => Promise<void>;
+    /** 删除来源（AUT-001）：墓碑语义，已录入历史保留；入口自己做两段确认。 */
+    onDelete?: (source: SourceSnapshot) => Promise<void>;
     /** 保存来源级媒体策略（ADR-0014）：只影响之后入队的采集。 */
     onSaveMediaPolicy: (source: SourceSnapshot, policy: SourceMediaPolicy) => Promise<void>;
     /** 保留期清理：预览（dryRun）与确认执行（ADR-0015 决策 7）。 */
     onPreviewMediaCleanup?: () => Promise<MediaCleanupReport>;
     onConfirmMediaCleanup?: () => Promise<MediaCleanupReport>;
     activatingSourceId?: string | null;
+    deletingSourceId?: string | null;
     runningSourceId?: string | null;
     sources: readonly SourceSnapshot[];
 };
@@ -76,14 +79,18 @@ function formatInterval(intervalMs: number): string {
 export function SourceActions({
     onRun,
     onToggleActivation,
+    onDelete,
     onSaveMediaPolicy,
     onPreviewMediaCleanup,
     onConfirmMediaCleanup,
     activatingSourceId = null,
+    deletingSourceId = null,
     runningSourceId = null,
     sources,
 }: SourceActionsProps) {
     const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+    // 删除是两段确认：第一次点击把该行切到确认态，第二次才发命令。
+    const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
     const [policyForm, setPolicyForm] = useState<MediaPolicyFormValues>({
         images: "download",
         maxFileMb: "",
@@ -163,6 +170,8 @@ export function SourceActions({
                     {sources.map((source) => {
                         const running = runningSourceId === source.id;
                         const activating = activatingSourceId === source.id;
+                        const deleting = deletingSourceId === source.id;
+                        const confirmingDelete = confirmingDeleteId === source.id;
                         const editingPolicy = editingPolicyId === source.id;
                         return (
                             <li
@@ -238,8 +247,40 @@ export function SourceActions({
                                             <SlidersHorizontal aria-hidden={true} />
                                             <span className="sr-only">媒体策略 {source.name}</span>
                                         </Button>
+                                        {onDelete && (
+                                            <Button
+                                                size="icon-sm"
+                                                variant={confirmingDelete ? "destructive" : "outline"}
+                                                disabled={deleting || running || activating}
+                                                aria-label={confirmingDelete
+                                                    ? `确认删除 ${source.name}`
+                                                    : `删除 ${source.name}`}
+                                                onClick={() => {
+                                                    if (!confirmingDelete) {
+                                                        setConfirmingDeleteId(source.id);
+                                                        return;
+                                                    }
+                                                    setConfirmingDeleteId(null);
+                                                    void onDelete(source);
+                                                }}
+                                            >
+                                                <Trash2 aria-hidden={true} />
+                                                <span className="sr-only">
+                                                    {confirmingDelete ? `确认删除 ${source.name}` : `删除 ${source.name}`}
+                                                </span>
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
+                                {confirmingDelete && (
+                                    <p
+                                        role="status"
+                                        className="rounded-[var(--radius-control)] border border-dashed px-3 py-2 text-xs leading-5 text-muted-foreground"
+                                    >
+                                        删除来源只移除配置与定时：已录入的条目、来源历史与媒体都保留。
+                                        再次点击该按钮确认删除，或点其它地方取消。
+                                    </p>
+                                )}
                                 {editingPolicy && (
                                     <form
                                         aria-label={`媒体策略 ${source.name}`}

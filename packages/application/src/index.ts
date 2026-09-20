@@ -81,7 +81,7 @@ export {
 } from "./repository-port.js";
 export {
     ConnectorExecutionError, type JobLease, type IngestConnector, type ConnectorErrorCode,
-    type ConnectorResolver,
+    type ConnectorResolver, type ConnectorStateHandle,
 } from "./connector-ports.js";
 export {
     ConnectorRegistry,

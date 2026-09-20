@@ -17,6 +17,10 @@ model SourceInstance {
     enabled             Boolean                 @default(false)
     revision            Int                     @default(1)
     connectionId        String?
+    // 墓碑（AUT-001）：删除来源只删配置与调度绑定，已录入的 Entry/Observation 必须保留，
+    // 而 Entry.sourceInstanceId 是必填级联外键——硬删会带走全部历史，所以来源行留下、
+    // 从产品面消失（列表/读取/调度都过滤 deletedAt）。
+    deletedAt           DateTime?
     createdAt           DateTime                @default(now())
     updatedAt           DateTime                @updatedAt
     observations        Observation[]

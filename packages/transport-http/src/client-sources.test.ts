@@ -6,6 +6,51 @@ import {
 } from "./index.js";
 
 describe("HttpCosmosClient 来源与运行", () => {
+    it("posts a source removal with the base revision and the idempotency key", async () => {
+        const requests: Array<{ url: string; init?: RequestInit }> = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                return new Response(JSON.stringify({
+                    id: "source-1",
+                    name: "RSS",
+                    sourceDefinitionRef: "source.rss@1",
+                    operationId: "fetch",
+                    connectorId: "rss",
+                    kind: "rss",
+                    config: { feedUrl: "https://example.test/feed.xml" },
+                    enabled: false,
+                    revisionId: "source-1:3",
+                    createdAt: "2026-08-24T00:00:00.000Z",
+                    updatedAt: "2026-08-24T00:00:02.000Z",
+                    lastRunAt: null,
+                    lastError: null,
+                }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        await client.deleteSource("source-1", {
+            baseRevisionId: "source-1:2",
+            actor: "user",
+            reason: "不再关注",
+        }, "removal-1");
+
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/sources/source-1/removals");
+        expect(requests[0]?.init).toMatchObject({
+            method: "POST",
+            headers: expect.objectContaining({ "idempotency-key": "removal-1" }),
+            body: JSON.stringify({
+                baseRevisionId: "source-1:2",
+                actor: "user",
+                reason: "不再关注",
+            }),
+        });
+    });
+
     it("posts source activation commands with the idempotency key", async () => {
         const requests: Array<{ url: string; init?: RequestInit }> = [];
         const client = new HttpCosmosClient({

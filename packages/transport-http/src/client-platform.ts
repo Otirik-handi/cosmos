@@ -1,6 +1,7 @@
 import {
     connectorDescriptorSchema,
     healthResponseSchema,
+    jobListSchema,
     jobSnapshotSchema,
     runSnapshotSchema,
     sourceDefinitionPageSchema,
@@ -86,5 +87,13 @@ export class PlatformClient extends HttpCosmosClientBase {
         return this.request(`/api/v1/jobs/${encodeURIComponent(jobId)}`, {
             schema: jobSnapshotSchema,
         });
+    }
+
+    /** 某个 Run 的 Job 列表（OPS-002）：产品面据此展示状态、重试次数与错误。 */
+    async listRunJobs(runId: string): Promise<readonly JobSnapshot[]> {
+        const page = await this.request(`/api/v1/runs/${encodeURIComponent(runId)}/jobs`, {
+            schema: jobListSchema,
+        });
+        return page.items;
     }
 }

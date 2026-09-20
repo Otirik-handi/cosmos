@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ComponentProps } from "react";
 
-import type { RunControlResult, RunSnapshot } from "@cosmos/contracts";
+import type { JobSnapshot, RunControlResult, RunSnapshot } from "@cosmos/contracts";
 import type { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,15 @@ const statusLabel: Record<RunSnapshot["status"], string> = {
     running: "运行中",
     succeeded: "成功",
     failed: "失败",
+    cancelled: "已取消",
+};
+
+const jobStatusLabel: Record<JobSnapshot["status"], string> = {
+    queued: "排队中",
+    leased: "执行中",
+    retry_wait: "等待重试",
+    succeeded: "成功",
+    failed_terminal: "失败",
     cancelled: "已取消",
 };
 
@@ -55,6 +64,10 @@ export function RunHistory({ client, refreshToken = 0 }: RunHistoryProps) {
     const [busy, setBusy] = useState(false);
     const [lastResult, setLastResult] = useState<RunControlResult | null>(null);
     const [controlError, setControlError] = useState<string | null>(null);
+    // 选中 Run 的 Job（OPS-002）：状态、重试次数与错误。Run 投影里没有 job 引用，
+    // 所以这里按选中项单独取一次；结果带上 runId，渲染时比对，避免切换选中后旧响应覆盖。
+    const [jobs, setJobs] = useState<{ runId: string; items: readonly JobSnapshot[] } | null>(null);
+    const [jobsError, setJobsError] = useState<string | null>(null);
 
     const load = (): void => {
         client.listRuns({ limit: 20 })
@@ -126,6 +139,13 @@ export function RunHistory({ client, refreshToken = 0 }: RunHistoryProps) {
                                 setSelectedId(run.id);
                                 setLastResult(null);
                                 setControlError(null);
+                                setJobs(null);
+                                setJobsError(null);
+                                client.listRunJobs(run.id)
+                                    .then((list) => setJobs({ runId: run.id, items: list }))
+                                    .catch((caught: unknown) => {
+                                        setJobsError(caught instanceof Error ? caught.message : "任务列表读取失败。");
+                                    });
                             }}
                             className="flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
                         >
@@ -159,6 +179,41 @@ export function RunHistory({ client, refreshToken = 0 }: RunHistoryProps) {
                             </>
                         ) : null}
                     </dl>
+                    {/* OPS-002：Run 之下的 Job（状态、重试次数、错误）。Attempt 明细仍只在 API。 */}
+                    <div className="flex flex-col gap-1" data-run-jobs={selected.id}>
+                        <span className="text-xs font-medium text-muted-foreground">任务</span>
+                        {jobsError ? (
+                            <p role="alert" className="text-xs text-destructive">{jobsError}</p>
+                        ) : jobs && jobs.runId === selected.id ? (
+                            jobs.items.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">这个 Run 没有登记任务。</p>
+                            ) : (
+                                <ul className="flex flex-col gap-1">
+                                    {jobs.items.map((job) => (
+                                        <li
+                                            key={job.id}
+                                            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-sm border bg-card px-2 py-1 text-xs"
+                                        >
+                                            <Badge variant={job.status === "failed_terminal" ? "destructive" : "secondary"}>
+                                                {jobStatusLabel[job.status]}
+                                            </Badge>
+                                            <span className="text-muted-foreground">{job.kind}</span>
+                                            <span className="text-muted-foreground">
+                                                重试 {job.attempts}/{job.maxAttempts}
+                                            </span>
+                                            {(job.errorCode || job.error) && (
+                                                <span className="min-w-0 truncate text-destructive">
+                                                    {job.errorCode ?? job.error}
+                                                </span>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )
+                        ) : (
+                            <p className="text-xs text-muted-foreground">读取任务…</p>
+                        )}
+                    </div>
                     <RunControl
                         run={selected}
                         busy={busy}

@@ -56,6 +56,14 @@ export interface CosmosRepository {
         sourceId: string;
         idempotencyKey: string;
     }): Promise<SourceSnapshot>;
+    /** 删除来源 = 墓碑 + 移除调度绑定；已录入历史保留（AUT-001）。 */
+    deleteSource(input: {
+        sourceId: string;
+        baseRevisionId: string;
+        idempotencyKey: string;
+        actor: string | null;
+        reason: string | null;
+    }): Promise<SourceSnapshot>;
     createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance>;
     listConnections(): Promise<readonly ConnectionInstance[]>;
     getConnection(connectionId: string): Promise<ConnectionInstance | null>;
@@ -95,6 +103,8 @@ export interface CosmosRepository {
     startRun(runId: string, lease?: JobLease): Promise<RunSnapshot>;
     getRun(runId: string): Promise<RunSnapshot | null>;
     getJob(jobId: string): Promise<JobSnapshot | null>;
+    /** 某个 Run 的 Job（OPS-002）；`runId` 兼容 legacy Run 与 durable WorkflowRun。 */
+    listRunJobs(runId: string): Promise<readonly JobSnapshot[]>;
     listWorkflowAttempts(jobId: string): Promise<readonly WorkflowAttemptSnapshot[]>;
     getWorkflowAttempt(attemptId: string): Promise<WorkflowAttemptSnapshot | null>;
     getCheckpoint(sourceId: string): Promise<string | null>;

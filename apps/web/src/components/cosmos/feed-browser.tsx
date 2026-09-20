@@ -3,7 +3,8 @@ import type { FormEventHandler, ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
-import type { FeedItem, LabelRef, SearchQuery, SourceSnapshot, TopicSummary } from "@cosmos/contracts";
+import type { AssetStatus, ContentKind, FeedItem, LabelRef, SearchQuery, SourceSnapshot, TopicSummary } from "@cosmos/contracts";
+import { assetStatusSchema, contentKindSchema } from "@cosmos/contracts";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,30 @@ export const searchSchema = z.object({
     /** 分类（Label）与 Topic 是多选筛选，条件本身存 id 数组，提交时再拼成 search 的逗号串。 */
     labelIds: z.array(z.string()).default([]),
     topicIds: z.array(z.string()).default([]),
+    /** LIB-001 的三个维度：作者、媒体类型（内容形态）、录入状态（本地媒体保存状态）。 */
+    author: z.string().trim().max(200).default(""),
+    contentKind: contentKindSchema.or(z.literal("")).default(""),
+    assetStatus: assetStatusSchema.or(z.literal("")).default(""),
 });
+
+/** 媒体类型用内容形态表达（ING-017 的 `ContentKind`）。 */
+const CONTENT_KIND_LABELS: Record<ContentKind, string> = {
+    post: "帖子",
+    article: "文章",
+    video: "视频",
+    audio: "音频",
+    image: "图片",
+    comment: "评论",
+    listing: "列表",
+};
+
+/** 录入状态 = 该条目当前 Revision 的本地媒体保存状态，与资产四态一致。 */
+const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
+    saved: "已保存",
+    metadata_only: "仅元数据",
+    skipped: "未保存",
+    failed: "保存失败",
+};
 
 export type SearchFormValues = z.input<typeof searchSchema>;
 
@@ -147,6 +171,15 @@ function activeFilterLabels(
         const topic = topics.find((candidate) => candidate.id === topicId);
         chips.push(`Topic：${topic ? topic.title : topicId}`);
     }
+    if (activeSearch.author) {
+        chips.push(`作者：${activeSearch.author}`);
+    }
+    if (activeSearch.contentKind) {
+        chips.push(`媒体类型：${CONTENT_KIND_LABELS[activeSearch.contentKind]}`);
+    }
+    if (activeSearch.assetStatus) {
+        chips.push(`录入状态：${ASSET_STATUS_LABELS[activeSearch.assetStatus]}`);
+    }
     return chips;
 }
 
@@ -226,6 +259,36 @@ export function FeedBrowser({
                         type="date"
                         {...searchForm.register("publishedBefore")}
                     />
+                    <Input
+                        aria-label="搜索作者"
+                        placeholder="作者或账号"
+                        className="lg:max-w-[10rem]"
+                        {...searchForm.register("author")}
+                    />
+                    <select
+                        aria-label="媒体类型"
+                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                        {...searchForm.register("contentKind")}
+                    >
+                        <option value="">全部媒体类型</option>
+                        {Object.entries(CONTENT_KIND_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        aria-label="录入状态"
+                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+                        {...searchForm.register("assetStatus")}
+                    >
+                        <option value="">全部录入状态</option>
+                        {Object.entries(ASSET_STATUS_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
                     <Button type="submit" variant="outline">
                         <Search data-icon="inline-start" />
                         搜索

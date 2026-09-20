@@ -13,6 +13,23 @@ export const contentKindSchema = z.enum([
 ]);
 export type ContentKind = z.infer<typeof contentKindSchema>;
 
+/**
+ * 发现渠道（ING-004）的 wire 形状。语义 owner 是 `@cosmos/domain` 的 `discoveryChannels`
+ * （由连接器在域层声明），这里只负责跨 HTTP / Workflow JSON 边界的取值校验。
+ */
+export const discoveryChannelSchema = z.enum([
+    "account",
+    "recommendation",
+    "search",
+    "announcement",
+    "email",
+    "manual",
+    "related",
+    "agent",
+    "unknown",
+]);
+export type DiscoveryChannel = z.infer<typeof discoveryChannelSchema>;
+
 export const publisherKindSchema = z.enum([
     "user",
     "channel",
@@ -299,6 +316,17 @@ export const sourceActivationCommandSchema = z.object({
     baseRevisionId: sourceRevisionIdSchema,
 }).strict();
 export type SourceActivationCommand = z.infer<typeof sourceActivationCommandSchema>;
+
+/**
+ * 删除来源（AUT-001）。删除只移除来源配置与调度绑定：已录入的 Entry/Observation/Revision
+ * 保留（需求验收把「删除凭据、停用来源、删除历史数据」定为三个独立动作）。
+ */
+export const deleteSourceCommandSchema = z.object({
+    baseRevisionId: sourceRevisionIdSchema,
+    actor: z.string().trim().min(1).max(100).nullish(),
+    reason: z.string().trim().min(1).max(1000).nullish(),
+}).strict();
+export type DeleteSourceCommand = z.infer<typeof deleteSourceCommandSchema>;
 
 export const sourceProbeResultSchema = z.object({
     sourceId: z.string(),

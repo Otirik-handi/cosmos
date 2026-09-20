@@ -137,6 +137,7 @@ the current code has not removed it or replaced it with a permanent redirect.
 | `POST /sources` | JSON body `CreateSourceCommand`（strict，无 `enabled`） | HTTP 201，创建默认停用的 Source（`revisionId` 从 `<id>:1` 起）并返回投影。先按 Zod 合同解析，再确认 ref 对应 enabled manifest 与 operationId，最后按 canonical 配置 schema 校验 `config` 后写库。 |
 | `PATCH /sources/:sourceId` | JSON body `UpdateSourceCommand`：必填 `baseRevisionId`，可选 `name` 与完整替换的 `config` | HTTP 200，CAS 更新后返回投影；不存在 404；body 不合法或配置校验失败 400；revision 过期 409。`config` 存在时先经 canonical schema 校验。 |
 | `POST /sources/:sourceId/activation-commands` | 必需非空且 ≤300 字符的 `Idempotency-Key` header；body `SourceActivationCommand` | HTTP 201 返回更新后投影。启用前按 canonical schema 校验已保存配置；同 key 同请求重放返回首次记录的结果快照；同 key 不同请求或过期 `baseRevisionId` 409；no-op 不递增 revision。 |
+| `POST /sources/:sourceId/removals` | 必需非空且 ≤300 字符的 `Idempotency-Key` header；body `DeleteSourceCommand`：必填 `baseRevisionId`，可选 `actor`/`reason` | HTTP 200 返回删除后的投影（**墓碑**语义，AUT-001）：来源从列表/读取/调度中消失，已录入的 Entry/Observation/Revision 与媒体全部保留；删除移除调度绑定并写 `source.deleted.v1` 审计事件。命令天然幂等——重复调用返回同一份结果、不重复写事件；过期 `baseRevisionId` 409；来源不存在 404。 |
 | `POST /sources/:sourceId/test` | 可选 `Idempotency-Key` header（≤300 字符） | 不变：HTTP 202 返回 `JobSnapshot`，创建 `source-probe` Job；未提供 key 时生成随机 probe key；Source 不存在 404。 |
 | `POST /sources/:sourceId/runs` | 可选 `Idempotency-Key` header（≤300 字符） | HTTP 201 返回 Product Run；仅接受已启用 Source，未启用 409 `conflict`；Source 不存在 404；无 header 时生成随机 key。优先 Workflow Control 入队 `cosmos.ingest@1`，否则走 legacy queued Run。 |
 | `POST /media-cleanups` | 可选 `Idempotency-Key` header（≤300 字符）；body `MediaCleanupCommand`（可选 `sourceId`、可选 `dryRun`，缺省 `dryRun: true`） | HTTP 201 返回 `MediaCleanupRunSnapshot`；入队 `cosmos.media-cleanup@1`。durable host 未启用时 409 `conflict`；未知字段或非法 body 400 `validation_failed`；同 key 不同 `{sourceId, dryRun}` 409 `conflict`。无 header 时生成随机 key。 |
@@ -180,6 +181,7 @@ contracts 的 `getSourceConfigurationSchema(ref)` strict Zod schema 校验——
 | --- | --- | --- |
 | `GET /runs` | 可选 `sourceId`、`limit` | 运行记录：按创建时间倒序返回最近 durable `RunSnapshot[]`（缺省 20 条、上界 100）；只含 durable `WorkflowRun`，不含 legacy Run 泳道。 |
 | `GET /runs/:runId` | path `runId` | 先查 Workflow Host envelope，存在则返回 Product Run；否则查 legacy `RunSnapshot`；两者都不存在 404。 |
+| `GET /runs/:runId/jobs` | path `runId` | `{ items: JobSnapshot[] }`（按 createdAt 升序，OPS-002）：`runId` 同时匹配 legacy `Job.runId` 与 durable `Job.workflowRunId`，因为两种 Run 共用同一个 Run 读端点。未知 Run 返回空列表而不是 404。这是产品面从 Run 走到 Job 的唯一入口；Attempt 明细仍由 `/jobs/:jobId/attempts` 提供。 |
 | `GET /workflow-runs/:runId` | path `runId` | 当前实现别名，调用同一 `/runs/:runId` 查询和投影；不存在 404。 |
 | `POST /runs/:runId/cancellations` | body 可选 `reason` | Run 控制 v1：非终态 Run 终态化 `cancelled` + fence；不存在 404，终态/并发 409；返回 `RunControlResult`（`run` + `reuse`/`sideEffects`）。 |
 | `POST /runs/:runId/recoveries` | body 可选 `reason` | Run 控制 v1：无活动 lease 的非终态 Run 置 `resumeRequired` 送回恢复队列；活动 lease/终态 409，不存在 404。 |
@@ -224,7 +226,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | Method/path | 输入 | 成功输出与分页 |
 | --- | --- | --- |
 | `GET /feed` | query `cursor?`、`limit?` | `FeedPage`。limit 缺省 20；非数字回退 20，随后 clamp 到 1–100；cursor 交给 repository。按更新倒序返回 Story Feed，nextCursor 是偏移字符串或 null。 |
-| `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`labelIds?`、`topicIds?`（逗号分隔 id）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；label/topic 过滤为 any-of 语义（Story 级标签、active Topic 成员）；Zod 解析失败 400。无写副作用。 |
+| `GET /search` | query `text?`（最多 500）、`sourceId?`、`publishedAfter?`、`publishedBefore?`（带 offset 的 ISO）、`labelIds?`、`topicIds?`（逗号分隔 id）、`author?`（最多 200，按发布者 name/handle 子串、大小写不敏感）、`contentKind?`（受管内容形态）、`assetStatus?`（受管资产四态）、`cursor?`、`limit?`（1–100，默认 20） | `SearchPage`，FTS/过滤结果与 rank；label/topic 过滤为 any-of 语义（Story 级标签、active Topic 成员），`author`/`contentKind`/`assetStatus` 为单值等值条件、彼此 AND；`assetStatus` 命中「当前 Revision 的资产里存在该状态」的条目；Zod 解析失败 400。无写副作用。 |
 | `GET /entries` | query `sourceId?`、`cursor?`、`limit?`（1–100，默认 50） | `EntryPage`；Zod 解析失败 400。 |
 | `GET /stories/:storyId` | path `storyId` | `StoryDetail`：Story 摘要（含 `status`/`replacedBy` 与当前表示的 `timeRange`/`keyFacts`）、可空 `entry`（最近成员，兼容位）、`entries`（全部成员，updatedAt 倒序）、`entities`（关联 Entity 快照列表）与 `topics`（当前 Topic 成员）。旧 merge id 先解析到 canonical Story；split 历史壳保留自身 id 且可零成员；不存在/无当前 Revision 404。 |
 | `POST /stories/:storyId/entry-moves` | body `MoveEntryToStoryCommand` | `StoryDetail`；Schema 失败 400，Entry/Story 缺失 404。 |

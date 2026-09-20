@@ -123,6 +123,17 @@ export function useFeedWorkspace(
         }
         const values = searchForm.getValues();
         ctx.setError(null);
+        // SavedView 合同只有关键词/来源/时间/分类/Topic（LIB-005 的「状态」等条件属 Phase 4），
+        // 带了存不下的条件就拒绝保存，而不是让条件被静默丢掉。
+        const unsupported = [
+            values.author?.trim() ? "作者" : null,
+            values.contentKind ? "媒体类型" : null,
+            values.assetStatus ? "录入状态" : null,
+        ].filter((label): label is string => label !== null);
+        if (unsupported.length > 0) {
+            ctx.setError(`保存视图暂不支持这些条件：${unsupported.join("、")}（属 LIB-005，Phase 4）。`);
+            return;
+        }
         try {
             await client.createSavedView({
                 name: trimmedName,
@@ -152,6 +163,11 @@ export function useFeedWorkspace(
             publishedBefore: toDateInputValue(view.publishedBefore),
             labelIds: view.labelIds,
             topicIds: view.topicIds,
+            // 视图存不下这三个条件（LIB-005，Phase 4），套用时显式清空，
+            // 否则表单会残留上一次搜索的作者/媒体筛选。
+            author: "",
+            contentKind: "",
+            assetStatus: "",
         });
         ctx.setError(null);
         try {

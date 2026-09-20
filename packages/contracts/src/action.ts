@@ -4,6 +4,7 @@ import {
     assetErrorCodeSchema,
     contentKindSchema,
     contentMetricsSchema,
+    discoveryChannelSchema,
     publisherSchema,
     sourceExecutionSnapshotSchema,
     temporalValueSchema,
@@ -228,6 +229,7 @@ export const normalizedIngestItemSchema = z.object({
     sourceLocator: z.record(z.string(), z.custom<JsonValue>(isJsonValue, {
         message: "sourceLocator must contain JSON-safe values.",
     })),
+    discoveryChannel: discoveryChannelSchema.optional(),
     rawPayload: z.string(),
     rawPayloadMimeType: z.string().optional(),
     assets: normalizedAssetInputSchema.array(),

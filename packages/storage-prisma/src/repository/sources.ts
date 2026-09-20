@@ -5,7 +5,7 @@ import { type CreateSourceCommand, type ConnectionInstance, type CreateConnectio
 import { ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parseSourceRevisionId } from "../storage-root.js";
-import { isUniqueConstraintError, sourceActivationRequestHash } from "./repository-internals.js";
+import { appendDomainEvent, isUniqueConstraintError, sourceActivationRequestHash } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers4 } from "./helpers-4.js";
 
 export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers4 {
@@ -44,14 +44,16 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
 
     async listSources(): Promise<readonly SourceSnapshot[]> {
         const sources = await this.prisma.sourceInstance.findMany({
+            // 墓碑来源（AUT-001 删除）不再出现在产品面上。
+            where: { deletedAt: null },
             orderBy: { createdAt: "asc" },
         });
         return Promise.all(sources.map((source) => this.toSourceSnapshot(source)));
     }
 
     async getSource(sourceId: string): Promise<SourceSnapshot | null> {
-        const source = await this.prisma.sourceInstance.findUnique({
-            where: { id: sourceId },
+        const source = await this.prisma.sourceInstance.findFirst({
+            where: { id: sourceId, deletedAt: null },
         });
         return source ? this.toSourceSnapshot(source) : null;
     }
@@ -59,7 +61,8 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     async updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot> {
         const expectedRevision = parseSourceRevisionId(sourceId, input.baseRevisionId);
         const current = await this.prisma.sourceInstance.findUnique({ where: { id: sourceId } });
-        if (!current) throw new SourceNotFoundError(sourceId);
+        // 墓碑来源对编辑命令等同不存在（AUT-001）。
+        if (!current || current.deletedAt) throw new SourceNotFoundError(sourceId);
         await this.prisma.$transaction(async (tx) => {
             const updated = await tx.sourceInstance.updateMany({
                 where: { id: sourceId, revision: expectedRevision },
@@ -231,6 +234,54 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         return true;
     }
 
+    /**
+     * 删除来源（AUT-001）：墓碑 + 移除调度绑定，已录入的 Entry/Observation/Revision 全部保留
+     * （Entry.sourceInstanceId 是必填级联外键，硬删会带走历史，所以来源行留下）。
+     *
+     * 不建命令表：删除天然幂等——重复调用返回同一份墓碑快照、不重复写事件；CAS 只拦
+     * 「拿旧 revision 去删一个已经被改过的来源」。actor/reason 进 DomainEvent 保留审计（ORG-010）。
+     */
+    async deleteSource(input: {
+        sourceId: string;
+        baseRevisionId: string;
+        idempotencyKey: string;
+        actor: string | null;
+        reason: string | null;
+    }): Promise<SourceSnapshot> {
+        const expectedRevision = parseSourceRevisionId(input.sourceId, input.baseRevisionId);
+        const current = await this.prisma.sourceInstance.findUnique({ where: { id: input.sourceId } });
+        if (!current) throw new SourceNotFoundError(input.sourceId);
+        if (current.deletedAt) {
+            return this.toSourceSnapshot(current);
+        }
+        if (current.revision !== expectedRevision) {
+            throw new SourceRevisionConflictError(input.sourceId);
+        }
+        await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.sourceInstance.updateMany({
+                where: { id: input.sourceId, revision: expectedRevision, deletedAt: null },
+                data: { deletedAt: new Date(), enabled: false, revision: expectedRevision + 1 },
+            });
+            if (updated.count !== 1) throw new SourceRevisionConflictError(input.sourceId);
+            await tx.triggerBinding.deleteMany({ where: { sourceId: input.sourceId } });
+            await appendDomainEvent(tx, {
+                type: "source.deleted.v1",
+                aggregateType: "SourceInstance",
+                aggregateId: input.sourceId,
+                idempotencyKey: input.idempotencyKey,
+                payload: {
+                    sourceId: input.sourceId,
+                    baseRevisionId: input.baseRevisionId,
+                    actor: input.actor,
+                    reason: input.reason,
+                },
+            });
+        });
+        return this.toSourceSnapshot(
+            await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } }),
+        );
+    }
+
     async listScheduleTriggers(): Promise<readonly {
         sourceId: string;
         intervalMs: number;
@@ -238,11 +289,12 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     }[]> {
         const bindings = await this.prisma.triggerBinding.findMany({
             where: { kind: "schedule", enabled: true },
-            include: { source: { select: { id: true, enabled: true } } },
+            include: { source: { select: { id: true, enabled: true, deletedAt: true } } },
         });
         const result: { sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
         for (const binding of bindings) {
-            if (!binding.source.enabled) continue;
+            // 删除来源会移除绑定；这里再挡一次，避免历史数据里残留的绑定把墓碑来源排进调度。
+            if (!binding.source.enabled || binding.source.deletedAt) continue;
             const config = JSON.parse(binding.configJson) as { intervalMs?: number };
             if (typeof config.intervalMs !== "number") continue;
             const latest = await this.prisma.workflowRun.findFirst({

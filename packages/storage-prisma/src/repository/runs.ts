@@ -268,6 +268,18 @@ export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
         return job ? this.toJobSnapshot(job) : null;
     }
 
+    /**
+     * 某个 Run 的 Job（OPS-002）。`runId` 既可能是 legacy Run id，也可能是 durable
+     * WorkflowRun id（两者共用同一读端点），所以两个外键都要匹配。
+     */
+    async listRunJobs(runId: string): Promise<readonly JobSnapshot[]> {
+        const jobs = await this.prisma.job.findMany({
+            where: { OR: [{ runId }, { workflowRunId: runId }] },
+            orderBy: { createdAt: "asc" },
+        });
+        return jobs.map((job) => this.toJobSnapshot(job));
+    }
+
     async latestEventSequence(): Promise<number> {
         const result = await this.prisma.domainEvent.aggregate({
             _max: { sequence: true },

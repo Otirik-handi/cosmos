@@ -162,6 +162,16 @@ export const jobSnapshotSchema = z.object({
 export type JobSnapshot = z.infer<typeof jobSnapshotSchema>;
 
 /**
+ * 某个 Run 的 Job 列表（OPS-002）。Run 投影里没有 job 引用，所以产品面要走到
+ * Job/Attempt 必须先有这个读端点；Attempt 明细仍由 `GET /jobs/:id/attempts` 提供。
+ */
+export const jobListSchema = z.object({
+    items: jobSnapshotSchema.array(),
+});
+
+export type JobList = z.infer<typeof jobListSchema>;
+
+/**
  * Probe an unsaved source configuration: the command carries the config
  * itself instead of a sourceId, so a user can validate a feed before saving
  * the Source. The canonical configuration schema for the ref still owns

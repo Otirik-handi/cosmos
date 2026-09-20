@@ -6,7 +6,9 @@
 export {
     aiHotSourceConfigSchema, assetErrorCodeSchema, assetErrorCodes, bilibiliSourceConfigSchema,
     connectionInstanceSchema, connectionStatusSchema, contentKindSchema, contentMetricsSchema,
-    createConnectionCommandSchema, createSourceCommandSchema, fixtureRssSourceConfigSchema,
+    createConnectionCommandSchema, createSourceCommandSchema, deleteSourceCommandSchema,
+    discoveryChannelSchema,
+    fixtureRssSourceConfigSchema,
     getSourceConfigurationSchema, idempotencyKeySchema, ingestCommandSchema,
     mediaPolicyCeilings, mediaPolicyImagesSchema, mediaRetryCeiling, mediaRetryPolicySchema,
     protocolVersion, publisherKindSchema, publisherMetricsSchema, publisherSchema,
@@ -20,7 +22,7 @@ export {
     updateConnectionCommandSchema, updateSourceCommandSchema, type AiHotSourceConfig,
     type AssetErrorCode, type BilibiliSourceConfig, type ConnectionInstance,
     type ConnectionStatus, type ContentKind, type ContentMetrics, type CreateConnectionCommand,
-    type CreateSourceCommand, type FixtureRssSourceConfig, type IngestCommand,
+    type CreateSourceCommand, type DeleteSourceCommand, type DiscoveryChannel, type FixtureRssSourceConfig, type IngestCommand,
     type MediaPolicyImages, type MediaRetryPolicy, type Publisher, type PublisherKind,
     type PublisherMetrics, type RssSourceConfig, type SourceActivationCommand,
     type SourceConfig, type SourceConnectorId, type SourceDefinitionRef,
@@ -33,7 +35,7 @@ export {
 
 export {
     assetSnapshotSchema, assetStatusSchema, connectorDescriptorSchema, ingestResultSchema,
-    jobKindSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
+    jobKindSchema, jobListSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
     mediaCleanupCommandSchema, mediaCleanupEntrySchema, mediaCleanupReportSchema,
     mediaCleanupRunSnapshotSchema, publicAssetSnapshotSchema, sourceAuthSchema,
     sourceConfigProbeCommandSchema,

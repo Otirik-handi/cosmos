@@ -67,6 +67,15 @@ Asset download 中未被 client 封装的部分不由它承担。
   行内“媒体策略”入口打开一个表单（图片下载开关 + 单文件/单次上限 + 失败重试次数 + 保留天数，
   留空表示跟随默认/永久保留），保存走 `PATCH /api/v1/sources/:id`（带 `baseRevisionId`），
   超默认值在本地就被拒绝，409 提示版本冲突并刷新（ADR-0014/0015）。
+- **删除来源（AUT-001）**：来源健康行内还有一个删除按钮，**两段确认**——第一次点击把该行切到
+  确认态并显示“只移除配置与定时，已录入内容保留”，第二次点击才发
+  `POST /api/v1/sources/:id/removals`（带 `baseRevisionId` 与 `Idempotency-Key`，actor 记 `user`）。
+  成功后来源从看板消失、调度停止，已录入的条目与来源历史保留；409 提示版本冲突并刷新。
+- **运行记录里的任务（OPS-002）**：运行记录列表选中某个 Run 时，除元数据与控制动作外还会取
+  `GET /api/v1/runs/:id/jobs` 并列出该 Run 的 Job（状态、`attempts/maxAttempts` 重试次数、
+  `errorCode`/`error`）；结果带 `runId` 并在渲染时比对，避免切换选中后旧响应覆盖。
+  没有登记任务时显示“这个 Run 没有登记任务”；读取失败显示可读错误。**Attempt 明细
+  （租约窗口、owner 等）仍只在 API**，本面板不展示。
 - **保留期清理**：来源健康区底部提供“预览过期媒体 → 确认清理”两步操作，走
   `POST /api/v1/media-cleanups`（`dryRun: true` 预览、`false` 确认）并轮询
   `GET /api/v1/media-cleanups/:runId` 到终态；预览展示候选条数/字节与最多 5 条样例，
@@ -74,6 +83,11 @@ Asset download 中未被 client 封装的部分不由它承担。
 - **分类（Label）与 Topic 筛选**：搜索表单把已加载的 Label 与 Topic 渲染成可多选的筛选
   chip；选中项以 id 数组存在表单状态里，提交时拼成 `search` 的 `labelIds`/`topicIds`
   逗号串。它不新增合同，只是把既有 search 过滤条件接出编辑入口。
+- **作者 / 媒体类型 / 录入状态筛选（LIB-001）**：搜索表单另有「作者」输入与「媒体类型」
+  「录入状态」两个单值下拉（受管枚举，表单 schema 用 `contentKindSchema`/`assetStatusSchema`
+  收窄），提交时作为 `author`/`contentKind`/`assetStatus` 传给 `search`，命中条件在筛选区
+  回显为 chip。这三个条件**存不进 Saved View**（视图条件形状属 LIB-005，Phase 4）：当前搜索
+  带了它们时保存视图会被拒绝并说明原因，套用视图时也会被清空——不允许静默丢条件。
 - **Story 时间线**：由 `StoryDetail.entries` 的全部 Revision 与 Observation 展平成按时间
   倒序的事件流（来源名、事件类型、标题、时间），纯客户端投影，不新增读合同。
 - **Story 相关内容**：与本 Story 共享分类或共享 Entity 的其它 Story，纯读组合

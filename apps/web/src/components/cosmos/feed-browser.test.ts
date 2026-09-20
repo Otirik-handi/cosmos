@@ -1,6 +1,33 @@
 import { describe, expect, it } from "vitest";
 
-import { toReadableExcerpt } from "./feed-browser";
+import { searchSchema, toReadableExcerpt } from "./feed-browser";
+
+describe("searchSchema", () => {
+    it("defaults the LIB-001 filters to empty", () => {
+        const parsed = searchSchema.parse({});
+
+        expect(parsed.author).toBe("");
+        expect(parsed.contentKind).toBe("");
+        expect(parsed.assetStatus).toBe("");
+    });
+
+    it("trims the author and keeps managed enum values only", () => {
+        const parsed = searchSchema.parse({
+            author: "  Alice  ",
+            contentKind: "video",
+            assetStatus: "metadata_only",
+        });
+
+        expect(parsed.author).toBe("Alice");
+        expect(parsed.contentKind).toBe("video");
+        expect(parsed.assetStatus).toBe("metadata_only");
+    });
+
+    it("rejects values outside the managed enums", () => {
+        expect(searchSchema.safeParse({ contentKind: "podcast" }).success).toBe(false);
+        expect(searchSchema.safeParse({ assetStatus: "unknown" }).success).toBe(false);
+    });
+});
 
 describe("toReadableExcerpt", () => {
     it("returns the fallback for empty values", () => {
