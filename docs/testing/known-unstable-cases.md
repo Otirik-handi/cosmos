@@ -29,6 +29,7 @@
 | 2026-09-17 Task 26 worktree：整套跑，额外加一个**只做既有行为**的诊断 spec（录入一个来源 + 归并两条 Story，完全不碰新功能） | 20/22，失败在 `:103` 与 `:417`（后者耗时 5.1 分钟） |
 | 2026-09-17 Task 26 worktree：整套跑，额外加一个只录入来源、不归并的诊断 spec | 22/22 通过 |
 | 2026-09-18 Task 31 worktree：同一 build 整套连跑 2 次（`bun run test:browser`） | 第 1 轮 **22/22 通过**；第 2 轮 **21/22**，失败在 `:186`「拆分场景」，同 build 单跑该用例 **1 passed (3.2s)** |
+| 2026-09-20 fork CI run 35502486397（`master` `263cc3c`，改动只有 `ERRATA.md` 一行） | Browser E2E **22 passed / 1 failed**，失败在 `:103`「证据关系反向视图」`toBeVisible` 10 秒超时；同 run 的 `ingest.spec.ts` 也三次（原始 + retry1 + retry2）报 `toBeFocused` 超时。**单独重跑 Browser E2E job 后全绿**（24 passed），与该 job 前一次运行（`fc7867f`）全绿一致 |
 
 **2026-09-17 关于 `:539` 的补充观察（Task 26 期间）**：失败现场 `role=status` 显示「搜索到 0 条结果。」，页面上却仍有 1 个 `article`（内容是刚录入来源的条目），于是 `expect(page.locator("article")).toHaveCount(0)` 10 秒内 23 次都读到 1。该 `article` 只能是页面级 `FeedBrowser` 渲染的（全仓只有它渲染 `<article>`；看板阅读流区块用 `<ul><li><button>`），而 `onSearch` 在同一次状态更新里同时写 `activeSearch`、`feed` 与提示语，所以「提示语说 0 条、列表还留着上一次的内容」在代码上无法解释——**这是一个未查清的观察，不排除应用存在搜索状态不一致**。没有改这条断言，也没有用重跑结案。
 
@@ -111,3 +112,16 @@
 | 紧接着单独复跑 `bun run test:browser:component-lab` | **14 passed (17.6s)** |
 
 **当前判断**：与第 5 条不同，这次失败发生在任何断言之前，形态是"dev server 没起来"，更像端口/进程残留或资源争用（前一轮浏览器套件刚用过同一批端口）。与 Task 32 的改动没有可解释的因果关系——本片只动了来源行与运行记录的渲染。**建议**：再出现时先看组件实验室配置里的端口是否与浏览器套件重叠、以及上一轮是否留下了未退出的 server 进程。
+
+## 7. CI Quality job 里 `apps/worker/src/workflow-ingest.test.ts` 的单用例超时
+
+**状态（2026-09-20，一次观察，未归因）**：CI 的 Quality job 在 `bun run test` 里失败一次，形态是**单个用例 15 秒超时**，不是断言失败。
+
+| 跑法 | 结果 |
+|---|---|
+| fork CI run 35502486397（`master` `263cc3c`，改动只有 `ERRATA.md` 一行） | Quality **1 failed / 631 passed**：`workflow-ingest.test.ts:34`「keeps durable ingest parity across idempotency, snapshots, revisions and projections」`Test timed out in 15000ms` |
+| 同 run 单独重跑 Quality job | **全绿** |
+| 该 job 前一次运行（`fc7867f`） | **全绿**（同一文件通过） |
+| 本机单跑 `bunx vitest run apps/worker/src/workflow-ingest.test.ts` | **4 passed (19.66s)**，整文件比 CI 的单用例上限还长 |
+
+**当前判断**：该文件每个用例都跑真实 `prisma migrate deploy` 建隔离库，整文件本机要 19.66 秒；CI runner 更慢时单个用例越过 15 秒默认上限是环境速度问题，与内容改动无关（本次改动是纯文档）。与第 1 条注记的「Windows 下 SQLite 迁移超时/EBUSY 同一家族」相邻但不同：这里不是断言失败，也不是 Windows。**建议**：再出现时先确认是否只在慢 runner 上发生；若反复出现，考虑给该文件显式 `testTimeout`（属测试配置改动，需要单独切片）。
