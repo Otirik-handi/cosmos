@@ -138,3 +138,15 @@
 - **门禁**：`bun run db:validate` 通过；`bun run docs:check` 723 文件 0 失败；`size-governance --fail-on-new` PASS；`git diff --check` 干净。
 - **未运行（明确记录）**：**真实来源验收**。`bun run test:real:bilibili` 需要 `COSMOS_OPENCLI_PATH`（外部 OpenCLI 可执行文件）、`OPENCLI_PROFILE`（浏览器里已登录的 profile）、`COSMOS_REAL_RSS_URL` 与 `COSMOS_ALLOW_REAL_NETWORK=true`，且本机网络不可用（同轮 `git fetch` 也因 schannel 凭证失败）。因此切片 3 的验收只完成了**产品面那一半**：Bilibili 双计划能在产品面建出（浏览器 E2E 已证），真实抓取未验证。
 - **下一步**：Task 33 的 v1 完成定义（expand + backfill + read switch + 产品面）已齐，剩真实来源验收与第 4 步 contract（单独排期）。
+
+## 2026-09-21：提交与编号登记
+
+- **本轮切片**：把本分支积压的改动提交，并按维护者裁定正式登记编号。
+- **提交**（worktree `feat/t33-plan-read-switch`，基于 master `97a5e72`）：
+  - `559f356 feat(t33): switch enabled, media, checkpoint and connector state to the collection plan (AUT-010)`——94 文件实现（含 3 个 migration 与 4 个新测试文件）。
+  - `f9b76ac docs(t33): sync the task record, spec and API draft with the delivered slices`——14 文件文档。
+  - 未切成更多提交的原因：这四块工作在**文件层面交织**（`contracts/base.ts` 被 1c-1c-b1／b2／c 与切片 2 都改过，`use-source-workspace.ts` 四块都改过），按层或按切片拆会得到单独跑不过 typecheck 的提交。提交后 `bun run typecheck` 仍为 **0**，工作区干净。**未 push**。
+- **编号**（维护者 2026-09-21 裁定）：
+  1. **33 正式分配给本 Task**；README 的「编号 33 由 Agent 建议、待维护者确认」改为「编号 33 由维护者 2026-09-21 分配」，Follow-ups 里的待确认项删除。
+  2. **`.agents/tasks/README.md` 的 Task 导航补上 32 与 33**（此前索引停在 31，32 就已经漏登记）。32 的条目未写「编号由维护者分配」，因为 Task 32 自己的 README 没有该记录，不替它补一个没有证据的日期。
+- **发现（对后续 Task 有影响）**：`01–24 → 26` 的跳号不是漏号，**25 是预留号**——[`ui-surface-ownership-v1`](../../../docs/proposals/ui-surface-ownership-v1.md) 写明界面职责重划那次尝试的分支已作废，「重做时可复用编号 **Task 25**（它只存在于已作废的分支上，`master` 没有这个 Task）」。按「最大号 +1」顺延会误占它。另有 17、20、21、22、23、24 六条至今挂着「编号待维护者确认」。
