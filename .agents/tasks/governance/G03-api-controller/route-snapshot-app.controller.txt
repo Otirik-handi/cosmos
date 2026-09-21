@@ -12,7 +12,6 @@ GET       /sources                                     sources
 GET       /sources/:sourceId                           source
 POST      /sources                                     createSource
 PATCH     /sources/:sourceId                           updateSource
-POST      /sources/:sourceId/activation-commands       activateSource
 POST      /sources/:sourceId/removals                  deleteSource
 POST      /sources/:sourceId/test                      testSource
 POST      /source-config-probes                        createSourceConfigProbe
@@ -24,6 +23,7 @@ PATCH     /connections/:connectionId                   updateConnection
 POST      /connections/:connectionId/removals          deleteConnection
 GET       /collection-plans                            listCollectionPlans
 GET       /collection-plans/:planId                    collectionPlan
+PATCH     /collection-plans/:planId                    updateCollectionPlan
 GET       /storage-stats                               storageStats
 GET       /backups                                     listBackups
 POST      /backups                                     createBackup

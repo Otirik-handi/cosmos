@@ -107,10 +107,10 @@ Browser Bridge/OpenCLI profile 可以投影为一种外部管理的 Connection�
 | Planned · Phase 1 product cutover | `POST` | `/sources` | `SourceSnapshot`；保存后强制 `enabled=false`，不接受客户端 `enabled` |
 | Current (legacy) | `GET` | `/sources/{id}` | `SourceSnapshot`；不存在返回 404 |
 | Current (legacy) | `PATCH` | `/sources/{id}` | `SourceSnapshot`；当前只支持 `enabled` |
-| Planned · Phase 1 product cutover | `PATCH` | `/sources/{id}` | `SourceSnapshot`；目标合同编辑名称/完整配置，不改变 `enabled` |
+| Planned · Phase 1 product cutover | `PATCH` | `/sources/{id}` | `SourceSnapshot`；v1 只写来源名与目标配置 `config`，不改变 `enabled`（启用状态归计划） |
 | Planned · Phase 1 remainder | `POST` | `/source-configuration-validations` | 同步校验未保存的 `sourceDefinitionRef + config`；成功返回 validation snapshot；失败沿用当前 `validation_failed` 合同，具体 HTTP 状态待实现验证 |
 | Planned · Phase 1 remainder | `POST` | `/source-probes` | `202 SourceConfigProbeJobSnapshot`；创建独立的 `source-config-probe` Job，不能复用当前 `source-probe` |
-| Planned · Phase 1 remainder | `POST` | `/sources/{id}/activation-commands` | 独立启用/停用 Command；返回更新后的 `SourceSnapshot` |
+| Superseded（ADR-0023） | `POST` | `/sources/{id}/activation-commands` | v1 移除：启用状态归采集计划，写入口是 `PATCH /collection-plans/{id}` 的 `enabled`；留着它会让同一事实有两个所有者 |
 | Convergence | `POST` | `/sources/{id}/probes` | `202 ProbeSnapshot`；已保存 Source 的规范 Probe 路径 |
 | Current compatibility | `POST` | `/sources/{id}/test` | `202 JobSnapshot`；保留已保存 Source Probe 语义，不接受未保存 `kind + config` |
 | Current | `POST` | `/sources/{id}/runs` | `202 WorkflowRunSnapshot`；创建对应的 Workflow Run |
@@ -177,7 +177,7 @@ CollectionPlan 是用户可见的独立采集目标。一个 Connection 可以�
 | Planned | `GET` | `/collection-plans` | `Page<CollectionPlanSummary>` |
 | Planned | `POST` | `/collection-plans` | `CollectionPlanSnapshot` |
 | Planned · Phase 1 remainder | `GET` | `/collection-plans/{id}` | `CollectionPlanDetail` |
-| Planned · Phase 1 remainder | `PATCH` | `/collection-plans/{id}` | 新 revision Snapshot |
+| Current | `PATCH` | `/collection-plans/{id}` | 新 revision Snapshot；计划自有字段的唯一写入口（含 `enabled`） |
 | Planned | `DELETE` | `/collection-plans/{id}` | 停止未来触发，不删历史事实 |
 | Planned · Phase 1 remainder | `POST` | `/collection-plans/{id}/runs` | 手动触发绑定 Workflow |
 | Planned · Phase 1 remainder | `GET` | `/collection-plans/{id}/checkpoint` | `CheckpointSnapshot` |
@@ -188,7 +188,13 @@ Source 与 CollectionPlan 的最终关系仍可在实现 Task 调整，但 API �
 只开放 manual/schedule、预算、checkpoint 和 overlap；Phase 2 再开放同一
 Connection 下的多 Operation/多计划管理。默认计划不是第二套调度模型。
 
-**v1 落地范围（2026-09-20 裁定，ADR [`0023`](../adr/0023-collection-plan-v1.md)）**：计划与采集目标**一对一**（计划引用目标，目标继续承载内容身份）；进入 v1 的端点是 `GET`／`POST /collection-plans`、`GET`／`PATCH /collection-plans/{id}` 与 `GET /collection-plans/{id}/checkpoint`，`DELETE` 与 checkpoint 重置仍为 `Planned`／`Reserved`；`overlapPolicy` 的写路径 v1 **只接受 `forbid`**（与现状等价的「上一轮未结束时到点不重复入队」），其余值必须显式拒绝并说明尚未实现；`CollectionPlanDetail.discoveryContext` v1 不新增持久字段，由目标配置派生；`scope` 与 `sourceOperationRef` 在 v1 是目标的只读投影，不是计划自有字段。手动运行在 v1 沿用既有 `POST /sources/{id}/runs`，计划级运行路由后置。来源端点与计划端点之间的字段边界（连接、调度、媒体预算的写入入口）在 Task 33 切片 1c 冻结，冻结前不改变现有来源端点的行为。v1 计划的媒体预算字段叫 `mediaPolicy`（ADR [`0014`](../adr/0014-per-source-media-policy-v1.md) 语义：图片开关、单文件／单次预算、重试与保留期）；本文件 `CollectionPlanDetail` 里的 `budget: WorkflowBudget` 属通用预算切片，v1 不使用。v1 也**不提供 `POST /collection-plans`**：计划与采集目标一对一且随来源创建自动生成，独立创建没有合法语义；读投影在 v1 增加 `scheduleIntervalMs`，计划级最近运行摘要后置。
+**v1 落地范围（2026-09-20 裁定，ADR [`0023`](../adr/0023-collection-plan-v1.md)）**：计划与采集目标**一对一**（计划引用目标，目标继续承载内容身份）；进入 v1 的端点是 `GET`／`POST /collection-plans`、`GET`／`PATCH /collection-plans/{id}` 与 `GET /collection-plans/{id}/checkpoint`，`DELETE` 与 checkpoint 重置仍为 `Planned`／`Reserved`；`overlapPolicy` 的写路径 v1 **只接受 `forbid`**（与现状等价的「上一轮未结束时到点不重复入队」），其余值必须显式拒绝并说明尚未实现；`CollectionPlanDetail.discoveryContext` v1 不新增持久字段，由目标配置派生；`scope` 与 `sourceOperationRef` 在 v1 是目标的只读投影，不是计划自有字段。手动运行在 v1 沿用既有 `POST /sources/{id}/runs`，计划级运行路由后置。v1 计划的媒体预算字段叫 `mediaPolicy`（ADR [`0014`](../adr/0014-per-source-media-policy-v1.md) 语义：图片开关、单文件／单次预算、重试与保留期）；本文件 `CollectionPlanDetail` 里的 `budget: WorkflowBudget` 属通用预算切片，v1 不使用。v1 也**不提供 `POST /collection-plans`**：计划与采集目标一对一且随来源创建自动生成，独立创建没有合法语义；读投影在 v1 增加 `scheduleIntervalMs`，计划级最近运行摘要后置。
+
+**字段边界冻结（2026-09-20，Task 33 切片 1c-1c-b1 落地）**：`PATCH /collection-plans/{id}` 是**计划自有字段的唯一写入口**——计划名、连接、调度间隔、媒体预算与**启用状态**；`PATCH /sources/{id}` 只写采集目标自身的字段——来源名（内容出处的名字）与目标配置 `config`（不含 `media`）。创建路径不变：`POST /sources` 仍接受 `scheduleIntervalMs` 与可选的 `connectionId`（切片 3 补入），因为它在同一步里建出来源与默认计划——这两个字段都归计划，放在创建命令里是为了让「建目标」与「配计划」原子完成，不留下半成品；不存在的 `connectionId` 按 `not_found` 拒绝，而不是撞数据库外键变成 500。v1 两个名字各自可改：计划名由计划端点改，来源名保留为内容出处的名字，创建时同值、之后可各自演化。启用状态**不设独立的 activation Command**：`PATCH /collection-plans/{id}` 的 `enabled` 配合 `baseRevisionId`（计划自身的 revision，与来源 revision 相互独立）已经阻止并发覆盖，而启停不产生新事实、不需要幂等键；因此 `POST /sources/{id}/activation-commands` 与它的幂等记录在 v1 一并移除，启用前校验已保存配置有效的前置条件由计划端点承担。
+
+**媒体预算归属落地（2026-09-20，Task 33 切片 1c-1c-b2）**：媒体预算的**读取方**是计划的 `mediaPolicy`，`SourceInstance.config` 不再接受 `media`（RSS 的 canonical schema 是 strict，多带即 `validation_failed`）；`PATCH /sources/{id}` 携带 `media` 会被拒绝，`PATCH /collection-plans/{id}` 的 `mediaPolicy` 是唯一写入口。已入库的来源配置在迁移中移除该字段。媒体策略在**入队时固化**进该轮的执行快照（ADR [`0014`](../adr/0014-per-source-media-policy-v1.md) 决策 4）：一轮运行中途改计划不影响这一轮，这与「计划 id 由 workflow envelope 承载、不进执行快照」并不矛盾——前者是本轮的行为输入，后者是归属身份。媒体保留期（`retentionDays`）同样按计划读取，保留期清理的候选来源以计划的策略为准。
+
+**checkpoint 与连接器状态归属落地（2026-09-21，Task 33 切片 1c-1c-c）**：checkpoint 按**采集计划**寻址——游标与 revision 属于计划，`Checkpoint.planId` 是查找键，`sourceInstanceId` 保留到第 4 步 contract 删列。对应地，workflow 的 checkpoint Action 由 `source.checkpoint@1` 改名为 `collection-plan.checkpoint@1`（载荷与输出由 `sourceId` 改为 `planId`，catalog manifest hash 随之为 `builtin:collection-plan.checkpoint@1:cas-v1`），领域事件改为 `collection-plan.checkpoint.committed.v1`／`superseded.v1`。**执行快照因此带上 `planId`**：checkpoint 提交与连接器状态命名空间解析都发生在 workflow 内部，那里拿不到 envelope。连接器状态命名空间的 manifest 默认模板由 `source:{id}` 改为 `plan:{id}`（`{id}` 取计划 id），已入库的 `ConnectorState.namespace` 在迁移中由 `source:<sourceId>` 重写为 `plan:<sourceId>`——状态可重建，重写只为避免切换后白付一次全量抓取。
 
 ### 4.4 TriggerBinding 与 Webhook
 

@@ -58,7 +58,7 @@ fetchItems(input: {
 }>;
 ```
 
-`ConnectorStateHandle` 只暴露 `get(key)`/`put(key, value, expectedVersion)`——命名空间由宿主按 manifest 的 `stateStoreNamespace` 解析（`{id}` 替换为来源 id，声明为 null 就不给句柄），连接器不接触命名空间与并发控制。Ingest Workflow 的 `source.fetch@1` 通过 `IngestActionOptions.connectorState` 注入它；legacy 采集路径不注入，连接器必须退化成无状态抓取。
+`ConnectorStateHandle` 只暴露 `get(key)`/`put(key, value, expectedVersion)`——命名空间由宿主按 manifest 的 `stateStoreNamespace` 解析（`{id}` 替换为**采集计划 id**，ADR-0023 决策 2；声明为 null 就不给句柄），连接器不接触命名空间与并发控制。Ingest Workflow 的 `source.fetch@1` 通过 `IngestActionOptions.connectorState` 注入它；legacy 采集路径不注入，连接器必须退化成无状态抓取。
 
 `validate` 接收 Source 对象本身，绝不是 `{ source }` 包装对象；只有 `fetchItems` 使用对象参数。`validate` 不返回连接器结果，验证失败通过抛出异常表示。
 
@@ -128,7 +128,7 @@ fetchItems(input: {
 2. 读取 Run 对应的来源。
 3. 调用 `startRun(runId, lease)`。
 4. 解析连接器并调用 `validate(source)`。
-5. 读取来源 Checkpoint。
+5. 读取该来源所属计划的 Checkpoint（ADR-0023 决策 2）。
 6. 使用 Checkpoint 中的 cursor 调用 `fetchItems`。
 7. 按连接器返回顺序逐项调用 `persistIngestItem({ sourceId, runId, item })`。
 8. 写入连接器返回的下一 Checkpoint。

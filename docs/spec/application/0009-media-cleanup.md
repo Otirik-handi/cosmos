@@ -37,7 +37,7 @@ handler 要求 `HostActionExecutionFence`，把 `fence.workflowRunId` 与 `fence
 
 `runMediaCleanup`（[Prisma Repository](../storage/0001-prisma-repository.md) 实现）：
 
-1. 按来源读取 `config.media.retentionDays`，对 `> 0` 的来源收集 `status: saved`、`storageKey` 非空、`createdAt < now - retentionDays` 的 Asset 作为候选；无保留期配置的来源不产生候选。
+1. 按采集计划读取 `mediaPolicy.retentionDays`（ADR-0023 决策 2：保留期归计划，来源配置里没有 `media` 字段），对 `> 0` 的计划收集 `status: saved`、`storageKey` 非空、`createdAt < now - retentionDays` 的 Asset 作为候选；无保留期配置的计划不产生候选。
 2. `dryRun: true` 只汇总候选，不写任何数据、不发事件。
 3. `dryRun: false` 对每个候选在一个事务里（先校验 host fence）把 Asset 更新为 `status: metadata_only`、`storageKey: null`、`byteSize: null`、`errorCode: retention_expired`、`errorMessage: 已按保留期清理（保留 N 天）`，保留 `sourceUrl`；随后统计同一 `storageKey` 是否仍有其它 Asset 引用，只有最后一个引用者才删除 Blob 字节。
 4. 无论 dryRun 与否，都追加 `media.cleanup.completed.v1` DomainEvent（`aggregateType: WorkflowRun`、`aggregateId: runId`），报告是事件 payload；`getMediaCleanupReport(runId)` 读取该 Run 的最新一条。

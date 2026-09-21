@@ -10,9 +10,9 @@
 
 ## 组件定位
 
-`packages/application/src/workflow-ingest.ts` 注册并实现一个工作流 Definition `cosmos.ingest@1`，以及五个 Action：`source.fetch@1`、`media.retry.fetch@1`、`media.retry.apply@1`、`library.ingest@1`、`source.checkpoint@1`。
+`packages/application/src/workflow-ingest.ts` 注册并实现一个工作流 Definition `cosmos.ingest@1`，以及五个 Action：`source.fetch@1`、`media.retry.fetch@1`、`media.retry.apply@1`、`library.ingest@1`、`collection-plan.checkpoint@1`。
 
-该组件负责协调来源分页抓取、逐项入库和来源 checkpoint 提交。它不拥有领域模型或持久化 schema；相关 canonical 定义见[标准化内容模型](../domain/0001-normalized-content.md)、[公共合同](../contracts/0001-public-contracts.md)和[文件 Blob Store](../storage/0005-file-blob-store.md)。
+该组件负责协调来源分页抓取、逐项入库和计划 checkpoint 提交。它不拥有领域模型或持久化 schema；相关 canonical 定义见[标准化内容模型](../domain/0001-normalized-content.md)、[公共合同](../contracts/0001-public-contracts.md)和[文件 Blob Store](../storage/0005-file-blob-store.md)。
 
 ### 在系统中的位置与作用
 它是 Workflow Host 中的 ingest 业务定义层，向 registry 提供 `cosmos.ingest@1` 及其三个 runtime Action。
@@ -21,7 +21,7 @@
 它把来源分页抓取、逐项入库和 checkpoint 提交组织成可恢复的工作流步骤，同时把领域规则和持久化实现留给各自 owner。
 
 ### 使用方式
-组合根注册该 Definition 与 `source.fetch@1`、`library.ingest@1`、`source.checkpoint@1`；入队由 [Ingest Workflow Control](0005-ingest-workflow-control.md) 完成，执行由 Host runtime 按 Action ref 调用。
+组合根注册该 Definition 与 `source.fetch@1`、`library.ingest@1`、`collection-plan.checkpoint@1`；入队由 [Ingest Workflow Control](0005-ingest-workflow-control.md) 完成，执行由 Host runtime 按 Action ref 调用。
 
 ### 典型情景
 需要把一次来源同步拆成可重试的 fetch、ingest、checkpoint 顺序，或重建内置 Workflow catalog 时，选择本组件。
@@ -37,7 +37,7 @@
 | `media.retry.fetch@1` | `builtin:media.retry.fetch@1` | `connector` | `trusted_worker` | external |
 | `media.retry.apply@1` | `builtin:media.retry.apply@1` | `library` | `host` | none |
 | `library.ingest@1` | `builtin:library.ingest@1` | `library` | `host` | none |
-| `source.checkpoint@1` | `builtin:source.checkpoint@1:cas-v1` | `control` | `host` | none |
+| `collection-plan.checkpoint@1` | `builtin:collection-plan.checkpoint@1:cas-v1` | `control` | `host` | none |
 
 `cosmos.ingest@1` 的 Definition 要求运行时支持：`durable`、`processRestart`、`concurrentExecution`、`multiWorker`、`leases`、`externalReceipts`、`valueReferences`，且均为 `true`。
 
@@ -52,7 +52,7 @@
 3. 有候选时调用 `media.retry.apply@1`，输入 `{outcomes}`，Activity key 为 `media.retry.apply`。
 4. 按 `page.items` 的索引顺序调用 `library.ingest@1`，输入 `{sourceId, triggerKind, item}`，Activity key 为 `library.ingest:${index}`。
 5. 根据每项结果累加 `createdEntry`、`revisedEntry`、`duplicateObservation` 三个布尔结果对应的计数；item 不并行处理。
-6. 调用 `source.checkpoint@1`，输入 `{sourceId, cursor: page.nextCursor, expectedRevision: input.checkpointRevision, itemCount: page.items.length}`。
+6. 调用 `collection-plan.checkpoint@1`，输入 `{planId, cursor: page.nextCursor, expectedRevision: input.checkpointRevision, itemCount: page.items.length}`。
 7. 写入 key 为 `ingest-page` 的 `workflow.checkpoint`。
 8. 发出 `ingest.page.persisted`、版本 `v1` 的 workflow event，payload 为 `sourceId`、`triggerKind`、`itemCount`、`nextCursor`、`checkpointRevision`、`checkpointCommitted`。
 9. 返回工作流输出（含 `mediaRetryCandidateCount`、`mediaRetryAppliedCount`）。
@@ -84,12 +84,14 @@ input: { sourceId: string; triggerKind: "manual" | "schedule"; item: NormalizedI
 output: { createdEntry: boolean; revisedEntry: boolean; duplicateObservation: boolean }
 ```
 
-`source.checkpoint@1` 的 JSON 输入/输出是：
+`collection-plan.checkpoint@1` 的 JSON 输入/输出是：
 
 ```ts
-input: { sourceId: string; cursor: string | null; expectedRevision: number; itemCount: number }
-output: { sourceId: string; cursor: string | null; revision: number; committed: boolean }
+input: { planId: string; cursor: string | null; expectedRevision: number; itemCount: number }
+output: { planId: string; cursor: string | null; revision: number; committed: boolean }
 ```
+
+checkpoint 按**采集计划**寻址（ADR-0023 决策 2）：游标与 revision 属于计划，不属于采集目标。若按目标寻址，「同一目标多个计划」时载荷无法区分两个计划。
 
 这些三个 Action schema 都是 strict；额外输入字段、非 JSON-safe item 值、负 revision/count 或不满足 normalized item 身份证据的 payload 均在 ActionRegistry/contract schema 边界失败。
 
@@ -114,7 +116,7 @@ persistWorkflowIngestItem(input: {
 }): Promise<PersistIngestItemResult>;
 
 setWorkflowIngestCheckpoint(input: {
-  sourceId: string; workflowRunId: string;
+  planId: string; workflowRunId: string;
   cursor: string | null; expectedRevision: number; itemCount: number;
   fence: HostActionExecutionFence; idempotencyKey: string;
 }): Promise<SourceCheckpointOutput>;
@@ -148,7 +150,7 @@ setWorkflowIngestCheckpoint(input: {
 
 `source.fetch@1` 成功后，工作流从“待抓取”进入“逐项入库”；所有 item 按索引成功处理后进入“待提交 checkpoint”；checkpoint Action 返回后先写 `ingest-page` workflow checkpoint，再发出 persisted event，最后完成。
 
-checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revision 并返回 `committed: true`；不匹配时保留较新的 cursor/revision，返回 `committed: false`，并记录 `source.checkpoint.superseded.v1`。CAS 冲突不是覆盖写入，也不回滚已经完成的 item 入库。
+checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revision 并返回 `committed: true`；不匹配时保留较新的 cursor/revision，返回 `committed: false`，并记录 `collection-plan.checkpoint.superseded.v1`。CAS 冲突不是覆盖写入，也不回滚已经完成的 item 入库。
 
 任一未被运行时重试恢复的 Action 失败都会中止本次工作流运行；后续步骤和 persisted event 不执行。
 
@@ -158,13 +160,13 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 
 对声明 `media-download` 能力且注入了 media acquirer 的 connector，`source.fetch@1` 只对“入库后会产生新建/修订 Entry”的 item 执行媒体获取：下载前先用与持久化 duplicate 判定同口径的内容指纹预检（`listContentUnchangedItems`），已存在同 `externalKey` 且当前 Revision 指纹未变的 item 保持 connector 返回的 `metadata_only` 资产，不做网络下载；其后的 duplicate 持久化路径不写 Asset 行。首次采集、内容修订或其它 Source 下的同键 item 仍正常获取媒体。
 
-**来源级媒体策略（ADR-0014）**：fetch action 用 `resolveMediaPolicy(source.config.media)` 从本次 Run 冻结的来源快照解析有效策略后传入 acquirer。`images: "metadata_only"` 时 acquirer 直接返回 connector 的原始 item（不改写状态、不发请求）；否则用 `maxFileBytes`/`maxRunBytes` 覆盖本次 Run 的字节预算，两者都已按全局默认封顶。legacy `source-ingest` 泳道用同一函数解析同一个来源快照，行为一致。因为策略来自快照，修改来源配置只影响之后入队的 Run。
+**来源级媒体策略（ADR-0014）**：fetch action 用 `resolveMediaPolicy(source.mediaPolicy)` 从本次 Run 冻结的执行快照解析有效策略后传入 acquirer。策略本身归采集计划（ADR-0023 决策 2），来源配置里没有 `media` 字段。`images: "metadata_only"` 时 acquirer 直接返回 connector 的原始 item（不改写状态、不发请求）；否则用 `maxFileBytes`/`maxRunBytes` 覆盖本次 Run 的字节预算，两者都已按全局默认封顶。legacy `source-ingest` 泳道用同一函数解析同一个执行快照，行为一致。因为策略来自快照，修改计划只影响之后入队的 Run。
 
 对每个状态为 `saved` 且带 `content: Uint8Array` 的 asset，`toJsonItem` 调用 `WorkflowBlobStore.put(content, { mimeType })`，并在 Workflow JSON 中写入 `{ key, hash, byteSize, mediaType }` BlobRef；非 saved、无 content 的 asset 写 `blobRef: null`。host `library.ingest@1` 再用 `readVerifiedBlob` 将 BlobRef 恢复为 bytes 后传给领域端口。
 
 `library.ingest@1` 的 Action 元数据为 `effect: none`，但其领域端口在 host fence 与 ingest command idempotency 保护下会持久化 raw payload Blob、资产 Blob、`Observation`、`Entry`、`EntryRevision`、`Story`/`StoryRevision`、`Asset`、FTS，以及 entry/feed events。raw payload Blob 的最终写入由生产 `PrismaCosmosRepository.persistIngestItemInternal` 完成，不由 WorkflowBlobStore 的 asset 转换重复写入。
 
-`source.checkpoint@1` 同样在 host fence 与 DomainEvent idempotency 下更新来源 checkpoint，并记录 committed 或 superseded event。工作流自身另写 `workflow.checkpoint`，再发出 type 为 `ingest.page.persisted`、version 为 `v1` 的事件。
+`collection-plan.checkpoint@1` 同样在 host fence 与 DomainEvent idempotency 下更新计划的 checkpoint，并记录 committed 或 superseded event。工作流自身另写 `workflow.checkpoint`，再发出 type 为 `ingest.page.persisted`、version 为 `v1` 的事件。
 
 ## 错误与降级
 
@@ -184,7 +186,7 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 
 `toJsonItem` 将领域 `NormalizedIngestItem` 转为 `NormalizedIngestItemContract`：保存 asset content 的 bytes 外置到 WorkflowBlobStore，返回的 StoredBlob `mimeType` 在 BlobRef 中命名为 `mediaType`；`byteSize` 使用存储返回的 byteSize（asset 已提供时只作为领域 metadata 保留）。`fromJsonItem` 对非空 BlobRef 调用 `readVerifiedBlob`，将返回的 `Uint8Array` 放回领域 asset `content`。
 
-`library.ingest@1` 和 `source.checkpoint@1` 依赖 `HostActionExecutionFence`、`WorkflowIngestDomainPort`/Repository 和 verified Blob reader。两个 handler 把 `hostContext.fence.workflowRunId` 作为 `workflowRunId`，把 `context.idempotencyKey` 原样作为端口 `idempotencyKey`；它们不从输入 payload 猜测或替换 fence。领域与存储语义分别见[标准化内容模型](../domain/0001-normalized-content.md)和[文件 Blob Store](../storage/0005-file-blob-store.md)。
+`library.ingest@1` 和 `collection-plan.checkpoint@1` 依赖 `HostActionExecutionFence`、`WorkflowIngestDomainPort`/Repository 和 verified Blob reader。两个 handler 把 `hostContext.fence.workflowRunId` 作为 `workflowRunId`，把 `context.idempotencyKey` 原样作为端口 `idempotencyKey`；它们不从输入 payload 猜测或替换 fence。领域与存储语义分别见[标准化内容模型](../domain/0001-normalized-content.md)和[文件 Blob Store](../storage/0005-file-blob-store.md)。
 
 ## 配置
 
@@ -194,7 +196,7 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 | `media.retry.fetch@1` | `connector` | `trusted_worker` | `external` | `true` | `false` | `null` | `maxAttempts: 2`，`backoff: 1000`，仅 `dependency_unavailable`、`timeout`、`rate_limited` 可重试 |
 | `media.retry.apply@1` | `library` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
 | `library.ingest@1` | `library` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
-| `source.checkpoint@1` | `control` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
+| `collection-plan.checkpoint@1` | `control` | `host` | `none` | `true` | `true` | `null` | `maxAttempts: 3`，`backoff: 1000` |
 
 五个 Action 的 idempotency key 均由 workflow runtime/context 提供；本组件不提供绕过 fence、CAS 或 ActionRegistry 的配置开关。
 
@@ -209,7 +211,7 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 ## 重建验收
 
 - 注册的五个 refs、五个实现哈希以及 Definition capability requirements 与本文完全一致。
-- 相同输入下，Activity 调用顺序和 key 可观测为 `source.fetch`、`media.retry.fetch`、可选的 `media.retry.apply`、`library.ingest:0..n-1`、`source.checkpoint`；不存在并行 item 调用。
+- 相同输入下，Activity 调用顺序和 key 可观测为 `source.fetch`、`media.retry.fetch`、可选的 `media.retry.apply`、`library.ingest:0..n-1`、`collection-plan.checkpoint`；不存在并行 item 调用。
 - raw `Uint8Array` 不出现在 workflow JSON；saved content 可由生成的 `BlobRef` 完整、逐字节校验读取。
 - 连续运行可产生预期的 Observation、Entry revision、Story/feed/search/events，重复 command 由 fence 和 idempotency 返回既有结果。
 - checkpoint revision 匹配时提交新 cursor；不匹配时不覆盖新状态，返回当前 cursor/revision、`checkpointCommitted: false`，并产生 superseded event。
