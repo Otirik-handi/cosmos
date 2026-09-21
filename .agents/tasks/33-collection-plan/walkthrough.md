@@ -122,3 +122,21 @@
 - **门禁**：`bun run typecheck` 全仓 **0**；`bun run test` **113 文件 / 654 用例全绿**。
 - **仍未切换（留在来源侧）**：媒体策略的**读取**（ingest 与媒体获取仍读 `config.media`）、启用状态、游标与状态命名空间。理由与 1c-1b 的记录相同——这些读取的切换必须与产品写入口同批，否则会出现「产品写进去、运行读不到」。
 - **下一步**：切片 2（Web：在一个连接下建出第二个计划，看到各自的频率与最近失败）与切片 3（连接器选择与 schema 驱动表单）；1c-1c 的读取切换与 1c-2b 的计划写接口随后。
+
+## 2026-09-20：把已完成的数据面切片并入 master，冻结剩余顺序
+
+- **本轮切片**：不写新功能。把已验证的 1a～1c-2a 合并进 master，并把剩余四块（1c-1c、1c-2b、切片 2、切片 3）的顺序定下来。
+- **合并**：`067428f merge: introduce the collection plan as a data-plane object (Task 33)`，`--no-ff`（沿用仓库既有的任务合并形态，同 Task 24）。带进 8 个提交 / 32 文件（+1201 / −60），分支 `feat/t33-collection-plan` 保留为已合并历史，worktree 继续复用。**未 push**。
+- **合并前在 worktree 内的门禁**：`bun run typecheck` **0**；`bun run test` **113 文件 / 654 用例全绿**；`bun run db:validate` 通过；`bun run docs:check` 713 文件 0 失败；`size-governance --fail-on-new` PASS。
+- **合并后在 master 的门禁**：`bun run typecheck` **0**（先跑了一次 `db:generate`，见发现 1）；`bun run test` **113 文件 / 654 用例全绿**；`bun run db:validate` 通过；`bun run docs:check` 721 文件 0 失败；`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` PASS（基线内 7 条 warning，不阻塞）；`git diff --check` 干净。
+- **决定**：
+  1. 剩余顺序冻结为 **1c-1c → 切片 2 → 切片 3**。原 walkthrough 写的「下一步是切片 2」被推翻，理由：计划行的 `enabled` 与 `mediaPolicy` 现在只是创建时从来源复制的副本，产品面若现在做，显示的启用状态与媒体预算是过期值，1c-1c 切换后还要再改一次界面。
+  2. **界面形态推迟**：现有「来源健康」区块是否改造成「采集计划」并按连接分组，等 1c-1c 让计划行成为唯一事实之后再定，避免在计划行还是副本时先做一次界面。
+  3. **连接器状态命名空间的 manifest 默认模板由 `source:{id}` 改为 `plan:{id}`**。ADR-0023 决策 2 写「模板语义不变」，按**解析对象**不变理解（仍是单一 `{id}` 占位、仍由 manifest 声明），字面前缀随归属改为 `plan`。理由：照字面只换 `{id}` 取值会得到 `source:plan:<sourceId>`，前缀与实际含义相反，成为永久的排障噪声。内置插件（rss、collectors）都不覆盖该默认值，改 `packages/application/src/catalog.ts` 一处即可；迁移把已有 `source:<sourceId>` 重写为 `plan:<sourceId>`。
+  4. **`docs/spec/` 的同步推迟到 1c-1c 之后一次性写**。当前读取路径一半按计划、一半按来源，现在写 spec 会被下一轮立刻改写。
+- **发现（影响后续与其它工作区）**：
+  1. **合并含 Prisma schema 改动的分支后，必须在目标工作区跑 `bun run db:generate`**。合并刚完成时主工作区 `bun run typecheck` 报 6 个错（`Property 'collectionPlan' does not exist on type 'PrismaClient'`、`Prisma` 无 `CollectionPlanGetPayload` 等），因为生成的 Prisma Client 只在 worktree 里更新过；`db:generate` 后归 0。生成物在 `node_modules` 下、不入库，所以这是每个拉取该 master 的工作区都要走的一步。
+  2. `git fetch origin` 与 `git fetch upstream` 均失败（schannel `SEC_E_NO_CREDENTIALS`），无法确认远端是否前进；`origin/master` 停在 `5cbb670`，本地 master 领先它 3 个文档提交加这次合并。本轮只有本地合并。
+  3. 任务范围里写的「行为落地后的 `docs/spec/`」至今为空：`docs/spec/` 下没有任何 CollectionPlan 内容（只有 `PROJECT-STATUS.md` 与 `Phase-2-UNDO.md` 提到）。按决定 4 排到 1c-1c 之后。
+- **未运行**：`test:e2e`、浏览器产品 E2E、真实来源验收（本轮无用户可观察行为变化；浏览器验收属于切片 2）。
+- **下一步**：从合并后的 master 开新分支 `feat/t33-plan-read-switch` 做 1c-1c——媒体策略读取、启用状态、checkpoint 与连接器状态命名空间改按计划，同批做命名空间重写迁移与 `config.media` 移除，并冻结 `PATCH /sources/{id}` 与 `PATCH /collection-plans/{id}` 的字段边界。

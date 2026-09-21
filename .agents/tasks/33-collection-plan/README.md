@@ -49,13 +49,14 @@ Non-goals（ADR-0023 已裁定后置）：
 
 ## Current State
 
-- 生命周期阶段：**增量实现中**（分支 `feat/t33-collection-plan`）。已完成切片 1a expand、1b backfill、1c-1a（来源与默认计划同批创建）、1c-1b（调度按计划取数、运行归属计划）、1c-2a（计划读接口）、1c-1c-a（媒体预算写穿透）；过程与验证记录见 [`walkthrough.md`](walkthrough.md)。
+- 生命周期阶段：**数据面切片已并入 master**（合并提交 `067428f`，`--no-ff`）。已完成切片 1a expand、1b backfill、1c-1a（来源与默认计划同批创建）、1c-1b（调度按计划取数、运行归属计划）、1c-2a（计划读接口）、1c-1c-a（媒体预算写穿透）；过程与验证记录见 [`walkthrough.md`](walkthrough.md)。
 - 连贯目标：让「一个连接下的多个采集计划」成为真实对象并可在产品面配置。
 - 可观察验收（≤3）：
-  1. 回填后既有来源照常按原频率采集，全量测试与既有浏览器用例无回归；✅ 数据面已达成（全量测试 113 文件 / 654 用例全绿），浏览器用例未在本分支跑过。
-  2. 同一连接下两个计划的 Run、错误、重试与游标互不影响（行为测试 + 真实来源验收）；⏳ 调度与运行归属已有行为测试，真实来源验收待切片 3。
+  1. 回填后既有来源照常按原频率采集，全量测试与既有浏览器用例无回归；✅ 数据面已达成（合并后 master 全量测试 113 文件 / 654 用例全绿），浏览器用例未在本 Task 跑过。
+  2. 同一连接下两个计划的 Run、错误、重试与游标互不影响（行为测试 + 真实来源验收）；⏳ 调度与运行归属已有行为测试，游标仍按来源，真实来源验收待切片 3。
   3. 不打开数据库就能在一个连接下建出第二个计划，并看到两个计划各自的频率与最近一次失败；⏳ 读接口已就绪，产品面待切片 2。
-- 仍未切换（留在来源侧，属 1c-1c 余下部分）：媒体策略的读取、启用状态、游标与状态命名空间。
+- 仍未切换（留在来源侧，属 1c-1c）：媒体策略的读取、启用状态、游标与状态命名空间。
+- 剩余顺序已冻结为 **1c-1c → 切片 2 → 切片 3**；界面形态等 1c-1c 让计划行成为唯一事实后再定。
 - 依赖：Task 22（Connection／StateStore）、Task 23（TriggerBinding 与 manifest 命名空间）、Task 02（SourceInstance／Checkpoint）。
 - 受影响合同：Prisma schema 与 migration；contracts（计划 DTO／命令、Run 投影的计划引用）；application（调度与 ingest 的计划解析）；storage（repository）；API（计划端点）；transport（HTTP client）；Web（计划管理面与来源表单）。
 - 预计核心文件：`packages/storage-prisma/prisma/schema.prisma` + 新 migration；`packages/contracts/src/`（计划合同与 `index.ts`）；`packages/application/src/`（`repository-port.ts`、`workflow-ingest.ts`、`workflow-control.ts`、`catalog.ts`）；`packages/storage-prisma/src/repository/`；`apps/worker/src/main.ts`、`apps/worker/src/scheduling.ts`；`apps/api/src/app.controller/`（新增计划 controller）；`packages/transport-http/src/`；`apps/web/src/app/`、`apps/web/src/components/cosmos/`、`apps/web/src/home/`。
@@ -65,9 +66,9 @@ Non-goals（ADR-0023 已裁定后置）：
 
 capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内部按 expand → backfill → read switch 顺序，每一步可独立合入与验证。
 
-1. **切片 1a expand**：✅ 已交付（计划表、contracts、四处可空计划列）。
-2. **切片 1b backfill**：✅ 已交付（默认计划与计划引用回填；状态命名空间重写按偏差记录移到 1c）。
-3. **切片 1c read switch**：⏳ 部分交付——调度、运行归属与计划读接口已切换（1c-1b／1c-2a）；媒体策略读取、启用状态、游标与状态命名空间仍按来源（1c-1c 余下部分）。
+1. **切片 1a expand**：✅ 已交付并合入 master（计划表、contracts、四处可空计划列）。
+2. **切片 1b backfill**：✅ 已交付并合入 master（默认计划与计划引用回填；状态命名空间重写按偏差记录移到 1c）。
+3. **切片 1c read switch**：⏳ 部分交付并合入 master——调度、运行归属与计划读接口已切换（1c-1b／1c-2a）；媒体策略读取、启用状态、游标与状态命名空间仍按来源（1c-1c，下一轮，分支 `feat/t33-plan-read-switch`）。
 4. **切片 2 计划管理面**：⏳ 未开始（Web 连接下多计划的创建与查看）。验收：浏览器 E2E。
 5. **切片 3 连接器与表单**：⏳ 未开始（连接器选择 + schema 驱动字段）。验收：产品面建出 Bilibili 双计划并跑真实来源。
 
@@ -80,15 +81,16 @@ capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内�
 - 重叠策略 v1 只接受一种值，其它值显式拒绝并说明尚未实现；API Draft 的完整枚举保留为目标合同。
 - 发现上下文 v1 不新增持久字段，由目标配置派生；API Draft 的 `discoveryContext` 细节留待后续切片。
 - v1 手动运行沿用 `POST /sources/{id}/runs`，计划级运行路由后置（已写入 API Draft §4.3 的 v1 落地范围）。
-- 待实现期决定的项（记录在此，不静默选择）：`PATCH /sources/{id}` 与 `PATCH /collection-plans/{id}` 的字段边界（连接、调度、媒体预算的写入入口），在切片 1c 冻结并同批更新 API Draft。
+- 待实现期决定的项（记录在此，不静默选择）：`PATCH /sources/{id}` 与 `PATCH /collection-plans/{id}` 的字段边界（连接、调度、媒体预算的写入入口），在 1c-1c 冻结并同批更新 API Draft。
+- 连接器状态命名空间的 manifest 默认模板由 `source:{id}` 改为 `plan:{id}`（2026-09-20 决定）：ADR-0023 决策 2 的「模板语义不变」按**解析对象**不变理解（仍是单一 `{id}` 占位、仍由 manifest 声明），字面前缀随归属改为 `plan`；照字面只换 `{id}` 取值会得到 `source:plan:<sourceId>`，前缀与实际含义相反。
 
 ## Implementation Walkthrough
 
-未开始。开工后过程、偏差与验证记录写入同目录 [`walkthrough.md`](walkthrough.md)（append-only）。
+过程、偏差与验证记录写入同目录 [`walkthrough.md`](walkthrough.md)（append-only）；本节不重复其证据。
 
 ## Verification / Gate
 
-未运行代码验证。定义阶段已完成并有记录：Proposal accepted、ADR-0023 落地、`docs:check` 711 文件 0 失败、`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` PASS（2026-09-20，证据在 Proposal 决策记录与 ADR）。
+合并后的 master 全绿：`typecheck` 0、全量测试 113 文件 / 654 用例、`docs:check` 721 文件 0 失败、`db:validate` 通过、`size-governance --fail-on-new` PASS。命令、结果与未运行项见 [`walkthrough.md`](walkthrough.md) 的合并记录；未运行项为 `test:e2e`、浏览器产品 E2E 与真实来源验收。
 
 ## Follow-ups
 
