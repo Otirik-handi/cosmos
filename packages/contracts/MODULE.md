@@ -4,10 +4,10 @@
 
 ## 公共入口
 
-`src/index.ts` 只做导出与模块地图（**167 行**），解析后 **432 个导出（219 值 / 213 类型）**。
+`src/index.ts` 只做导出与模块地图（**183 行**），解析后 **471 个导出（239 值 / 232 类型）**。
 
 - 机器可读真相源：`entry-surface.txt`（排序后的 `kind<TAB>名称`），由 `bun run scripts/entry-export-surface.ts packages/contracts/src/index.ts` 生成。
-- 常驻护栏：`src/entry-contract.test.ts` 断言运行时值导出集合等于快照的 `value` 行（219 个）；增删导出必须先显式重新生成快照。
+- 常驻护栏：`src/entry-contract.test.ts` 断言运行时值导出集合等于快照的 `value` 行（239 个）；增删导出必须先显式重新生成快照。
 - 环依赖：入口与模块之间 **0 环**（`bunx madge --circular`）；守卫是保持 0。
 
 ## 子模块地图
@@ -18,6 +18,7 @@
 |---|---|---|
 | `index.ts` | 入口门面：只有导出与模块地图 | ~2.8k |
 | `base.ts` | 基础合同：来源 / 内容 / 发布者 / 触发器 / 连接 / 媒体策略（83 导出） | ~3.9k |
+| `collection-plan.ts` | 采集计划（ADR-0023）：快照读投影、创建/更新命令与 v1 重叠策略枚举（← base） | ~0.4k |
 | `action.ts` | Action 与采集合同：Action manifest/执行、归一化采集项、媒体重试、Source fetch/checkpoint（53 导出） | ~3.3k |
 | `source.ts` | 来源与采集：Connector 描述符、Catalog SourceDefinition 清单、来源配置探测、Job 快照、资产与媒体清理（← search、entry-relation） | ~2.4k |
 | `run-control.ts` | Run/Job 生命周期：五态状态机、步与作业状态、Run 快照、取消/恢复/重跑命令与结果（← source） | ~0.6k |
@@ -31,7 +32,7 @@
 | `user-organization.ts` | 用户组织：Label、Collection、Favorite、Annotation 与 Saved View 条件与命令 | ~2.1k |
 | `board.ts` | 看板：Block 类型与配置白名单、Board/Section/Block 详情与写入命令、Spotlight 人工固定 | ~2.1k |
 
-测试与源码同级（`*.test.ts`），全部从 `./index.js` 导入：门面 re-export 使其无需改导入，同时它们构成门面的额外护栏。按域对应：`source.test.ts`、`entity-relation.test.ts`、`user-organization.test.ts`、`topic.test.ts`、`board.test.ts`、`story-subtype.test.ts`，以及既有的 `run-control.test.ts`、`connection.test.ts`、`trigger.test.ts`、`action.test.ts`。
+测试与源码同级（`*.test.ts`），全部从 `./index.js` 导入：门面 re-export 使其无需改导入，同时它们构成门面的额外护栏。按域对应：`source.test.ts`、`entity-relation.test.ts`、`user-organization.test.ts`、`topic.test.ts`、`board.test.ts`、`story-subtype.test.ts`、`collection-plan.test.ts`，以及既有的 `run-control.test.ts`、`connection.test.ts`、`trigger.test.ts`、`action.test.ts`。
 
 ## 阅读顺序
 
@@ -47,4 +48,4 @@
 - 此处只放 schema 与类型，不放编排逻辑或 I/O；
 - 新增模块必须保持依赖单向：`bunx madge --circular --extensions ts packages/contracts/src/index.ts` 必须是 0 环。
 
-更新日期：2026-09-14
+更新日期：2026-09-20

@@ -1,4 +1,4 @@
-# 共 120 条路由
+# 共 122 条路由
 GET       /health                                      health
 GET       /connectors                                  connectors
 GET       /source-definitions                          sourceDefinitions
@@ -22,6 +22,8 @@ GET       /connections/:connectionId                   connection
 POST      /connections                                 createConnection
 PATCH     /connections/:connectionId                   updateConnection
 POST      /connections/:connectionId/removals          deleteConnection
+GET       /collection-plans                            listCollectionPlans
+GET       /collection-plans/:planId                    collectionPlan
 GET       /storage-stats                               storageStats
 GET       /backups                                     listBackups
 POST      /backups                                     createBackup

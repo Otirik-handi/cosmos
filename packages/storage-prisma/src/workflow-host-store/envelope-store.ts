@@ -57,6 +57,14 @@ export class PrismaWorkflowHostEnvelopeStore extends PrismaWorkflowHostStoreBase
                 }
 
                 const now = normalized.createdAt;
+                // 计划归属（ADR-0023）：调用方可以显式给计划，否则按来源解析——v1 计划与
+                // 目标一对一，来源存在就一定有默认计划；来源不存在（测试夹具）保持 null。
+                const planId = normalized.planId ?? (normalized.sourceId === null
+                    ? null
+                    : (await tx.collectionPlan.findUnique({
+                        where: { sourceId: normalized.sourceId },
+                        select: { id: true },
+                    }))?.id ?? null);
                 const row = await tx.workflowRun.create({
                     data: {
                         id: normalized.runId,
@@ -67,6 +75,7 @@ export class PrismaWorkflowHostEnvelopeStore extends PrismaWorkflowHostStoreBase
                         status: "queued",
                         resumeRequired: false,
                         sourceInstanceId: normalized.sourceId,
+                        planId,
                         errorMessage: null,
                         definitionKey: normalized.definition.key,
                         definitionVersion: normalized.definition.version,

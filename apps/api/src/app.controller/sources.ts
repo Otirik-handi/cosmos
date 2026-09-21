@@ -342,6 +342,27 @@ export class AppControllerSources extends AppControllerBase {
         }
     }
 
+    // ---- Collection plans (ADR-0023): the user-visible collection unit. ----
+
+    @Get("collection-plans")
+    async listCollectionPlans() {
+        return this.repository.listCollectionPlans();
+    }
+
+    @Get("collection-plans/:planId")
+    @Bind(Param("planId"))
+    async collectionPlan(planId: string) {
+        const result = await this.repository.getCollectionPlan(planId);
+        if (!result) {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Collection plan not found: ${planId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
     // ---- Storage occupancy + backup/restore (ADR-0019 / OPS-003/004). ----
 
     @Get("storage-stats")

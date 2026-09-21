@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
-import { type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceActivationCommand, type SourceSnapshot, type UpdateSourceCommand } from "@cosmos/contracts";
+import { type CollectionPlanSnapshot, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceActivationCommand, type SourceMediaPolicy, type SourceSnapshot, type UpdateSourceCommand } from "@cosmos/contracts";
 import { ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parseSourceRevisionId } from "../storage-root.js";
-import { appendDomainEvent, isUniqueConstraintError, sourceActivationRequestHash } from "./repository-internals.js";
+import { appendDomainEvent, isUniqueConstraintError, resolvePlanId, sourceActivationRequestHash } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers4 } from "./helpers-4.js";
 
 export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers4 {
@@ -26,10 +26,23 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                     revision: 1,
                 },
             });
+            // 计划与采集目标一对一（ADR-0023）：默认计划与来源同批建出。读取切换之后
+            // 调度、状态命名空间与媒体预算都按计划归属，晚建会让新来源失去这些归属。
+            const plan = await tx.collectionPlan.create({
+                data: {
+                    id: `plan:${created.id}`,
+                    name: created.name,
+                    sourceId: created.id,
+                    mediaPolicyJson: extractMediaPolicy(input.config),
+                    enabled: false,
+                    revision: 1,
+                },
+            });
             if (input.scheduleIntervalMs !== undefined) {
                 await tx.triggerBinding.create({
                     data: {
                         sourceId: created.id,
+                        planId: plan.id,
                         kind: "schedule",
                         configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
                         enabled: true,
@@ -58,6 +71,27 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         return source ? this.toSourceSnapshot(source) : null;
     }
 
+    /**
+     * 计划读投影（ADR-0023）：产品面的对象是计划，所以它要能独立回答「挂在哪个连接、
+     * 多久采集一次、什么媒体预算」。墓碑来源的计划不出现在产品面上。
+     */
+    async listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]> {
+        const plans = await this.prisma.collectionPlan.findMany({
+            where: { source: { deletedAt: null } },
+            include: { triggerBinding: true },
+            orderBy: { createdAt: "asc" },
+        });
+        return plans.map((plan) => toCollectionPlanSnapshot(plan, plan.triggerBinding));
+    }
+
+    async getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot | null> {
+        const plan = await this.prisma.collectionPlan.findFirst({
+            where: { id: planId, source: { deletedAt: null } },
+            include: { triggerBinding: true },
+        });
+        return plan ? toCollectionPlanSnapshot(plan, plan.triggerBinding) : null;
+    }
+
     async updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot> {
         const expectedRevision = parseSourceRevisionId(sourceId, input.baseRevisionId);
         const current = await this.prisma.sourceInstance.findUnique({ where: { id: sourceId } });
@@ -74,20 +108,38 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                 },
             });
             if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
+            // 过渡期写穿透（ADR-0023 决策 2）：来源端点是产品当前唯一的编辑入口，
+            // 它写的名字、连接与媒体策略同时落进计划，避免计划读投影与来源行各说一套。
+            if (input.name !== undefined || input.connectionId !== undefined || input.config !== undefined) {
+                await tx.collectionPlan.updateMany({
+                    where: { sourceId },
+                    data: {
+                        ...(input.name !== undefined ? { name: input.name } : {}),
+                        ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
+                        ...(input.config !== undefined
+                            ? { mediaPolicyJson: extractMediaPolicy(input.config) }
+                            : {}),
+                    },
+                });
+            }
             if (input.scheduleIntervalMs !== undefined) {
                 if (input.scheduleIntervalMs === null) {
                     await tx.triggerBinding.deleteMany({ where: { sourceId } });
                 } else {
+                    // 后补的绑定必须带计划归属，否则读取切换后永远不会被调度。
+                    const planId = await resolvePlanId(tx, sourceId);
                     await tx.triggerBinding.upsert({
                         where: { sourceId },
                         create: {
                             sourceId,
+                            planId,
                             kind: "schedule",
                             configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
                             enabled: true,
                             revision: 1,
                         },
                         update: {
+                            planId,
                             configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
                             revision: { increment: 1 },
                         },
@@ -307,27 +359,34 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     }
 
     async listScheduleTriggers(): Promise<readonly {
+        planId: string;
         sourceId: string;
         intervalMs: number;
         lastRunAt: string | null;
     }[]> {
-        const bindings = await this.prisma.triggerBinding.findMany({
-            where: { kind: "schedule", enabled: true },
-            include: { source: { select: { id: true, enabled: true, deletedAt: true } } },
+        // 调度单位是采集计划（ADR-0023）：绑定挂在计划上，来源只决定可执行性
+        // （启用且未删除）。计划与目标 v1 一对一，所以这里读到的仍是同一批来源。
+        const plans = await this.prisma.collectionPlan.findMany({
+            where: { source: { enabled: true, deletedAt: null } },
+            include: {
+                triggerBinding: true,
+                source: { select: { id: true } },
+            },
         });
-        const result: { sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
-        for (const binding of bindings) {
-            // 删除来源会移除绑定；这里再挡一次，避免历史数据里残留的绑定把墓碑来源排进调度。
-            if (!binding.source.enabled || binding.source.deletedAt) continue;
+        const result: { planId: string; sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
+        for (const plan of plans) {
+            const binding = plan.triggerBinding;
+            if (!binding || binding.kind !== "schedule" || !binding.enabled) continue;
             const config = JSON.parse(binding.configJson) as { intervalMs?: number };
             if (typeof config.intervalMs !== "number") continue;
             const latest = await this.prisma.workflowRun.findFirst({
-                where: { sourceInstanceId: binding.sourceId },
+                where: { planId: plan.id },
                 orderBy: { createdAt: "desc" },
                 select: { finishedAt: true, createdAt: true },
             });
             result.push({
-                sourceId: binding.sourceId,
+                planId: plan.id,
+                sourceId: plan.source.id,
                 intervalMs: config.intervalMs,
                 lastRunAt: latest ? (latest.finishedAt ?? latest.createdAt).toISOString() : null,
             });
@@ -420,4 +479,41 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         await copyFile(source, this.roots.databasePath);
     }
 
+}
+
+/**
+ * 计划的媒体预算从来源配置继承（ADR-0023 决策 6，字段语义沿用 ADR-0014）。
+ * 没有配置时保持 null —— 那表示「跟随全局默认」，不是空策略。
+ */
+function extractMediaPolicy(config: unknown): string | null {
+    if (config === null || typeof config !== "object") {
+        return null;
+    }
+    const media = (config as { media?: unknown }).media;
+    return media === undefined ? null : JSON.stringify(media);
+}
+
+function toCollectionPlanSnapshot(
+    plan: Prisma.CollectionPlanGetPayload<{}>,
+    binding: Prisma.TriggerBindingGetPayload<{}> | null,
+): CollectionPlanSnapshot {
+    const interval = binding === null
+        ? undefined
+        : (JSON.parse(binding.configJson) as { intervalMs?: unknown }).intervalMs;
+    return {
+        id: plan.id,
+        name: plan.name,
+        sourceId: plan.sourceId,
+        connectionId: plan.connectionId,
+        triggerBindingId: binding?.id ?? null,
+        mediaPolicy: plan.mediaPolicyJson === null
+            ? null
+            : JSON.parse(plan.mediaPolicyJson) as SourceMediaPolicy,
+        overlapPolicy: plan.overlapPolicy as CollectionPlanSnapshot["overlapPolicy"],
+        enabled: plan.enabled,
+        revisionId: String(plan.revision),
+        scheduleIntervalMs: typeof interval === "number" ? interval : null,
+        createdAt: plan.createdAt.toISOString(),
+        updatedAt: plan.updatedAt.toISOString(),
+    };
 }

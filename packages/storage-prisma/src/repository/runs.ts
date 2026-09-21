@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type JobSnapshot, type SourceConfigProbeCommand } from "@cosmos/contracts";
 import { type CosmosRepository, type JobLease } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
-import { appendDomainEvent, assertJobLease } from "./repository-internals.js";
+import { appendDomainEvent, assertJobLease, resolvePlanId } from "./repository-internals.js";
 import { PrismaCosmosRepositorySources } from "./sources.js";
 
 export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
@@ -18,6 +18,7 @@ export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
             const created = await tx.run.create({
                 data: {
                     sourceInstanceId: input.sourceId,
+                    planId: await resolvePlanId(tx, input.sourceId),
                     triggerKind: input.triggerKind,
                     status: "running",
                     startedAt: now,
@@ -85,6 +86,7 @@ export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
             const created = await tx.run.create({
                 data: {
                     sourceInstanceId: input.sourceId,
+                    planId: await resolvePlanId(tx, input.sourceId),
                     triggerKind: input.triggerKind,
                     status: "queued",
                 },

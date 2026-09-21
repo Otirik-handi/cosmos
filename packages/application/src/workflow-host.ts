@@ -59,6 +59,8 @@ export interface CreateWorkflowEnvelopeInput {
     inputSnapshot: JsonValue;
     productRun: JsonValue;
     sourceId?: string | null;
+    /** Collection plan the Run belongs to (ADR-0023); resolved from the source when omitted. */
+    planId?: string | null;
     createdAt?: string;
 }
 

@@ -516,3 +516,18 @@ export function readPayloadSourceId(payloadJson: string | null): string | null {
         return null;
     }
 }
+
+/**
+ * 计划归属（ADR-0023）：v1 计划与采集目标一对一，按来源解析即可；来源不存在
+ * （测试夹具或历史行）时保持 null，不让旧路径因为缺计划而失败。
+ */
+export async function resolvePlanId(
+    tx: Prisma.TransactionClient,
+    sourceId: string,
+): Promise<string | null> {
+    const plan = await tx.collectionPlan.findUnique({
+        where: { sourceId },
+        select: { id: true },
+    });
+    return plan?.id ?? null;
+}

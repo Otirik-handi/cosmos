@@ -3,6 +3,7 @@ import type { Logger } from "@cosmos/logging";
 /** The slice of `IngestWorkflowControlService` the schedule tick depends on. */
 export interface ScheduledRunQueue {
     enqueue(input: {
+        planId: string;
         sourceId: string;
         triggerKind: "schedule";
         idempotencyKey: string;
@@ -10,6 +11,7 @@ export interface ScheduledRunQueue {
 }
 
 export interface ScheduleTrigger {
+    planId: string;
     sourceId: string;
     intervalMs: number;
     lastRunAt: string | null;
@@ -24,9 +26,9 @@ export interface ScheduleQueueOptions {
 /**
  * Enabled schedule trigger bindings (ADR-0018) drive scheduled dispatch: a
  * disabled source or a source without a schedule trigger must never queue a Run
- * just because time passed. The idempotency key buckets the current instant by
- * the source's own interval, so Worker restarts and overlapping ticks cannot
- * double-queue the same window.
+ * just because time passed. Since ADR-0023 the trigger belongs to the collection
+ * plan, so the idempotency key buckets the instant by the *plan's* interval —
+ * two plans under one connection never share or cancel each other's window.
  */
 export function createScheduleQueue(
     options: ScheduleQueueOptions,
@@ -42,12 +44,14 @@ export function createScheduleQueue(
             const bucket = Math.floor(now.getTime() / interval);
             try {
                 const envelope = await options.queue.enqueue({
+                    planId: trigger.planId,
                     sourceId: trigger.sourceId,
                     triggerKind: "schedule",
-                    idempotencyKey: `schedule:${trigger.sourceId}:${bucket}`,
+                    idempotencyKey: `schedule:${trigger.planId}:${bucket}`,
                 });
                 options.logger.child({
                     runId: envelope.runId,
+                    planId: trigger.planId,
                     sourceId: trigger.sourceId,
                 }).info("workflow.run.queued", {
                     triggerKind: "schedule",
@@ -56,7 +60,10 @@ export function createScheduleQueue(
             } catch (error) {
                 // One broken source must not prevent another source or any
                 // downstream lane from being polled in this cycle.
-                options.logger.child({ sourceId: trigger.sourceId }).error("workflow.run.queue_failed", {
+                options.logger.child({
+                    planId: trigger.planId,
+                    sourceId: trigger.sourceId,
+                }).error("workflow.run.queue_failed", {
                     triggerKind: "schedule",
                 }, error);
             }

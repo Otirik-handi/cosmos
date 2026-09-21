@@ -49,12 +49,13 @@ Non-goals（ADR-0023 已裁定后置）：
 
 ## Current State
 
-- 生命周期阶段：**定义**（切片 1 未开工；本轮只落合同与文档，不写代码）。
+- 生命周期阶段：**增量实现中**（分支 `feat/t33-collection-plan`）。已完成切片 1a expand、1b backfill、1c-1a（来源与默认计划同批创建）、1c-1b（调度按计划取数、运行归属计划）、1c-2a（计划读接口）、1c-1c-a（媒体预算写穿透）；过程与验证记录见 [`walkthrough.md`](walkthrough.md)。
 - 连贯目标：让「一个连接下的多个采集计划」成为真实对象并可在产品面配置。
 - 可观察验收（≤3）：
-  1. 回填后既有来源照常按原频率采集，全量测试与既有浏览器用例无回归；
-  2. 同一连接下两个计划的 Run、错误、重试与游标互不影响（行为测试 + 真实来源验收）；
-  3. 不打开数据库就能在一个连接下建出第二个计划，并看到两个计划各自的频率与最近一次失败。
+  1. 回填后既有来源照常按原频率采集，全量测试与既有浏览器用例无回归；✅ 数据面已达成（全量测试 113 文件 / 654 用例全绿），浏览器用例未在本分支跑过。
+  2. 同一连接下两个计划的 Run、错误、重试与游标互不影响（行为测试 + 真实来源验收）；⏳ 调度与运行归属已有行为测试，真实来源验收待切片 3。
+  3. 不打开数据库就能在一个连接下建出第二个计划，并看到两个计划各自的频率与最近一次失败；⏳ 读接口已就绪，产品面待切片 2。
+- 仍未切换（留在来源侧，属 1c-1c 余下部分）：媒体策略的读取、启用状态、游标与状态命名空间。
 - 依赖：Task 22（Connection／StateStore）、Task 23（TriggerBinding 与 manifest 命名空间）、Task 02（SourceInstance／Checkpoint）。
 - 受影响合同：Prisma schema 与 migration；contracts（计划 DTO／命令、Run 投影的计划引用）；application（调度与 ingest 的计划解析）；storage（repository）；API（计划端点）；transport（HTTP client）；Web（计划管理面与来源表单）。
 - 预计核心文件：`packages/storage-prisma/prisma/schema.prisma` + 新 migration；`packages/contracts/src/`（计划合同与 `index.ts`）；`packages/application/src/`（`repository-port.ts`、`workflow-ingest.ts`、`workflow-control.ts`、`catalog.ts`）；`packages/storage-prisma/src/repository/`；`apps/worker/src/main.ts`、`apps/worker/src/scheduling.ts`；`apps/api/src/app.controller/`（新增计划 controller）；`packages/transport-http/src/`；`apps/web/src/app/`、`apps/web/src/components/cosmos/`、`apps/web/src/home/`。
@@ -64,11 +65,11 @@ Non-goals（ADR-0023 已裁定后置）：
 
 capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内部按 expand → backfill → read switch 顺序，每一步可独立合入与验证。
 
-1. **切片 1a expand**：新增 `CollectionPlan` 表与 contracts；Run／WorkflowRun／Checkpoint 增加可空计划列。验收：migration 应用后旧路径行为不变、既有测试全绿。
-2. **切片 1b backfill**：为每个既有来源生成默认计划（继承连接、触发器、媒体预算），回填三处计划引用并重写状态命名空间。验收：回填后既有来源行为与状态读取不变。
-3. **切片 1c read switch**：Worker 调度、ingest、checkpoint 提交、状态命名空间与产品查询改读计划；计划 CRUD 与读投影上线（API／transport）。验收：双计划隔离的行为测试。
-4. **切片 2 计划管理面**：Web 连接下多计划的创建与查看、计划级状态。验收：浏览器 E2E。
-5. **切片 3 连接器与表单**：连接器选择 + schema 驱动字段（`enum`、认证提示）。验收：产品面建出 Bilibili 双计划并跑真实来源。
+1. **切片 1a expand**：✅ 已交付（计划表、contracts、四处可空计划列）。
+2. **切片 1b backfill**：✅ 已交付（默认计划与计划引用回填；状态命名空间重写按偏差记录移到 1c）。
+3. **切片 1c read switch**：⏳ 部分交付——调度、运行归属与计划读接口已切换（1c-1b／1c-2a）；媒体策略读取、启用状态、游标与状态命名空间仍按来源（1c-1c 余下部分）。
+4. **切片 2 计划管理面**：⏳ 未开始（Web 连接下多计划的创建与查看）。验收：浏览器 E2E。
+5. **切片 3 连接器与表单**：⏳ 未开始（连接器选择 + schema 驱动字段）。验收：产品面建出 Bilibili 双计划并跑真实来源。
 
 每片开工前在 [`walkthrough.md`](walkthrough.md) 记录当轮切片与仍有后果的假设；本 README 只维护当前摘要，过程、偏差与验证记录写入 walkthrough。
 
