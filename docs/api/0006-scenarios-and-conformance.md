@@ -83,6 +83,8 @@ Connection
 - 撤销 Connection 使两个计划不可执行，但不删除已录入 Entry；
 - Worker 不由用户指定。
 
+v1 落地注记（2026-09-20，ADR [`0023`](../adr/0023-collection-plan-v1.md)）：两个计划各自持有 Trigger、checkpoint、媒体预算与状态命名空间，隔离要求不变；`overlapPolicy` 在 v1 只有一种值（与现状等价的「上一轮未结束时到点不重复入队」），因此本场景的「overlap policy 独立」在 v1 表现为**各自独立生效**，而不是各自可配不同策略。AuthorizationSession 与 Connection 撤销的产品语义依赖真实认证 Adapter，不在 Task 33 的切片 1–3 范围。
+
 ### S04：无 URL 群聊消息
 
 验收：

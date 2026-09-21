@@ -188,6 +188,8 @@ Source 与 CollectionPlan 的最终关系仍可在实现 Task 调整，但 API �
 只开放 manual/schedule、预算、checkpoint 和 overlap；Phase 2 再开放同一
 Connection 下的多 Operation/多计划管理。默认计划不是第二套调度模型。
 
+**v1 落地范围（2026-09-20 裁定，ADR [`0023`](../adr/0023-collection-plan-v1.md)）**：计划与采集目标**一对一**（计划引用目标，目标继续承载内容身份）；进入 v1 的端点是 `GET`／`POST /collection-plans`、`GET`／`PATCH /collection-plans/{id}` 与 `GET /collection-plans/{id}/checkpoint`，`DELETE` 与 checkpoint 重置仍为 `Planned`／`Reserved`；`overlapPolicy` 的写路径 v1 **只接受 `forbid`**（与现状等价的「上一轮未结束时到点不重复入队」），其余值必须显式拒绝并说明尚未实现；`CollectionPlanDetail.discoveryContext` v1 不新增持久字段，由目标配置派生；`scope` 与 `sourceOperationRef` 在 v1 是目标的只读投影，不是计划自有字段。手动运行在 v1 沿用既有 `POST /sources/{id}/runs`，计划级运行路由后置。来源端点与计划端点之间的字段边界（连接、调度、媒体预算的写入入口）在 Task 33 切片 1c 冻结，冻结前不改变现有来源端点的行为。
+
 ### 4.4 TriggerBinding 与 Webhook
 
 | 成熟度 | Method | Path | 结果 |

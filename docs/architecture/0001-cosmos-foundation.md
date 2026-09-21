@@ -127,6 +127,7 @@
 82. SourceInstance 以版本化 `sourceDefinitionRef` 作为唯一业务身份；manifest 显式提供 `connectorId`，旧 `kind` 只在迁移和运行时兼容期间保留，并由 manifest 映射约束，不允许新 API 写入或隐式 kind→ref 推导。
 83. SourceInstance 持久化单调整数 `revision`，公开投影提供不透明 `revisionId`；创建从 revision 1 开始且默认停用，配置更新和启用状态变更都必须使用基于 revision 的 CAS。过期 revision 返回 `conflict`，不得使用 `updatedAt` 代替。
 84. 旧数据迁移先按已登记的 kind→sourceDefinitionRef/operationId 显式映射预检；未知 kind、非唯一映射或 manifest 不可用时阻断迁移并报告，不静默生成 ref。
+85. `CollectionPlan` v1 落地为真实对象：用户可见的独立采集计划持有连接引用、触发器、媒体预算、计划级 checkpoint 与状态命名空间，v1 与采集目标一对一；目标继续承载内容身份（Entry/Observation 归属不变）。重叠策略 v1 只实现与现状等价的一种，本节第 73 条预留的 `queue`/`replace`/`allow`/`merge` 随后续切片；迁移按 expand／backfill／read switch／contract 四步，contract 单独部署与授权（Proposal [`collection-plan-v1`](../proposals/collection-plan-v1.md)、ADR [`0023`](../adr/0023-collection-plan-v1.md)）。
 
 ## 21. 架构不变量
 后续实现和重构必须持续验证：
@@ -193,4 +194,5 @@
 60. lease 丢失后的 late evidence 只能追加 external `unknown` 审计，不能取得 owner、Secret、terminal 或领域写入能力。
 61. 并发 Gateway claim 必须在 TaskStore 中原子保留 Session/lane capacity；Worker 上报 slot 和进程内 long-poll 都不是容量权威。
 62. `nb-workflow@0.2.0` Kernel API 已用于当前 Cosmos Durable Host 固定 Ingest；后续扩展仍须通过 Kernel/Backend conformance。Task 04 Spike 与 API Draft 只能作为 Host/Worker 边界和历史证据，不能被误报为 Gateway 或其它未实现能力。
+63. 采集计划、采集目标、连接与触发器的归属边界唯一：Run/WorkflowRun 记录计划，Entry/Observation 归目标，计划级 checkpoint 与状态命名空间不出现第二套并行当前状态。
 
