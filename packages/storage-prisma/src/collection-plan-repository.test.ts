@@ -205,4 +205,38 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             await repository.close();
         }
     });
+
+    it("在来源端点改媒体策略时，计划的媒体预算同步更新", async () => {
+        const repository = await createRepository();
+        try {
+            const source = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "https://example.test/feed.xml" },
+            });
+            await expect(repository.getCollectionPlan(`plan:${source.id}`))
+                .resolves.toMatchObject({ mediaPolicy: null });
+
+            // 过渡期：来源端点仍是产品唯一的编辑入口，改媒体策略必须同时落进计划，
+            // 否则计划读投影会一直显示创建时那份旧值。
+            await repository.updateSource(source.id, {
+                baseRevisionId: source.revisionId,
+                config: { feedUrl: "https://example.test/feed.xml", media: { images: "metadata_only" } },
+            });
+            await expect(repository.getCollectionPlan(`plan:${source.id}`))
+                .resolves.toMatchObject({ mediaPolicy: { images: "metadata_only" } });
+
+            // 移除策略时计划要回到「跟随全局默认」，不能留下旧值。
+            const current = await repository.getSource(source.id);
+            await repository.updateSource(source.id, {
+                baseRevisionId: current?.revisionId ?? source.revisionId,
+                config: { feedUrl: "https://example.test/feed.xml" },
+            });
+            await expect(repository.getCollectionPlan(`plan:${source.id}`))
+                .resolves.toMatchObject({ mediaPolicy: null });
+        } finally {
+            await repository.close();
+        }
+    });
 });

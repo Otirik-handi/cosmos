@@ -109,13 +109,16 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
             });
             if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
             // 过渡期写穿透（ADR-0023 决策 2）：来源端点是产品当前唯一的编辑入口，
-            // 它写的名字与连接同时落进计划，避免计划读投影与来源行各说一套。
-            if (input.name !== undefined || input.connectionId !== undefined) {
+            // 它写的名字、连接与媒体策略同时落进计划，避免计划读投影与来源行各说一套。
+            if (input.name !== undefined || input.connectionId !== undefined || input.config !== undefined) {
                 await tx.collectionPlan.updateMany({
                     where: { sourceId },
                     data: {
                         ...(input.name !== undefined ? { name: input.name } : {}),
                         ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
+                        ...(input.config !== undefined
+                            ? { mediaPolicyJson: extractMediaPolicy(input.config) }
+                            : {}),
                     },
                 });
             }
