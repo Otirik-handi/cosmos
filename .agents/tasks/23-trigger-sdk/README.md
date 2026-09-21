@@ -1,6 +1,6 @@
 # Task 23：Trigger / SDK v1（Phase 2 第十三切片）
 
-> 编号 23 由 Agent 建议、待维护者确认。
+> 编号 23 经维护者 2026-09-21 确认。
 
 ## User Request / Topic
 

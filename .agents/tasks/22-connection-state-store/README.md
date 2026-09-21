@@ -1,6 +1,6 @@
 # Task 22：Connection / SecretStore / StateStore v1（Phase 2 第十二切片）
 
-> 编号 22 由 Agent 建议、待维护者确认。
+> 编号 22 经维护者 2026-09-21 确认。
 
 ## User Request / Topic
 
