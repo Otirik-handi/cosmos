@@ -29,6 +29,8 @@ type	CollectionBlockConfig
 type	CollectionDetail
 type	CollectionItemCommand
 type	CollectionList
+type	CollectionPlanOverlapPolicy
+type	CollectionPlanSnapshot
 type	CollectionSummary
 type	ConnectionInstance
 type	ConnectionStatus
@@ -39,6 +41,7 @@ type	CreateAnnotationCommand
 type	CreateBlockCommand
 type	CreateBoardCommand
 type	CreateCollectionCommand
+type	CreateCollectionPlanCommand
 type	CreateConnectionCommand
 type	CreateEntityCommand
 type	CreateEntityRelationCommand
@@ -215,6 +218,7 @@ type	UpdateAnnotationCommand
 type	UpdateBlockConfigCommand
 type	UpdateBoardCommand
 type	UpdateCollectionCommand
+type	UpdateCollectionPlanCommand
 type	UpdateConnectionCommand
 type	UpdateEntityCommand
 type	UpdateSavedViewCommand
@@ -259,6 +263,8 @@ value	cancelRunCommandSchema
 value	collectionDetailSchema
 value	collectionItemCommandSchema
 value	collectionListSchema
+value	collectionPlanOverlapPolicySchema
+value	collectionPlanSnapshotSchema
 value	collectionSummarySchema
 value	connectionInstanceSchema
 value	connectionStatusSchema
@@ -269,6 +275,7 @@ value	createAnnotationCommandSchema
 value	createBlockCommandSchema
 value	createBoardCommandSchema
 value	createCollectionCommandSchema
+value	createCollectionPlanCommandSchema
 value	createConnectionCommandSchema
 value	createEntityCommandSchema
 value	createEntityRelationCommandSchema
@@ -450,6 +457,7 @@ value	updateAnnotationCommandSchema
 value	updateBlockConfigCommandSchema
 value	updateBoardCommandSchema
 value	updateCollectionCommandSchema
+value	updateCollectionPlanCommandSchema
 value	updateConnectionCommandSchema
 value	updateEntityCommandSchema
 value	updateSavedViewCommandSchema

@@ -34,6 +34,13 @@ export {
 } from "./base.js";
 
 export {
+    collectionPlanOverlapPolicySchema, collectionPlanSnapshotSchema,
+    createCollectionPlanCommandSchema, updateCollectionPlanCommandSchema,
+    type CollectionPlanOverlapPolicy, type CollectionPlanSnapshot,
+    type CreateCollectionPlanCommand, type UpdateCollectionPlanCommand,
+} from "./collection-plan.js";
+
+export {
     assetSnapshotSchema, assetStatusSchema, connectorDescriptorSchema, ingestResultSchema,
     jobKindSchema, jobListSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
     mediaCleanupCommandSchema, mediaCleanupEntrySchema, mediaCleanupReportSchema,

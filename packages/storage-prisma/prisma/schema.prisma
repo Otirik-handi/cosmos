@@ -31,23 +31,52 @@ model SourceInstance {
     activationCommands  SourceActivationCommand[]
     connection          ConnectionInstance?     @relation(fields: [connectionId], references: [id], onDelete: SetNull)
     triggerBinding      TriggerBinding?         @relation("TriggerBindingSource")
+    plan                CollectionPlan?
 
     @@index([connectionId])
 }
 
 // First-class trigger (ADR-0018): when a source is started, expressed as a
-// schedule/manual binding. One current binding per source in v1; multi-plan and
-// overlap policy arrive with CollectionPlan.
+// schedule/manual binding. One current binding per source in v1. ADR-0023 moves
+// the binding's owner to the CollectionPlan; planId stays nullable until the
+// backfill and the read switch land, so the source-keyed scheduler keeps working.
 model TriggerBinding {
-    id         String         @id @default(cuid())
-    sourceId   String         @unique
-    kind       String         @default("schedule")
+    id         String          @id @default(cuid())
+    sourceId   String          @unique
+    planId     String?         @unique
+    kind       String          @default("schedule")
     configJson String
-    enabled    Boolean        @default(true)
-    revision   Int            @default(1)
-    createdAt  DateTime       @default(now())
-    updatedAt  DateTime       @updatedAt
-    source     SourceInstance @relation("TriggerBindingSource", fields: [sourceId], references: [id], onDelete: Cascade)
+    enabled    Boolean         @default(true)
+    revision   Int             @default(1)
+    createdAt  DateTime        @default(now())
+    updatedAt  DateTime        @updatedAt
+    source     SourceInstance  @relation("TriggerBindingSource", fields: [sourceId], references: [id], onDelete: Cascade)
+    plan       CollectionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+}
+
+// 采集计划（ADR-0023）：用户可见的独立采集计划，v1 与采集目标一对一，持有连接、
+// 触发器、媒体预算与计划级 checkpoint/状态命名空间，让同一连接下的多个计划各自
+// 拥有 Run、错误、重试与游标。expand 步只建表与可空列：回填与读取切换之前，按来源
+// 调度与读取的旧路径必须继续可用。
+model CollectionPlan {
+    id              String              @id @default(cuid())
+    name            String
+    sourceId        String              @unique
+    connectionId    String?
+    mediaPolicyJson String?
+    overlapPolicy   String              @default("forbid")
+    enabled         Boolean             @default(false)
+    revision        Int                 @default(1)
+    createdAt       DateTime            @default(now())
+    updatedAt       DateTime            @updatedAt
+    source          SourceInstance      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+    connection      ConnectionInstance? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+    triggerBinding  TriggerBinding?
+    checkpoint      Checkpoint?
+    runs            Run[]
+    workflowRuns    WorkflowRun[]
+
+    @@index([connectionId])
 }
 
 // Reusable user login/authorization on an external platform (ADR-0017). A
@@ -65,6 +94,7 @@ model ConnectionInstance {
     createdAt   DateTime         @default(now())
     updatedAt   DateTime         @updatedAt
     sources     SourceInstance[]
+    plans       CollectionPlan[]
 }
 
 // Namespaced + versioned non-secret connector state (ADR-0017): cursor/ETag/
@@ -97,37 +127,42 @@ model SourceActivationCommand {
 }
 
 model Checkpoint {
-    id               String         @id @default(cuid())
-    sourceInstanceId String         @unique
+    id               String          @id @default(cuid())
+    sourceInstanceId String          @unique
+    planId           String?         @unique
     cursor           String?
-    revision         Int            @default(0)
+    revision         Int             @default(0)
     workflowRunId    String?
-    updatedAt        DateTime       @updatedAt
-    sourceInstance   SourceInstance @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
-    workflowRun      WorkflowRun?   @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+    updatedAt        DateTime        @updatedAt
+    sourceInstance   SourceInstance  @relation(fields: [sourceInstanceId], references: [id], onDelete: Cascade)
+    plan             CollectionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+    workflowRun      WorkflowRun?    @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
 }
 
 model Run {
-    id                    String         @id @default(cuid())
+    id                    String          @id @default(cuid())
     sourceInstanceId      String
+    planId                String?
     triggerKind           String
     status                String
-    createdAt             DateTime       @default(now())
+    createdAt             DateTime        @default(now())
     startedAt             DateTime?
     finishedAt            DateTime?
-    itemCount             Int            @default(0)
-    createdEntryCount     Int            @default(0)
-    revisedEntryCount     Int            @default(0)
+    itemCount             Int             @default(0)
+    createdEntryCount     Int             @default(0)
+    revisedEntryCount     Int             @default(0)
     duplicateObservationCount Int         @default(0)
     errorCode             String?
     errorMessage          String?
     sourceInstance        SourceInstance  @relation(fields: [sourceInstanceId], references: [id])
+    plan                  CollectionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
     steps                 Step[]
     jobs                  Job[]
     observations          Observation[]
     events                DomainEvent[]
 
     @@index([sourceInstanceId, createdAt])
+    @@index([planId, createdAt])
 }
 
 model Step {
@@ -719,6 +754,7 @@ model WorkflowRun {
     status             String
     resumeRequired     Boolean               @default(false)
     sourceInstanceId   String?
+    planId             String?
     errorMessage       String?
     definitionKey      String
     definitionVersion  String
@@ -734,6 +770,7 @@ model WorkflowRun {
     createdAt          DateTime
     updatedAt          DateTime
     sourceInstance     SourceInstance?      @relation(fields: [sourceInstanceId], references: [id], onDelete: SetNull)
+    plan               CollectionPlan?      @relation(fields: [planId], references: [id], onDelete: SetNull)
     checkpoints        Checkpoint[]
     workflowObservations Observation[] @relation("WorkflowRunObservations")
     jobs               Job[]
@@ -742,6 +779,7 @@ model WorkflowRun {
 
     @@index([status, updatedAt])
     @@index([sourceInstanceId, createdAt])
+    @@index([planId, createdAt])
 }
 
 model WorkflowCompletion {
