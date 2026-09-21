@@ -7,6 +7,8 @@ import {
 } from "react";
 import {
     createSourceCommandSchema,
+    type CollectionPlanSnapshot,
+    type ConnectionInstance,
     type HealthResponse,
     type MediaCleanupReport,
     type SourceMediaPolicy,
@@ -16,6 +18,9 @@ import {
     CosmosTransportError,
 } from "@cosmos/transport-http";
 import {
+    readManifestFields,
+    toConfigFromFields,
+    validateManifestFields,
     type ProbeState,
     type SourceDefinitionState,
 } from "@/components/cosmos/source-form";
@@ -23,7 +28,6 @@ import {
     client,
     delay,
     readError,
-    toSourceConfig,
     toScheduleIntervalMs,
     RSS_SOURCE_DEFINITION_REF,
     RSS_OPERATION_ID,
@@ -49,58 +53,99 @@ export function useSourceWorkspace(
 ) {
     const [health, setHealth] = useState<HealthResponse | null>(null);
     /** 共享加载态:入队/探测/看板等操作都会用到。 */
-    const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
-    const [activatingSourceId, setActivatingSourceId] = useState<string | null>(null);
-    const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
+    const [runningPlanId, setRunningPlanId] = useState<string | null>(null);
+    const [activatingPlanId, setActivatingPlanId] = useState<string | null>(null);
+    const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
     const [runRefreshToken, setRunRefreshToken] = useState(0);
     const [checkingService, setCheckingService] = useState(false);
     const [showSourceForm, setShowSourceForm] = useState(false);
     const [definitionState, setDefinitionState] = useState<SourceDefinitionState>({status: "loading"});
+    /** 表单当前选中的来源定义；默认 RSS（唯一无需额外前置条件的定义）。 */
+    const [selectedDefinitionRef, setSelectedDefinitionRef] = useState<string>(RSS_SOURCE_DEFINITION_REF);
     const [probeState, setProbeState] = useState<ProbeState>({status: "idle"});
+    const [plans, setPlans] = useState<readonly CollectionPlanSnapshot[]>([]);
+    const [connections, setConnections] = useState<readonly ConnectionInstance[]>([]);
     const probeConfigKeyRef = useRef<string | null>(null);
-    const sourceSummary = useMemo(() => {
-        if (shared.sources.length === 0) {
-            return "尚未配置来源";
+    const planSummary = useMemo(() => {
+        if (plans.length === 0) {
+            return "尚未配置采集计划";
         }
-        return `${shared.sources.length} 个来源，${shared.sources.filter((source) => source.enabled).length} 个启用`;
-    }, [shared.sources]);
+        return `${plans.length} 个采集计划，${plans.filter((plan) => plan.enabled).length} 个启用`;
+    }, [plans]);
 
-    /** 表单字段由 catalog manifest 驱动；目录不可用时只提供重试，不回退硬编码字段。 */
+    /**
+     * 产品面的对象是采集计划（ADR-0023 决策 5），列表与表单的连接选择都读它；
+     * 连接名要在分组标题里显示，所以两个列表一起取。
+     */
+    const loadPlans = useCallback(async (): Promise<void> => {
+        try {
+            const [nextPlans, nextConnections] = await Promise.all([
+                client.listCollectionPlans(),
+                client.listConnections(),
+            ]);
+            setPlans(nextPlans);
+            setConnections(nextConnections);
+        } catch (caught) {
+            ctx.setError(readError(caught));
+        }
+    }, [ctx]);
+
+    useEffect(() => {
+        void loadPlans();
+    }, [loadPlans]);
+
+    /**
+     * 表单字段由 catalog manifest 驱动；目录不可用时只提供重试，不回退硬编码字段。
+     * 目录里可能有多个来源定义（rss / bilibili / aihot），全部保留供表单选择。
+     */
     const loadDefinitions = useCallback(async (): Promise<void> => {
         setDefinitionState({status: "loading"});
         try {
             const definitions = await client.listSourceDefinitions();
-            const manifest = definitions.find((item) => item.ref === RSS_SOURCE_DEFINITION_REF);
-            if (!manifest) {
-                setDefinitionState({status: "error", message: `目录中没有 ${RSS_SOURCE_DEFINITION_REF} 来源定义。`});
+            const enabled = definitions.filter((item) => item.status === "enabled");
+            if (enabled.length === 0) {
+                setDefinitionState({status: "error", message: "目录里没有可用的来源定义。"});
                 return;
             }
-            if (manifest.status !== "enabled") {
-                setDefinitionState({status: "error", message: `来源定义 ${RSS_SOURCE_DEFINITION_REF} 当前不可用。`});
-                return;
-            }
-            setDefinitionState({status: "ready", manifest});
+            setDefinitionState({status: "ready", manifests: enabled});
         } catch (caught) {
             setDefinitionState({status: "error", message: readError(caught)});
         }
     }, []);
 
+    /** 当前来源定义与它的字段规则；字段规则同时驱动校验与 config 构造。 */
+    const selectedManifest = definitionState.status === "ready"
+        ? definitionState.manifests.find((item) => item.ref === selectedDefinitionRef) ?? null
+        : null;
+    const manifestFields = useMemo(
+        () => (selectedManifest ? readManifestFields(selectedManifest) : []),
+        [selectedManifest],
+    );
+
+    /** 换来源定义就整组重置配置字段：旧定义的字段值对新定义没有意义。 */
+    const selectDefinition = useCallback((ref: string): void => {
+        setSelectedDefinitionRef(ref);
+        sourceForm.setValue("config", {});
+        setProbeState({status: "idle"});
+        probeConfigKeyRef.current = null;
+    }, [sourceForm]);
+
     // 测试结果只对提交时的配置有效；字段一变立即作废，避免旧结果误导保存决定。
-    const watchedFeedUrl = sourceForm.watch("feedUrl");
+    const watchedConfig = sourceForm.watch("config");
     const watchedScheduleInterval = sourceForm.watch("scheduleIntervalMinutes");
     const onTestSourceConfig = async (): Promise<void> => {
         const valid = await sourceForm.trigger();
-        if (!valid) {
+        if (!valid || !selectedManifest) {
             return;
         }
         const values = sourceForm.getValues();
-        const config = toSourceConfig(values);
+        const config = toConfigFromFields(manifestFields, values.config);
         probeConfigKeyRef.current = JSON.stringify(config);
         setProbeState({status: "running"});
         try {
             let snapshot = await client.createSourceConfigProbe({
-                sourceDefinitionRef: RSS_SOURCE_DEFINITION_REF,
-                operationId: RSS_OPERATION_ID,
+                sourceDefinitionRef: selectedManifest.ref,
+                operationId: selectedManifest.operationIds[0] ?? RSS_OPERATION_ID,
                 config,
             });
             const deadline = Date.now() + PROBE_POLL_TIMEOUT_MS;
@@ -139,40 +184,56 @@ export function useSourceWorkspace(
 
     const onCreateSource = sourceForm.handleSubmit(async (values) => {
         ctx.setError(null);
+        if (!selectedManifest) {
+            ctx.setError("目录里没有可用的来源定义，无法保存计划。");
+            return;
+        }
+        // 字段级校验先跑：能从 JSON Schema 判断的规则在本地就报，不发给服务端。
+        // 更细的规则（如 Bilibili 的条件必填）由服务端 canonical schema 裁决并回显。
+        const fieldErrors = validateManifestFields(manifestFields, values.config);
+        if (Object.keys(fieldErrors).length > 0) {
+            for (const [field, message] of Object.entries(fieldErrors)) {
+                sourceForm.setError(`config.${field}` as "config", {message});
+            }
+            ctx.setError("目标配置有未填写或不合法的字段，请按提示修正。");
+            return;
+        }
         try {
             await client.createSource(createSourceCommandSchema.parse({
                 name: values.name,
-                sourceDefinitionRef: RSS_SOURCE_DEFINITION_REF,
-                operationId: RSS_OPERATION_ID,
-                config: toSourceConfig(values),
+                sourceDefinitionRef: selectedManifest.ref,
+                operationId: selectedManifest.operationIds[0] ?? RSS_OPERATION_ID,
+                config: toConfigFromFields(manifestFields, values.config),
                 scheduleIntervalMs: toScheduleIntervalMs(values),
+                connectionId: values.connectionId === "" ? null : values.connectionId,
             }));
-            ctx.setNotice("来源已保存，当前为停用状态；在“来源健康”列表中启用后开始抓取。");
+            ctx.setNotice("采集计划已保存，当前为停用状态；在“采集计划”列表中启用后开始抓取。");
             setShowSourceForm(false);
             sourceForm.reset();
-            await feedApi.refresh();
+            await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             ctx.setError(readError(caught));
         }
     });
 
     const saveMediaPolicy = async (
-        source: SourceSnapshot,
+        plan: CollectionPlanSnapshot,
         policy: SourceMediaPolicy,
     ): Promise<void> => {
         ctx.setError(null);
         try {
-            const nextConfig = { ...source.config, media: policy };
-            await client.updateSource(source.id, {
-                baseRevisionId: source.revisionId,
-                config: nextConfig,
+            // 媒体预算归采集计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划自己的
+            // revision；来源端点不再接受 config.media。
+            await client.updateCollectionPlan(plan.id, {
+                mediaPolicy: policy,
+                baseRevisionId: plan.revisionId,
             });
-            ctx.setNotice(`已保存 ${source.name} 的媒体策略；只影响之后的采集。`);
-            await feedApi.refresh();
+            ctx.setNotice(`已保存 ${plan.name} 的媒体策略；只影响之后的采集。`);
+            await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             if (caught instanceof CosmosTransportError && caught.status === 409) {
-                ctx.setError("来源配置已被其它修改更新（版本冲突），列表已刷新，请重试。");
-                await feedApi.refresh();
+                ctx.setError("计划配置已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                await Promise.all([feedApi.refresh(), loadPlans()]);
             }
             throw caught;
         }
@@ -201,54 +262,57 @@ export function useSourceWorkspace(
         return snapshot.report;
     };
 
-    const toggleActivation = async (source: SourceSnapshot, enabled: boolean): Promise<void> => {        setActivatingSourceId(source.id);
+    const toggleActivation = async (plan: CollectionPlanSnapshot, enabled: boolean): Promise<void> => {
+        setActivatingPlanId(plan.id);
         ctx.setError(null);
         try {
-            await client.activateSource(source.id, {
+            // 启用状态归采集计划（ADR-0023 决策 2），CAS 用计划自己的 revision。
+            await client.updateCollectionPlan(plan.id, {
                 enabled,
-                baseRevisionId: source.revisionId,
-            }, `web-activation:${source.id}:${source.revisionId}:${enabled ? "enable" : "disable"}`);
+                baseRevisionId: plan.revisionId,
+            });
             ctx.setNotice(enabled
-                ? `来源 ${source.name} 已启用；可执行手动录入，配置了定时的来源会自动抓取。`
-                : `来源 ${source.name} 已停用，不再自动或手动抓取。`);
-            await feedApi.refresh();
+                ? `计划 ${plan.name} 已启用；可执行手动录入，配置了定时的计划会自动抓取。`
+                : `计划 ${plan.name} 已停用，不再自动或手动抓取。`);
+            await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             if (caught instanceof CosmosTransportError && caught.status === 409) {
-                ctx.setError("来源状态已被其它修改更新（版本冲突），列表已刷新，请重试。");
-                await feedApi.refresh();
+                ctx.setError("计划状态已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                await Promise.all([feedApi.refresh(), loadPlans()]);
             } else {
                 ctx.setError(readError(caught));
             }
         } finally {
-            setActivatingSourceId(null);
+            setActivatingPlanId(null);
         }
     };
 
     /**
-     * 删除来源（AUT-001）。墓碑语义：来源从看板消失、调度停止，但已录入的条目与来源历史
-     * 全部保留（Entry.sourceInstanceId 是必填级联外键，硬删会带走历史）。二次确认在
-     * `SourceActions` 的两段按钮里，这里只负责发命令与刷新。
+     * 删除计划（AUT-001）。v1 的删除仍是目标域命令（`DELETE /collection-plans/{id}` 是
+     * Planned），所以用计划读投影上的 `sourceId`／`sourceRevisionId` 发它。墓碑语义：计划
+     * 从看板消失、调度停止，但已录入的条目与来源历史全部保留（Entry.sourceInstanceId 是
+     * 必填级联外键，硬删会带走历史）。二次确认在列表组件的两段按钮里。
      */
-    const deleteSource = async (source: SourceSnapshot): Promise<void> => {
-        setDeletingSourceId(source.id);
+    const deletePlan = async (plan: CollectionPlanSnapshot): Promise<void> => {
+        setDeletingPlanId(plan.id);
         ctx.setError(null);
         try {
-            await client.deleteSource(source.id, {
-                baseRevisionId: source.revisionId,
+            await client.deleteSource(plan.sourceId, {
+                baseRevisionId: plan.sourceRevisionId,
                 actor: "user",
-                reason: "用户在看板删除来源",
-            }, `web-deletion:${source.id}:${source.revisionId}`);
-            ctx.setNotice(`来源 ${source.name} 已删除；已录入内容与来源历史保留。`);
-            await feedApi.refresh();
+                reason: "用户在看板删除采集计划",
+            }, `web-deletion:${plan.sourceId}:${plan.sourceRevisionId}`);
+            ctx.setNotice(`计划 ${plan.name} 已删除；已录入内容与来源历史保留。`);
+            await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             if (caught instanceof CosmosTransportError && caught.status === 409) {
-                ctx.setError("来源已被其它修改更新（版本冲突），列表已刷新，请重试。");
-                await feedApi.refresh();
+                ctx.setError("计划已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                await Promise.all([feedApi.refresh(), loadPlans()]);
             } else {
                 ctx.setError(readError(caught));
             }
         } finally {
-            setDeletingSourceId(null);
+            setDeletingPlanId(null);
         }
     };
 
@@ -269,48 +333,56 @@ export function useSourceWorkspace(
         }
     };
 
-    const runSource = async (source: SourceSnapshot): Promise<void> => {
-        setRunningSourceId(source.id);
+    const runPlan = async (plan: CollectionPlanSnapshot): Promise<void> => {
+        setRunningPlanId(plan.id);
         ctx.setError(null);
         try {
-            const result = await client.triggerSource(source.id);
+            // v1 手动运行沿用目标域路由（计划级运行路由后置，见 API Draft §4.3）。
+            const result = await client.triggerSource(plan.sourceId);
             ctx.setNotice(
                 result.status === "queued" || result.status === "running"
                     ? `录入任务已排队（Run ${result.id}），Worker 完成后 Feed 会自动刷新。`
                     : `录入任务状态：${result.status}。`,
             );
             setRunRefreshToken((value) => value + 1);
-            await feedApi.refresh();
+            await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             ctx.setError(readError(caught));
         } finally {
-            setRunningSourceId(null);
+            setRunningPlanId(null);
         }
     };
 
 
     return {
-        activatingSourceId,
+        activatingPlanId,
         checkService,
         checkingService,
+        connections,
         definitionState,
-        deleteSource,
-        deletingSourceId,
+        deletePlan,
+        deletingPlanId,
         health,
         loadDefinitions,
+        loadPlans,
+        manifestFields,
+        planSummary,
+        plans,
         probeConfigKeyRef,
+        selectDefinition,
+        selectedDefinitionRef,
+        selectedManifest,
         setProbeState,
         onCreateSource,
         onTestSourceConfig,
         probeState,
         runMediaCleanup,
         runRefreshToken,
-        runSource,
-        runningSourceId,
+        runPlan,
+        runningPlanId,
         saveMediaPolicy,
         setShowSourceForm,
         showSourceForm,
-        sourceSummary,
         toggleActivation,
     };
 }

@@ -219,17 +219,19 @@ export const sourceMediaPolicySchema = z.object({
 }).strict();
 export type SourceMediaPolicy = z.infer<typeof sourceMediaPolicySchema>;
 
+/**
+ * 采集目标的配置。媒体预算**不在**这里：它归采集计划（ADR-0023 决策 2 的字段边界），
+ * 读取方是 `CollectionPlan.mediaPolicyJson`，写入口是 `PATCH /collection-plans/{id}`。
+ */
 export const sourceConfigSchema = z.object({
     feedUrl: z.string().url().optional(),
     fixturePath: z.string().min(1).optional(),
-    media: sourceMediaPolicySchema.optional(),
     ...scheduleConfigShape,
 }).passthrough();
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
 
 export const rssSourceConfigSchema = z.object({
     feedUrl: httpFeedUrlSchema,
-    media: sourceMediaPolicySchema.optional(),
     ...scheduleConfigShape,
 }).strict();
 export type RssSourceConfig = z.infer<typeof rssSourceConfigSchema>;
@@ -297,25 +299,26 @@ export const createSourceCommandSchema = z.object({
     config: z.unknown(),
     /** Optional schedule interval; creates a schedule TriggerBinding (ADR-0018). */
     scheduleIntervalMs: triggerIntervalSchema.optional(),
+    /**
+     * 可选的连接绑定（ADR-0017）。连接归采集计划（ADR-0023 决策 2），但创建命令在
+     * 同一步里建出来源与默认计划，所以这里接受它——与 `scheduleIntervalMs` 同例，
+     * 避免「先建目标再补连接」这种会留下半成品的两步流程。
+     */
+    connectionId: z.string().trim().min(1).max(100).nullable().optional(),
 }).strict();
 export type CreateSourceCommand = z.infer<typeof createSourceCommandSchema>;
 
+/**
+ * 采集目标自身的可写字段（ADR-0023 决策 2 的字段边界）：来源只拥有名字（内容出处的
+ * 名字）与目标配置。连接、调度、媒体预算与启用状态都归采集计划，写入口是
+ * `PATCH /collection-plans/{id}`——同一个事实不设第二个写入口。
+ */
 export const updateSourceCommandSchema = z.object({
     baseRevisionId: sourceRevisionIdSchema,
     name: z.string().trim().min(1).max(200).optional(),
     config: z.unknown().optional(),
-    /** Optional reusable connection anchor (ADR-0017); null unlinks the source. */
-    connectionId: z.string().trim().min(1).max(100).nullable().optional(),
-    /** Optional schedule interval (ADR-0018); null removes the schedule trigger. */
-    scheduleIntervalMs: triggerIntervalSchema.nullable().optional(),
 }).strict();
 export type UpdateSourceCommand = z.infer<typeof updateSourceCommandSchema>;
-
-export const sourceActivationCommandSchema = z.object({
-    enabled: z.boolean(),
-    baseRevisionId: sourceRevisionIdSchema,
-}).strict();
-export type SourceActivationCommand = z.infer<typeof sourceActivationCommandSchema>;
 
 /**
  * 删除来源（AUT-001）。删除只移除来源配置与调度绑定：已录入的 Entry/Observation/Revision
@@ -358,6 +361,16 @@ export const sourceExecutionSnapshotSchema = z.object({
     kind: sourceKindSchema,
     config: sourceConfigSchema,
     enabled: z.boolean(),
+    /**
+     * 所属计划（ADR-0023 决策 2）。入队时固化：checkpoint 提交与连接器状态命名空间都在
+     * workflow 内部发生，那里拿不到 envelope，只能从执行快照取计划身份。
+     */
+    planId: z.string(),
+    /**
+     * 所属计划的媒体预算，入队时固化（ADR-0023 决策 2 + ADR-0014 语义）。媒体获取与重试
+     * 读的是这一份，不是目标配置：一轮运行中途改策略不该影响这一轮。null 表示跟随全局默认。
+     */
+    mediaPolicy: sourceMediaPolicySchema.nullable(),
     revisionId: sourceRevisionIdSchema,
     createdAt: z.string(),
     updatedAt: z.string(),
@@ -368,10 +381,16 @@ export type SourceExecutionSnapshot = z.infer<typeof sourceExecutionSnapshotSche
 export const sourceSnapshotSchema = sourceExecutionSnapshotSchema.extend({
     lastRunAt: z.string().nullable(),
     lastError: z.string().nullable(),
-    /** Optional reusable connection anchor; null/absent for unauthenticated sources (ADR-0017). */
-    connectionId: z.string().nullable().optional(),
-    /** Current schedule interval from the source's TriggerBinding, if any (ADR-0018). */
-    scheduleIntervalMs: z.number().int().positive().nullable().optional(),
+    /**
+     * 计划派生的只读投影（ADR-0023 决策 2）：v1 计划与采集目标一对一，来源读投影
+     * 带上计划的 CAS 凭据与计划自有字段，让既有产品入口能作用到这些事实的所有者，
+     * 而不必再查一次计划。计划 id 在基类里（执行路径也要用）。
+     */
+    planRevisionId: sourceRevisionIdSchema,
+    /** 所属计划的连接引用（ADR-0017）；未认证来源的计划没有连接。 */
+    connectionId: z.string().nullable(),
+    /** 所属计划的调度间隔；没有调度绑定时为 null（只手动触发）。 */
+    scheduleIntervalMs: z.number().int().positive().nullable(),
 });
 export type SourceSnapshot = z.infer<typeof sourceSnapshotSchema>;
 

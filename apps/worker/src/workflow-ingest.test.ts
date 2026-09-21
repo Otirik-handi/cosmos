@@ -214,13 +214,18 @@ describe("Worker Ingest Workflow composition", () => {
                 data: {
                     name: "Mutated workflow fixture",
                     configJson: JSON.stringify({ fixturePath: "mutated-fixture.xml" }),
-                    enabled: false,
                 },
+            });
+            // 启用状态归计划（ADR-0023 决策 2）：要改它就改计划，来源行上的同名列
+            // 在读取切换后不再被读——这正是本用例第二段要证明的快照口径。
+            await repository.prisma.collectionPlan.update({
+                where: { sourceId: source.id },
+                data: { enabled: false },
             });
 
             const firstCompleted = await drainWorkflow(composition, firstRun.runId);
             expect(firstCompleted.status).toBe("completed");
-            expect(await repository.getCheckpointSnapshot(source.id)).toEqual({
+            expect(await repository.getCheckpointSnapshot(source.planId)).toEqual({
                 cursor: "cursor-1",
                 revision: 1,
             });
@@ -257,7 +262,7 @@ describe("Worker Ingest Workflow composition", () => {
             })).resolves.toEqual(secondRun);
             const secondCompleted = await drainWorkflow(restartedComposition, secondRun.runId);
             expect(secondCompleted.status).toBe("completed");
-            expect(await repository.getCheckpointSnapshot(source.id)).toEqual({
+            expect(await repository.getCheckpointSnapshot(source.planId)).toEqual({
                 cursor: "cursor-2",
                 revision: 2,
             });
@@ -555,7 +560,7 @@ describe("Worker Ingest Workflow composition", () => {
         }
     }, 15_000);
 
-    it("honours the source's media policy frozen into the run snapshot", async () => {
+    it("honours the plan's media policy frozen into the run snapshot", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-policy-"));
         temporaryRoots.push(root);
         prepareDatabase(root);
@@ -567,14 +572,18 @@ describe("Worker Ingest Workflow composition", () => {
                 name: "Media policy workflow",
                 sourceDefinitionRef: "source.fixture-rss@1",
                 operationId: "fetch",
-                config: { media: { images: "metadata_only" } },
+                config: {},
             });
-            const source = await repository.activateSource({
-                sourceId: created.id,
-                idempotencyKey: `test-activation:${created.id}`,
+            // 媒体预算归计划（ADR-0023 决策 2）：策略从计划端点写入，再入队固化到执行快照。
+            await repository.updateCollectionPlan(created.planId, {
                 enabled: true,
-                baseRevisionId: created.revisionId,
+                mediaPolicy: { images: "metadata_only" },
+                baseRevisionId: created.planRevisionId,
             });
+            const source = await repository.getSource(created.id) as NonNullable<
+                Awaited<ReturnType<typeof repository.getSource>>
+            >;
+            expect(source.mediaPolicy).toEqual({ images: "metadata_only" });
             const item: NormalizedIngestItem = {
                 externalId: "media-policy-1",
                 title: "Media policy item",
@@ -683,12 +692,13 @@ describe("Worker Ingest Workflow composition", () => {
                 operationId: "fetch",
                 config: {},
             });
-            const source = await repository.activateSource({
-                sourceId: created.id,
-                idempotencyKey: `test-activation:${created.id}`,
+            await repository.updateCollectionPlan(created.planId, {
                 enabled: true,
-                baseRevisionId: created.revisionId,
+                baseRevisionId: created.planRevisionId,
             });
+            const source = await repository.getSource(created.id) as NonNullable<
+                Awaited<ReturnType<typeof repository.getSource>>
+            >;
             const item: NormalizedIngestItem = {
                 externalId: "media-retry-1",
                 title: "Media retry item",
@@ -851,10 +861,11 @@ async function createFixtureSource(
         operationId: "fetch",
         config: {},
     });
-    return repository.activateSource({
-        sourceId: created.id,
-        idempotencyKey: `test-activation:${created.id}`,
+    await repository.updateCollectionPlan(created.planId, {
         enabled: true,
-        baseRevisionId: created.revisionId,
+        baseRevisionId: created.planRevisionId,
     });
+    const source = await repository.getSource(created.id);
+    if (!source) throw new Error(`Fixture source missing: ${created.id}`);
+    return source;
 }

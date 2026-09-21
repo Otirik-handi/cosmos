@@ -41,7 +41,7 @@ let sourceId: string;
  * 补的缺口：Task 32 切片 3 的 304 短路此前只有 `plugins/rss` 的 fixture 证据，
  * 真实公网验收只跑一次抓取、观察不到第二次的 304。这里用受控 RSS 服务把服务端行为
  * 钉死（第一次 200 + 验证器、第二次 304），断言三件事：
- *   1. 第一次抓取把 ETag / Last-Modified 存进来源的 ConnectorState；
+ *   1. 第一次抓取把 ETag / Last-Modified 存进所属计划命名空间的 ConnectorState；
  *   2. 第二次抓取真的带上 `If-None-Match` / `If-Modified-Since`；
  *   3. 304 时短路——Worker 记录 `connector.transport.not_modified`，且不产生新条目。
  */
@@ -126,7 +126,6 @@ describe("conditional fetch Node process E2E (AUT-003)", () => {
             apiBaseUrl,
             feedUrl: rss.url,
             name: "Conditional RSS E2E",
-            activationIdempotencyKey: "conditional-fetch-source-1",
         });
         sourceId = readString(created, "id");
 
@@ -204,8 +203,9 @@ async function readConnectorState(): Promise<{ etag?: string; lastModified?: str
         datasources: { db: { url: databaseUrl(stack.dataRoot) } },
     });
     try {
+        // 命名空间按计划解析（ADR-0023 决策 2）：v1 计划 id 形如 `plan:<sourceId>`。
         const row = await prisma.connectorState.findFirst({
-            where: { namespace: `source:${sourceId}`, key: "http-cache" },
+            where: { namespace: `plan:${sourceId}`, key: "http-cache" },
         });
         if (!row) return null;
         return JSON.parse(row.valueJson) as { etag?: string; lastModified?: string };

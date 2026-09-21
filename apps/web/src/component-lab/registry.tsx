@@ -24,7 +24,7 @@ import {
     renderRunControlLab,
     renderRunHistoryLab,
     renderStoragePanelLab,
-    renderSourceActionsLab,
+    renderCollectionPlanListLab,
     renderSourceFormLab,
     renderStatusSummaryLab,
     renderStoryPanelLab,
@@ -268,10 +268,11 @@ const statusSummaryControls = [
     control("eventStreamState", "Event stream", "select", "connecting", ["connecting", "connected", "unavailable"]),
 ] as const satisfies readonly LabControlDefinition[];
 
-const sourceActionsControls = [
-    control("sourceName", "Source name", "text", "Cosmos fixture"),
+const collectionPlanListControls = [
+    control("sourceName", "Plan name", "text", "Cosmos fixture"),
     control("state", "State", "select", "configured", ["configured", "untimed", "empty", "disabled", "media-policy"]),
     control("enabled", "Enabled", "boolean", true),
+    control("grouped", "Grouped by connection", "boolean", false),
 ] as const satisfies readonly LabControlDefinition[];
 
 const runControlControls = [
@@ -443,21 +444,22 @@ export const labComponentDefinitions = [
         render: renderFeedBrowserLab,
     },
     {
-        id: "source-actions",
-        label: "SourceActions",
+        id: "collection-plan-list",
+        label: "CollectionPlanList",
         category: "Cosmos",
-        modulePath: "components/cosmos/source-actions.tsx",
+        modulePath: "components/cosmos/collection-plan-list.tsx",
         defaultSceneId: "configured",
-        controls: sourceActionsControls,
+        controls: collectionPlanListControls,
         scenes: [
-            {id: "configured", label: "Configured", props: {sourceName: "Cosmos fixture", state: "configured", enabled: true}},
-            {id: "untimed", label: "Untimed", props: {sourceName: "Cosmos fixture", state: "untimed", enabled: true}},
-            {id: "empty", label: "Empty", props: {sourceName: "Cosmos fixture", state: "empty", enabled: true}},
-            {id: "disabled", label: "Disabled", props: {sourceName: "Cosmos fixture", state: "disabled", enabled: false}},
-            {id: "media-policy", label: "Media policy tightened", props: {sourceName: "Cosmos fixture", state: "media-policy", enabled: true}},
+            {id: "configured", label: "Configured", props: {sourceName: "Cosmos fixture", state: "configured", enabled: true, grouped: false}},
+            {id: "grouped", label: "Grouped by connection", props: {sourceName: "Cosmos fixture", state: "configured", enabled: true, grouped: true}},
+            {id: "untimed", label: "Untimed", props: {sourceName: "Cosmos fixture", state: "untimed", enabled: true, grouped: false}},
+            {id: "empty", label: "Empty", props: {sourceName: "Cosmos fixture", state: "empty", enabled: true, grouped: false}},
+            {id: "disabled", label: "Disabled", props: {sourceName: "Cosmos fixture", state: "disabled", enabled: false, grouped: false}},
+            {id: "media-policy", label: "Media policy tightened", props: {sourceName: "Cosmos fixture", state: "media-policy", enabled: true, grouped: false}},
         ],
         tokens: sharedTokens,
-        render: renderSourceActionsLab,
+        render: renderCollectionPlanListLab,
     },
     {
         id: "run-control",

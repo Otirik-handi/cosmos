@@ -36,6 +36,8 @@ function createHarness() {
         kind: "fixture-rss",
         config: { fixturePath: "fixtures/rss/feed.xml" },
         enabled: true,
+        planId: `plan:${sourceId}`,
+        mediaPolicy: null,
         revisionId: `${sourceId}:1`,
         createdAt: "2026-08-16T00:00:00.000Z",
         updatedAt: "2026-08-16T00:00:00.000Z",

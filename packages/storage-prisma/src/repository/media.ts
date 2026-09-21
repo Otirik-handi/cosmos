@@ -343,7 +343,7 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
     }
 
     async setWorkflowIngestCheckpoint(input: {
-        sourceId: string;
+        planId: string;
         workflowRunId: string;
         cursor: string | null;
         expectedRevision: number;
@@ -360,36 +360,36 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
                 },
             });
             if (existingEvent) {
-                const payload = parseJson<{ sourceId?: string; cursor?: string | null; revision?: number; committed?: boolean }>(existingEvent.payloadJson);
-                if (payload?.sourceId !== input.sourceId) {
-                    throw new Error("Checkpoint idempotency key conflicts with another source.");
+                const payload = parseJson<{ planId?: string; cursor?: string | null; revision?: number; committed?: boolean }>(existingEvent.payloadJson);
+                if (payload?.planId !== input.planId) {
+                    throw new Error("Checkpoint idempotency key conflicts with another plan.");
                 }
                 return {
-                    sourceId: input.sourceId,
+                    planId: input.planId,
                     cursor: payload.cursor ?? null,
                     revision: payload.revision ?? input.expectedRevision,
                     committed: payload.committed === true,
                 };
             }
             const checkpoint = await tx.checkpoint.findUnique({
-                where: { sourceInstanceId: input.sourceId },
+                where: { planId: input.planId },
             });
             const currentRevision = checkpoint?.revision ?? 0;
             const currentCursor = checkpoint?.cursor ?? null;
             if (currentRevision !== input.expectedRevision) {
                 await appendDomainEvent(tx, {
-                    type: "source.checkpoint.superseded.v1",
+                    type: "collection-plan.checkpoint.superseded.v1",
                     workflowRunId: input.workflowRunId,
                     idempotencyKey: input.idempotencyKey,
                     payload: {
-                        sourceId: input.sourceId,
+                        planId: input.planId,
                         cursor: currentCursor,
                         revision: currentRevision,
                         committed: false,
                     },
                 });
                 return {
-                    sourceId: input.sourceId,
+                    planId: input.planId,
                     cursor: currentCursor,
                     revision: currentRevision,
                     committed: false,
@@ -399,7 +399,7 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
             if (checkpoint) {
                 const updated = await tx.checkpoint.updateMany({
                     where: {
-                        sourceInstanceId: input.sourceId,
+                        planId: input.planId,
                         revision: input.expectedRevision,
                     },
                     data: {
@@ -414,9 +414,12 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
             } else if (input.expectedRevision !== 0) {
                 throw new Error("Checkpoint revision CAS expected a missing revision 0 row.");
             } else {
+                // sourceInstanceId 仍是必填列（第 4 步 contract 才删），v1 一对一下
+                // 从计划 id 推导：计划 id 的形态就是 `plan:<sourceId>`。
                 await tx.checkpoint.create({
                     data: {
-                        sourceInstanceId: input.sourceId,
+                        sourceInstanceId: input.planId.replace(/^plan:/u, ""),
+                        planId: input.planId,
                         cursor: input.cursor,
                         revision: nextRevision,
                         workflowRunId: input.workflowRunId,
@@ -424,11 +427,11 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
                 });
             }
             await appendDomainEvent(tx, {
-                type: "source.checkpoint.committed.v1",
+                type: "collection-plan.checkpoint.committed.v1",
                 workflowRunId: input.workflowRunId,
                 idempotencyKey: input.idempotencyKey,
                 payload: {
-                    sourceId: input.sourceId,
+                    planId: input.planId,
                     cursor: input.cursor,
                     revision: nextRevision,
                     itemCount: input.itemCount,
@@ -436,7 +439,7 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
                 },
             });
             return {
-                sourceId: input.sourceId,
+                planId: input.planId,
                 cursor: input.cursor,
                 revision: nextRevision,
                 committed: true,
@@ -444,19 +447,20 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
         });
     }
 
-    async setCheckpoint(sourceId: string, cursor: string | null): Promise<void> {
+    async setCheckpoint(planId: string, cursor: string | null): Promise<void> {
         try {
             await this.prisma.checkpoint.upsert({
-                where: { sourceInstanceId: sourceId },
+                where: { planId },
                 create: {
-                    sourceInstanceId: sourceId,
+                    sourceInstanceId: planId.replace(/^plan:/u, ""),
+                    planId,
                     cursor,
                 },
                 update: { cursor },
             });
         } catch (error) {
             this.logger?.error("storage.checkpoint.failed", {
-                sourceId,
+                planId,
             }, error);
             throw error;
         }

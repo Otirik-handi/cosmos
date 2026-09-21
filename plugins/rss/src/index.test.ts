@@ -56,11 +56,11 @@ describe("RSS connector", () => {
             kind: "rss",
             config: { feedUrl: "https://example.test/feed.xml" },
             enabled: true,
+            mediaPolicy: null,
+            planId: "plan:source-rss",
             revisionId: "source-rss:1",
             createdAt: "2026-08-08T00:00:00.000Z",
             updatedAt: "2026-08-08T00:00:00.000Z",
-            lastRunAt: null,
-            lastError: null,
         } as const;
         // 宿主注入的命名空间化状态句柄：这里用内存版记录读写。
         const entries = new Map<string, { value: unknown; version: number }>();
@@ -115,11 +115,11 @@ describe("RSS connector", () => {
                 kind: "rss",
                 config: { feedUrl: "https://example.test/feed.xml" },
                 enabled: true,
+                mediaPolicy: null,
+                planId: "plan:source-rss",
                 revisionId: "source-rss:1",
                 createdAt: "2026-08-08T00:00:00.000Z",
                 updatedAt: "2026-08-08T00:00:00.000Z",
-                lastRunAt: null,
-                lastError: null,
             },
             cursor: null,
         });
@@ -161,11 +161,11 @@ describe("RSS connector", () => {
             kind: "fixture-rss" as const,
             config: {},
             enabled: true,
+            mediaPolicy: null,
+            planId: "plan:source-1",
             revisionId: "source-1:1",
             createdAt: "2026-08-08T00:00:00.000Z",
             updatedAt: "2026-08-08T00:00:00.000Z",
-            lastRunAt: null,
-            lastError: null,
         };
 
         const first = await connector.fetchItems({ source, cursor: null });
@@ -206,11 +206,11 @@ describe("RSS connector", () => {
                 kind: "rss",
                 config: { feedUrl: "https://example.test/feed.xml" },
                 enabled: true,
+                mediaPolicy: null,
+                planId: "plan:source-rss",
                 revisionId: "source-rss:1",
                 createdAt: "2026-08-08T00:00:00.000Z",
                 updatedAt: "2026-08-08T00:00:00.000Z",
-                lastRunAt: null,
-                lastError: null,
             },
             cursor: null,
         })).rejects.toThrow("RSS response could not be parsed.");

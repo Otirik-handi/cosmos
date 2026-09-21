@@ -43,7 +43,7 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 name: "动态",
                 sourceDefinitionRef: "source.rss@1",
                 operationId: "fetch",
-                config: { feedUrl: "https://example.test/feed.xml", media: { images: "metadata_only" } },
+                config: { feedUrl: "https://example.test/feed.xml" },
                 scheduleIntervalMs: 1_800_000,
             });
 
@@ -58,7 +58,8 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 enabled: false,
                 revision: 1,
             });
-            expect(JSON.parse(plans[0]?.mediaPolicyJson ?? "null")).toEqual({ images: "metadata_only" });
+            // 媒体预算归计划，创建时没有就是 null（跟随全局默认），不再从来源配置继承。
+            expect(plans[0]?.mediaPolicyJson).toBeNull();
 
             // 读取切换后调度按计划走，所以新建来源的绑定必须已经有计划归属。
             const bindings = await repository.prisma.triggerBinding.findMany();
@@ -105,11 +106,20 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 config: {},
                 scheduleIntervalMs: 7_200_000,
             });
-            await repository.updateSource(feed.id, { baseRevisionId: feed.revisionId, connectionId: connection.id });
-            await repository.updateSource(hot.id, { baseRevisionId: hot.revisionId, connectionId: connection.id });
-            // 未启用的来源不参与调度；这里直接置位，本用例只验证调度取数口径。
-            await repository.prisma.sourceInstance.update({ where: { id: feed.id }, data: { enabled: true } });
-            await repository.prisma.sourceInstance.update({ where: { id: hot.id }, data: { enabled: true } });
+            await repository.updateCollectionPlan(feed.planId, {
+                baseRevisionId: feed.planRevisionId,
+                connectionId: connection.id,
+            });
+            await repository.updateCollectionPlan(hot.planId, {
+                baseRevisionId: hot.planRevisionId,
+                connectionId: connection.id,
+            });
+            // 未启用的计划不参与调度；启用状态归计划（ADR-0023 决策 2），这里直接置位，
+            // 本用例只验证调度取数口径。
+            await repository.prisma.collectionPlan.updateMany({
+                where: { sourceId: { in: [feed.id, hot.id] } },
+                data: { enabled: true },
+            });
 
             const triggers = await repository.listScheduleTriggers();
             expect(triggers.map((trigger) => [trigger.planId, trigger.sourceId, trigger.intervalMs])).toEqual([
@@ -122,7 +132,6 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 where: { id: `plan:${hot.id}` },
                 data: { enabled: false },
             });
-            await repository.prisma.sourceInstance.update({ where: { id: hot.id }, data: { enabled: false } });
             const afterPause = await repository.listScheduleTriggers();
             expect(afterPause.map((trigger) => trigger.planId)).toEqual([`plan:${feed.id}`]);
         } finally {
@@ -138,40 +147,53 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 name: "动态",
                 sourceDefinitionRef: "source.rss@1",
                 operationId: "fetch",
-                config: { feedUrl: "https://example.test/feed.xml", media: { images: "metadata_only" } },
+                config: { feedUrl: "https://example.test/feed.xml" },
                 scheduleIntervalMs: 1_800_000,
             });
+            await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
+                mediaPolicy: { images: "metadata_only" },
+            });
 
-            // 计划是产品面的对象（ADR-0023），读投影要能直接回答「哪个连接、多久一次、什么预算」。
+            // 计划是产品面的对象（ADR-0023），读投影要能直接回答「哪个连接、多久一次、什么预算、
+            // 最近一次失败」——产品面按计划呈现状态，不再从来源行借用这些事实。
             await expect(repository.listCollectionPlans()).resolves.toEqual([
                 {
                     id: `plan:${source.id}`,
                     name: "动态",
                     sourceId: source.id,
+                    sourceRevisionId: source.revisionId,
                     connectionId: null,
                     triggerBindingId: expect.any(String),
                     mediaPolicy: { images: "metadata_only" },
                     overlapPolicy: "forbid",
                     enabled: false,
-                    revisionId: "1",
+                    revisionId: `plan:${source.id}:2`,
                     scheduleIntervalMs: 1_800_000,
+                    lastRunAt: null,
+                    lastError: null,
                     createdAt: expect.any(String),
                     updatedAt: expect.any(String),
                 },
             ]);
 
-            // 过渡期写穿透：来源端点的改名与连接绑定同时写进计划，避免两个界面各说一套。
-            const linked = await repository.updateSource(source.id, {
-                baseRevisionId: source.revisionId,
+            // 计划端点是名字与连接的唯一写入口（ADR-0023 决策 2）：来源端点不再写穿，
+            // 所以这里改计划、再确认来源读投影跟着走。
+            await repository.updateCollectionPlan(`plan:${source.id}`, {
+                baseRevisionId: `plan:${source.id}:2`,
                 name: "动态（主账号）",
                 connectionId: connection.id,
             });
             await expect(repository.getCollectionPlan(`plan:${source.id}`)).resolves.toMatchObject({
                 name: "动态（主账号）",
                 connectionId: connection.id,
-                revisionId: "1",
+                revisionId: `plan:${source.id}:3`,
             });
-            expect(linked.connectionId).toBe(connection.id);
+            await expect(repository.getSource(source.id)).resolves.toMatchObject({
+                connectionId: connection.id,
+                mediaPolicy: { images: "metadata_only" },
+                planRevisionId: `plan:${source.id}:3`,
+            });
 
             await expect(repository.getCollectionPlan("plan:missing")).resolves.toBeNull();
         } finally {
@@ -188,16 +210,19 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 operationId: "fetch",
                 config: { feedUrl: "https://example.test/later.xml" },
             });
-            const scheduled = await repository.updateSource(source.id, {
-                baseRevisionId: source.revisionId,
+            const scheduled = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
                 scheduleIntervalMs: 3_600_000,
             });
             expect(scheduled.scheduleIntervalMs).toBe(3_600_000);
 
-            // 读取切换后调度按计划取数：后补的绑定没有计划归属就会永远不被调度。
+            // 读取切换后调度按计划取数：绑定必须带计划归属，否则永远不会被调度。
             const bindings = await repository.prisma.triggerBinding.findMany();
             expect(bindings.map((binding) => binding.planId)).toEqual([`plan:${source.id}`]);
-            await repository.prisma.sourceInstance.update({ where: { id: source.id }, data: { enabled: true } });
+            await repository.prisma.collectionPlan.update({
+                where: { id: source.planId },
+                data: { enabled: true },
+            });
             await expect(repository.listScheduleTriggers()).resolves.toMatchObject([
                 { planId: `plan:${source.id}`, intervalMs: 3_600_000 },
             ]);
@@ -206,7 +231,7 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
         }
     });
 
-    it("在来源端点改媒体策略时，计划的媒体预算同步更新", async () => {
+    it("媒体预算只在计划端点上写，来源配置里不留第二份", async () => {
         const repository = await createRepository();
         try {
             const source = await repository.createSource({
@@ -215,26 +240,28 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 operationId: "fetch",
                 config: { feedUrl: "https://example.test/feed.xml" },
             });
-            await expect(repository.getCollectionPlan(`plan:${source.id}`))
+            await expect(repository.getCollectionPlan(source.planId))
                 .resolves.toMatchObject({ mediaPolicy: null });
 
-            // 过渡期：来源端点仍是产品唯一的编辑入口，改媒体策略必须同时落进计划，
-            // 否则计划读投影会一直显示创建时那份旧值。
-            await repository.updateSource(source.id, {
-                baseRevisionId: source.revisionId,
-                config: { feedUrl: "https://example.test/feed.xml", media: { images: "metadata_only" } },
+            const tightened = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
+                mediaPolicy: { images: "metadata_only", retentionDays: 30 },
             });
-            await expect(repository.getCollectionPlan(`plan:${source.id}`))
-                .resolves.toMatchObject({ mediaPolicy: { images: "metadata_only" } });
+            expect(tightened.mediaPolicy).toEqual({ images: "metadata_only", retentionDays: 30 });
+            // 来源读投影也跟着走：产品面读的是同一个事实。
+            await expect(repository.getSource(source.id))
+                .resolves.toMatchObject({ mediaPolicy: { images: "metadata_only", retentionDays: 30 } });
+            // 来源配置里不再有 media（1c-1c-b2 起目标配置不接受它）。
+            const raw = await repository.prisma.sourceInstance.findUniqueOrThrow({ where: { id: source.id } });
+            expect(JSON.parse(raw.configJson)).toEqual({ feedUrl: "https://example.test/feed.xml" });
 
-            // 移除策略时计划要回到「跟随全局默认」，不能留下旧值。
-            const current = await repository.getSource(source.id);
-            await repository.updateSource(source.id, {
-                baseRevisionId: current?.revisionId ?? source.revisionId,
-                config: { feedUrl: "https://example.test/feed.xml" },
+            // 清除策略时回到「跟随全局默认」，不留下旧值。
+            const cleared = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: tightened.revisionId,
+                mediaPolicy: null,
             });
-            await expect(repository.getCollectionPlan(`plan:${source.id}`))
-                .resolves.toMatchObject({ mediaPolicy: null });
+            expect(cleared.mediaPolicy).toBeNull();
+            await expect(repository.getSource(source.id)).resolves.toMatchObject({ mediaPolicy: null });
         } finally {
             await repository.close();
         }

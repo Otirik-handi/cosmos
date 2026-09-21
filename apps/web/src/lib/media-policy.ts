@@ -35,7 +35,7 @@ export type MediaPolicyParseResult =
     | { ok: false; message: string };
 
 export function mediaPolicyFormValues(
-    policy: SourceMediaPolicy | undefined,
+    policy: SourceMediaPolicy | null | undefined,
 ): MediaPolicyFormValues {
     return {
         images: policy?.images ?? "download",
@@ -112,8 +112,8 @@ export function parseMediaPolicyForm(values: MediaPolicyFormValues): MediaPolicy
     return { ok: true, policy };
 }
 
-/** 来源行的一句话摘要：区分「跟随默认」与「本来源已收紧」。 */
-export function describeMediaPolicy(policy: SourceMediaPolicy | undefined): string {
+/** 计划行的一句话摘要：区分「跟随默认」与「本计划已收紧」。 */
+export function describeMediaPolicy(policy: SourceMediaPolicy | null | undefined): string {
     const parts: string[] = [];
     if (policy?.images === "metadata_only") {
         parts.push("仅记录元数据");

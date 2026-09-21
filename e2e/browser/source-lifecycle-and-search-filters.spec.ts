@@ -8,13 +8,13 @@ async function ingestFeed(page: import("@playwright/test").Page, prefix: string)
     const sourceName = `${prefix}-${randomUUID().slice(0, 8)}`;
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建来源" }).click();
+    await page.getByRole("button", { name: "新建计划" }).click();
     await page.getByLabel("名称", { exact: true }).fill(sourceName);
     await page.getByLabel("Feed URL").fill(FEED_URL);
-    await page.getByRole("button", { name: "保存来源" }).click();
-    await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     await healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
     await healthSection.getByRole("button", { name: sourceName, exact: true }).click();
@@ -26,14 +26,14 @@ async function ingestFeed(page: import("@playwright/test").Page, prefix: string)
 }
 
 function healthSection(page: import("@playwright/test").Page) {
-    return page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    return page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
 }
 
 /**
  * AUT-001「删除来源」的 Web 入口：两段确认，且只删配置与定时。
  *
  * 这条用例补的是产品面证据缺口（Task 32 切片 4 记录过：删除入口只有类型/组件层证据）：
- * 第一次点击只切确认态并解释后果，第二次才发命令；删除后来源从来源健康看板消失，
+ * 第一次点击只切确认态并解释后果，第二次才发命令；删除后来源从采集计划看板消失，
  * 但它已录入的 Story 仍在 Feed 里（墓碑语义，历史保留）。
  */
 test("删除来源需要两段确认，删除后保留已录入内容", async ({ page }) => {
@@ -47,13 +47,13 @@ test("删除来源需要两段确认，删除后保留已录入内容", async ({
     const deleteButton = row.getByRole("button", { name: `删除 ${sourceName}`, exact: true });
     await deleteButton.click();
 
-    // 第一段：只切确认态，来源仍在，且明确说明只移除配置与定时。
-    await expect(row.getByText("删除来源只移除配置与定时", { exact: false })).toBeVisible();
+    // 第一段：只切确认态，计划仍在，且明确说明只移除采集配置与定时。
+    await expect(row.getByText("删除计划只移除采集配置与定时", { exact: false })).toBeVisible();
     await expect(row).toBeVisible();
 
     await row.getByRole("button", { name: `确认删除 ${sourceName}`, exact: true }).click();
 
-    // 第二段：来源从来源健康看板消失。
+    // 第二段：来源从采集计划看板消失。
     await expect(health.locator("li").filter({ hasText: sourceName })).toHaveCount(0, {
         timeout: 15_000,
     });

@@ -48,14 +48,12 @@ describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
             });
             expect(source.scheduleIntervalMs).toBe(60_000);
 
-            // Disabled sources are excluded from the scheduler loop.
+            // Disabled plans are excluded from the scheduler loop.
             await expect(repository.listScheduleTriggers()).resolves.toEqual([]);
 
-            const activated = await repository.activateSource({
-                sourceId: source.id,
+            const activated = await repository.updateCollectionPlan(source.planId, {
                 enabled: true,
-                baseRevisionId: source.revisionId,
-                idempotencyKey: "activate-1",
+                baseRevisionId: source.planRevisionId,
             });
             expect(activated.scheduleIntervalMs).toBe(60_000);
             await expect(repository.listScheduleTriggers()).resolves.toEqual([
@@ -66,7 +64,7 @@ describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
         }
     });
 
-    it("upserts and removes the schedule via updateSource", async () => {
+    it("upserts and removes the schedule via the plan endpoint", async () => {
         const repository = await createRepository();
         try {
             const source = await repository.createSource({
@@ -77,13 +75,13 @@ describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
             });
             expect(source.scheduleIntervalMs).toBeNull();
 
-            const scheduled = await repository.updateSource(source.id, {
-                baseRevisionId: source.revisionId,
+            const scheduled = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
                 scheduleIntervalMs: 120_000,
             });
             expect(scheduled.scheduleIntervalMs).toBe(120_000);
 
-            const cleared = await repository.updateSource(source.id, {
+            const cleared = await repository.updateCollectionPlan(source.planId, {
                 baseRevisionId: scheduled.revisionId,
                 scheduleIntervalMs: null,
             });

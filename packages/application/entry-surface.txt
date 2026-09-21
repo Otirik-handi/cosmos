@@ -100,6 +100,8 @@ value	BoardNameConflictError
 value	BoardNotFoundError
 value	BoardSectionNotFoundError
 value	CollectionNotFoundError
+value	CollectionPlanNotFoundError
+value	CollectionPlanRevisionConflictError
 value	ConnectionNotFoundError
 value	ConnectorExecutionError
 value	ConnectorProbeService

@@ -58,7 +58,7 @@ describe("Trigger/SDK contracts (ADR-0018)", () => {
                 externalKey: "url",
                 discoveryContext: "",
                 media: "download",
-                stateStoreNamespace: "source:{id}",
+                stateStoreNamespace: "{id}",
             }],
         });
         expect(manifest.auth.kind).toBe("none");

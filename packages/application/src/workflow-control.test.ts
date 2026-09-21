@@ -21,6 +21,8 @@ const source: IngestWorkflowInputSnapshot["source"] = {
     kind: "fixture-rss",
     config: { fixturePath: "fixtures/rss/feed.xml" },
     enabled: true,
+    planId: "plan:source-1",
+    mediaPolicy: null,
     revisionId: "source-1:1",
     createdAt: "2026-08-16T00:00:00.000Z",
     updatedAt: "2026-08-16T00:00:00.000Z",

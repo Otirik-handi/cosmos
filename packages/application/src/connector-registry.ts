@@ -1,7 +1,7 @@
 /** Connector 注册表。 */
 
 import type {
-    ConnectorDescriptor, SourceSnapshot,
+    ConnectorDescriptor, SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 
 import type {
@@ -25,7 +25,7 @@ export class ConnectorRegistry {
         return this;
     }
 
-    resolve(source: SourceSnapshot): IngestConnector {
+    resolve(source: SourceExecutionSnapshot): IngestConnector {
         const connector = this.connectors.get(source.connectorId);
         if (!connector) {
             throw new Error(`Unsupported source connector: ${source.connectorId}`);
@@ -33,7 +33,7 @@ export class ConnectorRegistry {
         return connector;
     }
 
-    validate(source: SourceSnapshot): IngestConnector {
+    validate(source: SourceExecutionSnapshot): IngestConnector {
         const connector = this.resolve(source);
         connector.validate(source);
         return connector;

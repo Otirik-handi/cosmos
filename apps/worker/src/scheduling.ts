@@ -3,7 +3,6 @@ import type { Logger } from "@cosmos/logging";
 /** The slice of `IngestWorkflowControlService` the schedule tick depends on. */
 export interface ScheduledRunQueue {
     enqueue(input: {
-        planId: string;
         sourceId: string;
         triggerKind: "schedule";
         idempotencyKey: string;
@@ -44,7 +43,6 @@ export function createScheduleQueue(
             const bucket = Math.floor(now.getTime() / interval);
             try {
                 const envelope = await options.queue.enqueue({
-                    planId: trigger.planId,
                     sourceId: trigger.sourceId,
                     triggerKind: "schedule",
                     idempotencyKey: `schedule:${trigger.planId}:${bucket}`,

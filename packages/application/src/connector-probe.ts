@@ -2,7 +2,7 @@
 
 import {
     getSourceConfigurationSchema, type SourceConfigProbeCommand,
-    type SourceConfigProbeResult, type SourceConfig, type SourceSnapshot,
+    type SourceConfigProbeResult, type SourceConfig, type SourceExecutionSnapshot,
     type SourceProbeResult,
 } from "@cosmos/contracts";
 
@@ -165,9 +165,11 @@ export class SourceConfigProbeService {
             const config = configurationSchema.parse(command.config) as SourceConfig;
             stage = "validate";
             // Connectors only read config (and log kind); the remaining
-            // identity fields exist to satisfy SourceSnapshot without
-            // inventing a persisted source row.
-            const transientSource: SourceSnapshot = {
+            // identity fields exist to satisfy the execution snapshot without
+            // inventing a persisted source row. A probe has no plan, so the
+            // plan-owned fields carry sentinels — connectors must not read
+            // them (they belong to the host, ADR-0023 decision 2).
+            const transientSource: SourceExecutionSnapshot = {
                 id: "config-probe",
                 name: "(unsaved configuration)",
                 sourceDefinitionRef: command.sourceDefinitionRef,
@@ -176,11 +178,11 @@ export class SourceConfigProbeService {
                 kind: manifest.id,
                 config,
                 enabled: false,
+                planId: "config-probe",
+                mediaPolicy: null,
                 revisionId: "0",
                 createdAt: this.now(),
                 updatedAt: this.now(),
-                lastRunAt: null,
-                lastError: null,
             };
             const connector = this.connectors.resolve(transientSource);
             logger = logger.child({ connectorId: connector.id });

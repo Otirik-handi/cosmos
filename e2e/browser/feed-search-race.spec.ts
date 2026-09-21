@@ -9,13 +9,13 @@ async function ingestFeed(page: import("@playwright/test").Page, prefix: string)
     const sourceName = `${prefix}-${randomUUID().slice(0, 8)}`;
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建来源" }).click();
+    await page.getByRole("button", { name: "新建计划" }).click();
     await page.getByLabel("名称", { exact: true }).fill(sourceName);
     await page.getByLabel("Feed URL").fill(FEED_URL);
-    await page.getByRole("button", { name: "保存来源" }).click();
-    await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     await healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
     await healthSection.getByRole("button", { name: sourceName, exact: true }).click();

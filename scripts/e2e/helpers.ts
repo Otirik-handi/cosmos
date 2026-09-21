@@ -373,17 +373,48 @@ async function postExpectedCreated(
     return payload;
 }
 
+async function getExpectedOk(
+    url: string,
+): Promise<Record<string, unknown>> {
+    const response = await fetch(url);
+    const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+    if (response.status !== 200 || payload === null) {
+        throw new Error(`Expected HTTP 200 from ${url}, got ${response.status}.`);
+    }
+    return payload;
+}
+
+async function patchExpectedOk(
+    url: string,
+    headers: Record<string, string>,
+    body: unknown,
+): Promise<Record<string, unknown>> {
+    const response = await fetch(url, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+    if (response.status !== 200 || payload === null) {
+        throw new Error(`Expected HTTP 200 from ${url}, got ${response.status}.`);
+    }
+    return payload;
+}
+
 /**
  * Single source of truth for the Product API acceptance flow: create a
- * disabled RSS Source, then optionally enable it through an activation
- * command. Contract changes to this flow should land here only instead of
- * being re-applied across every E2E scenario.
+ * disabled RSS Source, then optionally enable its default plan. Contract
+ * changes to this flow should land here only instead of being re-applied
+ * across every E2E scenario.
+ *
+ * Always resolves to the **source** projection: enabling now goes through the
+ * plan endpoint (ADR-0023), whose response is a plan snapshot, so the helper
+ * re-reads the source instead of handing callers a differently shaped object.
  */
 export async function createRssSource(options: {
     apiBaseUrl: string;
     feedUrl: string;
     name: string;
-    activationIdempotencyKey: string | ((sourceId: string) => string);
     enabled?: boolean;
     scheduleIntervalMs?: number;
 }): Promise<Record<string, unknown>> {
@@ -400,17 +431,19 @@ export async function createRssSource(options: {
         },
     });
     const sourceId = created.id;
-    const baseRevisionId = created.revisionId;
-    if (typeof sourceId !== "string" || typeof baseRevisionId !== "string") {
-        throw new Error("Source creation response is missing id or revisionId.");
+    const planId = created.planId;
+    const planRevisionId = created.planRevisionId;
+    if (typeof sourceId !== "string" || typeof planId !== "string" || typeof planRevisionId !== "string") {
+        throw new Error("Source creation response is missing id, planId or planRevisionId.");
     }
     if (options.enabled === false) return created;
-    const activationKey = typeof options.activationIdempotencyKey === "function"
-        ? options.activationIdempotencyKey(sourceId)
-        : options.activationIdempotencyKey;
-    return await postExpectedCreated(
-        `${options.apiBaseUrl}/api/v1/sources/${encodeURIComponent(sourceId)}/activation-commands`,
-        { "content-type": "application/json", "idempotency-key": activationKey },
-        { enabled: true, baseRevisionId },
+    // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
+    await patchExpectedOk(
+        `${options.apiBaseUrl}/api/v1/collection-plans/${encodeURIComponent(planId)}`,
+        { "content-type": "application/json" },
+        { enabled: true, baseRevisionId: planRevisionId },
+    );
+    return await getExpectedOk(
+        `${options.apiBaseUrl}/api/v1/sources/${encodeURIComponent(sourceId)}`,
     );
 }

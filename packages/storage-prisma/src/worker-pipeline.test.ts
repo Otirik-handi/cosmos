@@ -386,7 +386,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
                 maxAttempts: 3,
                 payloadJson: JSON.stringify({
                     activity: {
-                        key: "source.checkpoint",
+                        key: "collection-plan.checkpoint",
                         path: "root",
                         seq: 0,
                         kind: "action",
@@ -401,7 +401,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
         });
         try {
             await expect(repository.setWorkflowIngestCheckpoint({
-                sourceId: "source-checkpoint",
+                planId: "plan:source-checkpoint",
                 workflowRunId,
                 cursor: "cursor-1",
                 expectedRevision: 0,
@@ -410,7 +410,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
                     workflowRunId,
                     kernelRevision: 1,
                     activity: {
-                        key: "source.checkpoint",
+                        key: "collection-plan.checkpoint",
                         path: "root",
                         seq: 0,
                         kind: "action",
@@ -423,12 +423,12 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
                 },
                 idempotencyKey: "workflow-checkpoint-action-key",
             })).resolves.toEqual({
-                sourceId: "source-checkpoint",
+                planId: "plan:source-checkpoint",
                 cursor: "cursor-1",
                 revision: 1,
                 committed: true,
             });
-            await expect(repository.getCheckpointSnapshot("source-checkpoint"))
+            await expect(repository.getCheckpointSnapshot("plan:source-checkpoint"))
                 .resolves.toEqual({ cursor: "cursor-1", revision: 1 });
         } finally {
             await repository.close();

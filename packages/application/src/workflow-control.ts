@@ -35,7 +35,7 @@ export type IngestWorkflowInputSnapshot = z.infer<typeof ingestWorkflowInputSnap
 export interface IngestWorkflowControlOptions {
     store: WorkflowHostStore;
     getSourceExecutionSnapshot(sourceId: string): Promise<IngestWorkflowInputSnapshot["source"] | null>;
-    getCheckpointSnapshot(sourceId: string): Promise<{ cursor: string | null; revision: number }>;
+    getCheckpointSnapshot(planId: string): Promise<{ cursor: string | null; revision: number }>;
     ids?: IdGenerator;
 }
 
@@ -47,13 +47,11 @@ export class IngestWorkflowControlService {
     }
 
     async enqueue(input: {
-        planId?: string | null;
         sourceId: string;
         triggerKind: IngestTriggerKind;
         idempotencyKey: string;
     }): Promise<WorkflowEnvelope> {
         const sourceId = input.sourceId.trim();
-        const planId = input.planId == null ? null : input.planId.trim();
         const idempotencyKey = input.idempotencyKey.trim();
         const triggerKind = ingestTriggerKindSchema.parse(input.triggerKind);
         if (!sourceId || !idempotencyKey) {
@@ -73,7 +71,10 @@ export class IngestWorkflowControlService {
         }
         const source = await this.options.getSourceExecutionSnapshot(sourceId);
         if (!source) throw new Error(`Source not found: ${sourceId}`);
-        const checkpoint = await this.options.getCheckpointSnapshot(sourceId);
+        // 计划身份从执行快照取，不由调用方另传一份：两者若不一致，入队记录的归属会与
+        // 运行期实际用的计划（checkpoint、连接器状态命名空间）对不上。
+        const planId = source.planId;
+        const checkpoint = await this.options.getCheckpointSnapshot(planId);
         const inputSnapshot = ingestWorkflowInputSnapshotSchema.parse({
             source,
             cursor: checkpoint.cursor,

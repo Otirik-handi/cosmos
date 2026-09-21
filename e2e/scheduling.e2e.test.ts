@@ -70,7 +70,9 @@ beforeAll(async () => {
         badSourceId = readString(badSource, "id");
         goodSourceId = readString(goodSource, "id");
         const bucket = Math.floor(Date.now() / 60_000);
-        const collisionKey = `schedule:${badSourceId}:${bucket}`;
+        // 调度幂等键按计划归属（ADR-0023，1c-1b 起为 `schedule:<planId>:<bucket>`）：
+        // 碰撞必须撞在计划 id 上，撞来源 id 不会命中，这条用例会静默退化成「没有冲突」。
+        const collisionKey = `schedule:${readString(badSource, "planId")}:${bucket}`;
         const collisionRun = await requestJson(
             `${apiBaseUrl}/api/v1/sources/${readString(collisionSource, "id")}/runs`,
             {
@@ -166,7 +168,6 @@ async function createSource(name: string, enabled: boolean): Promise<unknown> {
         name,
         enabled,
         scheduleIntervalMs: 60_000,
-        activationIdempotencyKey: (sourceId) => `scheduling-activate:${sourceId}`,
     });
 }
 

@@ -21,11 +21,16 @@ describe("HttpCosmosClient 来源与运行", () => {
                     kind: "rss",
                     config: { feedUrl: "https://example.test/feed.xml" },
                     enabled: false,
+                    mediaPolicy: null,
                     revisionId: "source-1:3",
                     createdAt: "2026-08-24T00:00:00.000Z",
                     updatedAt: "2026-08-24T00:00:02.000Z",
                     lastRunAt: null,
                     lastError: null,
+                    planId: "plan:source-1",
+                    planRevisionId: "plan:source-1:2",
+                    connectionId: null,
+                    scheduleIntervalMs: null,
                 }), {
                     status: 200,
                     headers: { "content-type": "application/json" },
@@ -51,26 +56,28 @@ describe("HttpCosmosClient 来源与运行", () => {
         });
     });
 
-    it("posts source activation commands with the idempotency key", async () => {
+    it("patches the plan to enable it, with the plan revision as CAS", async () => {
         const requests: Array<{ url: string; init?: RequestInit }> = [];
         const client = new HttpCosmosClient({
             baseUrl: "http://localhost:4310",
             fetch: async (input, init) => {
                 requests.push({ url: String(input), init });
                 return new Response(JSON.stringify({
-                    id: "source-1",
+                    id: "plan:source-1",
                     name: "RSS",
-                    sourceDefinitionRef: "source.rss@1",
-                    operationId: "fetch",
-                    connectorId: "rss",
-                    kind: "rss",
-                    config: { feedUrl: "https://example.test/feed.xml" },
+                    sourceId: "source-1",
+                    sourceRevisionId: "source-1:1",
+                    connectionId: null,
+                    triggerBindingId: null,
+                    mediaPolicy: null,
+                    overlapPolicy: "forbid",
                     enabled: true,
-                    revisionId: "source-1:2",
-                    createdAt: "2026-08-24T00:00:00.000Z",
-                    updatedAt: "2026-08-24T00:00:01.000Z",
+                    revisionId: "plan:source-1:2",
+                    scheduleIntervalMs: null,
                     lastRunAt: null,
                     lastError: null,
+                    createdAt: "2026-08-24T00:00:00.000Z",
+                    updatedAt: "2026-08-24T00:00:01.000Z",
                 }), {
                     status: 200,
                     headers: { "content-type": "application/json" },
@@ -78,20 +85,17 @@ describe("HttpCosmosClient 来源与运行", () => {
             },
         });
 
-        const activated = await client.activateSource("source-1", {
+        const activated = await client.updateCollectionPlan("plan:source-1", {
             enabled: true,
-            baseRevisionId: "source-1:1",
-        }, "activation-1");
-
-        expect(activated.revisionId).toBe("source-1:2");
-        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/sources/source-1/activation-commands");
-        expect(requests[0]?.init).toMatchObject({
-            method: "POST",
-            headers: expect.objectContaining({ "idempotency-key": "activation-1" }),
+            baseRevisionId: "plan:source-1:1",
         });
+
+        expect(activated.revisionId).toBe("plan:source-1:2");
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/collection-plans/plan%3Asource-1");
+        expect(requests[0]?.init).toMatchObject({ method: "PATCH" });
         expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
             enabled: true,
-            baseRevisionId: "source-1:1",
+            baseRevisionId: "plan:source-1:1",
         });
     });
 
@@ -132,7 +136,7 @@ describe("HttpCosmosClient 来源与运行", () => {
                             externalKey: "url",
                             discoveryContext: "",
                             media: "download",
-                            stateStoreNamespace: "source:{id}",
+                            stateStoreNamespace: "{id}",
                         }],
                     }],
                     nextCursor: null,
@@ -282,13 +286,16 @@ describe("HttpCosmosClient 来源与运行", () => {
             id: "plan:s1",
             name: "主账号动态每 30 分钟",
             sourceId: "s1",
+            sourceRevisionId: "s1:1",
             connectionId: "c1",
             triggerBindingId: "t1",
             mediaPolicy: null,
             overlapPolicy: "forbid",
             enabled: true,
-            revisionId: "1",
+            revisionId: "plan:s1:1",
             scheduleIntervalMs: 1_800_000,
+            lastRunAt: null,
+            lastError: null,
             createdAt: "2026-09-20T08:00:00.000Z",
             updatedAt: "2026-09-20T08:00:00.000Z",
         };

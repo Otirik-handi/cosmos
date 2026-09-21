@@ -72,7 +72,6 @@ describe("createScheduleQueue", () => {
 
         expect(queue.calls).toHaveLength(1);
         expect(queue.calls[0]).toEqual({
-            planId: "plan:due",
             sourceId: "due",
             triggerKind: "schedule",
             idempotencyKey: `schedule:plan:due:${Math.floor(NOW.getTime() / 60_000)}`,
@@ -116,13 +115,11 @@ describe("createScheduleQueue", () => {
 
         expect(queue.calls).toEqual([
             {
-                planId: "plan:bilibili-hot",
                 sourceId: "bilibili-hot",
                 triggerKind: "schedule",
                 idempotencyKey: `schedule:plan:bilibili-hot:${Math.floor(NOW.getTime() / 60_000)}`,
             },
             {
-                planId: "plan:aihot",
                 sourceId: "aihot",
                 triggerKind: "schedule",
                 idempotencyKey: `schedule:plan:aihot:${Math.floor(NOW.getTime() / 120_000)}`,
@@ -153,7 +150,9 @@ describe("createScheduleQueue", () => {
             `schedule:plan:feed:${Math.floor(NOW.getTime() / 1_800_000)}`,
             `schedule:plan:hot:${Math.floor(NOW.getTime() / 7_200_000)}`,
         ]);
-        expect(new Set(queue.calls.map((call) => call.planId))).toEqual(new Set(["plan:feed", "plan:hot"]));
+        // 计划身份由上面的幂等键承载：`enqueue` 不再接受调用方另传的 planId，
+        // 而是从执行快照取（两个来源若不一致，入队归属会与运行期用的计划对不上）。
+        expect(queue.calls.map((call) => call.sourceId)).toEqual(["feed", "hot"]);
     });
 
     it("continues queuing later triggers when one source fails to enqueue", async () => {

@@ -16,19 +16,21 @@ export class PrismaCosmosRepositoryJobClaims extends PrismaCosmosRepositoryRuns 
         return attempt ?? null;
     }
 
-    async getCheckpoint(sourceId: string): Promise<string | null> {
+    // checkpoint 按计划寻址（ADR-0023 决策 2）：游标与 revision 属于采集计划，
+    // 来源列在读取切换后不再作为查找键（第 4 步 contract 才删列）。
+    async getCheckpoint(planId: string): Promise<string | null> {
         const checkpoint = await this.prisma.checkpoint.findUnique({
-            where: { sourceInstanceId: sourceId },
+            where: { planId },
         });
         return checkpoint?.cursor ?? null;
     }
 
-    async getCheckpointSnapshot(sourceId: string): Promise<{
+    async getCheckpointSnapshot(planId: string): Promise<{
         cursor: string | null;
         revision: number;
     }> {
         const checkpoint = await this.prisma.checkpoint.findUnique({
-            where: { sourceInstanceId: sourceId },
+            where: { planId },
         });
         return {
             cursor: checkpoint?.cursor ?? null,

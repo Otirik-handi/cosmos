@@ -35,21 +35,19 @@ try {
     });
     assertStatus(source, 201, "Docker RSS source creation");
     const sourceId = readString(source.body, "id");
+    // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
     const activated = await requestJson(
-        `http://127.0.0.1:4310/api/v1/sources/${sourceId}/activation-commands`,
+        `http://127.0.0.1:4310/api/v1/collection-plans/${encodeURIComponent(readString(source.body, "planId"))}`,
         {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-                "idempotency-key": "docker-flow-rss-activation",
-            },
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
             body: JSON.stringify({
                 enabled: true,
-                baseRevisionId: readString(source.body, "revisionId"),
+                baseRevisionId: readString(source.body, "planRevisionId"),
             }),
         },
     );
-    assertStatus(activated, 201, "Docker RSS source activation");
+    assertStatus(activated, 200, "Docker RSS plan activation");
 
     const queued = await requestJson(
         `http://127.0.0.1:4310/api/v1/sources/${sourceId}/runs`,

@@ -78,7 +78,6 @@ beforeAll(async () => {
             apiBaseUrl,
             feedUrl: rss.url,
             name: "Controlled Recovery RSS",
-            activationIdempotencyKey: "recovery-e2e-activation",
         });
         const sourceId = readString(activated, "id");
         const queued = await requestJson(`${apiBaseUrl}/api/v1/sources/${sourceId}/runs`, {

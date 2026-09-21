@@ -123,7 +123,6 @@ describe("ingest Node process E2E", () => {
             apiBaseUrl,
             feedUrl: rss.url,
             name: "Controlled RSS E2E",
-            activationIdempotencyKey: "ingest-e2e-source-1",
         });
         expect(sourceResponse).toMatchObject({
             name: "Controlled RSS E2E",
@@ -140,7 +139,6 @@ describe("ingest Node process E2E", () => {
             apiBaseUrl,
             feedUrl: rss.url,
             name: "Second Controlled RSS E2E",
-            activationIdempotencyKey: "ingest-e2e-source-2",
         });
         const secondSourceId = readString(secondSourceResponse, "id");
 

@@ -16,8 +16,8 @@ import { createHealthSnapshot, WorkflowHostConflictError } from "@cosmos/applica
 import {
     createSourceCommandSchema,
     deleteSourceCommandSchema,
-    sourceActivationCommandSchema,
     sourceConfigProbeCommandSchema,
+    updateCollectionPlanCommandSchema,
     updateSourceCommandSchema,
     createConnectionCommandSchema,
     updateConnectionCommandSchema,
@@ -134,6 +134,18 @@ export class AppControllerSources extends AppControllerBase {
         try {
             const command = createSourceCommandSchema.parse(body);
             this.validateSourceDefinition(command);
+            // 连接归计划（ADR-0023 决策 2）：不先查一次的话，不存在的连接会撞数据库外键
+            // 变成 500，而它其实是一个可以明确告诉调用方的输入错误。
+            if (command.connectionId) {
+                const connection = await this.repository.getConnection(command.connectionId);
+                if (!connection) {
+                    throw new NotFoundException({
+                        code: "not_found",
+                        message: `Connection not found: ${command.connectionId}`,
+                        retryable: false,
+                    });
+                }
+            }
             return toPublicSource(await this.repository.createSource(command));
         } catch (error) {
             sourceCommandError(error);
@@ -162,37 +174,6 @@ export class AppControllerSources extends AppControllerBase {
             }
             const updated = await this.repository.updateSource(sourceId, input);
             return toPublicSource(updated);
-        } catch (error) {
-            sourceCommandError(error);
-        }
-    }
-
-    @Post("sources/:sourceId/activation-commands")
-    @Bind(Param("sourceId"), Body(), Headers("idempotency-key"))
-    async activateSource(sourceId: string, body: unknown, idempotencyKey?: string) {
-        try {
-            const key = requireIdempotencyKey(idempotencyKey);
-            const command = sourceActivationCommandSchema.parse(body);
-            if (command.enabled) {
-                const source = await this.repository.getSource(sourceId);
-                if (!source) {
-                    throw new NotFoundException({
-                        code: "not_found",
-                        message: `Source not found: ${sourceId}`,
-                        retryable: false,
-                    });
-                }
-                this.validateSourceDefinition({
-                    sourceDefinitionRef: source.sourceDefinitionRef,
-                    operationId: source.operationId,
-                    config: source.config,
-                });
-            }
-            return toPublicSource(await this.repository.activateSource({
-                ...command,
-                sourceId,
-                idempotencyKey: key,
-            }));
         } catch (error) {
             sourceCommandError(error);
         }
@@ -361,6 +342,45 @@ export class AppControllerSources extends AppControllerBase {
             });
         }
         return result;
+    }
+
+    /**
+     * 计划自有字段的唯一写入口（ADR-0023 决策 2）：名字、连接、调度、媒体预算与启用状态。
+     * 启用沿用来源端点原有的前置条件——已保存的目标配置必须仍然有效，否则启用会造出一个
+     * 每次运行都失败的启用计划。
+     */
+    @Patch("collection-plans/:planId")
+    @Bind(Param("planId"), Body())
+    async updateCollectionPlan(planId: string, body: unknown) {
+        try {
+            const input = updateCollectionPlanCommandSchema.parse(body);
+            if (input.enabled === true) {
+                const plan = await this.repository.getCollectionPlan(planId);
+                if (!plan) {
+                    throw new NotFoundException({
+                        code: "not_found",
+                        message: `Collection plan not found: ${planId}`,
+                        retryable: false,
+                    });
+                }
+                const source = await this.repository.getSource(plan.sourceId);
+                if (!source) {
+                    throw new NotFoundException({
+                        code: "not_found",
+                        message: `Source not found: ${plan.sourceId}`,
+                        retryable: false,
+                    });
+                }
+                this.validateSourceDefinition({
+                    sourceDefinitionRef: source.sourceDefinitionRef,
+                    operationId: source.operationId,
+                    config: source.config,
+                });
+            }
+            return await this.repository.updateCollectionPlan(planId, input);
+        } catch (error) {
+            sourceCommandError(error);
+        }
     }
 
     // ---- Storage occupancy + backup/restore (ADR-0019 / OPS-003/004). ----

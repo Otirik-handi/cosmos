@@ -23,7 +23,8 @@ import { BoardBlockList } from "./board-sortable-blocks";
 const BLOCK_TYPE_LABELS: Record<string, string> = {
     feed: "阅读流",
     spotlight: "热点",
-    "source-health": "来源健康",
+    // type 键是看板布局里已持久化的标识（改它要迁移），标签随产品术语改为「采集计划」。
+    "source-health": "采集计划",
     "topic-list": "Topic 列表",
     collection: "收藏夹",
 };
@@ -81,8 +82,8 @@ export type BoardCommands = {
 type BoardViewProps = {
     board: BoardDetail;
     client: HttpCosmosClient;
-    /** 来源健康区块复用页面的 SourceActions（含启用/停用/手动录入操作）。 */
-    sourceActionsSlot: ReactNode;
+    /** 采集计划区块复用页面的计划列表（含启用/停用/手动录入操作）。 */
+    planListSlot: ReactNode;
     topics: readonly TopicSummary[];
     openingTopicId: string | null;
     onOpenTopic: (topicId: string) => void;
@@ -103,7 +104,7 @@ type BoardViewProps = {
 export function BoardView({
     board,
     client,
-    sourceActionsSlot,
+    planListSlot,
     topics,
     openingTopicId,
     onOpenTopic,
@@ -148,7 +149,7 @@ export function BoardView({
                                 editable={editable}
                                 commands={commands}
                                 client={client}
-                                sourceActionsSlot={sourceActionsSlot}
+                                planListSlot={planListSlot}
                                 savedViews={savedViews}
                                 collections={collections}
                                 topics={topics}
@@ -186,7 +187,7 @@ function BlockList({
     editable,
     commands,
     client,
-    sourceActionsSlot,
+    planListSlot,
     savedViews,
     collections,
     topics,
@@ -200,7 +201,7 @@ function BlockList({
     editable: boolean;
     commands?: BoardCommands;
     client: HttpCosmosClient;
-    sourceActionsSlot: ReactNode;
+    planListSlot: ReactNode;
     savedViews: readonly SavedView[];
     collections: readonly CollectionSummary[];
     topics: readonly TopicSummary[];
@@ -215,7 +216,7 @@ function BlockList({
                 block={block}
                 client={client}
                 boardId={board.id}
-                sourceActionsSlot={sourceActionsSlot}
+                planListSlot={planListSlot}
                 savedViews={savedViews}
                 topics={topics}
                 openingTopicId={openingTopicId}
@@ -607,7 +608,7 @@ type BoardBlockContentProps = {
     block: BoardBlock;
     client: HttpCosmosClient;
     boardId: string;
-    sourceActionsSlot: ReactNode;
+    planListSlot: ReactNode;
     savedViews: readonly SavedView[];
     topics: readonly TopicSummary[];
     openingTopicId: string | null;
@@ -620,7 +621,7 @@ function BoardBlockContent({
     block,
     client,
     boardId,
-    sourceActionsSlot,
+    planListSlot,
     savedViews,
     topics,
     openingTopicId,
@@ -658,7 +659,7 @@ function BoardBlockContent({
                 />
             );
         case "source-health":
-            return <>{sourceActionsSlot}</>;
+            return <>{planListSlot}</>;
         case "topic-list":
             return (
                 <BoardTopicListBlock

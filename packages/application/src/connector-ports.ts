@@ -4,7 +4,7 @@ import type {
     JsonValue,
 } from "@notnotype/nb-workflow";
 import type {
-    SourceSnapshot,
+    SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import type {
     NormalizedIngestItem,
@@ -31,9 +31,14 @@ export interface IngestConnector {
     description: string;
     configVersion: string;
     capabilities: readonly string[];
-    validate(source: SourceSnapshot): void;
+    /**
+     * 连接器收到的是这一轮运行固化的执行快照，但**只该读目标身份与配置**（id／kind／
+     * connectorId／config）。快照里还有宿主字段（启用状态、媒体预算、最近运行），
+     * 它们由宿主的其它环节消费，连接器依赖它们会在归属变化时静默失效（ADR-0023 决策 2）。
+     */
+    validate(source: SourceExecutionSnapshot): void;
     fetchItems(input: {
-        source: SourceSnapshot;
+        source: SourceExecutionSnapshot;
         cursor: string | null;
         idempotencyKey?: string;
         signal?: AbortSignal;
@@ -77,7 +82,7 @@ export class ConnectorExecutionError extends Error {
 }
 
 export type ConnectorResolver = (
-    source: SourceSnapshot,
+    source: SourceExecutionSnapshot,
 ) => IngestConnector;
 
 /**

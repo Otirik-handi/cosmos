@@ -64,6 +64,7 @@ export {
 } from "./logger.js";
 export {
     SourceNotFoundError, SourceRevisionConflictError, ConnectionNotFoundError,
+    CollectionPlanNotFoundError, CollectionPlanRevisionConflictError,
     StoryNotFoundError, StoryRevisionConflictError, StoryMergeConflictError,
     StorySplitConflictError, StorySubtypeInvalidError, StoryUserStateMigrationConflictError,
     TopicNotFoundError,

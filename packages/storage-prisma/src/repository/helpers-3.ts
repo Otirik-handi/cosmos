@@ -1,4 +1,4 @@
-import { sourceKindSchema, sourceConfigSchema, type FeedItem, type FeedPage, type HealthResponse, type CollectionDetail, type CollectionSummary, type BoardBlock, type BoardDetail } from "@cosmos/contracts";
+import { sourceKindSchema, sourceConfigSchema, sourceMediaPolicySchema, type FeedItem, type FeedPage, type HealthResponse, type CollectionDetail, type CollectionSummary, type BoardBlock, type BoardDetail } from "@cosmos/contracts";
 import { BoardBlockNotFoundError, BoardNotFoundError, BoardSectionNotFoundError, type MediaCleanupCandidate, type RepositoryHealth, type WorkflowAttemptSnapshot } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { appendDomainEvent, parseCursor, parseJson, projectWorkflowAttempts, toBoardBlock } from "./repository-internals.js";
@@ -35,12 +35,15 @@ export class PrismaCosmosRepositoryHelpers3 extends PrismaCosmosRepositoryHelper
         const limit = input.limit ?? 200;
         const sources = await this.prisma.sourceInstance.findMany({
             where: input.sourceId ? { id: input.sourceId } : {},
-            select: { id: true, name: true, configJson: true },
+            select: { id: true, name: true, plan: { select: { mediaPolicyJson: true } } },
         });
         const candidates: MediaCleanupCandidate[] = [];
         for (const source of sources) {
-            const config = sourceConfigSchema.safeParse(parseJson(source.configJson) ?? {});
-            const retentionDays = config.success ? config.data.media?.retentionDays ?? 0 : 0;
+            // 保留期归采集计划（ADR-0023 决策 2）：来源配置里的 media 在读取切换后已移除，
+            // 清理窗口必须读计划那份，否则所有来源都会被当成「没有保留期」而永不清理。
+            const policyJson = source.plan?.mediaPolicyJson;
+            const policy = policyJson ? sourceMediaPolicySchema.safeParse(parseJson(policyJson)) : null;
+            const retentionDays = policy?.success ? policy.data.retentionDays ?? 0 : 0;
             if (retentionDays <= 0) {
                 continue;
             }

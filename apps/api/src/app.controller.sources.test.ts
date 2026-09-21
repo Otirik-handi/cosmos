@@ -146,7 +146,7 @@ describe("AppController source removal (AUT-001)", () => {
 });
 
 describe("AppController source media policy projection", () => {
-    it("keeps the per-source media policy in the public config", async () => {
+    it("projects the plan's media policy and the plan identity into the public source", async () => {
         const media = { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } as const;
         const base = {
             id: "source-1",
@@ -157,7 +157,12 @@ describe("AppController source media policy projection", () => {
             kind: "rss",
             config: { feedUrl: "https://example.test/feed.xml" },
             enabled: true,
+            mediaPolicy: media,
             revisionId: "source-1:1",
+            planId: "plan:source-1",
+            planRevisionId: "plan:source-1:1",
+            connectionId: null,
+            scheduleIntervalMs: null,
             createdAt: "2026-08-08T00:00:00.000Z",
             updatedAt: "2026-08-08T00:00:00.000Z",
             lastRunAt: null,
@@ -167,7 +172,7 @@ describe("AppController source media policy projection", () => {
             getSource: vi.fn().mockResolvedValue(base),
             updateSource: vi.fn().mockResolvedValue({
                 ...base,
-                config: { ...base.config, media },
+                name: "Fixture renamed",
                 revisionId: "source-1:2",
             }),
         };
@@ -178,13 +183,15 @@ describe("AppController source media policy projection", () => {
 
         const updated = await controller.updateSource("source-1", {
             baseRevisionId: "source-1:1",
-            config: { feedUrl: "https://example.test/feed.xml", media },
+            name: "Fixture renamed",
         });
 
-        expect(updated.config).toEqual({
-            feedUrl: "https://example.test/feed.xml",
-            media,
-        });
+        // 目标配置里不再有 media（1c-1c-b2），媒体预算作为计划派生的投影单独出现——
+        // 白名单漏掉它会让产品面读到 undefined。
+        expect(updated.config).toEqual({ feedUrl: "https://example.test/feed.xml" });
+        expect(updated.mediaPolicy).toEqual(media);
+        expect(updated.planId).toBe("plan:source-1");
+        expect(updated.planRevisionId).toBe("plan:source-1:1");
     });
 });
 

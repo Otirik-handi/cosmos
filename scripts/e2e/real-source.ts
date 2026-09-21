@@ -81,22 +81,20 @@ try {
             `Real ${kind} source creation returned HTTP ${created.status}.`,
         );
     const sourceId = readString(created.body, "id");
+    // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
     const activated = await requestJson(
-        `http://127.0.0.1:${apiPort}/api/v1/sources/${sourceId}/activation-commands`,
+        `http://127.0.0.1:${apiPort}/api/v1/collection-plans/${encodeURIComponent(readString(created.body, "planId"))}`,
         {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-                "idempotency-key": `real-${kind}-activation`,
-            },
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
             body: JSON.stringify({
                 enabled: true,
-                baseRevisionId: readString(created.body, "revisionId"),
+                baseRevisionId: readString(created.body, "planRevisionId"),
             }),
         },
     );
-    if (activated.status !== 201) {
-        throw new Error(`Real ${kind} source activation returned HTTP ${activated.status}.`);
+    if (activated.status !== 200) {
+        throw new Error(`Real ${kind} plan activation returned HTTP ${activated.status}.`);
     }
     const queued = await requestJson(
         `http://127.0.0.1:${apiPort}/api/v1/sources/${sourceId}/runs`,

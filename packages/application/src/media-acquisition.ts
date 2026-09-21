@@ -52,7 +52,7 @@ export interface MediaPolicy {
 }
 
 /**
- * Resolve a source's optional `config.media` into effective values. Missing
+ * Resolve a plan's optional `mediaPolicy` into effective values. Missing
  * fields follow the global defaults, and both byte limits are capped by them
  * so a stored value that bypassed the contract cannot raise the budget
  * (ADR-0014 decision 2).

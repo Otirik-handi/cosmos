@@ -39,7 +39,7 @@ import {
     ConnectorExecutionError,
 } from "./connector-ports.js";
 import type {
-    SourceSnapshot,
+    SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import {
     acquireItemsSkippingUnchanged,
@@ -67,7 +67,7 @@ import type {
 export const ingestWorkflowReference = "cosmos.ingest@1" as const;
 export const ingestFetchActionReference = "source.fetch@1" as const;
 export const ingestPersistActionReference = "library.ingest@1" as const;
-export const ingestCheckpointActionReference = "source.checkpoint@1" as const;
+export const ingestCheckpointActionReference = "collection-plan.checkpoint@1" as const;
 export const ingestMediaRetryFetchActionReference = "media.retry.fetch@1" as const;
 export const ingestMediaRetryApplyActionReference = "media.retry.apply@1" as const;
 
@@ -75,7 +75,7 @@ export { ingestWorkflowManifestHash } from "./workflow-control.js";
 import { ingestWorkflowManifestHash } from "./workflow-control.js";
 export const ingestFetchActionManifestHash = "builtin:source.fetch@1:source-snapshot-v1";
 export const ingestPersistActionManifestHash = "builtin:library.ingest@1";
-export const ingestCheckpointActionManifestHash = "builtin:source.checkpoint@1:cas-v1";
+export const ingestCheckpointActionManifestHash = "builtin:collection-plan.checkpoint@1:cas-v1";
 export const ingestMediaRetryFetchActionManifestHash = "builtin:media.retry.fetch@1";
 export const ingestMediaRetryApplyActionManifestHash = "builtin:media.retry.apply@1";
 
@@ -122,7 +122,7 @@ export interface WorkflowIngestDomainPort {
         idempotencyKey: string;
     }): Promise<PersistIngestItemResult>;
     setWorkflowIngestCheckpoint(input: {
-        sourceId: string;
+        planId: string;
         workflowRunId: string;
         cursor: string | null;
         expectedRevision: number;
@@ -152,7 +152,7 @@ export interface IngestActionOptions {
      * 按来源解析出的连接器状态句柄（ADR-0017/0018，命名空间取自 manifest 的
      * `stateStoreNamespace`）。没接状态存储时为 undefined，连接器退化成无状态抓取。
      */
-    connectorState?: (source: SourceSnapshot) => ConnectorStateHandle | undefined;
+    connectorState?: (source: SourceExecutionSnapshot) => ConnectorStateHandle | undefined;
     logger?: LoggerPort;
 }
 
@@ -196,7 +196,7 @@ export function createIngestWorkflowDefinition(): IngestWorkflowDefinition {
             // page is persisted so "retry" means "next collection of this
             // source", never an immediate second attempt on the same bytes
             // (ADR-0015 decisions 1 and 5).
-            const retryPolicy = resolveMediaPolicy(input.source.config.media);
+            const retryPolicy = resolveMediaPolicy(input.source.mediaPolicy);
             let mediaRetryCandidateCount = 0;
             let mediaRetryAppliedCount = 0;
             if (retryPolicy.retry.maxAttempts > 0) {
@@ -247,12 +247,12 @@ export function createIngestWorkflowDefinition(): IngestWorkflowDefinition {
             const checkpoint = await workflow.callAction<SourceCheckpointOutput>(
                 ingestCheckpointActionReference,
                 asJson({
-                    sourceId: input.source.id,
+                    planId: input.source.planId,
                     cursor: page.nextCursor,
                     expectedRevision: input.checkpointRevision,
                     itemCount: page.items.length,
                 }),
-                { key: "source.checkpoint" },
+                { key: "collection-plan.checkpoint" },
             );
             await workflow.checkpoint(asJson({
                 sourceId: input.source.id,
@@ -391,11 +391,9 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
             definition: sourceFetch,
             handler: async (input: unknown, context: ActionExecutionContext) => {
                 const parsed = sourceFetchInputSchema.parse(input);
-                const source = {
-                    ...parsed.source,
-                    lastRunAt: null,
-                    lastError: null,
-                };
+                // 连接器只吃不可变执行快照（connector-ports），产品读投影
+                // （最近运行/错误）不进这条路径。
+                const source = parsed.source;
                 let connector: IngestConnector;
                 try {
                     connector = options.resolveConnector(source);
@@ -434,10 +432,10 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                         unchanged,
                         {
                             signal: context.signal,
-                            // Policy comes from this Run's frozen source snapshot,
-                            // so editing a source never affects a queued Run
-                            // (ADR-0014 decision 4).
-                            policy: resolveMediaPolicy(source.config.media),
+                            // Policy comes from this Run's frozen execution
+                            // snapshot, so editing the plan never affects a
+                            // queued Run (ADR-0014 decision 4).
+                            policy: resolveMediaPolicy(source.mediaPolicy),
                         },
                     );
                 }
@@ -486,7 +484,7 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                 const parsed = sourceCheckpointInputSchema.parse(input);
                 const hostContext = requireHostContext(context);
                 return sourceCheckpointOutputSchema.parse(await options.domain.setWorkflowIngestCheckpoint({
-                    sourceId: parsed.sourceId,
+                    planId: parsed.planId,
                     workflowRunId: hostContext.fence.workflowRunId,
                     cursor: parsed.cursor,
                     expectedRevision: parsed.expectedRevision,

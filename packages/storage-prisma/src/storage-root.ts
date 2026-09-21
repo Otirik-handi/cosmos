@@ -1,6 +1,6 @@
 import { join, relative, resolve } from "node:path";
 import { readdir, stat } from "node:fs/promises";
-import { SourceRevisionConflictError } from "@cosmos/application";
+import { CollectionPlanRevisionConflictError, SourceRevisionConflictError } from "@cosmos/application";
 import { PrismaClient } from "@prisma/client";
 
 export interface StorageRoots {
@@ -97,17 +97,33 @@ export async function directorySize(root: string): Promise<{ bytes: number; file
 }
 
 export function parseSourceRevisionId(sourceId: string, revisionId: string): number {
-    const prefix = `${sourceId}:`;
+    return parseRevisionId(revisionId, sourceId, () => new SourceRevisionConflictError(sourceId));
+}
+
+/**
+ * 计划 revision 的解析与来源同形但报计划自己的冲突错误：两者是独立的 CAS 域
+ * （ADR-0023 决策 2），拿来源的冲突类型回报计划的并发写会误导调用方。
+ */
+export function parsePlanRevisionId(planId: string, revisionId: string): number {
+    return parseRevisionId(revisionId, planId, () => new CollectionPlanRevisionConflictError(planId));
+}
+
+function parseRevisionId(
+    revisionId: string,
+    ownerId: string,
+    conflict: () => Error,
+): number {
+    const prefix = `${ownerId}:`;
     if (!revisionId.startsWith(prefix) || revisionId.length === prefix.length) {
-        throw new SourceRevisionConflictError(sourceId);
+        throw conflict();
     }
     const rawRevision = revisionId.slice(prefix.length);
     if (!/^[1-9][0-9]*$/.test(rawRevision)) {
-        throw new SourceRevisionConflictError(sourceId);
+        throw conflict();
     }
     const revision = Number(rawRevision);
     if (!Number.isSafeInteger(revision) || revision < 1) {
-        throw new SourceRevisionConflictError(sourceId);
+        throw conflict();
     }
     return revision;
 }

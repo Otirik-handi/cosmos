@@ -342,8 +342,12 @@ export const libraryIngestOutputSchema = z.object({
 }).strict();
 export type LibraryIngestOutput = z.infer<typeof libraryIngestOutputSchema>;
 
+/**
+ * 采集计划的 checkpoint 提交（ADR-0023 决策 2）：按**计划**寻址，不是按采集目标。
+ * 若按目标寻址，「同一目标多个计划」时载荷无法区分两个计划，等于还要再改一次。
+ */
 export const sourceCheckpointInputSchema = z.object({
-    sourceId: z.string().trim().min(1),
+    planId: z.string().trim().min(1),
     cursor: z.string().nullable(),
     expectedRevision: z.number().int().nonnegative(),
     itemCount: z.number().int().nonnegative(),
@@ -351,7 +355,7 @@ export const sourceCheckpointInputSchema = z.object({
 export type SourceCheckpointInput = z.infer<typeof sourceCheckpointInputSchema>;
 
 export const sourceCheckpointOutputSchema = z.object({
-    sourceId: z.string().trim().min(1),
+    planId: z.string().trim().min(1),
     cursor: z.string().nullable(),
     revision: z.number().int().nonnegative(),
     committed: z.boolean(),

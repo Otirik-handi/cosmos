@@ -89,10 +89,10 @@ export async function createFixtureSource(
         config: input.config,
         ...(input.scheduleIntervalMs !== undefined ? { scheduleIntervalMs: input.scheduleIntervalMs } : {}),
     });
-    return repository.activateSource({
-        sourceId: created.id,
-        idempotencyKey: `test-activation:${created.id}`,
+    // 启用状态归计划（ADR-0023 决策 2）：夹具也走计划端点，不再有来源激活路径。
+    await repository.updateCollectionPlan(created.planId, {
         enabled: true,
-        baseRevisionId: created.revisionId,
+        baseRevisionId: created.planRevisionId,
     });
+    return repository.getSource(created.id) as Promise<SourceSnapshot>;
 }

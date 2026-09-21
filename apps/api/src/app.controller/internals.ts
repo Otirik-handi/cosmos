@@ -138,10 +138,6 @@ export function parsePositiveInteger(value: string): number {
 export function toPublicSource(source: SourceSnapshot) {
     const config: Record<string, unknown> = {};
     if (typeof source.config.feedUrl === "string") config.feedUrl = source.config.feedUrl;
-    // Per-source media policy (ADR-0014); absent means "follow the default".
-    if (source.config.media !== undefined) {
-        config.media = source.config.media;
-    }
     if (source.kind === "bilibili") {
         for (const key of ["mode", "limit", "profile", "schemaVersion"] as const) {
             const value = source.config[key];
@@ -157,11 +153,17 @@ export function toPublicSource(source: SourceSnapshot) {
         kind: source.kind,
         config,
         enabled: source.enabled,
+        /** 计划的媒体预算（ADR-0014 语义）；null 表示跟随全局默认。 */
+        mediaPolicy: source.mediaPolicy,
         revisionId: source.revisionId,
         createdAt: source.createdAt,
         updatedAt: source.updatedAt,
         lastRunAt: source.lastRunAt,
         lastError: source.lastError,
+        // 计划派生的只读投影（ADR-0023 决策 2）：产品面的启停与计划编辑要用计划自己的
+        // 身份与 revision 做 CAS，白名单漏掉它们会让计划端点永远拿不到 baseRevisionId。
+        planId: source.planId,
+        planRevisionId: source.planRevisionId,
         connectionId: source.connectionId ?? null,
         scheduleIntervalMs: source.scheduleIntervalMs ?? null,
     };
