@@ -26,10 +26,23 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                     revision: 1,
                 },
             });
+            // 计划与采集目标一对一（ADR-0023）：默认计划与来源同批建出。读取切换之后
+            // 调度、状态命名空间与媒体预算都按计划归属，晚建会让新来源失去这些归属。
+            const plan = await tx.collectionPlan.create({
+                data: {
+                    id: `plan:${created.id}`,
+                    name: created.name,
+                    sourceId: created.id,
+                    mediaPolicyJson: extractMediaPolicy(input.config),
+                    enabled: false,
+                    revision: 1,
+                },
+            });
             if (input.scheduleIntervalMs !== undefined) {
                 await tx.triggerBinding.create({
                     data: {
                         sourceId: created.id,
+                        planId: plan.id,
                         kind: "schedule",
                         configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
                         enabled: true,
@@ -420,4 +433,16 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         await copyFile(source, this.roots.databasePath);
     }
 
+}
+
+/**
+ * 计划的媒体预算从来源配置继承（ADR-0023 决策 6，字段语义沿用 ADR-0014）。
+ * 没有配置时保持 null —— 那表示「跟随全局默认」，不是空策略。
+ */
+function extractMediaPolicy(config: unknown): string | null {
+    if (config === null || typeof config !== "object") {
+        return null;
+    }
+    const media = (config as { media?: unknown }).media;
+    return media === undefined ? null : JSON.stringify(media);
 }

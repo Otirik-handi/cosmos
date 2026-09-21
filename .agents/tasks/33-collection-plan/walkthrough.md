@@ -51,3 +51,20 @@
   - 回填不幂等（重复插入会撞 `CollectionPlan_sourceId_key` 而失败）：这是有意的失败停止，不静默生成第二份计划。
 - **未运行**：浏览器 E2E、真实来源验收（本切片仍无用户可观察行为变化）。
 - **下一步**：切片 1c 拆两段——1c-1 数据面读取切换（调度、ingest、checkpoint、状态命名空间与媒体策略读取改读计划，并同批重写命名空间、移除来源侧 media）；1c-2 计划的产品面（API CRUD、读投影、transport）。
+
+## 2026-09-20：切片 1c-1a —— 来源与默认计划同批创建
+
+- **本轮切片**：读取切换的前置。回填只覆盖切换前已存在的来源，新建来源若没有计划，切换后会失去调度与状态归属。
+- **改动文件**：
+  1. `packages/storage-prisma/src/repository/sources.ts`：`createSource` 在同一事务里建出 `plan:<sourceId>` 默认计划（继承名称与媒体策略），调度绑定同时写上 `planId`；新增文件内 `extractMediaPolicy` helper。
+  2. `packages/storage-prisma/src/collection-plan-repository.test.ts`（新）：两条行为测试（有媒体策略 / 无媒体策略）。
+- **RED → GREEN**：RED（实现前实跑）**2 failed**（计划数为 0）；GREEN（实现后实跑）**2/2**。
+- **门禁**：`bun run typecheck` 全仓 **0**；`bun run test` **112 文件全绿**（1b 后基线 111 文件 / 644 用例）。
+- **连带修正**：切片 1a 的 `collection-plan-migration.test.ts` 原本假设「来源没有计划、由测试自己插入第一条计划」；本切片让创建来源自动带出默认计划后，那条测试的第一步就撞上唯一约束。已按新行为改写为「创建来源已带出默认计划，第二个计划必须被数据库拒绝」，默认值断言由新的 repository 测试承担——两处不重复。
+- **决定**：
+  - 计划 id 与回填保持一致用 `plan:<sourceId>`：迁移路径与创建路径产生同一形态，便于核对与排障。
+  - 计划名在创建时复制来源名，**不**在 `updateSource` 写回（避免同一事实两个所有者）；计划改名归 1c-2 的计划端点，`PATCH /sources/{id}` 与 `PATCH /collection-plans/{id}` 的字段边界同批冻结。
+  - 媒体策略是**复制**而不是搬走：来源配置仍是当前读取方，移除与读取切换同批（与 1b 的偏差记录同一理由）。
+  - 媒体策略缺省写 `null`（表示跟随全局默认），不写空对象。
+- **未运行**：浏览器 E2E、真实来源验收（本切片仍无用户可观察行为变化）。
+- **下一步**：切片 1c-1b 调度与 ingest 读取切换——`listScheduleTriggers` 改按计划取数、Run／WorkflowRun 写 `planId`、checkpoint 按计划读写、ConnectorState 命名空间解析取计划 id；同批加迁移重写状态命名空间并从来源配置移除 `media`。

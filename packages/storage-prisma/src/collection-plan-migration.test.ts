@@ -71,9 +71,11 @@ describe("CollectionPlan expand 迁移 (ADR-0023 决策 2)", () => {
         }
     });
 
-    it("计划与采集目标一对一，默认值符合 v1 合同", async () => {
+    it("计划与采集目标一对一：同一目标的第二个计划被数据库拒绝", async () => {
         const repository = await createRepository();
         try {
+            // 创建来源已经带出默认计划（切片 1c-1a），这里要证明的是第二个计划进不来，
+            // 而不是靠调用方自觉维持一对一。
             const source = await repository.createSource({
                 name: "Bilibili 动态",
                 sourceDefinitionRef: "source.fixture-rss@1",
@@ -81,21 +83,9 @@ describe("CollectionPlan expand 迁移 (ADR-0023 决策 2)", () => {
                 config: {},
             });
 
-            const plan = await repository.prisma.collectionPlan.create({
-                data: { id: "plan-1", name: "主账号动态每 30 分钟", sourceId: source.id },
-            });
-            expect(plan).toMatchObject({
-                connectionId: null,
-                mediaPolicyJson: null,
-                overlapPolicy: "forbid",
-                enabled: false,
-                revision: 1,
-            });
-
-            // v1 一个目标一个计划：第二个计划必须被数据库拒绝，而不是靠调用方自觉。
             await expect(repository.prisma.collectionPlan.create({
                 data: { id: "plan-2", name: "同一目标的第二个计划", sourceId: source.id },
-            })).rejects.toThrow();
+            })).rejects.toThrow(/Unique constraint/);
         } finally {
             await repository.close();
         }
