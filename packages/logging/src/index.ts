@@ -23,6 +23,7 @@ export interface LogContext {
     requestId?: string;
     runId?: string;
     jobId?: string;
+    planId?: string;
     sourceId?: string;
     connectorId?: string;
 }

@@ -320,27 +320,34 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     }
 
     async listScheduleTriggers(): Promise<readonly {
+        planId: string;
         sourceId: string;
         intervalMs: number;
         lastRunAt: string | null;
     }[]> {
-        const bindings = await this.prisma.triggerBinding.findMany({
-            where: { kind: "schedule", enabled: true },
-            include: { source: { select: { id: true, enabled: true, deletedAt: true } } },
+        // 调度单位是采集计划（ADR-0023）：绑定挂在计划上，来源只决定可执行性
+        // （启用且未删除）。计划与目标 v1 一对一，所以这里读到的仍是同一批来源。
+        const plans = await this.prisma.collectionPlan.findMany({
+            where: { source: { enabled: true, deletedAt: null } },
+            include: {
+                triggerBinding: true,
+                source: { select: { id: true } },
+            },
         });
-        const result: { sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
-        for (const binding of bindings) {
-            // 删除来源会移除绑定；这里再挡一次，避免历史数据里残留的绑定把墓碑来源排进调度。
-            if (!binding.source.enabled || binding.source.deletedAt) continue;
+        const result: { planId: string; sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
+        for (const plan of plans) {
+            const binding = plan.triggerBinding;
+            if (!binding || binding.kind !== "schedule" || !binding.enabled) continue;
             const config = JSON.parse(binding.configJson) as { intervalMs?: number };
             if (typeof config.intervalMs !== "number") continue;
             const latest = await this.prisma.workflowRun.findFirst({
-                where: { sourceInstanceId: binding.sourceId },
+                where: { planId: plan.id },
                 orderBy: { createdAt: "desc" },
                 select: { finishedAt: true, createdAt: true },
             });
             result.push({
-                sourceId: binding.sourceId,
+                planId: plan.id,
+                sourceId: plan.source.id,
                 intervalMs: config.intervalMs,
                 lastRunAt: latest ? (latest.finishedAt ?? latest.createdAt).toISOString() : null,
             });

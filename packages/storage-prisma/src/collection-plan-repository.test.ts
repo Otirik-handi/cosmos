@@ -86,4 +86,47 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             await repository.close();
         }
     });
+
+    it("调度按计划取数：同一连接下的两个计划各带自己的间隔与计划归属", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
+            const feed = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+                scheduleIntervalMs: 1_800_000,
+            });
+            const hot = await repository.createSource({
+                name: "推荐流",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+                scheduleIntervalMs: 7_200_000,
+            });
+            await repository.updateSource(feed.id, { baseRevisionId: feed.revisionId, connectionId: connection.id });
+            await repository.updateSource(hot.id, { baseRevisionId: hot.revisionId, connectionId: connection.id });
+            // 未启用的来源不参与调度；这里直接置位，本用例只验证调度取数口径。
+            await repository.prisma.sourceInstance.update({ where: { id: feed.id }, data: { enabled: true } });
+            await repository.prisma.sourceInstance.update({ where: { id: hot.id }, data: { enabled: true } });
+
+            const triggers = await repository.listScheduleTriggers();
+            expect(triggers.map((trigger) => [trigger.planId, trigger.sourceId, trigger.intervalMs])).toEqual([
+                [`plan:${feed.id}`, feed.id, 1_800_000],
+                [`plan:${hot.id}`, hot.id, 7_200_000],
+            ]);
+
+            // 停用一个计划只影响它自己：另一个计划仍在调度里。
+            await repository.prisma.collectionPlan.update({
+                where: { id: `plan:${hot.id}` },
+                data: { enabled: false },
+            });
+            await repository.prisma.sourceInstance.update({ where: { id: hot.id }, data: { enabled: false } });
+            const afterPause = await repository.listScheduleTriggers();
+            expect(afterPause.map((trigger) => trigger.planId)).toEqual([`plan:${feed.id}`]);
+        } finally {
+            await repository.close();
+        }
+    });
 });

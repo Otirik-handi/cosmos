@@ -18,6 +18,7 @@ export function normalizeEnvelopeInput(input: CreateWorkflowEnvelopeInput): {
     inputSnapshot: JsonValue;
     productRun: JsonValue;
     sourceId: string | null;
+    planId: string | null;
     createdAt: Date;
 } {
     if (!input || typeof input !== "object") {
@@ -30,6 +31,9 @@ export function normalizeEnvelopeInput(input: CreateWorkflowEnvelopeInput): {
     const sourceId = input.sourceId == null
         ? null
         : requireNonEmptyString(input.sourceId, "sourceId");
+    const planId = input.planId == null
+        ? null
+        : requireNonEmptyString(input.planId, "planId");
     const definition = normalizeDefinition(input.definition);
     assertJsonValue(input.inputSnapshot);
     assertJsonValue(input.productRun);
@@ -43,6 +47,7 @@ export function normalizeEnvelopeInput(input: CreateWorkflowEnvelopeInput): {
         inputSnapshot: structuredClone(input.inputSnapshot),
         productRun: structuredClone(input.productRun),
         sourceId,
+        planId,
         createdAt,
     };
 }

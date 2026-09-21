@@ -68,3 +68,24 @@
   - 媒体策略缺省写 `null`（表示跟随全局默认），不写空对象。
 - **未运行**：浏览器 E2E、真实来源验收（本切片仍无用户可观察行为变化）。
 - **下一步**：切片 1c-1b 调度与 ingest 读取切换——`listScheduleTriggers` 改按计划取数、Run／WorkflowRun 写 `planId`、checkpoint 按计划读写、ConnectorState 命名空间解析取计划 id；同批加迁移重写状态命名空间并从来源配置移除 `media`。
+
+## 2026-09-20：切片 1c-1b —— 调度按计划取数、运行归属计划
+
+- **本轮切片**：读取切换的第一段（数据面）。假设：计划与目标 v1 一对一，因此调度改读计划、运行改记计划归属，都不改变用户可见行为。
+- **改动文件**：
+  1. `packages/storage-prisma/src/repository/sources.ts`：`listScheduleTriggers` 改为按计划取数（计划 → 调度绑定；来源只决定可执行性：启用且未删除），返回 `planId` + `sourceId` + `intervalMs` + `lastRunAt`；`lastRunAt` 按计划查最近一次运行。
+  2. `apps/worker/src/scheduling.ts`：`ScheduleTrigger` 增加 `planId`；入队携带 `planId`；幂等键改为 `schedule:<planId>:<bucket>`（同一连接下的两个计划不会互相顶掉窗口）；日志带上 `planId`。
+  3. `packages/application/src/workflow-control.ts`：`enqueue` 接受可选 `planId`，写进产品 Run 投影并传给 envelope。
+  4. `packages/application/src/workflow-host.ts`：`CreateWorkflowEnvelopeInput` 增加可选 `planId`。
+  5. `packages/storage-prisma/src/workflow-host-store/`（`internals-activity.ts`、`envelope-store.ts`）：规范化 `planId`；创建 envelope 时写 `WorkflowRun.planId`，调用方没给就按来源解析。
+  6. `packages/storage-prisma/src/repository/runs.ts`：`createRun`／`createQueuedRun` 写 `Run.planId`（同一个解析 helper）。
+  7. `packages/logging/src/index.ts`：`LogContext` 增加 `planId`。
+  8. 测试：`apps/worker/src/scheduling.test.ts` 新增「同一连接下的两个计划各按自己的间隔入队」；`packages/storage-prisma/src/collection-plan-repository.test.ts` 新增「调度按计划取数」；`trigger-binding.test.ts` 的期望值随读取口径补 `planId`。
+- **RED → GREEN**：RED（实现前实跑）调度测试 **3 failed**（仍按来源入队、键里没有计划）；GREEN 调度 **5/5**、collection-plan repository **3/3**、worker-pipeline + scheduling **11/11**。
+- **门禁**：`bun run typecheck` 全仓 **0**；`bun run test` **112 文件 / 648 用例全绿**（本切片前 112 文件 / 646 用例）。
+- **决定与偏差**：
+  - 本切片只切换**调度与运行归属**。以下四项仍留在来源侧，作为 1c-1c 的内容：连接器状态命名空间解析（仍取来源 id）、checkpoint 归属（仍按来源读写）、媒体策略读取（仍读 `config.media`）、来源启用状态（仍是可执行性判据）。理由：这四项同时连着**产品写入口**（来源端点与 Web 的来源行），在计划端点（1c-2）落地前切换会出现「产品写进去、调度读不到」。
+  - `planId` 在 envelope 创建时按来源解析，而不是要求所有调用方显式传：手动运行、重跑等既有路径不必改签名；历史或测试夹具来源解析不到时保持 null，不让旧路径失败。
+  - `trigger-binding.test.ts` 的期望值随读取口径更新（补 `planId`），不是放宽断言。
+- **未运行**：浏览器 E2E、真实来源验收（本切片无用户可观察行为变化）。
+- **下一步**：切片 1c-2（计划的产品面：CRUD、读投影、transport，以及来源端点与计划端点的字段边界），随后 1c-1c（命名空间／checkpoint／媒体策略／启用状态的归属切换与迁移）。

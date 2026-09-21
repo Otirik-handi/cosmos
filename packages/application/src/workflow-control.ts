@@ -47,11 +47,13 @@ export class IngestWorkflowControlService {
     }
 
     async enqueue(input: {
+        planId?: string | null;
         sourceId: string;
         triggerKind: IngestTriggerKind;
         idempotencyKey: string;
     }): Promise<WorkflowEnvelope> {
         const sourceId = input.sourceId.trim();
+        const planId = input.planId == null ? null : input.planId.trim();
         const idempotencyKey = input.idempotencyKey.trim();
         const triggerKind = ingestTriggerKindSchema.parse(input.triggerKind);
         if (!sourceId || !idempotencyKey) {
@@ -89,11 +91,13 @@ export class IngestWorkflowControlService {
             inputSnapshot: asJson(inputSnapshot),
             productRun: asJson({
                 status: "queued",
+                planId,
                 sourceId,
                 triggerKind,
                 idempotencyKey,
             }),
             sourceId,
+            planId,
         });
     }
 

@@ -59,7 +59,7 @@ describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
             });
             expect(activated.scheduleIntervalMs).toBe(60_000);
             await expect(repository.listScheduleTriggers()).resolves.toEqual([
-                { sourceId: source.id, intervalMs: 60_000, lastRunAt: null },
+                { planId: `plan:${source.id}`, sourceId: source.id, intervalMs: 60_000, lastRunAt: null },
             ]);
         } finally {
             await repository.close();
