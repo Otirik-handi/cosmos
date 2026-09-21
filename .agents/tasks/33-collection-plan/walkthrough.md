@@ -35,3 +35,19 @@
   - 未新增 storage 包导出：仓库方法仍挂在既有 `PrismaCosmosRepository` 上，冻结入口契约不受影响。
 - **未运行**：浏览器产品 E2E、真实来源验收（切片 1a 没有用户可观察行为变化，属后续切片的验收面）。
 - **下一步**：切片 1b（backfill）——为每个既有来源生成默认计划，回填三处计划引用并重写状态命名空间；开工前在 walkthrough 记录回填的幂等与失败停止条件。
+
+## 2026-09-20：切片 1b（backfill）—— 默认计划与计划引用回填
+
+- **本轮切片**：ADR-0023 决策 2 的第 2 步。假设：回填只写新列；来源侧字段与状态命名空间在读取切换之前仍是唯一读取方，所以这一步不动它们（可独立部署、可回滚）。
+- **改动文件**：
+  1. `packages/storage-prisma/prisma/migrations/20260920140000_collection_plan_backfill/migration.sql`（新）：为每个既有来源（含墓碑）生成 `plan:<sourceId>` 默认计划，继承连接、媒体策略与启用状态；回填 `Run`／`WorkflowRun`／`Checkpoint`／`TriggerBinding` 的计划引用。
+  2. `packages/storage-prisma/src/collection-plan-backfill.test.ts`（新）：按真实迁移顺序两段部署——先部署到 expand 步、播种子数据，再部署含 backfill 的全量迁移。
+- **RED → GREEN**：RED（实现前实跑）**1 failed**（`20260920140000_collection_plan_backfill 必须存在`）；GREEN（实现后实跑）**1/1**。
+- **门禁**：`bun run test` **111 文件 / 644 用例全绿**（切片 1a 后基线 110 / 643）。
+- **决定与偏差**：
+  - **偏差（相对 ADR-0023 决策 2 的措辞）**：ADR 把「状态命名空间按计划重写」写在 backfill 步；实现把它推到切片 1c 的读取切换。理由：命名空间改的是**读取方**要查的键，回填期提前重写会让仍按来源读取的旧路径查不到状态（等于丢掉 ETag／游标，虽可重建但要白付一次全量抓取）。同一理由，`SourceInstance.config.media` 与 `SourceInstance.connectionId` 在这一步只被**复制**、不被移除，移除与读取切换同批。
+  - 墓碑来源的计划写成 `enabled=false`（来源行可能仍留 `enabled=1`），避免读取切换后把已删除来源重新调度起来。
+  - 计划 id 用 `plan:<sourceId>` 派生，映射可复现、便于核对与回滚。
+  - 回填不幂等（重复插入会撞 `CollectionPlan_sourceId_key` 而失败）：这是有意的失败停止，不静默生成第二份计划。
+- **未运行**：浏览器 E2E、真实来源验收（本切片仍无用户可观察行为变化）。
+- **下一步**：切片 1c 拆两段——1c-1 数据面读取切换（调度、ingest、checkpoint、状态命名空间与媒体策略读取改读计划，并同批重写命名空间、移除来源侧 media）；1c-2 计划的产品面（API CRUD、读投影、transport）。
