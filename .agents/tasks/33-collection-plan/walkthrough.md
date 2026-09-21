@@ -89,3 +89,25 @@
   - `trigger-binding.test.ts` 的期望值随读取口径更新（补 `planId`），不是放宽断言。
 - **未运行**：浏览器 E2E、真实来源验收（本切片无用户可观察行为变化）。
 - **下一步**：切片 1c-2（计划的产品面：CRUD、读投影、transport，以及来源端点与计划端点的字段边界），随后 1c-1c（命名空间／checkpoint／媒体策略／启用状态的归属切换与迁移）。
+
+## 2026-09-20：切片 1c-2a —— 计划的读接口
+
+- **本轮切片**：产品面要能按计划回答「挂在哪个连接、多久采集一次、什么媒体预算」。只读，不写计划。
+- **改动文件**：
+  1. `packages/contracts/src/collection-plan.ts`：计划快照增加 `scheduleIntervalMs`（计划自己的调度间隔；没有调度绑定时为 null）。
+  2. `packages/storage-prisma/src/repository/sources.ts`：新增 `listCollectionPlans`／`getCollectionPlan` 与投影；`updateSource` 增加**过渡期写穿透**（名字与连接同时写进计划），并给后补的调度绑定补上计划归属。
+  3. `packages/storage-prisma/src/repository/repository-internals.ts`：`resolvePlanId` 提为共享 helper，`runs.ts` 改为引用。
+  4. `packages/application/src/repository-port.ts`：声明两个读方法与新的调度形状。
+  5. `apps/api/src/app.controller/sources.ts`：`GET /collection-plans`、`GET /collection-plans/:planId`。
+  6. `packages/transport-http/src/client-sources.ts`：客户端两个方法。
+  7. `.agents/tasks/governance/G03-api-controller/route-snapshot-app.controller.txt`：路由快照 120 → 122 条（新增两条计划读路由）。
+  8. 测试：repository（读投影、写穿透、后补调度挂计划）、contracts fixture、transport client、API controller。
+- **RED → GREEN**：RED（实现前实跑）**2 failed**（`listCollectionPlans is not a function`；后补绑定的 `planId` 为 `null`）；GREEN repository **5/5**、contracts **4/4**、transport **7/7**、API controller **2/2**、路由表守卫 **3/3**。
+- **门禁**：`bun run typecheck` 全仓 **0**；`bun run test` **113 文件全绿**。
+- **决定与偏差**：
+  - **修掉一个真实缺陷**：`updateSource` 后补调度绑定时没有写 `planId`，读取切换之后这类来源会永远不被调度——这是 1c-1a 只改创建路径留下的缝，本切片补上并有回归测试。
+  - 过渡期写穿透：来源端点是产品当前唯一的编辑入口，它写的名字与连接同时落进计划，保证计划读投影与来源行一致；计划自己的写路径在 1c-2b 落地。这期间同一事实在库里有两份列，由 ADR-0023 决策 2 的第 4 步（contract）收掉。
+  - `POST /collection-plans` 在 v1 **不做**：计划与目标一对一且随来源创建自动生成，独立创建没有合法语义。API Draft 的 v1 落地范围已同批写明。
+  - 计划级「最近一次运行／失败」摘要**未纳入**本切片：v1 计划与来源一对一，来源健康行已表达同一事实；等计划视图真正需要时再加，避免现在就把 WorkflowRun 投影搬进读模型。
+- **未运行**：浏览器 E2E、真实来源验收（读接口本身没有新的用户可观察行为，浏览器验收属于切片 2）。
+- **下一步**：1c-2b（计划的写接口：改名／连接／媒体预算，并与来源端点冻结字段边界），或先做 1c-1c（媒体策略、启用状态、游标与状态命名空间的归属切换）。

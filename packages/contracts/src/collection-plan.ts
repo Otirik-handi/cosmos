@@ -21,6 +21,8 @@ export const collectionPlanSnapshotSchema = z.object({
     overlapPolicy: collectionPlanOverlapPolicySchema,
     enabled: z.boolean(),
     revisionId: sourceRevisionIdSchema,
+    /** 计划的调度间隔；没有调度绑定时为 null（只手动触发）。 */
+    scheduleIntervalMs: z.number().int().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
 }).strict();

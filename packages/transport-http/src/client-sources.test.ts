@@ -276,4 +276,42 @@ describe("HttpCosmosClient 来源与运行", () => {
         expect(listed).toHaveLength(1);
         expect(requests[1]).toBe("http://localhost:4310/api/v1/connections");
     });
+
+    it("reads collection plans from the product API (ADR-0023)", async () => {
+        const plan = {
+            id: "plan:s1",
+            name: "主账号动态每 30 分钟",
+            sourceId: "s1",
+            connectionId: "c1",
+            triggerBindingId: "t1",
+            mediaPolicy: null,
+            overlapPolicy: "forbid",
+            enabled: true,
+            revisionId: "1",
+            scheduleIntervalMs: 1_800_000,
+            createdAt: "2026-09-20T08:00:00.000Z",
+            updatedAt: "2026-09-20T08:00:00.000Z",
+        };
+        const requests: string[] = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input) => {
+                requests.push(String(input));
+                const body = String(input).endsWith("/api/v1/collection-plans") ? [plan] : plan;
+                return new Response(JSON.stringify(body), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const listed = await client.listCollectionPlans();
+        expect(listed).toHaveLength(1);
+        expect(listed[0]).toMatchObject({ id: "plan:s1", scheduleIntervalMs: 1_800_000 });
+        expect(requests[0]).toBe("http://localhost:4310/api/v1/collection-plans");
+
+        const detail = await client.getCollectionPlan("plan:s1");
+        expect(detail).toMatchObject({ connectionId: "c1", overlapPolicy: "forbid" });
+        expect(requests[1]).toBe("http://localhost:4310/api/v1/collection-plans/plan%3As1");
+    });
 });

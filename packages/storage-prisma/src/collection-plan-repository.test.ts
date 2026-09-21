@@ -129,4 +129,80 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             await repository.close();
         }
     });
+
+    it("读投影按计划返回连接、频率与媒体预算，并跟随来源编辑", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
+            const source = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "https://example.test/feed.xml", media: { images: "metadata_only" } },
+                scheduleIntervalMs: 1_800_000,
+            });
+
+            // 计划是产品面的对象（ADR-0023），读投影要能直接回答「哪个连接、多久一次、什么预算」。
+            await expect(repository.listCollectionPlans()).resolves.toEqual([
+                {
+                    id: `plan:${source.id}`,
+                    name: "动态",
+                    sourceId: source.id,
+                    connectionId: null,
+                    triggerBindingId: expect.any(String),
+                    mediaPolicy: { images: "metadata_only" },
+                    overlapPolicy: "forbid",
+                    enabled: false,
+                    revisionId: "1",
+                    scheduleIntervalMs: 1_800_000,
+                    createdAt: expect.any(String),
+                    updatedAt: expect.any(String),
+                },
+            ]);
+
+            // 过渡期写穿透：来源端点的改名与连接绑定同时写进计划，避免两个界面各说一套。
+            const linked = await repository.updateSource(source.id, {
+                baseRevisionId: source.revisionId,
+                name: "动态（主账号）",
+                connectionId: connection.id,
+            });
+            await expect(repository.getCollectionPlan(`plan:${source.id}`)).resolves.toMatchObject({
+                name: "动态（主账号）",
+                connectionId: connection.id,
+                revisionId: "1",
+            });
+            expect(linked.connectionId).toBe(connection.id);
+
+            await expect(repository.getCollectionPlan("plan:missing")).resolves.toBeNull();
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("给已有来源补上调度时，绑定同时挂到计划上", async () => {
+        const repository = await createRepository();
+        try {
+            const source = await repository.createSource({
+                name: "无调度来源",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "https://example.test/later.xml" },
+            });
+            const scheduled = await repository.updateSource(source.id, {
+                baseRevisionId: source.revisionId,
+                scheduleIntervalMs: 3_600_000,
+            });
+            expect(scheduled.scheduleIntervalMs).toBe(3_600_000);
+
+            // 读取切换后调度按计划取数：后补的绑定没有计划归属就会永远不被调度。
+            const bindings = await repository.prisma.triggerBinding.findMany();
+            expect(bindings.map((binding) => binding.planId)).toEqual([`plan:${source.id}`]);
+            await repository.prisma.sourceInstance.update({ where: { id: source.id }, data: { enabled: true } });
+            await expect(repository.listScheduleTriggers()).resolves.toMatchObject([
+                { planId: `plan:${source.id}`, intervalMs: 3_600_000 },
+            ]);
+        } finally {
+            await repository.close();
+        }
+    });
 });

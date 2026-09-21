@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
-import { type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceActivationCommand, type SourceSnapshot, type UpdateSourceCommand } from "@cosmos/contracts";
+import { type CollectionPlanSnapshot, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceActivationCommand, type SourceMediaPolicy, type SourceSnapshot, type UpdateSourceCommand } from "@cosmos/contracts";
 import { ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parseSourceRevisionId } from "../storage-root.js";
-import { appendDomainEvent, isUniqueConstraintError, sourceActivationRequestHash } from "./repository-internals.js";
+import { appendDomainEvent, isUniqueConstraintError, resolvePlanId, sourceActivationRequestHash } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers4 } from "./helpers-4.js";
 
 export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers4 {
@@ -71,6 +71,27 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         return source ? this.toSourceSnapshot(source) : null;
     }
 
+    /**
+     * 计划读投影（ADR-0023）：产品面的对象是计划，所以它要能独立回答「挂在哪个连接、
+     * 多久采集一次、什么媒体预算」。墓碑来源的计划不出现在产品面上。
+     */
+    async listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]> {
+        const plans = await this.prisma.collectionPlan.findMany({
+            where: { source: { deletedAt: null } },
+            include: { triggerBinding: true },
+            orderBy: { createdAt: "asc" },
+        });
+        return plans.map((plan) => toCollectionPlanSnapshot(plan, plan.triggerBinding));
+    }
+
+    async getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot | null> {
+        const plan = await this.prisma.collectionPlan.findFirst({
+            where: { id: planId, source: { deletedAt: null } },
+            include: { triggerBinding: true },
+        });
+        return plan ? toCollectionPlanSnapshot(plan, plan.triggerBinding) : null;
+    }
+
     async updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot> {
         const expectedRevision = parseSourceRevisionId(sourceId, input.baseRevisionId);
         const current = await this.prisma.sourceInstance.findUnique({ where: { id: sourceId } });
@@ -87,20 +108,35 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                 },
             });
             if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
+            // 过渡期写穿透（ADR-0023 决策 2）：来源端点是产品当前唯一的编辑入口，
+            // 它写的名字与连接同时落进计划，避免计划读投影与来源行各说一套。
+            if (input.name !== undefined || input.connectionId !== undefined) {
+                await tx.collectionPlan.updateMany({
+                    where: { sourceId },
+                    data: {
+                        ...(input.name !== undefined ? { name: input.name } : {}),
+                        ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
+                    },
+                });
+            }
             if (input.scheduleIntervalMs !== undefined) {
                 if (input.scheduleIntervalMs === null) {
                     await tx.triggerBinding.deleteMany({ where: { sourceId } });
                 } else {
+                    // 后补的绑定必须带计划归属，否则读取切换后永远不会被调度。
+                    const planId = await resolvePlanId(tx, sourceId);
                     await tx.triggerBinding.upsert({
                         where: { sourceId },
                         create: {
                             sourceId,
+                            planId,
                             kind: "schedule",
                             configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
                             enabled: true,
                             revision: 1,
                         },
                         update: {
+                            planId,
                             configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
                             revision: { increment: 1 },
                         },
@@ -452,4 +488,29 @@ function extractMediaPolicy(config: unknown): string | null {
     }
     const media = (config as { media?: unknown }).media;
     return media === undefined ? null : JSON.stringify(media);
+}
+
+function toCollectionPlanSnapshot(
+    plan: Prisma.CollectionPlanGetPayload<{}>,
+    binding: Prisma.TriggerBindingGetPayload<{}> | null,
+): CollectionPlanSnapshot {
+    const interval = binding === null
+        ? undefined
+        : (JSON.parse(binding.configJson) as { intervalMs?: unknown }).intervalMs;
+    return {
+        id: plan.id,
+        name: plan.name,
+        sourceId: plan.sourceId,
+        connectionId: plan.connectionId,
+        triggerBindingId: binding?.id ?? null,
+        mediaPolicy: plan.mediaPolicyJson === null
+            ? null
+            : JSON.parse(plan.mediaPolicyJson) as SourceMediaPolicy,
+        overlapPolicy: plan.overlapPolicy as CollectionPlanSnapshot["overlapPolicy"],
+        enabled: plan.enabled,
+        revisionId: String(plan.revision),
+        scheduleIntervalMs: typeof interval === "number" ? interval : null,
+        createdAt: plan.createdAt.toISOString(),
+        updatedAt: plan.updatedAt.toISOString(),
+    };
 }

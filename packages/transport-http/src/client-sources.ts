@@ -1,4 +1,5 @@
 import {
+    collectionPlanSnapshotSchema,
     createSourceCommandSchema,
     deleteSourceCommandSchema,
     jobSnapshotSchema,
@@ -28,6 +29,7 @@ import {
     type SourceConfigProbeJobSnapshot,
     type SourceSnapshot,
     type ConnectionInstance,
+    type CollectionPlanSnapshot,
     type CreateConnectionCommand,
     type UpdateConnectionCommand,
     type MediaCleanupCommand,
@@ -125,6 +127,18 @@ export class SourcesClient extends PlatformClient {
     async getConnection(connectionId: string): Promise<ConnectionInstance> {
         return this.request(`/api/v1/connections/${encodeURIComponent(connectionId)}`, {
             schema: connectionInstanceSchema,
+        });
+    }
+
+    async listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]> {
+        return this.request("/api/v1/collection-plans", {
+            schema: collectionPlanSnapshotSchema.array(),
+        });
+    }
+
+    async getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot> {
+        return this.request(`/api/v1/collection-plans/${encodeURIComponent(planId)}`, {
+            schema: collectionPlanSnapshotSchema,
         });
     }
 

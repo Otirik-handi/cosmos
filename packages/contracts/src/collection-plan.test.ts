@@ -17,6 +17,7 @@ const snapshot = {
     overlapPolicy: "forbid",
     enabled: true,
     revisionId: "3",
+    scheduleIntervalMs: 1_800_000,
     createdAt: "2026-09-20T00:00:00.000Z",
     updatedAt: "2026-09-20T00:00:00.000Z",
 };

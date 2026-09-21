@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type JobSnapshot, type SourceConfigProbeCommand } from "@cosmos/contracts";
 import { type CosmosRepository, type JobLease } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
-import { appendDomainEvent, assertJobLease } from "./repository-internals.js";
+import { appendDomainEvent, assertJobLease, resolvePlanId } from "./repository-internals.js";
 import { PrismaCosmosRepositorySources } from "./sources.js";
 
 export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
@@ -289,19 +289,4 @@ export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
         return result._max.sequence ?? 0;
     }
 
-}
-
-/**
- * 计划归属（ADR-0023）：v1 计划与采集目标一对一，按来源解析即可；来源不存在
- * （测试夹具或历史行）时保持 null，不让旧路径因为缺计划而失败。
- */
-async function resolvePlanId(
-    tx: Prisma.TransactionClient,
-    sourceId: string,
-): Promise<string | null> {
-    const plan = await tx.collectionPlan.findUnique({
-        where: { sourceId },
-        select: { id: true },
-    });
-    return plan?.id ?? null;
 }

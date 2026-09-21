@@ -2,6 +2,7 @@
 
 import type {
     CreateSourceCommand, ConnectionInstance, CreateConnectionCommand,
+    CollectionPlanSnapshot,
     UpdateConnectionCommand, StorageStats, BackupSnapshot, FeedPage,
     EntryDetail, EntryPage, JobSnapshot, RevisionDetail,
     RunSnapshot, SearchPage, SearchQuery, SourceActivationCommand,
@@ -70,8 +71,12 @@ export interface CosmosRepository {
     getConnection(connectionId: string): Promise<ConnectionInstance | null>;
     updateConnection(connectionId: string, input: UpdateConnectionCommand): Promise<ConnectionInstance>;
     deleteConnection(connectionId: string): Promise<boolean>;
+    /** 计划读投影（ADR-0023）：产品面的对象是计划，按计划读取连接、频率与媒体预算。 */
+    listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]>;
+    getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot | null>;
     /** Enabled schedule trigger bindings (ADR-0018) for the scheduler loop. */
     listScheduleTriggers(): Promise<readonly {
+        planId: string;
         sourceId: string;
         intervalMs: number;
         lastRunAt: string | null;
