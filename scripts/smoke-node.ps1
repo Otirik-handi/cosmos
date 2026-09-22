@@ -221,15 +221,20 @@ try {
                 feedUrl = "http://127.0.0.1:4381/feed.xml"
             }
         } | ConvertTo-Json -Depth 5)
-    $source = Invoke-RestMethod `
-        -Method Post `
-        -Uri "http://127.0.0.1:4321/api/v1/sources/$($source.id)/activation-commands" `
-        -Headers @{ "Idempotency-Key" = "smoke-activation-1" } `
+    # Enabled state belongs to the plan (ADR-0023): the plan endpoint is the only writer
+    # and the plan revision is the CAS token. The response is a plan snapshot, so it must
+    # not replace $source, which later steps still address by source id.
+    $plan = Invoke-RestMethod `
+        -Method Patch `
+        -Uri "http://127.0.0.1:4321/api/v1/collection-plans/$($source.planId)" `
         -ContentType "application/json" `
         -Body (@{
             enabled = $true
-            baseRevisionId = $source.revisionId
+            baseRevisionId = $source.planRevisionId
         } | ConvertTo-Json -Depth 5)
+    if (-not $plan.enabled) {
+        throw "Plan activation did not report an enabled plan."
+    }
     $queuedResponse = Invoke-SmokeWebRequest -Parameters @{
         Method = "Post"
         Uri = "http://127.0.0.1:4321/api/v1/sources/$($source.id)/runs"
