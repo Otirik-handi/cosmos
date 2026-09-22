@@ -6,37 +6,22 @@
 >
 > 证据等级：**【代码核实】**= 本次直接读了实现、合同或数据库模型；**【文档核实】**= 只读了仓库记录，未运行验证；**【未验证】**= 没有可考察的路径。
 >
-> 最近更新：2026-09-20（P0-1 已裁定、按维护者指令暂停，见下方「当前暂停点」）
+> 最近更新：2026-09-22（P0-1 已交付并合并，见下方「当前暂停点」）
 
 ## 一句话结论
 
-Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 四条验收标准里前三条有自动化与真人两层证据。**仍未闭合的是 5 行需求（2 行完全未交付、3 行部分交付）和 1 条无法判定的验收条件**；另有 2 条已 accepted 但未落地的界面决定、3 条证据与门禁欠账。
+Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 四条验收标准里前三条有自动化与真人两层证据。**仍未闭合的是 4 行需求（1 行完全未交付、3 行部分交付）和 1 条无法判定的验收条件**；另有 2 条已 accepted 但未落地的界面决定、3 条证据与门禁欠账。P0-1（AUT-010 一个连接下的多个采集计划）已于 2026-09-22 交付并合并。
 
-## 当前暂停点（2026-09-20）
+## 当前暂停点（2026-09-22 更新：P0-1 已交付）
 
-**在做哪一个缺口**：P0-1（AUT-010 一个连接下的多个采集计划）。按维护者指令暂停，下次从这里继续。
+**P0-1（AUT-010 一个连接下的多个采集计划）已交付并合并**：Task [`33`](.agents/tasks/33-collection-plan/README.md)，`--no-ff` 合并 `4ef3636`。v1 形态按 ADR [`0023`](docs/adr/0023-collection-plan-v1.md)——`CollectionPlan` 与采集目标一对一，持有连接、触发器、媒体预算、计划级 checkpoint 与状态命名空间；迁移按 expand／backfill／read switch 落地，第 4 步 contract 单独排期与授权（不纳入该 Task）。产品面从「来源健康」改造为按连接分组的「采集计划」，新建计划可选连接与连接器、字段按 manifest 声明渲染。Task 33 的验证：全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例全绿；真实来源验收 `test:real:bilibili` 在同一连接下跑通 hot 与 feed 两个 Bilibili 计划（各 `itemCount=20`，连续两次 exit 0）。过程、偏差与未运行项见 Task 33 walkthrough。
 
-**已完成**
-
-1. 复核确认缺口性质：架构 §4.6 早已冻结 `CollectionPlan` 模型，§4.7 记录了 Phase 1 的收窄，而实现里始终没有该对象——是「已冻结的架构合同未落地」，不是新增需求。
-2. 起草决策提案 [`docs/proposals/collection-plan-v1.md`](docs/proposals/collection-plan-v1.md)（含现状证据、三个模型方案、四步迁移、三个切片、5 项待裁定）。
-3. 维护者 2026-09-20 **确认 5 项待裁定全部按建议采纳**，Proposal 转 `accepted`：计划模型选 A（建实体、v1 与目标一对一）、切片 3（连接器选择与 schema 驱动表单）并入、产品面术语用「采集计划」、重叠策略 v1 只做一种、迁移 contract 另排。
-4. 稳定决定已落文档并过门禁：PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 新增一行；架构 [`0001-cosmos-foundation.md`](docs/architecture/0001-cosmos-foundation.md) §19 决定 85、§21 不变量 63；新增 ADR [`0023`](docs/adr/0023-collection-plan-v1.md) 并登记进 [`docs/adr/README.md`](docs/adr/README.md)。
-5. 门禁：`bun run docs:check` **711 文件 failures=[]**；`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` **PASS（含 warning）**。
-
-**未完成（下次的起点）**
-
-1. **Task 编号待维护者分配**（建议 33；25 已按 `ui-surface-ownership` 的约定留给 UI 重做）。
-2. **提交与 worktree 授权待给**：当前 6 个变更未提交——修改 `docs/adr/README.md`、`docs/architecture/0001-cosmos-foundation.md`、`docs/requirements/0002-product-requirements/ERRATA.md`；新增 `docs/adr/0023-collection-plan-v1.md`、`docs/proposals/collection-plan-v1.md`、`Phase-2-UNDO.md`。
-3. **实现未开始**：按 ADR-0023 的四步迁移与三个切片执行；动代码前先按仓库流程更新 `docs/api/` Draft 并冻结公共合同（计划 DTO／命令、Run 投影的计划引用）。
-
-**下次开工第一件事**：向维护者确认 Task 编号与「先提交决定文档 + 建 worktree」的授权，然后建 Task 并起草 `docs/api/` 的计划合同。
+**本清单的下一个缺口**：按优先级从 P0-2（AUT-004 事件类触发）或 P1-1（ING-012 状态备份／恢复／迁移）继续；顺序尚未排定。
 
 ## 优先级总表
 
 | 优先级 | 编号 | 缺口 | 性质 | 卡住什么 |
 | --- | --- | --- | --- | --- |
-| P0 | P0-1 | AUT-010：一个连接下多个采集计划 | 完全未交付（v1 形态已裁定，实施暂停） | Phase 2 按需求表字面未完成；EXT-007 的验收条件随之不成立 |
 | P0 | P0-2 | AUT-004：Webhook／内部事件／条件变化／上游 Workflow 触发 | 完全未交付 | Phase 2 按需求表字面未完成 |
 | P1 | P1-1 | ING-012：Connector 状态的备份、恢复、迁移与范围隔离 | 部分交付 | 该行验收条件未满足 |
 | P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | 部分交付 | 该行验收条件未满足 |
@@ -51,15 +36,6 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 ---
 
 ## P0：完全未交付（Phase 2 按需求表字面未完成）
-
-### P0-1 AUT-010 一个连接下的多个采集计划
-
-- **需求要求**（[`part-07-1.md`](docs/requirements/0002-product-requirements/part-07-1.md) §7.4）：一个连接下可以配置多个独立采集计划，每个计划拥有自己的来源操作、范围、频率、预算、checkpoint、发现上下文和失败状态；验收场景是「同一 Bilibili 账号可以独立配置『动态每 30 分钟』和『推荐流每 2 小时』，两者的 Run、错误、重试和游标互不混淆」。
-- **现状【代码核实】**：数据库里没有「采集计划」这个对象。调度绑定 `TriggerBinding` 对来源是**一对一**（`sourceId` 唯一），一个来源只有一条当前绑定；模型注释直接写着「multi-plan and overlap policy arrive with CollectionPlan」——计划对象本身尚不存在（[`schema.prisma`](packages/storage-prisma/prisma/schema.prisma)）。
-- **连带**：EXT-007 的验收条件「通过同一合同支持多个采集计划」同样不成立；AUT-009 验收里「让多个 SourceInstance／采集计划引用同一个连接」只做到前半句（多个来源共用一个连接，已在 Task 22 交付）。
-- **影响**：同一账号下的多路采集无法拆开配置，频率、游标、失败状态只能共用一套；这是产品主线场景（一个账号既看动态又看推荐流）的硬缺口，不是打磨项。
-- **建议下一步**：先出 Proposal（计划对象、计划级的 checkpoint／游标／失败状态、计划与调度绑定的关系、与连接的作用域），接受后再定 Task。Task 22 与 Task 23 都已把它记为明确的 Non-goal，可直接作为 Proposal 的输入。
-- **进度（2026-09-20）**：Proposal [`collection-plan-v1`](docs/proposals/collection-plan-v1.md) 已起草并获维护者确认（5 项待裁定全部按建议采纳），稳定决定落入 PRD 勘误台账、架构 §19 决定 85／§21 不变量 63 与 ADR [`0023`](docs/adr/0023-collection-plan-v1.md)。**实现未开始**：Task 编号、提交与 worktree 授权待维护者，暂停点见上方「当前暂停点」。
 
 ### P0-2 AUT-004 事件类触发
 
@@ -84,16 +60,16 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 - **需求要求**（[`part-07-3.md`](docs/requirements/0002-product-requirements/part-07-3.md) §7.11）：manifest 可以声明多个 Source Operation、认证方式等；Web／API 可以根据声明展示配置**和登录状态**；增加新 Adapter 不需要改核心表或 Worker 专用分支。
 - **现状【代码核实】**：声明面已交付（`auth` 与 `operations` 结构齐全，operation 是数组）。缺的是使用面：四个内置 manifest **都只声明了单个 `fetch` 操作**，`auth.kind` 只有「无认证」和「外部」两种，因此「按声明展示登录状态」没有数据可展示——登录状态要等真实认证 Adapter。
 - **影响**：结构上支持多 operation，但没有任何一个真实 Adapter 用过；新 Adapter 的能力边界仍未被验证过一次，属于「合同先行、无人消费」。
-- **建议下一步**：与 P0-1（多采集计划）合并考虑——多 operation 的真正消费者就是「一个连接下多个计划」；真实认证 Adapter 接入（Bilibili 从外部 profile 迁到连接）是 Task 22 已登记的后续项，两者落地后本行自然闭合。
+- **建议下一步**：多 operation 的真正消费者是「一个连接下多个计划」，而 P0-1 已于 2026-09-22 交付（Task 33 的 Bilibili 计划仍只走 `source.bilibili@1` 的单一 `fetch` operation，没有用上多 operation）；本行闭合还差真实认证 Adapter 接入（Bilibili 从外部 profile 迁到连接），那是 Task 22 已登记的后续项。
 
 ### P1-3 AUT-009 连接状态／授权范围／失效原因的可见性与来源绑定入口
 
 > **本条是本次复核新增登记的**：PROJECT-STATUS 与勘误台账此前都没有把 AUT-009 列为未闭合行。
 
 - **需求要求**（[`part-07-1.md`](docs/requirements/0002-product-requirements/part-07-1.md) §7.1）：用户可以创建可复用的连接，并让多个来源／采集计划引用同一个连接；**用户能看到连接状态、授权范围和失效原因**；撤销凭证不删除已录入历史。
-- **现状【代码核实】**：连接对象、凭证存储、API 与「撤销凭证不删历史」都已交付。但产品界面只做到一半：连接面板只显示**状态徽标、名称和账号**，不显示授权范围（`scopeJson`）与失效原因（`lastError`）；新建表单只能填名称和 Connector，没有任何界面能把一个来源绑定到某个连接——绑定目前只有 API 一条路，且 Task 22 自己把「来源 → 连接的绑定 UI」记在 Follow-ups 里。
+- **现状【代码核实】**：连接对象、凭证存储、API 与「撤销凭证不删历史」都已交付。产品界面仍缺一半：连接面板只显示**状态徽标、名称和账号**，不显示授权范围（`scopeJson`）与失效原因（`lastError`）。**绑定入口已由 2026-09-22 的采集计划 v1 补上**（Task 33 切片 2／3：新建采集计划时可选连接，计划列表按连接分组），本行剩下的只有连接自身的可见性面板。
 - **影响**：用户看得到「已过期／错误」，看不到为什么；连接复用在产品面上不可操作，等于半个功能只有接口可用。
-- **建议下一步**：小切片即可（面板补两行 + 来源行加连接选择），可与 P1-1 同批；若维护者认为「授权范围／失效原因」要等真实认证 Adapter，则应像 EXT-006 一样登记进勘误台账，而不是留成一条静默的部分交付。
+- **建议下一步**：小切片即可（连接面板补授权范围与失效原因两行），可与 P1-1 同批；若维护者认为「授权范围／失效原因」要等真实认证 Adapter，则应像 EXT-006 一样登记进勘误台账，而不是留成一条静默的部分交付。
 
 ---
 

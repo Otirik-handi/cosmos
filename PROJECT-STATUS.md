@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-20。代码基线 `d7af0cc`（用户数据导出收口：LIB-008 与 OPS-004 的「导出」，Task 24 追加切片；功能基线 `da7d656`；该次推送的 CI run `35515892820` 五个 job 全绿）。**本地 = `origin/master` = `d7af0cc`**；`.worktree/` 已清空。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，但需求表仍有未闭合行**：AUT-004、AUT-010、ING-012、LIB-004、EXT-006（见下「Phase 2 尾巴遗留状态」；LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口），另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-22。代码基线 `4ef3636`（采集计划 v1：AUT-010 与 EXT-007 收口，Task 33 `--no-ff` 合并）。**本地 `master` 领先 `origin/master` 20 个提交、领先 `upstream/master` 206 个**；`.worktree/collection-plan` 保留 Task 33 分支。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，但需求表仍有未闭合行**：AUT-004、ING-012、LIB-004、EXT-006（见下「Phase 2 尾巴遗留状态」；AUT-010 与 EXT-007 已收口，LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口），另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -38,9 +38,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **2026-09-18 复核与决定**：先清文档口径与唯一被判定为验收失败的公开投影安全项（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)）——两项均已完成并推送；Phase 2 需求表尾巴、Phase 1 产品缺口与已 accepted 的界面职责重划之间的先后顺序**尚未排定**。
 
-**Phase 1 缺口复核的收口（2026-09-18）**：PRD §7 所有 `Phase 1`/`Phase 1B`/`Phase 1C` 行与 §12 验收已逐条核对，**表内无未闭合项**；三项裁定（Gateway 改标 `Phase 3`、`EXT-008` 收口、AUT-001「删除凭据」补实现）与逐条证据见勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 与 Task [`32`](.agents/tasks/32-phase1-closure/README.md)。
+**Phase 1 缺口复核的收口（2026-09-18）**：PRD §7 与 §12 逐条核对后**表内无未闭合项**；三项裁定（Gateway 改标 `Phase 3`、`EXT-008` 收口、AUT-001「删除凭据」补实现）与逐条证据见勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 与 Task [`32`](.agents/tasks/32-phase1-closure/README.md)。
 
-**Phase 2 收口与尾巴的完成记录（2026-09-15/16）**：Phase 2 收口四条（Story split 用户状态迁移与撤销、看板 UI 缺口与拖拽排序、四条主流程真人验收、ORG-021 改标）、ORG-017、远端 CI 收尾、`db:validate` 阻塞修复与界面职责重划的实现尝试作废，整段移入 [`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；本文只保留仍然有效的当前状态与决定。
+**Phase 2 收口与尾巴的完成记录（2026-09-15/16）**：完整记录已移入 [`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；本文只保留仍然有效的当前状态与决定。
 
 **真人验收产生的新方向（有效决定；细节在 Proposal）**：
 
@@ -50,7 +50,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
 - **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。
-- **Phase 2 仍未闭合的 5 行（2026-09-20 逐条核对并登记进勘误台账；同日导出收口后更新）**：未交付 AUT-004（事件触发）、AUT-010（多采集计划，EXT-007 同源）；部分交付 ING-012（StateStore 已交付且被 RSS 消费，缺备份/恢复/迁移）、EXT-006（manifest 声明面已交付，内置 manifest 仍只有单个 `fetch`，缺真实认证 Adapter 的登录状态展示）；延后到 Phase 3 的 LIB-004 正文片段字符级锚点。**LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口**（`GET /exports/user-data` + Web 存储面板下载入口，ADR-0019 决策 5；已合入 `d7af0cc` 并推送）。逐条证据在勘误台账。
+- **Phase 2 仍未闭合的 4 行（2026-09-22 更新）**：未交付 AUT-004（事件触发）；部分交付 ING-012（StateStore 已交付且被 RSS 消费，缺备份/恢复/迁移）、EXT-006（manifest 声明面已交付，内置 manifest 仍只有单个 `fetch`，缺真实认证 Adapter 的登录状态展示）；延后到 Phase 3 的 LIB-004 正文片段字符级锚点。**AUT-010 与 EXT-007 已由 2026-09-22 的采集计划 v1 收口**（Task [`33`](.agents/tasks/33-collection-plan/README.md)，合并 `4ef3636`）；AUT-009 的「多个来源／计划引用同一连接」随之成立，连接可见性面板仍未做。**LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口**（ADR-0019 决策 5，已合入 `d7af0cc`）。逐条证据在勘误台账。
 - **Phase 2 第四条验收条件尚无写入路径可考**：「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，未被真正考验；Phase 3 的 Knowledge Workflow 落地后需重新回归。
 - **真人验收暴露的三条界面方向**（维护者 2026-09-15，尚未排期）：Topic/Entity/用户组织缺独立操作面板、看板需要拖拽、文案过于专业化。前两条对应已 accepted 的 [`ui-surface-ownership-v1`](docs/proposals/ui-surface-ownership-v1.md)（PRD §8 / 架构 §11.4 / 新 ADR 与 Task 在 `master` 上尚未执行）；第三条对应仍 `reviewing` 的 [`ui-copy-review-v1`](docs/proposals/ui-copy-review-v1.md)。
 
@@ -147,7 +147,6 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 三种宿主模式的认证、Service Endpoint、SSE 恢复、Blob/Artifact 访问和版本协商。
 - Desktop Shell 的具体技术、安装/升级/卸载生命周期，以及 `pi-ai` 到 Harness 的迁移门槛。
 - SecretStore 第一版后端，以及 Adapter SecretRef/StateStore 的具体公共接口。
-- 一个 Connection 下多个 SourceInstance/采集计划的 UI 和持久模型。
 - 脚本优先 Workflow API、Context、Action 调用、Child Workflow、Journal、Graph/IR 转换和 kind/tags。
 - Knowledge Manager Web Chat、`cosmos cli`、多分身共享记忆和 ingest 参与的具体运行合同；当前不建设审批 UI。
 - Research Request、Trigger、Research Workflow、外部渠道访问、结果重新入库和失败恢复语义。
@@ -160,7 +159,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；当前环境没有 Docker CLI。
 - 真实 RSS/RSSHub 的**长时定时抓取**与更长时间的 Worker 重启演练。真实公网 RSS 的完整采集链路已于 2026-09-18 通过验收（阮一峰源，item count 3）；跨平台 Node 由远端 CI 的 Windows Node smoke job 覆盖。
-- Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E，Run 成功且 `itemCount=20`。
+- Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E（`itemCount=20`），2026-09-22 的 Task 33 验收在同一连接下同时跑通 hot 与 feed 两个计划（各 20 items）；限流与跨环境登录态仍未验。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
 - **Phase 1 收口（2026-09-18，Task [`32`](.agents/tasks/32-phase1-closure/README.md) 五切片，已合并 `cd7f7bb`）**：AUT-001 删除来源（墓碑，历史保留）、LIB-001 三个过滤维度、ING-004 发现渠道、AUT-003 条件请求（顺带补上 ING-012 的一半）、OPS-002 的 Run→Job 产品面均已交付；ING-008 按 ADR-0005 走勘误收窄。**Gateway（RUN-010/011、OPS-010）改标 `Phase 3`**；OPS-002 的「预算」收窄为媒体预算。`EXT-008` 与 AUT-001「删除凭据」按同日裁定收口（见「当前下一步」）。
 - Activity Host 的跨进程 durable recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline 和完整生产 executable registration 验收；当前代码/测试已有部分 Activity Job、lease、completion 和 direct loopback 证据，不能替代这些边界。
@@ -169,8 +168,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - API/DTO Draft v0.2 的 Zod schema、Product/Application/Transport 迁移、Gateway fake conformance、owner handoff、late evidence、Receipt CAS 和真实 bootstrap identity。
 - SQLite WAL/busy timeout 的显式配置与并发行为验收。
 - 真实认证 Adapter 的登录生命周期；Connection/SecretStore/ConnectorStateStore 地基已由 Task 22 交付，Checkpoint 迁移与加密-at-rest 未做。
-- 可配置多采集计划、通用 Workflow 插件/管理产品面、LLM 子任务和
-  Proposal/Provenance。
+- 通用 Workflow 插件/管理产品面、LLM 子任务和 Proposal/Provenance。
 - 推荐系统（Admission/Ranking/Impression/Feedback、推荐页、相关内容的服务端排序）；跨来源重复/转载关系只做人工标记与展示，不参与排序和去重（ADR-0022）。
 - Agent 分析、Artifact、Workspace 和交互状态。
 - 推送、摘要图片和网页发布（Phase 5）；看板已随 Phase 2 交付（可配置 Board/Section/Block、Spotlight 人工固定、区块拖拽排序）。
@@ -179,7 +177,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-20，主工作区，HEAD `fc7867f`）：`bun run typecheck` **全仓 0**、`bun run test` **106 文件 / 632 用例全绿**、`bun run build` 通过、`docs:check` **703 文件 0 失败**、size 门禁 PASS、`git diff --check` 干净；`bunx playwright test`（`COSMOS_E2E_WEB_PORT=4183`）**24 passed**、组件实验室 **14 passed**、`test:property` **4 用例全绿**、Node 进程 E2E **6 用例全绿**；真实公网 RSS 验收通过（item count 3）。逐项数字与未运行项见 Task 32 walkthrough。**主工作区的 `node_modules` 与 lockfile 不一致问题已由 `bun install` 解除**。
+- 最近一次全量证据（2026-09-22，主工作区，HEAD `4ef3636`，Task 33 合并后）：`bun run typecheck` **全仓 0**、`bun run test` **116 文件 / 656 用例全绿**、`docs:check` **733 文件 0 失败**、`db:validate` 通过、size 门禁 PASS、Node 进程 E2E **5 文件 / 6 用例全绿**、`git diff --check` 干净；真实来源验收 `test:real:bilibili` 通过（同一连接下 hot 与 feed 两个 Bilibili 计划，各 20 items，连续两次 exit 0）。本轮**未运行** `bun run build`、浏览器 E2E、组件实验室、`test:property` 与真实公网 RSS 验收；上一轮（HEAD `fc7867f`）的数字见 Task 32 walkthrough。**主工作区的 `node_modules` 与 lockfile 不一致问题已由 `bun install` 解除**。
 - **公开 Asset 投影的内部 Blob key 已剥离**（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，已 `--no-ff` 合入 `3ded765`）：按[准入决策表](docs/standards/repository-workflow.md#准入决策表)第 25 行当安全合同修复处理，**不开公开 Issue**；过程与回归锚点在 Task 31。
 - **浏览器产品 E2E 仍有间歇失败**（`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 根因已修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；其余仍未归因。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护（含 2026-09-20 新增的 CI Quality 单用例超时观察）。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
