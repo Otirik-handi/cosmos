@@ -90,9 +90,30 @@ export function useSourceWorkspace(
         }
     }, [ctx]);
 
+    /**
+     * 首屏加载在 effect 内直接发起：`react-hooks/set-state-in-effect` 会把 effect 直接调用的
+     * 局部 async 函数内联展开，把 `await` 之后的 setState 判成同步 setState；setState 落在
+     * `.then` 回调里才会被认成异步（同 connection-panel）。cancelled 守卫同时挡掉卸载后的写入。
+     */
     useEffect(() => {
-        void loadPlans();
-    }, [loadPlans]);
+        let cancelled = false;
+        void Promise.all([
+            client.listCollectionPlans(),
+            client.listConnections(),
+        ])
+            .then(([nextPlans, nextConnections]) => {
+                if (cancelled) return;
+                setPlans(nextPlans);
+                setConnections(nextConnections);
+            })
+            .catch((caught: unknown) => {
+                if (cancelled) return;
+                ctx.setError(readError(caught));
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [ctx]);
 
     /**
      * 表单字段由 catalog manifest 驱动；目录不可用时只提供重试，不回退硬编码字段。
