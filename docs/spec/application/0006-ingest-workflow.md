@@ -66,7 +66,8 @@
   source: SourceExecutionSnapshot;
   cursor: string | null;
   checkpointRevision: number; // nonnegative integer
-  triggerKind: "manual" | "schedule";
+  triggerKind: "manual" | "schedule" | "webhook";
+  triggerEvidence?: { bindingId: string; externalEventId: string; receivedAt: string };
 }
 ```
 
@@ -80,7 +81,7 @@ output: { items: NormalizedIngestItemContract[]; nextCursor: string | null }
 `library.ingest@1` 的 JSON 输入/输出是：
 
 ```ts
-input: { sourceId: string; triggerKind: "manual" | "schedule"; item: NormalizedIngestItemContract }
+input: { sourceId: string; triggerKind: "manual" | "schedule" | "webhook"; item: NormalizedIngestItemContract }
 output: { createdEntry: boolean; revisedEntry: boolean; duplicateObservation: boolean }
 ```
 
@@ -111,7 +112,7 @@ interface WorkflowBlobStore {
 ```ts
 persistWorkflowIngestItem(input: {
   sourceId: string; workflowRunId: string;
-  triggerKind: "manual" | "schedule"; item: NormalizedIngestItem;
+  triggerKind: "manual" | "schedule" | "webhook"; item: NormalizedIngestItem;
   fence: HostActionExecutionFence; idempotencyKey: string;
 }): Promise<PersistIngestItemResult>;
 

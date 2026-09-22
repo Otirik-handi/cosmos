@@ -6,7 +6,7 @@
 
 ## 最后更新
 
-2026-08-16
+2026-09-22
 
 ## 组件定位
 
@@ -29,7 +29,7 @@
 ## 概念与定义
 
 - `SourceExecutionSnapshot` 是入队时读取的 source 执行快照，使用公共契约中的定义：[SourceExecutionSnapshot](../contracts/0001-public-contracts.md)。
-- `WorkflowEnvelope.definition` 使用 `WorkflowDefinitionReference`。它的 `manifestHash` 是字符串，而不是 catalog 的 `{ algorithm, value }` 对象；本服务固定写入 `"builtin:cosmos.ingest@1:source-snapshot-v1"`。
+- `WorkflowEnvelope.definition` 使用 `WorkflowDefinitionReference`。它的 `manifestHash` 是字符串，而不是 catalog 的 `{ algorithm, value }` 对象；本服务固定写入 `"builtin:cosmos.ingest@1:source-snapshot-v2"`。
 - `ingestWorkflowInputSnapshotSchema` 定义 ingest 工作流的输入快照结构：
   ```ts
   z.object({
@@ -37,16 +37,18 @@
     cursor: string | null,
     checkpointRevision: nonnegative integer,
     triggerKind: ingestTriggerKindSchema,
+    triggerEvidence?: ingestTriggerEvidenceSchema,
   })
   ```
+- 触发证据（`ingestTriggerEvidenceSchema`）是「哪一次触发」的不可变记录，三个字段同进同出：绑定标识（`bindingId`）、外部事件标识（`externalEventId`，与入队幂等键同源）和入口收到时间（`receivedAt`）。它不含 Secret。`triggerEvidence` 在快照里可选，是为了兼容既有 manual/schedule Run 的快照；**`triggerKind = "webhook"` 时必须提供**，否则入队失败。
 - `inputSnapshot` 是入队时生成的不可变输入；排队后 source 的修改不会改变该次工作流使用的 source 快照。
 
 ## 外部行为
 
-`enqueue({ sourceId, triggerKind, idempotencyKey })` 执行以下行为：
+`enqueue({ sourceId, triggerKind, idempotencyKey, triggerEvidence? })` 执行以下行为：
 
 1. 对 `sourceId` 和 `idempotencyKey` 执行 `trim`；服务本身不截断幂等键。
-2. 解析 `triggerKind`。
+2. 解析 `triggerKind`；传入 `triggerEvidence` 时按 `ingestTriggerEvidenceSchema` 解析（缺字段或多余字段都失败）。`triggerKind = "webhook"` 而证据缺失时入队失败——webhook 的验收条件就是每次触发留下原因。
 3. 任一必填字符串为空时抛出：
    ```text
    Workflow ingest enqueue requires sourceId and Idempotency-Key.
@@ -106,6 +108,7 @@
   sourceId: string
   triggerKind: Trigger
   idempotencyKey: string
+  triggerEvidence?: TriggerEvidence
 }
 ```
 
@@ -114,6 +117,7 @@
 - `sourceId` 使用 trim 后的值。
 - `idempotencyKey` 使用 trim 后的值。
 - `triggerKind` 必须通过 `ingestTriggerKindSchema` 解析。
+- `triggerEvidence` 可选；提供时必须通过 `ingestTriggerEvidenceSchema`（三字段齐全、无多余字段）。`triggerKind = "webhook"` 时它必填。
 - trim 后的 `sourceId` 或 `idempotencyKey` 为空时请求无效。
 - checkpoint 的 `revision` 必须能够构造成非负整数 `checkpointRevision`。
 - source snapshot 不存在时不会创建工作流 envelope。
@@ -129,7 +133,7 @@
   {
     key: "cosmos.ingest",
     version: "1",
-    manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v1"
+    manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v2"
   }
   ```
 - 新建 envelope 的 `productRun` 为：
@@ -138,7 +142,8 @@
     status: "queued",
     sourceId,
     triggerKind,
-    idempotencyKey
+    idempotencyKey,
+    triggerEvidence?  // 仅在本次入队带证据时出现
   }
   ```
 
@@ -179,7 +184,7 @@
   -> 返回新 envelope
 ```
 
-创建后的 ingest 工作流输入固定为入队时的 source、cursor、checkpointRevision 和 triggerKind；source 后续修改不会回写或重算该 `inputSnapshot`。
+创建后的 ingest 工作流输入固定为入队时的 source、cursor、checkpointRevision、triggerKind 与（如有）triggerEvidence；source 后续修改不会回写或重算该 `inputSnapshot`。
 
 ## 副作用
 
@@ -197,6 +202,7 @@
 - `sourceId` 或 `idempotencyKey` trim 后为空：抛出
   `Workflow ingest enqueue requires sourceId and Idempotency-Key.`。
 - `triggerKind` 无法通过 schema 解析：入队失败。
+- `triggerEvidence` 无法通过 `ingestTriggerEvidenceSchema` 解析，或 `triggerKind = "webhook"` 而证据缺失：入队失败，不创建 envelope（错误信息为 `A webhook-triggered Run requires trigger evidence.`）。
 - 已有 envelope 的 snapshot 无法安全解析，或 snapshot 与请求 source/trigger 不匹配：抛出
   `Idempotency key ${idempotencyKey} conflicts with another source run.`。
 - source snapshot 为 `null`：抛出 `Source not found: ${sourceId}`，不创建 envelope。
@@ -209,7 +215,8 @@
 - `WorkflowHostStore`：查询和创建 [WorkflowEnvelope](0007-workflow-host-contract.md)，并承担 Host contract 规定的持久化、canonical JSON、唯一键和 queued event 行为。
 - `getSourceExecutionSnapshot`：提供 [SourceExecutionSnapshot](../contracts/0001-public-contracts.md)。
 - `getCheckpointSnapshot`：提供 source 对应的 cursor 和 revision。
-- `ingestTriggerKindSchema`：校验 [Trigger](../contracts/0001-public-contracts.md) 的 ingest 触发类型。
+- `ingestTriggerKindSchema`：校验 [Trigger](../contracts/0001-public-contracts.md) 的 ingest 触发类型（`manual`／`schedule`／`webhook`）。
+- `ingestTriggerEvidenceSchema`：校验触发证据的 wire shape；证据本身的语义与来源见 [Trigger](../contracts/0001-public-contracts.md)。
 - `IdGenerator`：生成 `runId`；未提供自定义实现时使用服务默认的 ID 生成器。
 
 调用点包括：
@@ -225,7 +232,7 @@
 
 ```ts
 ingestWorkflowDefinitionReference = "cosmos.ingest@1"
-ingestWorkflowManifestHash = "builtin:cosmos.ingest@1:source-snapshot-v1"
+ingestWorkflowManifestHash = "builtin:cosmos.ingest@1:source-snapshot-v2"
 ```
 
 创建 envelope 时使用：
@@ -234,7 +241,7 @@ ingestWorkflowManifestHash = "builtin:cosmos.ingest@1:source-snapshot-v1"
 definition: {
   key: "cosmos.ingest",
   version: "1",
-  manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v1"
+  manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v2"
 }
 ```
 
@@ -250,16 +257,19 @@ definition: {
 - [ ] 当 existing snapshot 的 trigger kind 不匹配或 snapshot 无法解析时，抛出同一精确动态错误 `Idempotency key ${idempotencyKey} conflicts with another source run.`。
 - [ ] 当 source reader 返回 `null` 时，抛出 `Source not found: ${sourceId}`，且不调用 `createWorkflowEnvelope`。
 - [ ] 当幂等键未命中且 source、checkpoint 均读取成功时，创建的 input snapshot 包含原始 source snapshot、checkpoint cursor、非负 checkpoint revision 和解析后的 trigger kind。
-- [ ] 新建 envelope 的 definition key 为 `cosmos.ingest`，version 为 `1`，manifest hash 为 `builtin:cosmos.ingest@1:source-snapshot-v1`。
+- [ ] 新建 envelope 的 definition key 为 `cosmos.ingest`，version 为 `1`，manifest hash 为 `builtin:cosmos.ingest@1:source-snapshot-v2`。
 - [ ] 新建 envelope 的 `productRun.status` 为 `queued`，并包含 sourceId、triggerKind 和 idempotencyKey。
 - [ ] source 在首次入队后发生修改时，已创建 envelope 的 input snapshot 仍保持入队时的 source snapshot。
 - [ ] 同一幂等键重复入队时返回相同 envelope；使用相同幂等键但不同 source 或 trigger 时拒绝请求。
 - [ ] schedule 调用使用 `schedule:${source.id}:${floor(now / interval)}` 作为幂等键；manual run 使用 `manual:${sourceId}:${randomUUID()}` 或请求 header 幂等键。
+- [ ] `triggerKind = "webhook"` 且带完整 `triggerEvidence` 入队时，新建 envelope 的 input snapshot 与 `productRun` 含同一份证据（绑定标识、外部事件标识、收到时间）。
+- [ ] `triggerKind = "webhook"` 而证据缺失时入队失败，错误信息为 `A webhook-triggered Run requires trigger evidence.`，且不创建 envelope。
+- [ ] `triggerKind = "manual"` 或 `"schedule"` 的入队快照不含 `triggerEvidence` 键（既有 Run 快照的兼容边界）。
 
 ## 实现与测试锚点
 
-- 实现：[packages/application/src/workflow-control.ts](../../../packages/application/src/workflow-control.ts#L15-L90)
-- 行为测试：[apps/worker/src/workflow-ingest.test.ts](../../../apps/worker/src/workflow-ingest.test.ts#L193-L283)，覆盖 snapshot 捕获、幂等返回、source/trigger 冲突、source mutation 和 checkpoint parity。
+- 实现：[packages/application/src/workflow-control.ts](../../../packages/application/src/workflow-control.ts#L29-L120)
+- 行为测试：[apps/worker/src/workflow-ingest.test.ts](../../../apps/worker/src/workflow-ingest.test.ts#L193-L283)，覆盖 snapshot 捕获、幂等返回、source/trigger 冲突、source mutation 和 checkpoint parity；[packages/application/src/workflow-control.test.ts](../../../packages/application/src/workflow-control.test.ts) 覆盖触发证据落库、webhook 缺证据被拒和 manual 快照的兼容边界；[packages/contracts/src/trigger.test.ts](../../../packages/contracts/src/trigger.test.ts) 覆盖触发类型与证据 schema。
 - API 组合与调用点：`apps/api/src/app.module.ts` 及其 API controller。
 - Worker schedule 调用点：`apps/worker/src/main.ts`。
 

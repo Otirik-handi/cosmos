@@ -85,7 +85,7 @@
 | --- | --- | --- |
 | Source | 可被采集的来源实例及其执行快照；`kind` 指向 Connector 家族 | [`contracts/0001-public-contracts.md`](contracts/0001-public-contracts.md) |
 | Connector | 针对 Source kind 的 validate/fetch 能力边界 | [`application/0001-connector-runtime.md`](application/0001-connector-runtime.md) |
-| Trigger | 产生 Workflow 入队请求的触发类型；当前 ingest 有 manual/schedule | [`application/0005-ingest-workflow-control.md`](application/0005-ingest-workflow-control.md) |
+| Trigger | 产生 Workflow 入队请求的触发类型；当前 ingest 有 manual/schedule/webhook（webhook 必须带触发证据，ADR-0024） | [`application/0005-ingest-workflow-control.md`](application/0005-ingest-workflow-control.md) |
 | Workflow Definition | 带版本和 manifest hash 的可执行 Workflow 合同 | [`application/0007-workflow-host-contract.md`](application/0007-workflow-host-contract.md) |
 | Workflow Run | 某 Definition 对一份不可变输入快照的一次 durable 执行 | [`application/0007-workflow-host-contract.md`](application/0007-workflow-host-contract.md) |
 | Kernel | `@notnotype/nb-workflow` 负责脚本、Activity identity、journal replay、waiting/resume 的规范执行内核 | [`application/0008-workflow-host-runtime.md`](application/0008-workflow-host-runtime.md) |
@@ -145,7 +145,7 @@
 
 这些约束是当前实现中重建时不能遗漏的语义；字段和完整错误分类仍由组件 owner spec 负责。
 
-- **固定 Workflow：** 入队创建 `cosmos.ingest@1` 的 Definition、Source execution snapshot、checkpoint cursor/revision、`triggerKind` 和 idempotency key；执行顺序是 `source.fetch@1 → media.retry.fetch@1 → [media.retry.apply@1] → library.ingest@1[] → source.checkpoint@1`（重试两步只在来源 `media.retry.maxAttempts > 0` 且存在早先 Run 已存的降级媒体时出现）。排队后修改 Source 不改变既有 Run 的 fetch 输入；相同 idempotency key 必须复用相同快照，冲突必须拒绝。保留期清理是独立维护 Workflow `cosmos.media-cleanup@1`（单 Action `media.cleanup@1`），只由显式命令入队。
+- **固定 Workflow：** 入队创建 `cosmos.ingest@1` 的 Definition、Source execution snapshot、checkpoint cursor/revision、`triggerKind`、可选的触发证据（`triggerEvidence`，webhook 必填，ADR-0024）和 idempotency key；执行顺序是 `source.fetch@1 → media.retry.fetch@1 → [media.retry.apply@1] → library.ingest@1[] → source.checkpoint@1`（重试两步只在来源 `media.retry.maxAttempts > 0` 且存在早先 Run 已存的降级媒体时出现）。排队后修改 Source 不改变既有 Run 的 fetch 输入；相同 idempotency key 必须复用相同快照，冲突必须拒绝。保留期清理是独立维护 Workflow `cosmos.media-cleanup@1`（单 Action `media.cleanup@1`），只由显式命令入队。
 - **Host 权威：** Kernel 只拥有脚本/journal 语义；SQL TaskStore 拥有 Run/Job/lease/retry/Completion 状态。Wakeup、HTTP 连接、内存 Registry、SSE 和日志都不能另立终态。
 - **双 fencing：** 写领域数据或 Domain Event 前同时验证 Workflow Run lease、Activity Job lease 和所需 kernel revision；token 仅用于内部校验，不能进入 Job payload、Kernel state、Manifest、Product API 或 Worker Admin 投影。旧 owner 的 heartbeat/complete/write 必须 fail closed。
 - **幂等与 at-least-once：** Envelope、Activity、Completion、Observation、Domain Event 和外部 Action 都以显式 idempotency key/receipt 或 CAS 处理重复；不能宣称 exactly-once。
