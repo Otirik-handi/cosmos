@@ -291,8 +291,105 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function requestJson(
+    url: string,
+    init?: RequestInit,
+): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(url, init);
+    const text = await response.text();
+    let body: unknown = null;
+    if (text) {
+        try {
+            body = JSON.parse(text) as unknown;
+        } catch {
+            body = text;
+        }
+    }
+    return { status: response.status, body };
+}
+
+export function readString(value: unknown, key: string): string {
+    if (
+        !isRecord(value)
+        || typeof value[key] !== "string"
+        || value[key].length === 0
+    ) {
+        throw new Error(`Expected ${key} in response.`);
+    }
+    return value[key];
+}
+
+export function expectJsonObject(
+    response: { status: number; body: unknown },
+    expected: number,
+    description: string,
+): Record<string, unknown> {
+    if (response.status !== expected || !isRecord(response.body)) {
+        throw new Error(
+            `Expected HTTP ${expected} from ${description}, got ${response.status}: ${JSON.stringify(response.body)}.`,
+        );
+    }
+    return response.body;
+}
+
+/**
+ * 真实来源验收共享的 Run 等待与判定：终态只认 succeeded / failed，成功口径与 item 数
+ * 上界只有一处定义，单来源与双计划两条路径不各自演化。
+ */
+export async function waitForTerminalRun(
+    apiBaseUrl: string,
+    runId: string,
+    label: string,
+): Promise<Record<string, unknown>> {
+    let completed: Record<string, unknown> | null = null;
+    await waitForCondition(
+        `${label} Run completion`,
+        async () => {
+            const result = await requestJson(`${apiBaseUrl}/runs/${runId}`);
+            if (result.status !== 200 || !isRecord(result.body)) return false;
+            completed = result.body;
+            return (
+                result.body.status === "succeeded"
+                || result.body.status === "failed"
+            );
+        },
+        180_000,
+        500,
+    );
+    const terminal: Record<string, unknown> | null = completed;
+    if (!terminal) {
+        throw new Error(`${label} Run ${runId} never reached a terminal status.`);
+    }
+    return terminal;
+}
+
+export function assertRunSucceeded(
+    label: string,
+    runId: string,
+    completed: Record<string, unknown>,
+): void {
+    if (completed.status !== "succeeded") {
+        throw new Error(
+            `${label} Run ${runId} did not succeed: ${JSON.stringify(completed)}.`,
+        );
+    }
+}
+
+export function boundedItemCount(
+    label: string,
+    completed: Record<string, unknown>,
+): number {
+    const itemCount = Number(completed.itemCount ?? 0);
+    if (!Number.isSafeInteger(itemCount) || itemCount < 0 || itemCount > 100) {
+        throw new Error(
+            `${label} item count exceeded bounded acceptance: ${itemCount}.`,
+        );
+    }
+    return itemCount;
 }
 
 async function collectFiles(directory: string): Promise<string[]> {

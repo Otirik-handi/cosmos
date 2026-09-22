@@ -1,23 +1,45 @@
 import {
     applyMigrations,
     assertLogsRedacted,
+    assertRunSucceeded,
+    boundedItemCount,
     createIsolatedStackRoot,
     disposeIsolatedStack,
     environmentForStack,
+    expectJsonObject,
     findAvailablePort,
     formatProcessFailure,
+    isRecord,
+    readString,
     readStructuredLogs,
     repositoryRoot,
+    requestJson,
     spawnService,
     stopManagedProcess,
     waitForCondition,
     waitForHttp,
-    type IsolatedStackRoot,
+    waitForTerminalRun,
     type ManagedProcess,
 } from "./helpers.js";
+import { runBilibiliDualPlanAcceptance } from "./real-bilibili-plans.js";
+
+type SourceCommand = {
+    name: string;
+    sourceDefinitionRef: string;
+    operationId: "fetch";
+    config: Record<string, unknown>;
+};
+
+/**
+ * 真实来源验收有两种形态：单来源（rss / aihot / bilibili-hot）只证明一条链路能抓，
+ * 双计划（bilibili）是 Task 33 的验收——同一连接下的 hot 与 feed 两个计划。
+ */
+type Acceptance =
+    | { mode: "single"; environment: NodeJS.ProcessEnv; command: SourceCommand }
+    | { mode: "dual-plan"; environment: NodeJS.ProcessEnv; profile: string };
 
 const kind = process.argv[2];
-const source = sourceConfiguration(kind);
+const acceptance = resolveAcceptance(kind);
 const stack = await createIsolatedStackRoot(`real-${kind ?? "source"}`);
 let api: ManagedProcess | undefined;
 let worker: ManagedProcess | undefined;
@@ -35,7 +57,7 @@ try {
         COSMOS_WORKER_POLL_MS: "100",
         COSMOS_WORKER_LEASE_MS: "30000",
         COSMOS_WORKER_SHUTDOWN_DEADLINE_MS: "5000",
-        ...(source.environment ?? {}),
+        ...acceptance.environment,
     });
     api = spawnService({
         name: `real-${kind}-api`,
@@ -68,83 +90,24 @@ try {
         200,
     );
 
-    const created = await requestJson(
-        `http://127.0.0.1:${apiPort}/api/v1/sources`,
-        {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(source.command),
-        },
-    );
-    if (created.status !== 201)
-        throw new Error(
-            `Real ${kind} source creation returned HTTP ${created.status}.`,
-        );
-    const sourceId = readString(created.body, "id");
-    // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
-    const activated = await requestJson(
-        `http://127.0.0.1:${apiPort}/api/v1/collection-plans/${encodeURIComponent(readString(created.body, "planId"))}`,
-        {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                enabled: true,
-                baseRevisionId: readString(created.body, "planRevisionId"),
-            }),
-        },
-    );
-    if (activated.status !== 200) {
-        throw new Error(`Real ${kind} plan activation returned HTTP ${activated.status}.`);
-    }
-    const queued = await requestJson(
-        `http://127.0.0.1:${apiPort}/api/v1/sources/${sourceId}/runs`,
-        {
-            method: "POST",
-            headers: { "idempotency-key": `real-${kind}-${Date.now()}` },
-        },
-    );
-    if (queued.status !== 201)
-        throw new Error(
-            `Real ${kind} Run enqueue returned HTTP ${queued.status}.`,
-        );
-    const runId = readString(queued.body, "id");
+    const summary = acceptance.mode === "dual-plan"
+        ? await runBilibiliDualPlanAcceptance({
+            apiPort,
+            stack,
+            profile: acceptance.profile,
+        })
+        : await runSingleSourceAcceptance({
+            kind,
+            apiPort,
+            command: acceptance.command,
+        });
 
-    let completed: Record<string, unknown> | null = null;
-    await waitForCondition(
-        `real ${kind} Run completion`,
-        async () => {
-            const result = await requestJson(
-                `http://127.0.0.1:${apiPort}/api/v1/runs/${runId}`,
-            );
-            if (result.status !== 200 || !isRecord(result.body)) return false;
-            completed = result.body;
-            return (
-                result.body.status === "succeeded" ||
-                result.body.status === "failed"
-            );
-        },
-        180_000,
-        500,
-    );
-    if (!completed || completed.status !== "succeeded") {
-        throw new Error(
-            `Real ${kind} Run did not succeed: ${JSON.stringify(completed)}.`,
-        );
-    }
-    const itemCount = Number(completed.itemCount ?? 0);
-    if (!Number.isSafeInteger(itemCount) || itemCount < 0 || itemCount > 100) {
-        throw new Error(
-            `Real ${kind} item count exceeded bounded acceptance: ${itemCount}.`,
-        );
-    }
     const records = await readStructuredLogs(stack.logRoot);
     assertLogsRedacted(records);
-    process.stdout.write(
-        `Real ${kind} acceptance passed: Run ${runId}, bounded item count ${itemCount}.\n`,
-    );
+    process.stdout.write(`${summary}\n`);
 } catch (error) {
-    await stopManagedProcess(worker, "force").catch(() => undefined);
-    await stopManagedProcess(api, "force").catch(() => undefined);
+    if (worker) await stopManagedProcess(worker, "force").catch(() => undefined);
+    if (api) await stopManagedProcess(api, "force").catch(() => undefined);
     throw new Error(
         [
             error instanceof Error ? error.message : String(error),
@@ -155,26 +118,69 @@ try {
             .join("\n"),
     );
 } finally {
-    await stopManagedProcess(worker, "graceful").catch(() => undefined);
-    await stopManagedProcess(api, "graceful").catch(() => undefined);
+    if (worker) await stopManagedProcess(worker, "graceful").catch(() => undefined);
+    if (api) await stopManagedProcess(api, "graceful").catch(() => undefined);
     await disposeIsolatedStack(stack.root);
 }
 
-type SourceConfiguration = {
-    command: {
-        name: string;
-        sourceDefinitionRef: string;
-        operationId: "fetch";
-        config: Record<string, unknown>;
-    };
-    environment?: NodeJS.ProcessEnv;
-};
+async function runSingleSourceAcceptance(input: {
+    kind: string | undefined;
+    apiPort: number;
+    command: SourceCommand;
+}): Promise<string> {
+    const apiBaseUrl = `http://127.0.0.1:${input.apiPort}/api/v1`;
+    const created = expectJsonObject(
+        await requestJson(`${apiBaseUrl}/sources`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(input.command),
+        }),
+        201,
+        `Real ${input.kind} source creation`,
+    );
+    const sourceId = readString(created, "id");
+    // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
+    expectJsonObject(
+        await requestJson(
+            `${apiBaseUrl}/collection-plans/${encodeURIComponent(readString(created, "planId"))}`,
+            {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    enabled: true,
+                    baseRevisionId: readString(created, "planRevisionId"),
+                }),
+            },
+        ),
+        200,
+        `Real ${input.kind} plan activation`,
+    );
+    const queued = expectJsonObject(
+        await requestJson(
+            `${apiBaseUrl}/sources/${sourceId}/runs`,
+            {
+                method: "POST",
+                headers: { "idempotency-key": `real-${input.kind}-${Date.now()}` },
+            },
+        ),
+        201,
+        `Real ${input.kind} Run enqueue`,
+    );
+    const runId = readString(queued, "id");
+    const label = `real ${input.kind}`;
+    const terminal = await waitForTerminalRun(apiBaseUrl, runId, label);
+    assertRunSucceeded(label, runId, terminal);
+    const itemCount = boundedItemCount(label, terminal);
+    return `Real ${input.kind} acceptance passed: Run ${runId}, bounded item count ${itemCount}.`;
+}
 
-function sourceConfiguration(value: string | undefined): SourceConfiguration {
+function resolveAcceptance(value: string | undefined): Acceptance {
     switch (value) {
         case "rss": {
             const feedUrl = requiredEnvironment("COSMOS_REAL_RSS_URL");
             return {
+                mode: "single",
+                environment: {},
                 command: {
                     name: "Explicit real RSS",
                     sourceDefinitionRef: "source.rss@1",
@@ -186,36 +192,38 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
         case "aihot":
             requireNetworkPermission();
             return {
+                mode: "single",
+                environment: { COSMOS_ALLOW_REAL_NETWORK: "true" },
                 command: {
                     name: "Explicit AI HOT",
                     sourceDefinitionRef: "source.aihot@1",
                     operationId: "fetch",
                     config: {},
                 },
-                environment: { COSMOS_ALLOW_REAL_NETWORK: "true" },
             };
-        case "bilibili":
         case "bilibili-hot": {
             requireNetworkPermission();
             const openCliPath = requiredEnvironment("COSMOS_OPENCLI_PATH");
             const profile = requiredEnvironment("OPENCLI_PROFILE");
-            const mode = kind === "bilibili-hot" ? "hot" : "feed";
             return {
+                mode: "single",
+                environment: openCliEnvironment(openCliPath, profile),
                 command: {
-                    name: kind === "bilibili-hot" ? "Explicit Bilibili Hot" : "Explicit Bilibili",
+                    name: "Explicit Bilibili Hot",
                     sourceDefinitionRef: "source.bilibili@1",
                     operationId: "fetch",
-                    config: {
-                        mode,
-                        profile,
-                        limit: 20,
-                    },
+                    config: { mode: "hot", profile, limit: 20 },
                 },
-                environment: {
-                    COSMOS_OPENCLI_PATH: openCliPath,
-                    OPENCLI_PROFILE: profile,
-                    COSMOS_ALLOW_REAL_NETWORK: "true",
-                },
+            };
+        }
+        case "bilibili": {
+            requireNetworkPermission();
+            const openCliPath = requiredEnvironment("COSMOS_OPENCLI_PATH");
+            const profile = requiredEnvironment("OPENCLI_PROFILE");
+            return {
+                mode: "dual-plan",
+                environment: openCliEnvironment(openCliPath, profile),
+                profile,
             };
         }
         default:
@@ -223,6 +231,14 @@ function sourceConfiguration(value: string | undefined): SourceConfiguration {
                 "Usage: bun run scripts/e2e/real-source.ts <rss|aihot|bilibili|bilibili-hot>.",
             );
     }
+}
+
+function openCliEnvironment(openCliPath: string, profile: string): NodeJS.ProcessEnv {
+    return {
+        COSMOS_OPENCLI_PATH: openCliPath,
+        OPENCLI_PROFILE: profile,
+        COSMOS_ALLOW_REAL_NETWORK: "true",
+    };
 }
 
 function requiredEnvironment(name: string): string {
@@ -238,37 +254,4 @@ function requireNetworkPermission(): void {
             "Explicit real-source acceptance requires COSMOS_ALLOW_REAL_NETWORK=true.",
         );
     }
-}
-
-function requestJson(
-    url: string,
-    init?: RequestInit,
-): Promise<{ status: number; body: unknown }> {
-    return fetch(url, init).then(async (response) => {
-        const text = await response.text();
-        let body: unknown = null;
-        if (text) {
-            try {
-                body = JSON.parse(text) as unknown;
-            } catch {
-                body = text;
-            }
-        }
-        return { status: response.status, body };
-    });
-}
-
-function readString(value: unknown, key: string): string {
-    if (
-        !isRecord(value) ||
-        typeof value[key] !== "string" ||
-        value[key].length === 0
-    ) {
-        throw new Error(`Expected ${key} in response.`);
-    }
-    return value[key];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
