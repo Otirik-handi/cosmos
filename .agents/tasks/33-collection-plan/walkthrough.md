@@ -126,3 +126,16 @@
   1. **`scripts/` 不在 `bun run typecheck` 覆盖内**。`typecheck:packages` 与 `typecheck:apps` 都不含它，所以真实来源脚本此前带着 6 个严格模式错误（`stopManagedProcess(undefined)`、闭包赋值后收窄成 `never`）也没被门禁发现；本轮顺带修掉。
   2. **本机 PATH 上的 `bun` 只有 `.ps1`**（`C:\Program Files\nodejs\bun.ps1`），`bun.exe` 在 `node_modules/bun/bin/`。`scripts/e2e/helpers.ts` 的 `applyMigrations` 用 `spawnSync("bun")`，而 vitest 是 node 进程（没有 bun 进程注入的 `BUN_BINARY`），于是 `bun run test:e2e` 在本机全部报 `spawnSync bun ENOENT`；设 `BUN_BINARY=<...>/bun.exe` 后 5 文件 / 6 用例全绿。这是本机环境问题，不是本分支回归。
 - **下一步**：Task 33 的 v1 完成定义与真实来源验收都已达成；剩第 4 步 contract（从来源移除连接／触发器／预算字段）单独排期与授权，以及分支合并。
+
+## 2026-09-22：并入 master、推送两个远端，并修掉合并后才暴露的 lint error
+
+- **本轮切片**：把已验证的分支并入 master、同步状态文档、推送 fork 与上游。唯一的产品代码改动是修一处让 CI 变红的 lint error。
+- **合并**：`4ef3636 merge: land the collection plan v1 product surface and per-plan state (Task 33)`，`--no-ff`。合并后先跑 `bun run db:generate`（本 Task 早先记录的发现 1），否则主工作区 typecheck 会报 Prisma Client 缺 `collectionPlan`。
+- **状态文档**（`deeab04`）：`PROJECT-STATUS.md` 把 AUT-010／EXT-007 移出未闭合行、更新基线与最近一次全量证据；`Phase-2-UNDO.md` 把 P0-1 从「完全未交付」移出（保留交付记录与证据），P1-3 的「来源↔连接绑定」半边标记为已补、只剩连接可见性面板。
+- **推送**：`origin`（fork）`5cbb670..deeab04`、`upstream` `67ce4b9..deeab04`，都是 fast-forward，未 force。
+- **合并后门禁（主工作区）**：`bun run typecheck` **0**、`bun run test` **116 文件 / 656 用例全绿**、`bun run test:e2e` **5 文件 / 6 用例全绿**、`docs:check` **733 文件 0 失败**、`db:validate` 通过、size 门禁 PASS、`git diff --check` 干净。
+- **CI 变红（本轮最重要的发现）**：推送后两个远端的 `Quality` job 都失败，根因是 `apps/web/src/app/home/use-source-workspace.ts:94` 的 `react-hooks/set-state-in-effect`（1 error）——该文件是切片 2／3 新增 `loadPlans` 时引入的。**本 Task 的验证矩阵里没有 `lint:web`**（typecheck 不跑 ESLint，浏览器 E2E 也不跑），所以本地全绿、CI 才暴露。这与发现 1（`scripts/` 不在 typecheck 覆盖内）同类：**「本地跑过的门禁」与「CI Quality job 实际跑的门禁」不是同一张表**。
+- **修法与依据**：`react-hooks/set-state-in-effect` 会把 effect 直接调用的**局部 async 函数**内联展开，把 `await` 之后的 setState 判成同步 setState；仓库里合规的先例（`connection-panel.tsx`）是**把 setState 放进 `.then` 回调**。据此把首屏加载从 `void loadPlans()` 改为 effect 内直接 `Promise.all([...]).then(...)`，并补 `cancelled` 守卫（顺带修掉卸载后写入的隐患）；`loadPlans` 保留给 8 处事件处理器复用。
+- **修复后门禁**：`bun run lint:web` **0 errors**（79 warnings）、`bun run typecheck` **0**、`bun run test` **116 文件 / 656 用例全绿**。
+- **浏览器 E2E（同一 build 连跑 3 次，如实记录）**：27/28（失败在 `phase2-organization.spec.ts:103`）→ 27/28（失败**漂移**到 `collection-plan-multi.spec.ts:63`，等「录入任务已排队」15 秒超时）→ **28/28 全绿**；两个失败 spec 单跑分别 8/8 与 1/1 通过。形态与 [`known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md) 第 1 条一致（失败点漂移、单跑通过），观察已追加进该表。**未做修复前的整套对照**（需要重新 build），所以「这次漂移与首屏加载改动无关」目前只有「失败点与首屏加载无可解释因果 + 单跑通过」这一层证据。
+- **下一步**：第 4 步 contract 单独排期与授权；`lint:web` 应补进后续 Task 的验证矩阵。
