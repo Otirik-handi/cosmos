@@ -14,16 +14,16 @@ test("offline: locally saved images render from the API after the network is blo
 
     // 使用本地受控 RSS：feed 与正文图片都来自 127.0.0.1，避免真实外网决定 CI 结果。
     const sourceName = `离线媒体-${randomUUID().slice(0, 8)}`;
-    await page.getByRole("button", { name: "新建来源" }).click();
+    await page.getByRole("button", { name: "新建计划" }).click();
     const feedUrlInput = page.getByLabel("Feed URL");
     await expect(feedUrlInput).toBeVisible();
     // 精确匹配：Saved View 的“视图名称”输入框也包含“名称”子串。
     await page.getByLabel("名称", { exact: true }).fill(sourceName);
     await feedUrlInput.fill("http://127.0.0.1:4380/offline.xml");
-    await page.getByRole("button", { name: "保存来源" }).click();
-    await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     const enableButton = healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true });
     await enableButton.click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
@@ -58,6 +58,10 @@ test("offline: locally saved images render from the API after the network is blo
         if (hasSaved) {
             // Online: verify image loads from local API.
             await expect(savedImage).toHaveAttribute("src", /\/api\/v1\/assets\//);
+            // 图是 loading="lazy" 且位于详情面板折叠线以下（约 y=900，面板高 720）。先滚进
+            // 视口再断言，否则这条断言依赖浏览器对屏外图片的预加载时机——页面并发请求一多
+            // 就会被推迟，失败与「图片是否可取」无关。
+            await savedImage.scrollIntoViewIfNeeded();
             await expect.poll(async () => (
                 await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
             )).toBeGreaterThan(0);
@@ -108,5 +112,5 @@ test("offline: locally saved images render from the API after the network is blo
     // Verify page is healthy after offline verification.
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "来源健康" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "采集计划" })).toBeVisible();
 });

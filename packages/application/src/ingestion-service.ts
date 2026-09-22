@@ -191,7 +191,7 @@ export class IngestionService {
                     this.mediaAcquirer,
                     page.items,
                     unchanged,
-                    { policy: resolveMediaPolicy(source.config.media) },
+                    { policy: resolveMediaPolicy(source.mediaPolicy) },
                 );
             }
 

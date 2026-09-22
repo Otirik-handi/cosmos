@@ -160,6 +160,8 @@ describe("Action contracts", () => {
             kind: "fixture-rss",
             config: { fixturePath: "fixtures/feed.xml" },
             enabled: true,
+            planId: "plan:source-1",
+            mediaPolicy: { images: "metadata_only" },
             revisionId: "source-1:1",
             createdAt: "2026-08-15T00:00:00.000Z",
             updatedAt: "2026-08-15T00:00:00.000Z",
@@ -167,11 +169,22 @@ describe("Action contracts", () => {
 
         expect(executionSnapshot).not.toHaveProperty("lastRunAt");
         expect(executionSnapshot).not.toHaveProperty("lastError");
+        // 执行快照带计划身份（ADR-0023 决策 2）：checkpoint 提交与连接器状态命名空间都在
+        // workflow 内部解析，那里拿不到 envelope。产品读投影多出的是 CAS 凭据与计划自有字段。
+        expect(executionSnapshot.planId).toBe("plan:source-1");
+        expect(executionSnapshot).not.toHaveProperty("planRevisionId");
+        expect(executionSnapshot).not.toHaveProperty("connectionId");
+        expect(executionSnapshot).not.toHaveProperty("scheduleIntervalMs");
+        // 媒体预算入队固化（ADR-0014 决策 4）：一轮运行中途改计划不影响这一轮。
+        expect(executionSnapshot.mediaPolicy).toEqual({ images: "metadata_only" });
         expect(sourceSnapshotSchema.parse({
             ...executionSnapshot,
             lastRunAt: null,
             lastError: null,
-        })).toMatchObject({ id: "source-1", lastRunAt: null });
+            planRevisionId: "plan:source-1:1",
+            connectionId: null,
+            scheduleIntervalMs: null,
+        })).toMatchObject({ id: "source-1", lastRunAt: null, planId: "plan:source-1" });
     });
 
     it("keeps normalized assets and manifests JSON serializable", () => {

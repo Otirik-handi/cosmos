@@ -28,7 +28,7 @@ test("keeps SourceForm RSS submission inside the lab", async ({page}) => {
         }
     });
 
-    await page.getByRole("button", {name: "保存来源"}).click();
+    await page.getByRole("button", {name: "保存计划"}).click();
     await expect(page).toHaveURL(initialUrl);
 
     expect(page.url()).toBe(initialUrl);

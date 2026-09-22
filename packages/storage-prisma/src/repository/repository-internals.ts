@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type SourceActivationCommand, type TemporalValue, type SavedView, type BoardBlock, type SpotlightPlacement, type EntryRelation, blockConfigSchemaFor } from "@cosmos/contracts";
+import { type TemporalValue, type SavedView, type BoardBlock, type SpotlightPlacement, type EntryRelation, blockConfigSchemaFor } from "@cosmos/contracts";
 import { checkStorySubtype, isSymmetricEntryRelationType, type StoryKind } from "@cosmos/domain";
 import { StorySubtypeInvalidError, type HostActionExecutionFence, type JobLease, type WorkflowAttemptSnapshot } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
@@ -339,18 +339,6 @@ export async function entryRelationIndexByEntry(
     return index;
 }
 
-export function sourceActivationRequestHash(input: SourceActivationCommand & {
-    sourceId: string;
-    idempotencyKey: string;
-}): string {
-    return `sha256:${createHash("sha256")
-        .update(JSON.stringify({
-            sourceId: input.sourceId,
-            enabled: input.enabled,
-            baseRevisionId: input.baseRevisionId,
-        }))
-        .digest("hex")}`;
-}
 
 export function exactTemporalValue(date: Date | null): TemporalValue | null {
     return date

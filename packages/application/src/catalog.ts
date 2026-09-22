@@ -189,7 +189,12 @@ const sourceOperation = (
     ref: string,
     externalKey: string,
     media: SourceOperationManifest["media"],
-    stateStoreNamespace: string | null = "source:{id}",
+    /**
+     * 连接器状态命名空间模板（ADR-0018）：`{id}` 由宿主替换成**采集计划 id**
+     * （ADR-0023 决策 2）。模板不带前缀——计划 id 本身已经形如 `plan:<sourceId>`，
+     * 再加一层前缀会得到 `plan:plan:<sourceId>`。
+     */
+    stateStoreNamespace: string | null = "{id}",
 ): SourceOperationManifest => ({
     operationId: "fetch",
     inputSchema: builtinSchema(`${ref}.fetch.input@1`, { type: "object" }),
@@ -221,17 +226,6 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
                 type: "object",
                 properties: {
                     feedUrl: { type: "string", format: "uri" },
-                    // Descriptive only; the canonical Zod schema owns the
-                    // tightening bounds (ADR-0014 decision 2).
-                    media: {
-                        type: "object",
-                        properties: {
-                            images: { enum: ["download", "metadata_only"] },
-                            maxFileBytes: { type: "integer", minimum: 65536, maximum: 10485760 },
-                            maxRunBytes: { type: "integer", minimum: 1048576, maximum: 52428800 },
-                        },
-                        additionalProperties: false,
-                    },
                 },
                 required: ["feedUrl"],
                 additionalProperties: false,
@@ -331,7 +325,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             "library.ingest@1",
             "media.retry.fetch@1",
             "media.retry.apply@1",
-            "source.checkpoint@1",
+            "collection-plan.checkpoint@1",
         ],
         requiredBackendCapabilities: {
             processRestart: true,
@@ -415,17 +409,17 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             outputSchema: builtinSchema("media.retry.apply.output@1", { type: "object" }),
         },
         {
-            id: "source.checkpoint",
+            id: "collection-plan.checkpoint",
             version: 1,
-            ref: "source.checkpoint@1",
+            ref: "collection-plan.checkpoint@1",
             provider: "cosmos",
-            manifestHash: builtinHash("builtin:source.checkpoint@1:cas-v1"),
+            manifestHash: builtinHash("builtin:collection-plan.checkpoint@1:cas-v1"),
             effectMode: "none",
             executionPlacement: "host",
             requiredCapabilities: ["source:checkpoint"],
             status: "enabled",
-            inputSchema: builtinSchema("source.checkpoint.input@1", { type: "object" }),
-            outputSchema: builtinSchema("source.checkpoint.output@1", { type: "object" }),
+            inputSchema: builtinSchema("collection-plan.checkpoint.input@1", { type: "object" }),
+            outputSchema: builtinSchema("collection-plan.checkpoint.output@1", { type: "object" }),
         },
     ];
 

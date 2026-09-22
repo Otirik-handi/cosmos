@@ -63,25 +63,23 @@ describe("source and job contracts", () => {
         expect(getSourceConfigurationSchema("source.unknown@1")).toBeNull();
     });
 
-    it("accepts an optional tightened per-source media policy", () => {
+    it("keeps the media budget out of the source config", () => {
+        // 媒体预算归采集计划（ADR-0023 决策 2）：目标配置里不再有 media 字段，
+        // 来源端点写不进它，读取方是计划。RSS 的配置是 strict，多带 media 必须被拒。
         expect(rssSourceConfigSchema.parse({
             feedUrl: "https://example.test/feed.xml",
-        }).media).toBeUndefined();
-        expect(rssSourceConfigSchema.parse({
+        })).toEqual({ feedUrl: "https://example.test/feed.xml" });
+        expect(() => rssSourceConfigSchema.parse({
             feedUrl: "https://example.test/feed.xml",
-            media: {
-                images: "metadata_only",
-                maxFileBytes: 2 * 1024 * 1024,
-                maxRunBytes: 8 * 1024 * 1024,
-            },
-        }).media).toEqual({
+            media: { images: "metadata_only" },
+        })).toThrow();
+        expect(sourceMediaPolicySchema.parse({
             images: "metadata_only",
             maxFileBytes: 2 * 1024 * 1024,
-            maxRunBytes: 8 * 1024 * 1024,
+        })).toEqual({
+            images: "metadata_only",
+            maxFileBytes: 2 * 1024 * 1024,
         });
-        expect(sourceConfigSchema.parse({
-            media: { maxFileBytes: 1024 * 1024 },
-        }).media).toEqual({ maxFileBytes: 1024 * 1024 });
     });
 
     it("rejects media policy values above the global ceilings or outside the enum", () => {
@@ -179,12 +177,19 @@ describe("source and job contracts", () => {
             connectorId: "rss",
             config: { feedUrl: "https://example.test/feed.xml" },
             enabled: false,
+            planId: "plan:source-1",
+            mediaPolicy: null,
             revisionId: "source-1:1",
             createdAt: "2026-08-24T00:00:00.000Z",
             updatedAt: "2026-08-24T00:00:00.000Z",
         });
 
         expect(snapshot.revisionId).toBe("source-1:1");
+        // 计划身份进执行快照（ADR-0023 决策 2）：checkpoint 与连接器状态命名空间都在
+        // workflow 内部解析，那里拿不到 envelope。
+        expect(snapshot.planId).toBe("plan:source-1");
+        // 媒体预算入队固化（ADR-0014 决策 4）：缺省是 null（跟随全局默认），不是可选。
+        expect(snapshot.mediaPolicy).toBeNull();
     });
 
 
@@ -345,7 +350,7 @@ describe("source definition catalog contracts", () => {
             externalKey: "url",
             discoveryContext: "",
             media: "download",
-            stateStoreNamespace: "source:{id}",
+            stateStoreNamespace: "{id}",
         }],
     } as const;
 

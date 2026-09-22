@@ -7,7 +7,7 @@ export type EventStreamState = "connecting" | "connected" | "unavailable";
 type StatusSummaryProps = {
     eventStreamState: EventStreamState;
     health: HealthResponse | null;
-    sourceSummary: string;
+    planSummary: string;
 };
 
 const EVENT_STREAM_COPY: Record<EventStreamState, { detail?: string; label: string }> = {
@@ -20,7 +20,7 @@ const EVENT_STREAM_COPY: Record<EventStreamState, { detail?: string; label: stri
 };
 
 /** 紧凑状态带：替代原首屏四张状态卡，信息保留但只占一行行高。 */
-export function StatusSummary({ eventStreamState, health, sourceSummary }: StatusSummaryProps) {
+export function StatusSummary({ eventStreamState, health, planSummary }: StatusSummaryProps) {
     const stream = EVENT_STREAM_COPY[eventStreamState];
 
     return (
@@ -35,8 +35,8 @@ export function StatusSummary({ eventStreamState, health, sourceSummary }: Statu
                 </span>
             </div>
             <div className="flex min-w-0 items-center justify-between gap-3 text-sm">
-                <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">来源</span>
-                <span className="min-w-0 truncate font-medium">{sourceSummary}</span>
+                <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">采集计划</span>
+                <span className="min-w-0 truncate font-medium">{planSummary}</span>
             </div>
             <div className="flex min-w-0 items-center justify-between gap-3 text-sm">
                 <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">数据层</span>

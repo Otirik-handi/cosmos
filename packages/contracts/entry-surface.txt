@@ -152,7 +152,6 @@ type	ServiceError
 type	ServiceErrorCode
 type	SetBlockVisibilityCommand
 type	SnapshotRequiredPayload
-type	SourceActivationCommand
 type	SourceAuth
 type	SourceCheckpointInput
 type	SourceCheckpointOutput
@@ -390,7 +389,6 @@ value	serviceErrorCodeSchema
 value	serviceErrorSchema
 value	setBlockVisibilityCommandSchema
 value	snapshotRequiredPayloadSchema
-value	sourceActivationCommandSchema
 value	sourceAuthSchema
 value	sourceCheckpointInputSchema
 value	sourceCheckpointOutputSchema

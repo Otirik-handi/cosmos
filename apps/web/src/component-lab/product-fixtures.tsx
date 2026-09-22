@@ -1,10 +1,11 @@
-import {useMemo} from "react";
+import {useMemo, useState} from "react";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {useForm} from "react-hook-form";
 
 import type {
     BoardBlock,
     BoardDetail,
+    CollectionPlanSnapshot,
     ConnectionInstance,
     EntityDetail,
     EntitySummary,
@@ -29,7 +30,7 @@ import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cos
 import {RunControl} from "@/components/cosmos/run-control";
 import {RunHistory} from "@/components/cosmos/run-history";
 import {StoragePanel} from "@/components/cosmos/storage-panel";
-import {SourceActions} from "@/components/cosmos/source-actions";
+import {CollectionPlanList} from "@/components/cosmos/collection-plan-list";
 import {
     SourceForm,
     sourceFormSchema,
@@ -51,6 +52,20 @@ import type {CosmosThemePreference} from "@/theme/theme";
 import type {LabProps} from "./types";
 
 const fixtureTimestamp = "2026-01-01T00:00:00.000Z";
+
+/** 合成连接：表单的连接选择与计划列表的按连接分组都用它。 */
+const labConnections: readonly ConnectionInstance[] = [{
+    id: "connection-fixture",
+    name: "Cosmos 主账号",
+    connectorId: "fixture-rss",
+    account: "fixture@example.test",
+    scopeJson: null,
+    status: "active",
+    secretRef: null,
+    lastError: null,
+    createdAt: fixtureTimestamp,
+    updatedAt: fixtureTimestamp,
+}];
 
 /** 与 domain 注册表同构的合成目录；实验室不发任何 Product API 请求。 */
 const labStorySubtypeOptions: readonly StorySubtype[] = [
@@ -135,7 +150,50 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
         externalKey: "url",
         discoveryContext: "",
         media: "download",
-        stateStoreNamespace: "source:{id}",
+        stateStoreNamespace: "{id}",
+    }],
+};
+
+/**
+ * 合成 Bilibili 定义：`mode` 只有 `enum` 没有 `type`，是表单必须处理的那种属性；
+ * 认证是 external（OpenCLI 登录态），用来覆盖「认证提示」分支。
+ */
+const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
+    id: "bilibili",
+    version: 1,
+    ref: "source.bilibili@1",
+    provider: "cosmos",
+    connectorId: "bilibili",
+    displayName: "Bilibili",
+    description: "Read Bilibili data through a trusted OpenCLI profile.",
+    manifestHash: {algorithm: "builtin", value: "builtin:source.bilibili@1"},
+    status: "enabled",
+    operationIds: ["fetch"],
+    capabilities: ["source:read", "cursor", "external:opencli"],
+    configurationSchema: {
+        id: "source.bilibili.config@1",
+        version: 1,
+        hash: {algorithm: "builtin", value: "source.bilibili.config@1"},
+        schema: {
+            type: "object",
+            properties: {
+                mode: {enum: ["hot", "feed"]},
+                profile: {type: "string"},
+                limit: {type: "integer", minimum: 1, maximum: 100},
+            },
+            required: ["mode"],
+            additionalProperties: false,
+        },
+    },
+    auth: {kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false},
+    operations: [{
+        operationId: "fetch",
+        inputSchema: {id: "source.bilibili.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.input@1"}},
+        outputSchema: {id: "source.bilibili.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.output@1"}},
+        externalKey: "url",
+        discoveryContext: "",
+        media: "metadata_only",
+        stateStoreNamespace: "{id}",
     }],
 };
 
@@ -157,6 +215,7 @@ export function renderSourceFormLab(props: LabProps) {
 function SourceFormLabFixture({props}: {props: LabProps}) {
     const name = textProp(props, "name", "Cosmos RSS");
     const feedUrl = textProp(props, "feedUrl", "https://example.com/feed.xml");
+    const [definitionRef, setDefinitionRef] = useState(labSourceDefinitionManifest.ref);
     const definitionState = optionProp<SourceDefinitionState["status"]>(
         props,
         "definitionState",
@@ -170,7 +229,12 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
         ["idle", "running", "succeeded", "failed", "timeout"] as const,
     );
     const values = useMemo<SourceFormValues>(
-        () => ({name, feedUrl, scheduleIntervalMinutes: "30"}),
+        () => ({
+            name,
+            scheduleIntervalMinutes: "30",
+            connectionId: "",
+            config: {feedUrl},
+        }),
         [feedUrl, name],
     );
     const form = useForm<SourceFormValues>({
@@ -179,7 +243,7 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
         values,
     });
     const resolvedDefinitionState: SourceDefinitionState = definitionState === "ready"
-        ? {status: "ready", manifest: labSourceDefinitionManifest}
+        ? {status: "ready", manifests: [labSourceDefinitionManifest, labBilibiliDefinitionManifest]}
         : definitionState === "error"
         ? {status: "error", message: "无法连接服务（HTTP 503）。"}
         : {status: "loading"};
@@ -192,10 +256,13 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
         <SourceForm
             form={form}
             definitionState={resolvedDefinitionState}
+            selectedDefinitionRef={definitionRef}
+            onSelectDefinition={setDefinitionRef}
             onSubmit={(event) => event.preventDefault()}
             onTest={() => undefined}
             probeState={resolvedProbeState}
             onRetryDefinition={() => undefined}
+            connections={labConnections}
         />
     );
 }
@@ -224,40 +291,42 @@ export function renderStatusSummaryLab(props: LabProps) {
         <StatusSummary
             eventStreamState={eventStreamState as EventStreamState}
             health={health}
-            sourceSummary={textProp(props, "sourceSummary", "尚未配置来源")}
+            planSummary={textProp(props, "planSummary", "尚未配置采集计划")}
         />
     );
 }
 
-export function renderSourceActionsLab(props: LabProps) {
+export function renderCollectionPlanListLab(props: LabProps) {
     const state = optionProp(props, "state", "configured", ["configured", "untimed", "empty", "disabled", "media-policy"] as const);
-    const sources: readonly SourceSnapshot[] = state === "empty"
+    const grouped = booleanProp(props, "grouped", false);
+    const plans: readonly CollectionPlanSnapshot[] = state === "empty"
         ? []
         : [{
-            id: "source-fixture",
+            id: "plan:source-fixture",
             name: textProp(props, "sourceName", "Cosmos fixture"),
-            sourceDefinitionRef: "source.fixture-rss@1",
-            operationId: "fetch",
-            connectorId: "fixture-rss",
-            kind: "fixture-rss",
-            config: state === "media-policy"
-                ? { media: { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } }
-                : {},
+            sourceId: "source-fixture",
+            sourceRevisionId: "source-fixture:1",
+            connectionId: grouped ? "connection-fixture" : null,
+            triggerBindingId: null,
+            mediaPolicy: state === "media-policy"
+                ? { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 }
+                : null,
+            overlapPolicy: "forbid",
             enabled: state !== "disabled" && booleanProp(props, "enabled", true),
-            revisionId: "source-fixture:1",
+            revisionId: "plan:source-fixture:1",
+            scheduleIntervalMs: state === "untimed" ? null : 1_800_000,
+            lastRunAt: null,
+            lastError: state === "disabled" ? "Fixture plan disabled" : null,
             createdAt: fixtureTimestamp,
             updatedAt: fixtureTimestamp,
-            lastRunAt: null,
-            lastError: state === "disabled" ? "Fixture source disabled" : null,
-            connectionId: null,
-            scheduleIntervalMs: state === "untimed" ? null : 1_800_000,
         }];
     return (
-        <SourceActions
+        <CollectionPlanList
             onRun={async () => undefined}
             onToggleActivation={async () => undefined}
             onSaveMediaPolicy={async () => undefined}
-            sources={sources}
+            plans={plans}
+            connections={grouped ? labConnections : []}
         />
     );
 }
@@ -487,11 +556,16 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
                 kind: "fixture-rss",
                 config: {fixturePath: "fixtures/rss/basic.xml"},
                 enabled: true,
+                mediaPolicy: null,
                 revisionId: "source-fixture:1",
                 createdAt: fixtureTimestamp,
                 updatedAt: fixtureTimestamp,
                 lastRunAt: null,
                 lastError: null,
+                planId: "plan:source-fixture",
+                planRevisionId: "plan:source-fixture:1",
+                connectionId: null,
+                scheduleIntervalMs: null,
             }]}
         />
     );
@@ -922,9 +996,9 @@ export function renderBoardViewLab(props: LabProps) {
         <BoardView
             board={board}
             client={labBoardClient}
-            sourceActionsSlot={(
+            planListSlot={(
                 <div className="rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-sm text-muted-foreground">
-                    合成来源健康区块。
+                    合成采集计划区块。
                 </div>
             )}
             topics={[{

@@ -81,11 +81,16 @@ export function source(input: Partial<SourceSnapshot> = {}): SourceSnapshot {
         kind: "bilibili",
         config: { mode: "hot", limit: 5 },
         enabled: true,
+        mediaPolicy: null,
         revisionId: "source-1:1",
         createdAt: "2026-08-08T00:00:00.000Z",
         updatedAt: "2026-08-08T00:00:00.000Z",
         lastRunAt: null,
         lastError: null,
+        planId: "plan:source-1",
+        planRevisionId: "plan:source-1:1",
+        connectionId: null,
+        scheduleIntervalMs: null,
         ...input,
     };
 }

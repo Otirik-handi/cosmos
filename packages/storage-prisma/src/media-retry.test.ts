@@ -303,6 +303,15 @@ async function setup(): Promise<{
                 revision: 1,
             },
         });
+        await prisma.collectionPlan.create({
+            data: {
+                id: `plan:${id}`,
+                name: id,
+                sourceId: id,
+                mediaPolicyJson: null,
+                revision: 1,
+            },
+        });
     }
     await prisma.sourceInstance.create({
         data: {
@@ -311,8 +320,19 @@ async function setup(): Promise<{
             kind: "rss",
             sourceDefinitionRef: "source.rss@1",
             operationId: "fetch",
-            configJson: JSON.stringify({ media: { retentionDays: 1 } }),
+            configJson: "{}",
             enabled: true,
+            revision: 1,
+        },
+    });
+    // 保留期归采集计划（ADR-0023 决策 2）：清理窗口读的是计划的 mediaPolicy，
+    // 来源配置里已经不再有 media 字段。
+    await prisma.collectionPlan.create({
+        data: {
+            id: "plan:source-c",
+            name: "source-c",
+            sourceId: "source-c",
+            mediaPolicyJson: JSON.stringify({ retentionDays: 1 }),
             revision: 1,
         },
     });

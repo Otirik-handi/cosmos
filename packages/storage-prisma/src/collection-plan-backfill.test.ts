@@ -68,6 +68,25 @@ describe("CollectionPlan backfill 迁移 (ADR-0023 决策 2)", () => {
         `);
         await client.$disconnect();
 
+        // 先只部署到 backfill 步：这一步的合同是「只写新列、不动来源侧」，
+        // 后面的读取切换（激活归属、媒体归属）不属于它的证据。
+        const backfillIndex = migrations.indexOf(backfillMigration);
+        const backfillSchema = await createMigrationWorkspace(root, migrations.slice(0, backfillIndex + 1));
+        deployMigrations(databasePath, backfillSchema);
+
+        const afterBackfill = new PrismaClient({ datasources: { db: { url: `file:${databasePath}` } } });
+        const backfilledSources = await afterBackfill.sourceInstance.findMany({
+            orderBy: { id: "asc" },
+            select: { id: true, configJson: true, connectionId: true },
+        });
+        await afterBackfill.$disconnect();
+
+        // 读取切换之前，来源侧仍是唯一读取方：回填不搬走 media，也不动状态命名空间。
+        expect(backfilledSources.map((source) => source.id)).toEqual(["source-deleted", "source-feed", "source-hot"]);
+        expect(JSON.parse(backfilledSources.find((source) => source.id === "source-feed")?.configJson ?? "{}"))
+            .toMatchObject({ media: { images: "metadata_only" } });
+        expect(backfilledSources.find((source) => source.id === "source-feed")?.connectionId).toBe("connection-1");
+
         deployMigrations(databasePath, await createMigrationWorkspace(root, migrations));
 
         const migrated = new PrismaClient({ datasources: { db: { url: `file:${databasePath}` } } });
@@ -108,10 +127,12 @@ describe("CollectionPlan backfill 迁移 (ADR-0023 决策 2)", () => {
         expect(runs.map((run) => run.planId)).toEqual(["plan:source-feed"]);
         expect(workflowRuns.map((run) => run.planId)).toEqual(["plan:source-feed"]);
 
-        // 读取切换之前，来源侧仍是唯一读取方：这一轮不搬走 media，也不动状态命名空间。
+        // 全部迁移跑完后的终态：媒体预算归计划，来源配置里的那份已被移除。
         expect(sources.map((source) => source.id)).toEqual(["source-deleted", "source-feed", "source-hot"]);
         expect(JSON.parse(sources.find((source) => source.id === "source-feed")?.configJson ?? "{}"))
-            .toMatchObject({ media: { images: "metadata_only" } });
+            .not.toHaveProperty("media");
+        expect(JSON.parse(plans.find((plan) => plan.id === "plan:source-feed")?.mediaPolicyJson ?? "null"))
+            .toEqual({ images: "metadata_only" });
         expect(sources.find((source) => source.id === "source-feed")?.connectionId).toBe("connection-1");
     });
 });

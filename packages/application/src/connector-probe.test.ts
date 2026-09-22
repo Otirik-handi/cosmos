@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type {
     RunSnapshot,
     SourceConfigProbeCommand,
-    SourceSnapshot,
+    SourceExecutionSnapshot,
     SourceProbeResult,
 } from "@cosmos/contracts";
 
@@ -136,9 +136,9 @@ describe("SourceConfigProbeService", () => {
 
     function rssConnectorFixture(items: Array<{ title: string }>): {
         connector: IngestConnector;
-        seenSources: SourceSnapshot[];
+        seenSources: SourceExecutionSnapshot[];
     } {
-        const seenSources: SourceSnapshot[] = [];
+        const seenSources: SourceExecutionSnapshot[] = [];
         const connector: IngestConnector = {
             id: "rss",
             description: "RSS",

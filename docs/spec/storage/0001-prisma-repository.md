@@ -125,7 +125,7 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 | 模型 | 代码可证的关键字段/约束 | 关系/删除边界 |
 | --- | --- | --- |
 | `SourceInstance` | id、name、kind、configJson、enabled、可空 deletedAt（墓碑，AUT-001）、createdAt、updatedAt | 拥有 observations、runs、checkpoint、entries；Observation/Entry/Checkpoint 级联，Run 外键为 RESTRICT |
-| `Checkpoint` | sourceInstanceId 唯一、cursor、revision、workflowRunId、updatedAt | 属于 Source；WorkflowRun 删除时 workflowRunId SET NULL |
+| `Checkpoint` | sourceInstanceId 唯一、planId 唯一（可空）、cursor、revision、workflowRunId、updatedAt | 按**采集计划**寻址（ADR-0023 决策 2）；sourceInstanceId 保留到第 4 步 contract 删列；WorkflowRun 删除时 workflowRunId SET NULL |
 | `Run` | source、triggerKind、status、created/started/finishedAt、item/created/revised/duplicate 计数、errorCode/errorMessage | 拥有 Step/Job/Observation/DomainEvent；子记录按 schema 级联或 SET NULL |
 | `Step` | runId、position 唯一、kind/status/attempts、input/output/error/时间 | 属于 Run，删除级联；Job 可关联 Step |
 | `Job` | 可选 runId/stepId/workflowRunId、可选 workflowKernelRevision、kind/status、payload/result、全局唯一 idempotencyKey、attempts/maxAttempts、lease owner/token/expires、nextAttemptAt/error | 同时承载 legacy 与 Activity Job；WorkflowCompletion 以 jobId 唯一关联 |

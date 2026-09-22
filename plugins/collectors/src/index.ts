@@ -11,7 +11,7 @@ import {
 import {
     aiHotSourceConfigSchema,
     bilibiliSourceConfigSchema,
-    type SourceSnapshot,
+    type SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import type {
     ContentMetrics,
@@ -404,7 +404,7 @@ export function createBuiltInConnectorRegistry(options: {
     ]);
 }
 
-function parseBilibiliConfig(source: SourceSnapshot) {
+function parseBilibiliConfig(source: SourceExecutionSnapshot) {
     try {
         return bilibiliSourceConfigSchema.parse(source.config);
     } catch (error) {
@@ -417,7 +417,7 @@ function parseBilibiliConfig(source: SourceSnapshot) {
     }
 }
 
-function parseAiHotConfig(source: SourceSnapshot) {
+function parseAiHotConfig(source: SourceExecutionSnapshot) {
     try {
         return aiHotSourceConfigSchema.parse(source.config);
     } catch (error) {

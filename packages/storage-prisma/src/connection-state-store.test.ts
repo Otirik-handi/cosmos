@@ -89,8 +89,8 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
             });
             expect(source.connectionId).toBeNull();
 
-            const linked = await repository.updateSource(source.id, {
-                baseRevisionId: source.revisionId,
+            const linked = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
                 connectionId: connection.id,
             });
             expect(linked.connectionId).toBe(connection.id);

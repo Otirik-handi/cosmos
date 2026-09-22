@@ -27,7 +27,7 @@ export const RELATED_STORY_PORTS: RelatedStoryPorts = {
     story: (storyId) => client.story(storyId),
 };
 
-/** 产品入口只暴露这一个来源定义；表单字段仍由该 manifest 的 schema 驱动。 */
+/** 产品入口默认选中这个来源定义；表单字段仍由所选 manifest 的 schema 驱动。 */
 export const RSS_SOURCE_DEFINITION_REF = "source.rss@1";
 export const RSS_OPERATION_ID = "fetch";
 export const PROBE_POLL_INTERVAL_MS = 1_500;
@@ -37,10 +37,6 @@ export const PROBE_POLL_TIMEOUT_MS = 30_000;
  * 表单里的定时以“分钟”输入，保存为 canonical 合同的 scheduleIntervalMs
  * （ADR-0018：定时是 TriggerBinding，不再写进 config）；清空表示关闭定时。
  */
-export function toSourceConfig(values: SourceFormValues): Record<string, unknown> {
-    return { feedUrl: values.feedUrl.trim() };
-}
-
 export function toScheduleIntervalMs(values: SourceFormValues): number | undefined {
     return values.scheduleIntervalMinutes !== ""
         ? Number(values.scheduleIntervalMinutes) * 60_000

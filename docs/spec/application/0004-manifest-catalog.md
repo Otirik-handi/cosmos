@@ -39,7 +39,7 @@ API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程�
 
 - **Catalog manifest**：`StaticCatalog` 的 Source/Workflow/Action 条目使用对象 `manifestHash: ManifestHash`，用于只读清单投影。
 - **Workflow Definition**：`createIngestWorkflowDefinition()` 和 `IngestWorkflowControlService.createWorkflowEnvelope()` 使用 `WorkflowDefinitionReference`，其 `manifestHash` 是字符串 `"builtin:cosmos.ingest@1:source-snapshot-v1"`。入队时不会把 catalog 的 `{ algorithm, value }` 对象写入 envelope。
-- **Executable Action Definition**：`createIngestActions()` 的 `ActionDefinition.manifestHash` 是可选字符串；三个实现分别使用 `builtin:source.fetch@1:source-snapshot-v1`、`builtin:library.ingest@1`、`builtin:source.checkpoint@1:cas-v1`。它同时携带运行时 Zod `inputSchema`/`outputSchema`，不能放入目录或 Workflow JSON。
+- **Executable Action Definition**：`createIngestActions()` 的 `ActionDefinition.manifestHash` 是可选字符串；三个实现分别使用 `builtin:source.fetch@1:source-snapshot-v1`、`builtin:library.ingest@1`、`builtin:collection-plan.checkpoint@1:cas-v1`。它同时携带运行时 Zod `inputSchema`/`outputSchema`，不能放入目录或 Workflow JSON。
 - **Action Descriptor/Manifest**：`ActionRegistry.descriptors()` 输出 `ActionDescriptor`，其中 `manifestHash` 仍是可选字符串，且不含 executable schema；公共 `actionManifestSchema` 是该 descriptor schema 的别名。目录里的 Action manifest 是另一种 catalog 条目，仍使用 `ManifestHash` 对象。
 
 因此，字符串与对象只在明确的投影/写入边界转换：固定 catalog 字符串经 `builtinHash` 包成 catalog 对象；Workflow/Action runtime definition 从固定字符串读取；不存在把三种类型混成一个 `ManifestHash` 的隐式转换。
@@ -106,7 +106,7 @@ API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程�
 | 3 | `bilibili` | `source.bilibili@1` | `source:read`、`cursor`、`external:opencli` | `mode`、`profile`、`limit`、`scheduleIntervalMs` |
 | 4 | `aihot` | `source.aihot@1` | `source:read`、`cursor` | `scheduleIntervalMs` |
 
-内置 Workflow 仅有 `cosmos.ingest@1`，其 catalog `manifestHash` 是对象 `{ algorithm: "builtin", value: "builtin:cosmos.ingest@1:source-snapshot-v1" }`。`requiredActionRefs` 顺序为 `source.fetch@1`、`library.ingest@1`、`source.checkpoint@1`；`requiredBackendCapabilities.processRestart`、`multiWorker`、`leases`、`externalReceipts`、`valueReferences` 均为 `true`。
+内置 Workflow 仅有 `cosmos.ingest@1`，其 catalog `manifestHash` 是对象 `{ algorithm: "builtin", value: "builtin:cosmos.ingest@1:source-snapshot-v1" }`。`requiredActionRefs` 顺序为 `source.fetch@1`、`library.ingest@1`、`collection-plan.checkpoint@1`；`requiredBackendCapabilities.processRestart`、`multiWorker`、`leases`、`externalReceipts`、`valueReferences` 均为 `true`。
 
 内置 Action catalog 顺序稳定为：
 
@@ -114,7 +114,7 @@ API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程�
 | --- | --- | --- | --- | --- | --- |
 | 1 | `source.fetch@1` | `builtin:source.fetch@1:source-snapshot-v1` | `external` | `trusted_worker` | `source:read` |
 | 2 | `library.ingest@1` | `builtin:library.ingest@1` | `none` | `host` | `library:write` |
-| 3 | `source.checkpoint@1` | `builtin:source.checkpoint@1:cas-v1` | `none` | `host` | `source:checkpoint` |
+| 3 | `collection-plan.checkpoint@1` | `builtin:collection-plan.checkpoint@1:cas-v1` | `none` | `host` | `source:checkpoint` |
 
 上述 Action catalog hash 的 `algorithm` 均为 `builtin`。Connector 顺序与 Source 顺序一致：`rss`、`fixture-rss`、`bilibili`、`aihot`。Connector 的字段语义以 [公共契约](../contracts/0001-public-contracts.md) 为准。
 

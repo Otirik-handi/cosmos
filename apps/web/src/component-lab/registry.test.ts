@@ -22,7 +22,7 @@ const expectedPublicModules = [
     "components/cosmos/feed-browser.tsx",
     "components/cosmos/run-control.tsx",
     "components/cosmos/run-history.tsx",
-    "components/cosmos/source-actions.tsx",
+    "components/cosmos/collection-plan-list.tsx",
     "components/cosmos/source-form.tsx",
     "components/cosmos/status-summary.tsx",
     "components/cosmos/storage-panel.tsx",
@@ -154,7 +154,7 @@ describe("component lab registry", () => {
     });
 
     it("rejects a boolean scene value with the wrong primitive type", () => {
-        const first = labComponentDefinitions.find((definition) => definition.id === "source-actions")!;
+        const first = labComponentDefinitions.find((definition) => definition.id === "collection-plan-list")!;
         const report = assertRegistryIntegrity({
             componentDefinitions: [{
                 ...first,

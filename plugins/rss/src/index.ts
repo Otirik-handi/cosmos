@@ -9,7 +9,7 @@ import {
     type IngestConnector,
 } from "@cosmos/application";
 import type {
-    SourceSnapshot,
+    SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import type {
     NormalizedAssetInput,
@@ -390,7 +390,7 @@ export function parseRssXml(
 }
 
 async function readFixture(
-    source: SourceSnapshot,
+    source: SourceExecutionSnapshot,
     rootDirectory = process.cwd(),
 ): Promise<string> {
     const configuredPath = source.config.fixturePath ?? "fixtures/rss/basic.xml";

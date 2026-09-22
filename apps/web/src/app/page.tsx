@@ -61,7 +61,7 @@ import { BoardView, type BoardCommands } from "@/components/cosmos/board-view";
 import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {RunHistory} from "@/components/cosmos/run-history";
 import {StoragePanel} from "@/components/cosmos/storage-panel";
-import {SourceActions} from "@/components/cosmos/source-actions";
+import {CollectionPlanList} from "@/components/cosmos/collection-plan-list";
 import {
     SourceForm,
     sourceFormSchema,
@@ -93,7 +93,6 @@ import {
     toBoundaryIso,
     toDateInputValue,
     toScheduleIntervalMs,
-    toSourceConfig,
 } from "./home/page-runtime";
 
 export default function Home() {
@@ -200,8 +199,10 @@ export default function Home() {
         resolver: zodResolver(sourceFormSchema),
         defaultValues: {
             name: "Cosmos RSS",
-            feedUrl: "https://example.com/feed.xml",
             scheduleIntervalMinutes: "30",
+            connectionId: "",
+            // 默认选中的是 RSS，所以给它的必填字段一个可编辑的起始值。
+            config: {feedUrl: "https://example.com/feed.xml"},
         },
     });
     const searchForm = useForm<SearchFormValues>({
@@ -252,32 +253,36 @@ export default function Home() {
         feedWorkspace,
     );
     const {
-        activatingSourceId,
+        activatingPlanId,
         checkService,
         checkingService,
+        connections,
         definitionState,
-        deleteSource,
-        deletingSourceId,
+        deletePlan,
+        deletingPlanId,
         health,
         loadDefinitions,
+        planSummary,
+        plans,
         probeConfigKeyRef,
+        selectDefinition,
+        selectedDefinitionRef,
         setProbeState,
         onCreateSource,
         onTestSourceConfig,
         probeState,
         runMediaCleanup,
         runRefreshToken,
-        runSource,
-        runningSourceId,
+        runPlan,
+        runningPlanId,
         saveMediaPolicy,
         setShowSourceForm,
         showSourceForm,
-        sourceSummary,
         toggleActivation,
     } = sourceWorkspace;
 
     // 测试结果只对提交时的配置有效；字段一变立即作废，避免旧结果误导保存决定。
-    const watchedFeedUrl = sourceForm.watch("feedUrl");
+    const watchedConfig = sourceForm.watch("config");
     const watchedScheduleInterval = sourceForm.watch("scheduleIntervalMinutes");
 
     useEffect(() => {
@@ -292,7 +297,7 @@ export default function Home() {
     useEffect(() => {
         probeConfigKeyRef.current = null;
         setProbeState({status: "idle"});
-    }, [watchedFeedUrl, watchedScheduleInterval]);
+    }, [watchedConfig, watchedScheduleInterval]);
 
     /**
      * 首次加载走全页 loading 骨架；之后（SSE、来源变更）一律后台刷新，
@@ -324,7 +329,7 @@ export default function Home() {
                     void refreshRef.current();
                 }
                 if (event.type === "run.failed.v1") {
-                    setNotice("一次录入运行失败，已刷新“来源健康”；请在来源行内查看错误信息。");
+                    setNotice("一次录入运行失败，已刷新“采集计划”；请在计划行内查看错误信息。");
                 }
             },
             onError: () => {
@@ -502,18 +507,19 @@ export default function Home() {
         />
     );
 
-    const sourceActions = (
-        <SourceActions
-            onRun={runSource}
+    const planList = (
+        <CollectionPlanList
+            onRun={runPlan}
             onToggleActivation={toggleActivation}
-            onDelete={deleteSource}
+            onDelete={deletePlan}
             onSaveMediaPolicy={saveMediaPolicy}
             onPreviewMediaCleanup={() => runMediaCleanup(true)}
             onConfirmMediaCleanup={() => runMediaCleanup(false)}
-            activatingSourceId={activatingSourceId}
-            deletingSourceId={deletingSourceId}
-            runningSourceId={runningSourceId}
-            sources={sources}
+            activatingPlanId={activatingPlanId}
+            deletingPlanId={deletingPlanId}
+            runningPlanId={runningPlanId}
+            plans={plans}
+            connections={connections}
         />
     );
 
@@ -536,7 +542,7 @@ export default function Home() {
                         <ThemeSwitcher onValueChange={setPreference} value={preference} />
                         <Button onClick={() => setShowSourceForm((value) => !value)}>
                             {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                            {showSourceForm ? "关闭表单" : "新建来源"}
+                            {showSourceForm ? "关闭表单" : "新建计划"}
                         </Button>
                         <Button
                             variant="outline"
@@ -626,7 +632,7 @@ export default function Home() {
                     <StatusSummary
                         eventStreamState={eventStreamState}
                         health={health}
-                        sourceSummary={sourceSummary}
+                        planSummary={planSummary}
                     />
                     <section aria-label="Entities" className="grid gap-2">
                         <h2 className="font-display text-lg font-semibold">Entities</h2>
@@ -665,10 +671,13 @@ export default function Home() {
                         <SourceForm
                             form={sourceForm}
                             definitionState={definitionState}
+                            selectedDefinitionRef={selectedDefinitionRef}
+                            onSelectDefinition={selectDefinition}
                             onSubmit={onCreateSource}
                             onTest={() => void onTestSourceConfig()}
                             probeState={probeState}
                             onRetryDefinition={() => void loadDefinitions()}
+                            connections={connections}
                         />
                     )}
                 </aside>
@@ -676,7 +685,7 @@ export default function Home() {
                     <BoardView
                         board={board}
                         client={client}
-                        sourceActionsSlot={sourceActions}
+                        planListSlot={planList}
                         topics={topics}
                         openingTopicId={openingTopicId}
                         onOpenTopic={(topicId) => void openTopic(topicId)}

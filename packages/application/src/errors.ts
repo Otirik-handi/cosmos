@@ -31,6 +31,28 @@ export class ConnectionNotFoundError extends Error {
     }
 }
 
+export class CollectionPlanNotFoundError extends Error {
+    readonly code = "not_found" as const;
+
+    constructor(planId: string) {
+        super(`Collection plan not found: ${planId}`);
+        this.name = "CollectionPlanNotFoundError";
+    }
+}
+
+/**
+ * 计划用自身 revision 做 CAS，与来源 revision 相互独立（ADR-0023 决策 2）：
+ * 来源被编辑不该让计划的并发写通过或失败，反之亦然。
+ */
+export class CollectionPlanRevisionConflictError extends Error {
+    readonly code = "conflict" as const;
+
+    constructor(planId: string) {
+        super(`Collection plan revision conflict: ${planId}`);
+        this.name = "CollectionPlanRevisionConflictError";
+    }
+}
+
 export class StoryNotFoundError extends Error {
     readonly code = "not_found" as const;
 

@@ -70,27 +70,41 @@ describe("AppController Source mutations", () => {
         expect(repository.createSource).not.toHaveBeenCalled();
     });
 
-    it("validates saved config before forwarding an activation command", async () => {
-        const activated = {
-            ...source,
-            enabled: true,
-            revisionId: "source-1:2",
+    it("validates the saved target config before enabling the plan", async () => {
+        const plan = {
+            id: "plan:source-1",
+            name: "RSS",
+            sourceId: "source-1",
+            connectionId: null,
+            triggerBindingId: null,
+            mediaPolicy: null,
+            overlapPolicy: "forbid" as const,
+            enabled: false,
+            revisionId: "plan:source-1:1",
+            scheduleIntervalMs: null,
+            createdAt: "2026-08-24T00:00:00.000Z",
+            updatedAt: "2026-08-24T00:00:00.000Z",
         };
         const repository = {
             getSource: vi.fn().mockResolvedValue(source),
-            activateSource: vi.fn().mockResolvedValue(activated),
+            getCollectionPlan: vi.fn().mockResolvedValue(plan),
+            updateCollectionPlan: vi.fn().mockResolvedValue({
+                ...plan,
+                enabled: true,
+                revisionId: "plan:source-1:2",
+            }),
         };
         const sourceProbe = {
             validate: vi.fn(),
         };
         const controller = new AppController(repository as never, sourceProbe as never);
 
-        await expect(controller.activateSource("source-1", {
+        await expect(controller.updateCollectionPlan("plan:source-1", {
             enabled: true,
-            baseRevisionId: "source-1:1",
-        }, "activation-1")).resolves.toMatchObject({
+            baseRevisionId: "plan:source-1:1",
+        })).resolves.toMatchObject({
             enabled: true,
-            revisionId: "source-1:2",
+            revisionId: "plan:source-1:2",
         });
 
         expect(sourceProbe.validate).toHaveBeenCalledWith({
@@ -98,11 +112,9 @@ describe("AppController Source mutations", () => {
             operationId: "fetch",
             config: source.config,
         });
-        expect(repository.activateSource).toHaveBeenCalledWith({
-            sourceId: "source-1",
-            idempotencyKey: "activation-1",
+        expect(repository.updateCollectionPlan).toHaveBeenCalledWith("plan:source-1", {
             enabled: true,
-            baseRevisionId: "source-1:1",
+            baseRevisionId: "plan:source-1:1",
         });
     });
     it("rejects an out-of-range schedule interval before updating", async () => {

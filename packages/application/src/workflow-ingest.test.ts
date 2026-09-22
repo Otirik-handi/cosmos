@@ -12,6 +12,8 @@ const source = {
     kind: "fixture-rss",
     config: {},
     enabled: true,
+    planId: "plan:source-1",
+    mediaPolicy: null,
     revisionId: "source-1:1",
     createdAt: "2026-08-16T00:00:00.000Z",
     updatedAt: "2026-08-16T00:00:00.000Z",
@@ -45,7 +47,7 @@ function actionsWith(fetchItems: () => Promise<never>, validate: () => void = ()
                 duplicateObservation: false,
             }),
             setWorkflowIngestCheckpoint: async () => ({
-                sourceId: "source-1",
+                planId: "plan:source-1",
                 cursor: null,
                 revision: 0,
                 committed: true,
@@ -164,7 +166,7 @@ function actionsWithMedia(options: {
                 duplicateObservation: false,
             }),
             setWorkflowIngestCheckpoint: async () => ({
-                sourceId: "source-1",
+                planId: "plan:source-1",
                 cursor: null,
                 revision: 0,
                 committed: true,

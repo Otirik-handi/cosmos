@@ -10,7 +10,7 @@ import {
     recoverRunCommandSchema,
     rerunRunCommandSchema,
     runControlResultSchema,
-    sourceActivationCommandSchema,
+    updateCollectionPlanCommandSchema,
     sourceConfigProbeCommandSchema,
     sourceConfigProbeJobSnapshotSchema,
     sourceSnapshotSchema,
@@ -24,13 +24,13 @@ import {
     type CancelRunCommand,
     type RecoverRunCommand,
     type RunControlResult,
-    type SourceActivationCommand,
     type SourceConfigProbeCommand,
     type SourceConfigProbeJobSnapshot,
     type SourceSnapshot,
     type ConnectionInstance,
     type CollectionPlanSnapshot,
     type CreateConnectionCommand,
+    type UpdateCollectionPlanCommand,
     type UpdateConnectionCommand,
     type MediaCleanupCommand,
     type MediaCleanupRunSnapshot,
@@ -170,17 +170,19 @@ export class SourcesClient extends PlatformClient {
         });
     }
 
-    async activateSource(
-        sourceId: string,
-        input: SourceActivationCommand,
-        idempotencyKey: string,
-    ): Promise<SourceSnapshot> {
-        const payload = sourceActivationCommandSchema.parse(input);
-        return this.request(`/api/v1/sources/${encodeURIComponent(sourceId)}/activation-commands`, {
-            method: "POST",
-            headers: { "idempotency-key": idempotencyKey },
+    /**
+     * 计划自有字段的唯一写入口（ADR-0023 决策 2）：名字、连接、调度、媒体预算与启用状态。
+     * 没有独立的 activation 方法：启用是这里的 `enabled` 字段，CAS 由 `baseRevisionId` 承担。
+     */
+    async updateCollectionPlan(
+        planId: string,
+        input: UpdateCollectionPlanCommand,
+    ): Promise<CollectionPlanSnapshot> {
+        const payload = updateCollectionPlanCommandSchema.parse(input);
+        return this.request(`/api/v1/collection-plans/${encodeURIComponent(planId)}`, {
+            method: "PATCH",
             body: payload,
-            schema: sourceSnapshotSchema,
+            schema: collectionPlanSnapshotSchema,
         });
     }
 

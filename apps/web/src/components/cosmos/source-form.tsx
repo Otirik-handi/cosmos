@@ -4,6 +4,7 @@ import {RotateCcw} from "lucide-react";
 import {z} from "zod";
 
 import type {
+    ConnectionInstance,
     SourceConfigProbeResult,
     SourceDefinitionManifest,
 } from "@cosmos/contracts";
@@ -27,19 +28,13 @@ import {
 } from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 
+/**
+ * 表单只校验它能自己判断的部分（名称、定时、连接）；目标配置的每个字段由所选
+ * manifest 的 JSON Schema 驱动，逐字段校验见 `validateManifestFields`，更细的规则
+ * （例如 Bilibili 的「mode=feed 才需要 profile」）由服务端 canonical schema 裁决。
+ */
 export const sourceFormSchema = z.object({
     name: z.string().trim().min(1, "请填写来源名称。").max(200, "来源名称不能超过 200 字符。"),
-    feedUrl: z.string()
-        .trim()
-        .min(1, "请填写 Feed URL。")
-        .url("请填写合法的 URL。")
-        .refine((value) => {
-            try {
-                return /^https?:$/i.test(new URL(value).protocol);
-            } catch {
-                return false;
-            }
-        }, {message: "Feed URL 必须是 http(s) 链接。"}),
     scheduleIntervalMinutes: z.union([
         z.literal(""),
         z.coerce.number()
@@ -47,6 +42,13 @@ export const sourceFormSchema = z.object({
             .min(1, "定时抓取间隔至少 1 分钟。")
             .max(44_640, "定时抓取间隔不能超过 31 天。"),
     ]),
+    /** 空串表示不绑定连接（未认证来源）。连接归计划（ADR-0023 决策 2）。 */
+    connectionId: z.string(),
+    /**
+     * 目标配置字段值，键与所选来源定义 JSON Schema 的属性名一一对应，值统一为字符串
+     * （数字与枚举在提交时按字段类型转换）。切换来源定义时整组重置。
+     */
+    config: z.record(z.string(), z.string()),
 });
 
 export type SourceFormValues = z.input<typeof sourceFormSchema>;
@@ -60,30 +62,38 @@ export type ProbeState =
 
 export type SourceDefinitionState =
     | {status: "loading"}
-    | {status: "ready"; manifest: SourceDefinitionManifest}
+    | {status: "ready"; manifests: readonly SourceDefinitionManifest[]}
     | {status: "error"; message: string};
 
 type SourceFormProps = {
     form: UseFormReturn<SourceFormValues>;
     definitionState: SourceDefinitionState;
+    /** 当前选中的来源定义 ref；未选中或目录里没有时表单不渲染字段。 */
+    selectedDefinitionRef: string;
+    onSelectDefinition: (ref: string) => void;
     onSubmit: FormEventHandler<HTMLFormElement>;
     onTest: () => void;
     probeState: ProbeState;
     onRetryDefinition: () => void;
+    /** 可绑定的连接（ADR-0017）；空列表时只显示「不绑定」。 */
+    connections: readonly ConnectionInstance[];
 };
 
-type ManifestField = {
+export type ManifestField = {
     name: string;
-    kind: "text" | "number";
+    kind: "text" | "number" | "select";
     required: boolean;
+    options: readonly string[];
+    minimum: number | null;
+    maximum: number | null;
 };
 
 /**
- * Read the descriptive JSON Schema out of a source definition manifest so the
- * form fields follow the catalog instead of a hardcoded per-kind list. Fields
- * outside string/integer stay unrendered rather than guessed.
+ * 从来源定义的描述性 JSON Schema 读出表单字段：`enum` → 选择框、`integer`/`number` →
+ * 数字、`string` → 文本。三种以外不渲染，也不猜类型——Bilibili 的 `mode` 只有 `enum`
+ * 没有 `type`，按类型白名单过滤会把它整条丢掉，必填的采集模式就再也选不出来。
  */
-function readManifestFields(manifest: SourceDefinitionManifest): ManifestField[] {
+export function readManifestFields(manifest: SourceDefinitionManifest): ManifestField[] {
     const schema = manifest.configurationSchema.schema;
     const properties = schema?.properties;
     if (!properties || typeof properties !== "object") {
@@ -92,50 +102,148 @@ function readManifestFields(manifest: SourceDefinitionManifest): ManifestField[]
     const required = Array.isArray(schema?.required)
         ? schema.required.filter((item): item is string => typeof item === "string")
         : [];
-    return Object.entries(properties)
-        .filter(([, raw]) => {
-            if (!raw || typeof raw !== "object") {
-                return false;
-            }
-            const type = (raw as {type?: unknown}).type;
-            return type === "string" || type === "integer";
-        })
-        .map(([name, raw]) => ({
+    const fields: ManifestField[] = [];
+    for (const [name, raw] of Object.entries(properties)) {
+        if (!raw || typeof raw !== "object") {
+            continue;
+        }
+        const property = raw as {type?: unknown; enum?: unknown; minimum?: unknown; maximum?: unknown};
+        const options = Array.isArray(property.enum)
+            ? property.enum.filter((item): item is string => typeof item === "string")
+            : [];
+        const kind = options.length > 0
+            ? "select"
+            : property.type === "integer" || property.type === "number"
+            ? "number"
+            : property.type === "string"
+            ? "text"
+            : null;
+        if (!kind) {
+            continue;
+        }
+        fields.push({
             name,
-            kind: (raw as {type: string}).type === "integer" ? "number" : "text",
+            kind,
             required: required.includes(name),
-        }));
+            options,
+            minimum: typeof property.minimum === "number" ? property.minimum : null,
+            maximum: typeof property.maximum === "number" ? property.maximum : null,
+        });
+    }
+    return fields;
 }
 
-/** UI presentation per known config field; unknown fields fall back to plain text. */
-const fieldPresentation: Record<string, {label: string; type?: string; placeholder?: string; description?: string}> = {
+/**
+ * 客户端能自行判断的字段校验（必填、整数、范围、枚举取值）。返回「字段名 → 消息」。
+ * 这里不复制服务端的条件规则：JSON Schema 表达不了 Bilibili 的「mode=feed 才需要
+ * profile」，硬猜会在合法输入上误报。
+ */
+export function validateManifestFields(
+    fields: readonly ManifestField[],
+    values: Readonly<Record<string, string>>,
+): Record<string, string> {
+    const errors: Record<string, string> = {};
+    for (const field of fields) {
+        const raw = (values[field.name] ?? "").trim();
+        const label = fieldPresentation[field.name]?.label ?? field.name;
+        if (raw === "") {
+            if (field.required) {
+                errors[field.name] = `请填写${label}。`;
+            }
+            continue;
+        }
+        if (field.kind === "select" && !field.options.includes(raw)) {
+            errors[field.name] = `${label}只能是：${field.options.join(" / ")}。`;
+            continue;
+        }
+        if (field.kind === "number") {
+            if (!/^-?\d+$/u.test(raw)) {
+                errors[field.name] = `${label}必须是整数。`;
+                continue;
+            }
+            const value = Number(raw);
+            if (field.minimum !== null && value < field.minimum) {
+                errors[field.name] = `${label}不能小于 ${field.minimum}。`;
+                continue;
+            }
+            if (field.maximum !== null && value > field.maximum) {
+                errors[field.name] = `${label}不能大于 ${field.maximum}。`;
+            }
+        }
+    }
+    return errors;
+}
+
+/** 按字段类型把表单里的字符串转成 config 值；空值不写进 config。 */
+export function toConfigFromFields(
+    fields: readonly ManifestField[],
+    values: Readonly<Record<string, string>>,
+): Record<string, unknown> {
+    const config: Record<string, unknown> = {};
+    for (const field of fields) {
+        const raw = (values[field.name] ?? "").trim();
+        if (raw === "") {
+            continue;
+        }
+        config[field.name] = field.kind === "number" ? Number(raw) : raw;
+    }
+    return config;
+}
+
+/**
+ * 已知字段的展示文案；未知字段回退到属性名。`optionLabels` 只影响枚举的显示值，
+ * 提交的仍是 manifest 声明的原值。
+ */
+const fieldPresentation: Record<string, {
+    label: string;
+    type?: string;
+    placeholder?: string;
+    description?: string;
+    optionLabels?: Record<string, string>;
+}> = {
     feedUrl: {
         label: "Feed URL",
         type: "url",
         placeholder: "https://example.com/feed.xml",
     },
-    scheduleIntervalMs: {
-        label: "定时抓取间隔（分钟）",
+    mode: {
+        label: "采集模式",
+        optionLabels: {hot: "热门", feed: "动态"},
+    },
+    profile: {
+        label: "OpenCLI Profile",
+        placeholder: "chrome-main",
+        description: "采集动态时需要；与浏览器里已登录的 OpenCLI profile 同名。",
+    },
+    limit: {
+        label: "每次条数",
         type: "number",
-        placeholder: "30",
-        description: "保存后按此间隔自动抓取；留空表示不自动抓取。",
+        placeholder: "20",
     },
 };
 
 export function SourceForm({
     form,
     definitionState,
+    selectedDefinitionRef,
+    onSelectDefinition,
     onSubmit,
     onTest,
     probeState,
     onRetryDefinition,
+    connections,
 }: SourceFormProps) {
+    const manifests = definitionState.status === "ready" ? definitionState.manifests : [];
+    const manifest = manifests.find((item) => item.ref === selectedDefinitionRef) ?? null;
+    const fields = manifest ? readManifestFields(manifest) : [];
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle>新建 RSS 来源</CardTitle>
+                <CardTitle>新建采集计划</CardTitle>
                 <CardDescription>
-                    按 RSS 来源定义填写配置；可先测试未保存配置，再保存为停用来源。
+                    一个计划 = 一个采集目标 + 它自己的频率、媒体预算与游标。先选来源定义，
+                    再按它的声明填配置；可先测试未保存配置，再保存为停用计划。
                 </CardDescription>
             </CardHeader>
             {definitionState.status === "error" ? (
@@ -165,6 +273,24 @@ export function SourceForm({
                 <form onSubmit={onSubmit}>
                     <CardContent>
                         <FieldGroup>
+                            <Field>
+                                <FieldLabel htmlFor="source-definition">来源定义</FieldLabel>
+                                <select
+                                    id="source-definition"
+                                    className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                                    value={selectedDefinitionRef}
+                                    onChange={(event) => onSelectDefinition(event.target.value)}
+                                >
+                                    {manifests.map((item) => (
+                                        <option key={item.ref} value={item.ref}>
+                                            {item.displayName}
+                                        </option>
+                                    ))}
+                                </select>
+                                <FieldDescription>
+                                    {manifest?.description ?? "目录里没有可用的来源定义。"}
+                                </FieldDescription>
+                            </Field>
                             <Field data-invalid={Boolean(form.formState.errors.name)}>
                                 <FieldLabel htmlFor="source-name">名称</FieldLabel>
                                 <Input
@@ -174,25 +300,63 @@ export function SourceForm({
                                 />
                                 <FieldError errors={[form.formState.errors.name]} />
                             </Field>
-                            {readManifestFields(definitionState.manifest).map((field) => {
+                            {manifest && manifest.auth.kind !== "none" && (
+                                <div
+                                    role="status"
+                                    data-source-auth={manifest.auth.kind}
+                                    className="flex flex-wrap items-center gap-2 rounded-[var(--radius-control)] border bg-muted/40 p-3 text-xs leading-5"
+                                >
+                                    <Badge variant="secondary">需要认证</Badge>
+                                    <span>
+                                        {manifest.auth.label ?? "该来源需要外部登录态"}
+                                        {manifest.auth.secretRefRequired ? "（需要凭据）" : ""}
+                                        ：在「连接」里绑定后即可复用，这里不填凭证。
+                                    </span>
+                                </div>
+                            )}
+                            {fields.map((field) => {
                                 const presentation = fieldPresentation[field.name];
+                                const error = form.formState.errors.config?.[field.name];
                                 return (
                                     <Field
                                         key={field.name}
-                                        data-invalid={Boolean(form.formState.errors[field.name as "feedUrl"])}
+                                        data-invalid={Boolean(error)}
                                     >
                                         <FieldLabel htmlFor={`source-config-${field.name}`}>
                                             {presentation?.label ?? field.name}
                                             {!field.required && <span className="text-muted-foreground">（可选）</span>}
                                         </FieldLabel>
-                                        <Input
-                                            id={`source-config-${field.name}`}
-                                            type={presentation?.type ?? "text"}
-                                            placeholder={presentation?.placeholder}
-                                            aria-invalid={Boolean(form.formState.errors[field.name as "feedUrl"])}
-                                            {...form.register(field.name as "feedUrl")}
-                                        />
-                                        <FieldError errors={[form.formState.errors[field.name as "feedUrl"]]} />
+                                        {field.kind === "select" ? (
+                                            <select
+                                                id={`source-config-${field.name}`}
+                                                className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                                                aria-invalid={Boolean(error)}
+                                                {...form.register(`config.${field.name}` as const)}
+                                            >
+                                                {/* 必填枚举也留一个空选项：静默取第一个值会让用户
+                                                    在没选的情况下采集成另一种模式（如 Bilibili 的热门 vs 动态）。 */}
+                                                <option value="">
+                                                    {field.required ? "请选择…" : "（未选择）"}
+                                                </option>
+                                                {field.options.map((option) => (
+                                                    <option key={option} value={option}>
+                                                        {presentation?.optionLabels?.[option] ?? option}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <Input
+                                                id={`source-config-${field.name}`}
+                                                type={field.kind === "number" ? "number" : presentation?.type ?? "text"}
+                                                placeholder={presentation?.placeholder}
+                                                aria-invalid={Boolean(error)}
+                                                {...form.register(`config.${field.name}` as const)}
+                                            />
+                                        )}
+                                        {presentation?.description && (
+                                            <FieldDescription>{presentation.description}</FieldDescription>
+                                        )}
+                                        <FieldError errors={[error]} />
                                     </Field>
                                 );
                             })}
@@ -212,6 +376,26 @@ export function SourceForm({
                                 </FieldDescription>
                                 <FieldError errors={[form.formState.errors.scheduleIntervalMinutes]} />
                             </Field>
+                            <Field>
+                                <FieldLabel htmlFor="source-connection">
+                                    连接<span className="text-muted-foreground">（可选）</span>
+                                </FieldLabel>
+                                <select
+                                    id="source-connection"
+                                    className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                                    {...form.register("connectionId")}
+                                >
+                                    <option value="">不绑定连接</option>
+                                    {connections.map((connection) => (
+                                        <option key={connection.id} value={connection.id}>
+                                            {connection.name}（{connection.connectorId}）
+                                        </option>
+                                    ))}
+                                </select>
+                                <FieldDescription>
+                                    绑定后可复用该连接的登录状态；同一连接下可以建多个计划。
+                                </FieldDescription>
+                            </Field>
                             <ProbeFeedback probeState={probeState} />
                         </FieldGroup>
                     </CardContent>
@@ -224,8 +408,8 @@ export function SourceForm({
                         >
                             {probeState.status === "running" ? "测试中…" : "测试配置"}
                         </Button>
-                        <Button type="submit" disabled={form.formState.isSubmitting}>
-                            {form.formState.isSubmitting ? "保存中…" : "保存来源（停用）"}
+                        <Button type="submit" disabled={form.formState.isSubmitting || !manifest}>
+                            {form.formState.isSubmitting ? "保存中…" : "保存计划（停用）"}
                         </Button>
                     </CardFooter>
                 </form>

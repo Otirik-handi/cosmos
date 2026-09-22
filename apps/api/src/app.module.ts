@@ -29,7 +29,7 @@ export const cosmosIngestControl = new IngestWorkflowControlService({
         const source = await cosmosRepository.getSource(sourceId);
         return source ?? null;
     },
-    getCheckpointSnapshot: (sourceId) => cosmosRepository.getCheckpointSnapshot(sourceId),
+    getCheckpointSnapshot: (planId) => cosmosRepository.getCheckpointSnapshot(planId),
 });
 export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService({
     store: cosmosWorkflowStore,

@@ -7,11 +7,11 @@ const OFFLINE_FEED_URL = "http://127.0.0.1:4380/offline.xml";
 async function createSource(page: import("@playwright/test").Page, sourceName: string): Promise<void> {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建来源" }).click();
+    await page.getByRole("button", { name: "新建计划" }).click();
     await page.getByLabel("名称", { exact: true }).fill(sourceName);
     await page.getByLabel("Feed URL").fill(OFFLINE_FEED_URL);
-    await page.getByRole("button", { name: "保存来源" }).click();
-    await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 }
 
 test("edits a source's media policy, rejects values above the default and keeps it across reloads", async ({ page }) => {
@@ -24,7 +24,7 @@ test("edits a source's media policy, rejects values above the default and keeps 
     const sourceName = `媒体策略-${randomUUID().slice(0, 8)}`;
     await createSource(page, sourceName);
 
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     const row = healthSection.locator("li").filter({ hasText: sourceName });
     await expect(row.getByText("媒体策略：跟随默认（10 / 50，重试 3 次，永久保留）")).toBeVisible();
 
@@ -47,7 +47,7 @@ test("edits a source's media policy, rejects values above the default and keeps 
     await page.reload();
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
     const reloadedRow = page
-        .getByRole("heading", { name: "来源健康" })
+        .getByRole("heading", { name: "采集计划" })
         .locator("..")
         .locator("..")
         .locator("li")
@@ -67,7 +67,7 @@ test("previews retention cleanup through the maintenance run without deleting an
     const sourceName = `保留期-${randomUUID().slice(0, 8)}`;
     await createSource(page, sourceName);
 
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     const row = healthSection.locator("li").filter({ hasText: sourceName });
     await row.getByRole("button", { name: `媒体策略 ${sourceName}` }).click();
     const form = row.locator(`form[aria-label="媒体策略 ${sourceName}"]`);
@@ -96,7 +96,7 @@ test("keeps images metadata-only for a source with image download off", async ({
     const sourceName = `媒体策略关闭-${randomUUID().slice(0, 8)}`;
     await createSource(page, sourceName);
 
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     const row = healthSection.locator("li").filter({ hasText: sourceName });
     await row.getByRole("button", { name: `媒体策略 ${sourceName}` }).click();
     const form = row.locator(`form[aria-label="媒体策略 ${sourceName}"]`);

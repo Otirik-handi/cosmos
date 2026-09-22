@@ -5,9 +5,10 @@ import type {
     CollectionPlanSnapshot,
     UpdateConnectionCommand, StorageStats, BackupSnapshot, FeedPage,
     EntryDetail, EntryPage, JobSnapshot, RevisionDetail,
-    RunSnapshot, SearchPage, SearchQuery, SourceActivationCommand,
+    RunSnapshot, SearchPage, SearchQuery,
     SourceCheckpointOutput, SourceConfigProbeCommand, SourceSnapshot,
-    StoryDetail, StoryUserStateMigrationResult, TopicDetail, TopicPage, UpdateSourceCommand,
+    StoryDetail, StoryUserStateMigrationResult, TopicDetail, TopicPage,
+    UpdateCollectionPlanCommand, UpdateSourceCommand,
     EntityDetail, EntityPage, LabelDetail, LabelItem, LabelList,
     CollectionDetail, CollectionList, CollectionSummary, FavoriteList,
     Annotation, AnnotationList, SavedView, SavedViewList,
@@ -54,10 +55,11 @@ export interface CosmosRepository {
     listSources(): Promise<readonly SourceSnapshot[]>;
     getSource(sourceId: string): Promise<SourceSnapshot | null>;
     updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot>;
-    activateSource(input: SourceActivationCommand & {
-        sourceId: string;
-        idempotencyKey: string;
-    }): Promise<SourceSnapshot>;
+    /**
+     * 计划自有字段的唯一写入口（ADR-0023 决策 2）：名字、连接、调度、媒体预算与启用状态。
+     * 来源端点不再写这些字段，启用状态也不另设 activation Command。
+     */
+    updateCollectionPlan(planId: string, input: UpdateCollectionPlanCommand): Promise<CollectionPlanSnapshot>;
     /** 删除来源 = 墓碑 + 移除调度绑定；已录入历史保留（AUT-001）。 */
     deleteSource(input: {
         sourceId: string;
@@ -115,8 +117,9 @@ export interface CosmosRepository {
     listRunJobs(runId: string): Promise<readonly JobSnapshot[]>;
     listWorkflowAttempts(jobId: string): Promise<readonly WorkflowAttemptSnapshot[]>;
     getWorkflowAttempt(attemptId: string): Promise<WorkflowAttemptSnapshot | null>;
-    getCheckpoint(sourceId: string): Promise<string | null>;
-    getCheckpointSnapshot(sourceId: string): Promise<{
+    /** checkpoint 按计划寻址（ADR-0023 决策 2）：游标与 revision 都属于采集计划。 */
+    getCheckpoint(planId: string): Promise<string | null>;
+    getCheckpointSnapshot(planId: string): Promise<{
         cursor: string | null;
         revision: number;
     }>;
@@ -209,7 +212,7 @@ export interface CosmosRepository {
         idempotencyKey: string;
     }): Promise<PersistIngestItemResult>;
     setWorkflowIngestCheckpoint(input: {
-        sourceId: string;
+        planId: string;
         workflowRunId: string;
         cursor: string | null;
         expectedRevision: number;
@@ -217,7 +220,7 @@ export interface CosmosRepository {
         fence: HostActionExecutionFence;
         idempotencyKey: string;
     }): Promise<SourceCheckpointOutput>;
-    setCheckpoint(sourceId: string, cursor: string | null): Promise<void>;
+    setCheckpoint(planId: string, cursor: string | null): Promise<void>;
     completeRun(input: {
         runId: string;
         status: "succeeded" | "failed" | "cancelled";

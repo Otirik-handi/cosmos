@@ -18,7 +18,7 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
     // 同一栈会话内数据库跨重试持久化，Feed 在重试时可能已有内容；
     // 编辑部空态改由组件实验室 empty 场景覆盖，这里不断言空态。
-    await page.getByRole("button", { name: "新建来源" }).click();
+    await page.getByRole("button", { name: "新建计划" }).click();
 
     // 表单字段由 catalog manifest 驱动：Feed URL 必填、定时可选默认 30 分钟。
     const feedUrlInput = page.getByLabel("Feed URL");
@@ -41,9 +41,9 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await expect(probeFeedback).toContainText("Cosmos scaffold is ready");
 
     // 保存只创建停用 Source，启用是列表行内的独立动作。
-    await page.getByRole("button", { name: "保存来源" }).click();
-    await expect(page.getByText("来源已保存，当前为停用状态")).toBeVisible();
-    const healthSection = page.getByRole("heading", { name: "来源健康" }).locator("..").locator("..");
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
+    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
     const healthRow = healthSection.locator("li").filter({ hasText: sourceName });
     // 停用来源在健康看板上明确“不参与调度”，即使它配置了定时。
     await expect(healthRow.getByText("已停用，定时抓取暂停")).toBeVisible();
@@ -137,7 +137,7 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
         expect(scroll.scrollWidth).toBeLessThanOrEqual(scroll.clientWidth);
     }
 
-    // 看板编辑模式：隐藏来源健康区块后浏览视图不再显示，重新进入编辑模式可恢复
+    // 看板编辑模式：隐藏采集计划区块后浏览视图不再显示，重新进入编辑模式可恢复
     // （BRD-002「隐藏 ≠ 删除」，底层来源数据不变）。
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole("button", { name: "编辑看板" }).click();
@@ -145,16 +145,16 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     await sourceHealthBlock
         .getByRole("button", { name: /^隐藏区块/ })
         .click();
-    await expect(sourceHealthBlock.getByText("已隐藏：来源健康")).toBeVisible();
+    await expect(sourceHealthBlock.getByText("已隐藏：采集计划")).toBeVisible();
     await page.getByRole("button", { name: "完成编辑" }).click();
-    await expect(page.getByRole("heading", { name: "来源健康" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "采集计划" })).toHaveCount(0);
     await page.getByRole("button", { name: "编辑看板" }).click();
     await page
         .locator('[data-block-type="source-health"]')
         .first()
         .getByRole("button", { name: /^显示区块/ })
         .click();
-    await expect(page.getByRole("heading", { name: "来源健康" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "采集计划" })).toBeVisible();
     await page.getByRole("button", { name: "完成编辑" }).click();
 
     // 人工 Spotlight：把当前 Story 固定到看板热点区，热点区出现后可解除。

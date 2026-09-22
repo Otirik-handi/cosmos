@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createLogger } from "@cosmos/logging";
-import type { SourceSnapshot } from "@cosmos/contracts";
+import type { SourceExecutionSnapshot } from "@cosmos/contracts";
 
 import {
     createAiHotConnector,
@@ -13,7 +13,7 @@ import {
 function source(input: {
     kind: "bilibili" | "aihot";
     config: Record<string, unknown>;
-}): SourceSnapshot {
+}): SourceExecutionSnapshot {
     return {
         id: `source-${input.kind}`,
         name: input.kind,
@@ -25,11 +25,11 @@ function source(input: {
         kind: input.kind,
         config: input.config,
         enabled: true,
+        mediaPolicy: null,
+        planId: `plan:source-${input.kind}`,
         revisionId: `source-${input.kind}:1`,
         createdAt: "2026-08-08T00:00:00.000Z",
         updatedAt: "2026-08-08T00:00:00.000Z",
-        lastRunAt: null,
-        lastError: null,
     };
 }
 

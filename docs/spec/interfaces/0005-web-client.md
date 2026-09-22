@@ -48,14 +48,15 @@ Asset download 中未被 client 封装的部分不由它承担。
 
 - **Feed**：API `FeedPage.items` 的 Story-level cards；页面展示 title、summary、kind、
   source，并以 `storyId` 作为卡片 key。
-- **Source**：共享合同中的可采集来源快照；Web 表单由 `source.rss@1` manifest 的
-  descriptive configurationSchema 驱动，创建后默认保持停用，由用户在来源列表行内
-  通过 activation command 单独启用/停用。
+- **Source**：共享合同中的可采集来源快照；Web 表单由**所选来源定义** manifest 的
+  descriptive configurationSchema 驱动，创建后默认保持停用，由用户在计划列表行内
+  通过 `PATCH /api/v1/collection-plans/{id}` 单独启用/停用。
 - **未保存配置 Probe**：`source-config-probe` Job 的 dry-run。表单“测试配置”提交
-  `sourceDefinitionRef + operationId + config`（不创建 Source），Web 轮询该 Job 快照
+  所选定义的 `sourceDefinitionRef + operationId + config`（不创建 Source），Web 轮询该 Job 快照
   直到终态或超时；结果显示抓取条数、耗时、样例标题，失败/超时有独立提示。
-- **来源定义状态**：表单打开时读取 `GET /api/v1/source-definitions` 并定位
-  `source.rss@1`；loading/error/ready 三态，error 提供重试，不回退到硬编码字段。
+- **来源定义状态**：表单打开时读取 `GET /api/v1/source-definitions`，保留其中
+  `status: enabled` 的全部定义供选择（默认选中 `source.rss@1`）；
+  loading/error/ready 三态，error 提供重试，不回退到硬编码字段。
 - **页面刷新**：按当前 `activeSearch` 重新并行读取 Feed/Search 与 Source，并替换而不是
   合并现有列表；匹配的 feed/run/job SSE 事件使用同一刷新路径，`snapshot_required` 只写 notice。
 - **SSE state**：`connecting`、`connected`、`unavailable` 三态 UI 指示；底层
@@ -63,10 +64,12 @@ Asset download 中未被 client 封装的部分不由它承担。
 - **来源健康**：`source-health` Block 把 Source 快照解释为一行行可读状态——启用徽章、定时语义
   （启用+定时显示“每 N 自动抓取”；启用无定时显示“未配置定时，仅手动录入”；停用显示
   “已停用，定时抓取暂停”或“已停用”）、媒体策略摘要、上次运行时间与最近错误。它不新增
-  读合同，投影自 `SourceSnapshot` 的 `enabled/config.scheduleIntervalMs/config.media/lastRunAt/lastError`。
+  读合同，投影自 `SourceSnapshot` 的 `enabled/scheduleIntervalMs/mediaPolicy/lastRunAt/lastError`
+  与 `planId/planRevisionId`（后两者是计划的 CAS 凭据，ADR-0023 决策 2）。
   行内“媒体策略”入口打开一个表单（图片下载开关 + 单文件/单次上限 + 失败重试次数 + 保留天数，
-  留空表示跟随默认/永久保留），保存走 `PATCH /api/v1/sources/:id`（带 `baseRevisionId`），
-  超默认值在本地就被拒绝，409 提示版本冲突并刷新（ADR-0014/0015）。
+  留空表示跟随默认/永久保留），保存走 `PATCH /api/v1/collection-plans/:id` 的 `mediaPolicy`
+  （带计划的 `baseRevisionId`），超默认值在本地就被拒绝，409 提示版本冲突并刷新（ADR-0014/0015）。
+  启用/停用同样走计划端点：媒体预算与启用状态都归采集计划，来源端点只写来源名与目标配置。
 - **删除来源（AUT-001）**：来源健康行内还有一个删除按钮，**两段确认**——第一次点击把该行切到
   确认态并显示“只移除配置与定时，已录入内容保留”，第二次点击才发
   `POST /api/v1/sources/:id/removals`（带 `baseRevisionId` 与 `Idempotency-Key`，actor 记 `user`）。
@@ -124,20 +127,30 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 
 页面提供以下用户流程：
 
-1. **配置来源（schema 驱动）**：打开“新建来源”卡片时读取 `GET /api/v1/source-definitions`，
-   定位 `source.rss@1` 并按其 configurationSchema 渲染字段：`feedUrl`（必填 http(s) URL）、
-   `scheduleIntervalMinutes`（分钟输入，默认 30，清空表示不自动抓取；保存时换算为
-   canonical `scheduleIntervalMs`）。表单通过 React Hook Form + Zod 校验。
+1. **配置计划（schema 驱动）**：打开“新建计划”卡片时读取 `GET /api/v1/source-definitions`，
+   保留全部 `enabled` 定义供**来源定义选择器**切换（默认 `source.rss@1`），按所选定义
+   的 configurationSchema 渲染字段：`enum` → 选择框、`integer`/`number` → 数字、
+   `string` → 文本，三种以外不渲染也不猜类型——Bilibili 的 `mode` 只有 `enum` 没有
+   `type`，按类型白名单过滤会把它整条丢掉。必填枚举同样保留一个空选项，避免静默取
+   第一个值。另有 `scheduleIntervalMinutes`（分钟输入，默认 30，清空表示不自动抓取；
+   保存时换算为 canonical `scheduleIntervalMs`）与连接选择。定义声明了认证
+   （`auth.kind !== "none"`）时展示提示与 label（Bilibili 为“OpenCLI 浏览器登录态”），
+   表单不收集凭证——凭证的载体是连接（ADR-0017）。切换定义会整组重置配置字段。
+   表单通过 React Hook Form + Zod 校验。
 2. **测试未保存配置**：点击“测试配置”先触发表单校验，通过后 `POST
-   /api/v1/source-config-probes`（不携带幂等键，服务端生成缺省键），随后每 1.5s 轮询
+   /api/v1/source-config-probes`（携带所选定义的 `sourceDefinitionRef` 与其首个
+   `operationId`，不携带幂等键，服务端生成缺省键），随后每 1.5s 轮询
    `GET /api/v1/source-config-probes/:jobId`，30s 未达终态显示超时提示；`succeeded`
    展示抓取条数、耗时、样例标题与“还有更多内容”提示，`failed_terminal`/`cancelled`
    显示错误文本。全程不创建 Source、不写事实数据；表单字段变化会使结果立即作废。
-3. **保存停用来源**：提交 `POST /api/v1/sources` 的 `source.rss@1` command（默认停用，
-   含 `scheduleIntervalMs`）；成功显示 notice、关闭并 reset 表单，然后 refresh。不再
-   自动启用。
-4. **行内启用/停用**：来源列表每个来源提供启用或停用按钮（同一 activation command，
-   `baseRevisionId=source.revisionId`，`Idempotency-Key: web-activation:<id>:<revisionId>:enable|disable`）；
+3. **保存停用计划**：先按所选定义的字段规则做客户端校验（必填、整数、范围、枚举取值），
+   通过后提交 `POST /api/v1/sources`（默认停用，含 `sourceDefinitionRef`、首个
+   `operationId`、按字段类型转换后的 `config`、`scheduleIntervalMs` 与可选
+   `connectionId`）；成功显示 notice、关闭并 reset 表单，然后 refresh。不再自动启用。
+   客户端不复制服务端的条件规则（JSON Schema 表达不了 Bilibili 的「mode=feed 才需要
+   profile」），这类错误由服务端 canonical schema 裁决并回显。
+4. **行内启用/停用**：计划列表每个计划提供启用或停用按钮（`PATCH
+   /api/v1/collection-plans/{id}`，`baseRevisionId=plan.revisionId`）；
    返回 409 conflict 时提示版本冲突并刷新列表，用户可重试。
 5. **手动运行**：对 enabled Source 点击按钮，调用 `triggerSource(source.id)`；queued/
    running 显示 Run 已排队，随后 refresh；其它 status 显示当前状态。disabled Source
@@ -273,13 +286,14 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 ### Form input
 
-- Source form：`name` trim 后 1–200 字符（默认 `Cosmos RSS`）；`feedUrl` 必须是
-  http(s) URL（默认占位 `https://example.com/feed.xml`），字段集合来自
-  `source.rss@1` manifest 的 descriptive schema，未知类型字段不渲染；
-  `scheduleIntervalMinutes` 为可选整数分钟（默认 `30`，1–44640，清空即关闭定时）。
-  保存固定发送
-  `{name, sourceDefinitionRef: "source.rss@1", operationId: "fetch", config: { feedUrl, scheduleIntervalMs? }}`
-  且不含 enabled；创建后保持停用。测试配置发送
+- Source form：`name` trim 后 1–200 字符（默认 `Cosmos RSS`）；配置字段集合来自**当前选中
+  的来源定义** manifest 的 descriptive schema（`enum` → 选择框、`integer`/`number` →
+  数字、`string` → 文本），未知类型字段不渲染；切换定义会清空整组配置字段；
+  `scheduleIntervalMinutes` 为可选整数分钟（默认 `30`，1–44640，清空即关闭定时）；
+  `connectionId` 为空串表示不绑定连接。保存发送
+  `{name, sourceDefinitionRef: <所选 ref>, operationId: <首个 operationId>, config: <按字段类型转换>, scheduleIntervalMs?, connectionId?}`
+  且不含 enabled；创建后保持停用。客户端校验只覆盖能从 JSON Schema 读出的规则
+  （必填、整数、最小/最大、枚举取值），条件规则由服务端裁决。测试配置发送
   `{sourceDefinitionRef, operationId, config}` 到 probe 端点，轮询间隔 1.5s、上限 30s。
 - Search form：text trim/max 500，sourceId、publishedAfter、publishedBefore 可为空；
   `labelIds`/`topicIds` 为多选数组（默认空，提交时 join 成逗号串，未选中不发送该字段）；
@@ -294,16 +308,18 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 页面显示：
 
-- 顶部 Cosmos/Phase 1 标识、说明、新建来源和检查服务按钮；notice/status 与 error/alert
+- 顶部 Cosmos/Phase 1 标识、说明、新建计划和检查服务按钮；notice/status 与 error/alert
   互斥显示最新状态文本。
-- 四个状态卡：服务器部署模式/health（有 health 时显示 service·workerStatus）、Source
+- 四个状态卡：服务器部署模式/health（有 health 时显示 service·workerStatus）、采集计划
   数与启用数、Prisma+SQLite 文案、SSE 已连接/正在连接/SSE 不可用。
-- 来源健康看板：无 Source 显示“创建第一个 RSS 来源。”；每个来源行展示启用/停用徽章、
-  名称、`kind · sourceDefinitionRef`、定时语义行（“每 N 分钟自动抓取”/“未配置定时，仅手动
-  录入”/“已停用，定时抓取暂停”/“已停用”）、上次运行时间与最近错误（红色截断）；行内提供
-  启用/停用按钮，enabled Source 另有手动录入按钮，disabled Source 的运行按钮禁用。
+- 采集计划看板：无计划显示“创建第一个采集计划。”；**按连接分组**（无连接的计划归
+  “未绑定连接”组，该组固定压尾），每组标题是连接名与计划数；每个计划行展示启用/停用徽章、
+  名称、定时语义行（“每 N 分钟自动抓取”/“未配置定时，仅手动录入”/“已停用，定时抓取暂停”/
+  “已停用”）、媒体策略摘要、上次运行时间与最近错误（红色截断）；行内提供启用/停用按钮，
+  enabled 计划另有手动录入按钮，disabled 计划的运行按钮禁用。
 - Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；
-  ready 时按 manifest 渲染字段，测试结果区显示 running/成功统计/失败原因/超时四态。
+  ready 时先显示来源定义选择器，再按所选 manifest 渲染字段（含 `enum` 选择框与认证提示），
+  测试结果区显示 running/成功统计/失败原因/超时四态。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
   时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多；
   搜索表单在存在 Label/Topic 时渲染多选筛选 chip，命中条件回显为筛选 chip。
@@ -442,14 +458,16 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 
 1. 使用空 `NEXT_PUBLIC_COSMOS_API_URL` 启动 Web，观察初始化请求为同源 `/api/v1/feed` 与
    `/api/v1/sources`，页面先显示 loading，成功后显示四个状态卡和 Feed/Source 内容。
-2. 打开“新建来源”，观察 `GET /api/v1/source-definitions` 读取与字段渲染（`feedUrl` 必填、
-   定时默认 30 分钟）；让 catalog 请求失败，观察表单错误与“重试读取”。填写合法值后点击
+2. 打开“新建计划”，观察 `GET /api/v1/source-definitions` 读取与字段渲染（默认 `source.rss@1`
+   的 `feedUrl` 必填、定时默认 30 分钟）；切到 `source.bilibili@1`，观察 `mode` 渲染为
+   选择框、`limit` 渲染为数字、认证提示出现，且切换定义清空上一组字段。让 catalog 请求失败，
+   观察表单错误与“重试读取”。填写合法值后点击
    “测试配置”，观察 `POST /api/v1/source-config-probes` 与按间隔的
    `GET /api/v1/source-config-probes/:jobId` 轮询，成功显示抓取条数与样例标题，且没有
-   `POST /api/v1/sources`。点击“保存来源（停用）”后观察创建请求不含 enabled、表单关闭，
-   来源列表新增停用来源。对停用来源点击启用，观察
-   `POST /api/v1/sources/:id/activation-commands`（header `Idempotency-Key:
-   web-activation:<id>:<revisionId>:enable`）后来源变为启用。
+   `POST /api/v1/sources`。点击“保存计划（停用）”后观察创建请求不含 enabled、表单关闭，
+   计划列表新增停用计划。对停用计划点击启用，观察
+   `PATCH /api/v1/collection-plans/:id`（body 含 `enabled` 与计划自身的 `baseRevisionId`）
+   后计划变为启用。
 3. 对 enabled Source 点击录入，观察 POST `/api/v1/sources/:id/runs`，queued/running 时
    notice 包含 Run id；disabled Source 的录入按钮不可点击，且 API 对未启用 Source 的手动
    Run 返回 409 conflict。对同一来源点击停用，观察 activation command 以
@@ -548,7 +566,7 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   回调，展示 revision/observation 元数据与来源成员/操作区；回调由宿主注入（真实页
   面调用 transport client，组件实验室用 stub，不发 Product API 请求）。
 
-首页首载调用 `ensureDefaultBoard` 幂等 seed 默认看板并按 Board 树渲染；看板加载失败时主区回退为完整阅读流，不阻断阅读。侧栏保留服务状态、Entities 列表与新建来源表单；来源健康与 Topic 列表迁入对应 Block。
+首页首载调用 `ensureDefaultBoard` 幂等 seed 默认看板并按 Board 树渲染；看板加载失败时主区回退为完整阅读流，不阻断阅读。侧栏保留服务状态、Entities 列表与新建计划表单；采集计划与 Topic 列表迁入对应 Block（区块 type 键仍为 `source-health`，显示标签为「采集计划」）。
 
 实验室 URL 只保存 `component`、`scene`、`viewport`、`theme`、`colorway`；非法值归一化并以
 `replace` 修正，用户操作以 `push` 保留浏览器前进/后退。已登记 token 的临时输入在失焦时校验，

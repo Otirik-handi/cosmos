@@ -24,7 +24,7 @@ import { PrismaConnectorStateStore, PrismaCosmosRepository } from "@cosmos/stora
 import { createWorkerAdminServer, type ComponentHealth, type WorkerAdminServer } from "@cosmos/worker-admin";
 import type { ConnectorStateHandle, ConnectorStateStorePort } from "@cosmos/application";
 import type { CatalogPort } from "@cosmos/application/catalog";
-import type { SourceSnapshot } from "@cosmos/contracts";
+import type { SourceExecutionSnapshot } from "@cosmos/contracts";
 import { parseWorkerRuntimeConfig } from "./config.js";
 import { WorkerRuntime } from "./runtime.js";
 import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
@@ -32,13 +32,14 @@ import { createScheduleQueue } from "./scheduling.js";
 import { createWorkflowHost } from "./workflow-host.js";
 
 /**
- * 把来源解析成连接器状态句柄：命名空间取自 manifest 的 `stateStoreNamespace`
- * （ADR-0018，声明为 null 就不给句柄，连接器退化成无状态抓取），`{id}` 换成来源 id。
+ * 把执行快照解析成连接器状态句柄：命名空间取自 manifest 的 `stateStoreNamespace`
+ * （ADR-0018，声明为 null 就不给句柄，连接器退化成无状态抓取），`{id}` 换成**计划 id**
+ * （ADR-0023 决策 2：状态按计划隔离）。
  */
 function resolveConnectorStateHandle(
     store: ConnectorStateStorePort,
     catalog: CatalogPort,
-    source: SourceSnapshot,
+    source: SourceExecutionSnapshot,
 ): ConnectorStateHandle | undefined {
     const definition = catalog.getSourceDefinitionByRef(source.sourceDefinitionRef);
     const namespace = definition?.operations
@@ -47,7 +48,7 @@ function resolveConnectorStateHandle(
     if (!namespace) {
         return undefined;
     }
-    const resolved = namespace.replaceAll("{id}", source.id);
+    const resolved = namespace.replaceAll("{id}", source.planId);
     return {
         get: (key) => store.getState(resolved, key),
         put: (key, value, expectedVersion) => store.putState(resolved, key, value, expectedVersion),
@@ -157,7 +158,7 @@ async function bootstrap(): Promise<void> {
                     const source = await repository.getSource(sourceId);
                     return source ?? null;
                 },
-                getCheckpointSnapshot: (sourceId) => repository.getCheckpointSnapshot(sourceId),
+                getCheckpointSnapshot: (planId) => repository.getCheckpointSnapshot(planId),
             })
             : null;
         const scheduleQueue = workflowControl

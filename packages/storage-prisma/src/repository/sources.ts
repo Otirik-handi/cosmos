@@ -1,11 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
-import { type CollectionPlanSnapshot, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceActivationCommand, type SourceMediaPolicy, type SourceSnapshot, type UpdateSourceCommand } from "@cosmos/contracts";
-import { ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
+import { type CollectionPlanSnapshot, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
+import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
-import { directorySize, fileSize, parseSourceRevisionId } from "../storage-root.js";
-import { appendDomainEvent, isUniqueConstraintError, resolvePlanId, sourceActivationRequestHash } from "./repository-internals.js";
+import { directorySize, fileSize, parsePlanRevisionId, parseSourceRevisionId } from "../storage-root.js";
+import { appendDomainEvent } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers4 } from "./helpers-4.js";
 
 export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers4 {
@@ -33,7 +32,10 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                     id: `plan:${created.id}`,
                     name: created.name,
                     sourceId: created.id,
-                    mediaPolicyJson: extractMediaPolicy(input.config),
+                    // 连接归计划（ADR-0023 决策 2）：创建命令接受它是为了让「建目标」与
+                    // 「绑连接」在同一步完成，不留下没有连接的计划。
+                    connectionId: input.connectionId ?? null,
+                    mediaPolicyJson: null,
                     enabled: false,
                     revision: 1,
                 },
@@ -73,65 +75,92 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
 
     /**
      * 计划读投影（ADR-0023）：产品面的对象是计划，所以它要能独立回答「挂在哪个连接、
-     * 多久采集一次、什么媒体预算」。墓碑来源的计划不出现在产品面上。
+     * 多久采集一次、什么媒体预算、最近一次失败」。墓碑来源的计划不出现在产品面上。
      */
+    protected async toCollectionPlanSnapshot(plan: CollectionPlanRow): Promise<CollectionPlanSnapshot> {
+        const latest = await this.latestRunDiagnostics(this.prisma, { planId: plan.id });
+        return toCollectionPlanSnapshot(plan, plan.triggerBinding, plan.source.revision, latest);
+    }
+
     async listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]> {
         const plans = await this.prisma.collectionPlan.findMany({
             where: { source: { deletedAt: null } },
-            include: { triggerBinding: true },
+            include: { triggerBinding: true, source: { select: { revision: true } } },
             orderBy: { createdAt: "asc" },
         });
-        return plans.map((plan) => toCollectionPlanSnapshot(plan, plan.triggerBinding));
+        return Promise.all(plans.map((plan) => this.toCollectionPlanSnapshot(plan)));
     }
 
     async getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot | null> {
         const plan = await this.prisma.collectionPlan.findFirst({
             where: { id: planId, source: { deletedAt: null } },
-            include: { triggerBinding: true },
+            include: { triggerBinding: true, source: { select: { revision: true } } },
         });
-        return plan ? toCollectionPlanSnapshot(plan, plan.triggerBinding) : null;
+        return plan ? this.toCollectionPlanSnapshot(plan) : null;
     }
 
+    /**
+     * 来源只写它自己拥有的字段（ADR-0023 决策 2 的字段边界）：名字与目标配置。
+     * 连接、调度、媒体预算与启用状态归计划，写入口是 `updateCollectionPlan`。
+     */
     async updateSource(sourceId: string, input: UpdateSourceCommand): Promise<SourceSnapshot> {
         const expectedRevision = parseSourceRevisionId(sourceId, input.baseRevisionId);
         const current = await this.prisma.sourceInstance.findUnique({ where: { id: sourceId } });
         // 墓碑来源对编辑命令等同不存在（AUT-001）。
         if (!current || current.deletedAt) throw new SourceNotFoundError(sourceId);
+        // 一次 CAS 写就够了：媒体预算的写穿透随 1c-1c-b2 收掉之后，这里不再有第二张表要改。
+        const updated = await this.prisma.sourceInstance.updateMany({
+            where: { id: sourceId, revision: expectedRevision },
+            data: {
+                ...(input.name !== undefined ? { name: input.name } : {}),
+                ...(input.config !== undefined ? { configJson: JSON.stringify(input.config) } : {}),
+                revision: { increment: 1 },
+            },
+        });
+        if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
+        return this.toSourceSnapshot(await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: sourceId } }));
+    }
+
+    /**
+     * 计划自有字段的唯一写入口（ADR-0023 决策 2）：名字、连接、调度、媒体预算与启用状态。
+     * CAS 用计划自身的 revision，与来源 revision 相互独立（ADR-0004 的形态）。
+     * 墓碑来源的计划对编辑命令等同不存在。
+     */
+    async updateCollectionPlan(
+        planId: string,
+        input: UpdateCollectionPlanCommand,
+    ): Promise<CollectionPlanSnapshot> {
+        const expectedRevision = parsePlanRevisionId(planId, input.baseRevisionId);
+        const current = await this.prisma.collectionPlan.findFirst({
+            where: { id: planId, source: { deletedAt: null } },
+        });
+        if (!current) throw new CollectionPlanNotFoundError(planId);
         await this.prisma.$transaction(async (tx) => {
-            const updated = await tx.sourceInstance.updateMany({
-                where: { id: sourceId, revision: expectedRevision },
+            const updated = await tx.collectionPlan.updateMany({
+                where: { id: planId, revision: expectedRevision },
                 data: {
                     ...(input.name !== undefined ? { name: input.name } : {}),
-                    ...(input.config !== undefined ? { configJson: JSON.stringify(input.config) } : {}),
                     ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
+                    ...(input.mediaPolicy !== undefined
+                        ? {
+                            mediaPolicyJson: input.mediaPolicy === null || input.mediaPolicy === undefined
+                                ? null
+                                : JSON.stringify(input.mediaPolicy),
+                        }
+                        : {}),
+                    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
                     revision: { increment: 1 },
                 },
             });
-            if (updated.count !== 1) throw new SourceRevisionConflictError(sourceId);
-            // 过渡期写穿透（ADR-0023 决策 2）：来源端点是产品当前唯一的编辑入口，
-            // 它写的名字、连接与媒体策略同时落进计划，避免计划读投影与来源行各说一套。
-            if (input.name !== undefined || input.connectionId !== undefined || input.config !== undefined) {
-                await tx.collectionPlan.updateMany({
-                    where: { sourceId },
-                    data: {
-                        ...(input.name !== undefined ? { name: input.name } : {}),
-                        ...(input.connectionId !== undefined ? { connectionId: input.connectionId } : {}),
-                        ...(input.config !== undefined
-                            ? { mediaPolicyJson: extractMediaPolicy(input.config) }
-                            : {}),
-                    },
-                });
-            }
+            if (updated.count !== 1) throw new CollectionPlanRevisionConflictError(planId);
             if (input.scheduleIntervalMs !== undefined) {
                 if (input.scheduleIntervalMs === null) {
-                    await tx.triggerBinding.deleteMany({ where: { sourceId } });
+                    await tx.triggerBinding.deleteMany({ where: { planId } });
                 } else {
-                    // 后补的绑定必须带计划归属，否则读取切换后永远不会被调度。
-                    const planId = await resolvePlanId(tx, sourceId);
                     await tx.triggerBinding.upsert({
-                        where: { sourceId },
+                        where: { sourceId: current.sourceId },
                         create: {
-                            sourceId,
+                            sourceId: current.sourceId,
                             planId,
                             kind: "schedule",
                             configJson: JSON.stringify({ intervalMs: input.scheduleIntervalMs }),
@@ -147,88 +176,9 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                 }
             }
         });
-        return this.toSourceSnapshot(await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: sourceId } }));
-    }
-
-    async activateSource(input: SourceActivationCommand & {
-        sourceId: string;
-        idempotencyKey: string;
-    }): Promise<SourceSnapshot> {
-        const expectedRevision = parseSourceRevisionId(input.sourceId, input.baseRevisionId);
-        const requestHash = sourceActivationRequestHash(input);
-        let source: Prisma.SourceInstanceGetPayload<{}>;
-        try {
-            const outcome = await this.prisma.$transaction(async (tx): Promise<{
-                snapshot: SourceSnapshot | null;
-            }> => {
-                const existing = await tx.sourceActivationCommand.findUnique({
-                    where: { idempotencyKey: input.idempotencyKey },
-                });
-                if (existing) {
-                    if (existing.sourceInstanceId !== input.sourceId || existing.requestHash !== requestHash) {
-                        throw new SourceRevisionConflictError(input.sourceId);
-                    }
-                    // Replay returns the recorded first-result snapshot so the
-                    // response stays stable even when later PATCHes moved the
-                    // source forward. Rows created before that column existed
-                    // fall back to a fresh read.
-                    return {
-                        snapshot: existing.resultSnapshotJson
-                            ? JSON.parse(existing.resultSnapshotJson) as SourceSnapshot
-                            : null,
-                    };
-                }
-
-                const current = await tx.sourceInstance.findUnique({ where: { id: input.sourceId } });
-                if (!current) throw new SourceNotFoundError(input.sourceId);
-                // CAS guard for every fresh command, including no-op intents:
-                // a stale baseRevisionId must conflict instead of recording.
-                if (current.revision !== expectedRevision) {
-                    throw new SourceRevisionConflictError(input.sourceId);
-                }
-
-                const resultRevision = current.enabled === input.enabled
-                    ? expectedRevision
-                    : expectedRevision + 1;
-                if (resultRevision !== expectedRevision) {
-                    const updated = await tx.sourceInstance.updateMany({
-                        where: { id: input.sourceId, revision: expectedRevision },
-                        data: { enabled: input.enabled, revision: resultRevision },
-                    });
-                    if (updated.count !== 1) throw new SourceRevisionConflictError(input.sourceId);
-                }
-                const resultRow = await tx.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
-                const snapshot = await this.toSourceSnapshot(resultRow, tx);
-                await tx.sourceActivationCommand.create({
-                    data: {
-                        id: randomUUID(),
-                        sourceInstanceId: input.sourceId,
-                        idempotencyKey: input.idempotencyKey,
-                        requestHash,
-                        enabled: input.enabled,
-                        baseRevisionId: input.baseRevisionId,
-                        resultRevision,
-                        resultSnapshotJson: JSON.stringify(snapshot),
-                    },
-                });
-                return { snapshot };
-            });
-            if (outcome.snapshot) return outcome.snapshot;
-            source = await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
-        } catch (error) {
-            if (!isUniqueConstraintError(error)) throw error;
-            const existing = await this.prisma.sourceActivationCommand.findUnique({
-                where: { idempotencyKey: input.idempotencyKey },
-            });
-            if (!existing || existing.sourceInstanceId !== input.sourceId || existing.requestHash !== requestHash) {
-                throw new SourceRevisionConflictError(input.sourceId);
-            }
-            if (existing.resultSnapshotJson) {
-                return JSON.parse(existing.resultSnapshotJson) as SourceSnapshot;
-            }
-            source = await this.prisma.sourceInstance.findUniqueOrThrow({ where: { id: input.sourceId } });
-        }
-        return this.toSourceSnapshot(source);
+        const updatedPlan = await this.getCollectionPlan(planId);
+        if (!updatedPlan) throw new CollectionPlanNotFoundError(planId);
+        return updatedPlan;
     }
 
     async createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance> {
@@ -336,9 +286,15 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         await this.prisma.$transaction(async (tx) => {
             const updated = await tx.sourceInstance.updateMany({
                 where: { id: input.sourceId, revision: expectedRevision, deletedAt: null },
-                data: { deletedAt: new Date(), enabled: false, revision: expectedRevision + 1 },
+                data: { deletedAt: new Date(), revision: expectedRevision + 1 },
             });
             if (updated.count !== 1) throw new SourceRevisionConflictError(input.sourceId);
+            // 启用状态归计划（ADR-0023 决策 2）：墓碑来源的计划必须一起停用，否则
+            // 计划读投影会把一个已删除的来源显示成「已启用」（回填用的是同一约定）。
+            await tx.collectionPlan.updateMany({
+                where: { sourceId: input.sourceId },
+                data: { enabled: false },
+            });
             await tx.triggerBinding.deleteMany({ where: { sourceId: input.sourceId } });
             await appendDomainEvent(tx, {
                 type: "source.deleted.v1",
@@ -364,10 +320,10 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         intervalMs: number;
         lastRunAt: string | null;
     }[]> {
-        // 调度单位是采集计划（ADR-0023）：绑定挂在计划上，来源只决定可执行性
-        // （启用且未删除）。计划与目标 v1 一对一，所以这里读到的仍是同一批来源。
+        // 调度单位是采集计划（ADR-0023）：绑定与启用状态都挂在计划上，来源只决定
+        // 「这个目标还在不在」（墓碑来源不调度）。计划与目标 v1 一对一。
         const plans = await this.prisma.collectionPlan.findMany({
-            where: { source: { enabled: true, deletedAt: null } },
+            where: { enabled: true, source: { deletedAt: null } },
             include: {
                 triggerBinding: true,
                 source: { select: { id: true } },
@@ -481,21 +437,16 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
 
 }
 
-/**
- * 计划的媒体预算从来源配置继承（ADR-0023 决策 6，字段语义沿用 ADR-0014）。
- * 没有配置时保持 null —— 那表示「跟随全局默认」，不是空策略。
- */
-function extractMediaPolicy(config: unknown): string | null {
-    if (config === null || typeof config !== "object") {
-        return null;
-    }
-    const media = (config as { media?: unknown }).media;
-    return media === undefined ? null : JSON.stringify(media);
-}
+/** `listCollectionPlans`／`getCollectionPlan` 的行形状：绑定、目标 revision 一起取。 */
+type CollectionPlanRow = Prisma.CollectionPlanGetPayload<{
+    include: { triggerBinding: true; source: { select: { revision: true } } };
+}>;
 
 function toCollectionPlanSnapshot(
     plan: Prisma.CollectionPlanGetPayload<{}>,
     binding: Prisma.TriggerBindingGetPayload<{}> | null,
+    sourceRevision: number,
+    latest: { at: Date; error: string | null } | null,
 ): CollectionPlanSnapshot {
     const interval = binding === null
         ? undefined
@@ -504,6 +455,7 @@ function toCollectionPlanSnapshot(
         id: plan.id,
         name: plan.name,
         sourceId: plan.sourceId,
+        sourceRevisionId: `${plan.sourceId}:${sourceRevision}`,
         connectionId: plan.connectionId,
         triggerBindingId: binding?.id ?? null,
         mediaPolicy: plan.mediaPolicyJson === null
@@ -511,8 +463,12 @@ function toCollectionPlanSnapshot(
             : JSON.parse(plan.mediaPolicyJson) as SourceMediaPolicy,
         overlapPolicy: plan.overlapPolicy as CollectionPlanSnapshot["overlapPolicy"],
         enabled: plan.enabled,
-        revisionId: String(plan.revision),
+        // CAS 的 baseRevisionId 必须是 `<planId>:<revision>`（parsePlanRevisionId 的形状）；
+        // 只回数字会让客户端拿到一个自己送不回来的 revisionId。
+        revisionId: `${plan.id}:${plan.revision}`,
         scheduleIntervalMs: typeof interval === "number" ? interval : null,
+        lastRunAt: latest?.at.toISOString() ?? null,
+        lastError: latest?.error ?? null,
         createdAt: plan.createdAt.toISOString(),
         updatedAt: plan.updatedAt.toISOString(),
     };
