@@ -49,11 +49,11 @@ Non-goals（ADR-0023 已裁定后置）：
 
 ## Current State
 
-- 生命周期阶段：**v1 完成定义已达成**（分支 `feat/t33-plan-read-switch`，未合并、未提交）。已合入 master：1a expand、1b backfill、1c-1a、1c-1b、1c-2a、1c-1c-a；本分支新增 **1c-1c-b1**、**1c-1c-b2**、**1c-1c-c**（1c-1c 整片收口）、**切片 2**（Web 计划管理面）与 **切片 3**（连接器与 manifest 驱动表单）。过程与验证记录见 [`walkthrough.md`](walkthrough.md)。
+- 生命周期阶段：**v1 完成定义与真实来源验收都已达成**（分支 `feat/t33-plan-read-switch`，未合并）。已合入 master：1a expand、1b backfill、1c-1a、1c-1b、1c-2a、1c-1c-a；本分支新增 **1c-1c-b1**、**1c-1c-b2**、**1c-1c-c**（1c-1c 整片收口）、**切片 2**（Web 计划管理面）、**切片 3**（连接器与 manifest 驱动表单）与 **真实来源验收**（`test:real:bilibili` 升级为同一连接下的 hot／feed 双计划）。过程与验证记录见 [`walkthrough.md`](walkthrough.md)。
 - 连贯目标：让「一个连接下的多个采集计划」成为真实对象并可在产品面配置。
 - 可观察验收（≤3）：
   1. 回填后既有来源照常按原频率采集，全量测试与既有浏览器用例无回归；✅ 已达成（全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例全绿）。
-  2. 同一连接下两个计划的 Run、错误、重试与游标互不影响（行为测试 + 真实来源验收）；⏳ 数据面全部按计划并有行为测试，浏览器 E2E 覆盖了「一个连接两个计划各自频率与失败互不混淆」与「Bilibili 双计划可在产品面建出」；**真实来源验收未运行**（缺 OpenCLI 与网络，见 walkthrough）。
+  2. 同一连接下两个计划的 Run、错误、重试与游标互不影响（行为测试 + 真实来源验收）；✅ 已达成。真实来源验收（2026-09-22）在同一连接下建出 hot 与 feed 两个 Bilibili 计划各跑一次真实抓取（各 20 条），断言两条 Run、各自 checkpoint 与计划读投影的归属互不覆盖；错误与重试的隔离仍由行为测试与浏览器 E2E 覆盖，Bilibili connector 不产生游标，游标只能验到「checkpoint 行按计划分开」（见 walkthrough）。
   3. 不打开数据库就能在一个连接下建出第二个计划，并看到两个计划各自的频率与最近一次失败；✅ 已达成（切片 2，`e2e/browser/collection-plan-multi.spec.ts`）。
 - 数据面读取切换已全部完成：连接、调度、启用状态、媒体预算、游标、连接器状态命名空间都归计划，来源侧同名旧列保留到第 4 步 contract 才删。
 - 产品面不再硬编码 RSS：来源定义可选，字段按所选 manifest 的 JSON Schema 渲染（含 `enum` 与认证提示）。
@@ -70,7 +70,7 @@ capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内�
 2. **切片 1b backfill**：✅ 已交付并合入 master（默认计划与计划引用回填；状态命名空间重写按偏差记录移到 1c）。
 3. **切片 1c read switch**：✅ **已交付**（本分支）——调度、运行归属、计划读接口（1c-1b／1c-2a，已合入 master）、计划写端点与启用状态（1c-1c-b1）、媒体预算（1c-1c-b2）、checkpoint 与连接器状态命名空间（1c-1c-c）全部按计划。第 4 步 contract（删来源侧旧列）仍单独排期。
 4. **切片 2 计划管理面**：✅ **已交付**（本分支）——产品面改造为「采集计划」并按连接分组，新建流程可选连接，计划级频率／媒体预算／最近失败可见。验收：`e2e/browser/collection-plan-multi.spec.ts`（一个连接下两个计划）。
-5. **切片 3 连接器与表单**：✅ **已交付**（本分支）——来源定义可选，字段按所选 manifest 的 JSON Schema 渲染（`enum` → 选择框、整数 → 数字、文本 → 文本），认证提示按 `auth` 声明展示。验收：`e2e/browser/collection-plan-connectors.spec.ts` 证明 Bilibili 双计划能在产品面建出；**真实来源抓取未运行**（缺 OpenCLI 与网络）。
+5. **切片 3 连接器与表单**：✅ **已交付**（本分支）——来源定义可选，字段按所选 manifest 的 JSON Schema 渲染（`enum` → 选择框、整数 → 数字、文本 → 文本），认证提示按 `auth` 声明展示。验收：`e2e/browser/collection-plan-connectors.spec.ts` 证明 Bilibili 双计划能在产品面建出；真实来源抓取由 `bun run test:real:bilibili` 验收（2026-09-22 通过，同一连接下 hot 与 feed 两个计划）。
 
 每片开工前在 [`walkthrough.md`](walkthrough.md) 记录当轮切片与仍有后果的假设；本 README 只维护当前摘要，过程、偏差与验证记录写入 walkthrough。
 
@@ -90,7 +90,7 @@ capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内�
 
 ## Verification / Gate
 
-当前分支全绿：`typecheck` 0、全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例、`docs:check` 723 文件 0 失败、`db:validate` 通过、`size-governance --fail-on-new` PASS。命令、结果与未运行项见 [`walkthrough.md`](walkthrough.md)；**未运行项为真实来源验收**——`test:real:bilibili` 需要 `COSMOS_OPENCLI_PATH`、`OPENCLI_PROFILE`、`COSMOS_REAL_RSS_URL` 与 `COSMOS_ALLOW_REAL_NETWORK=true`，本机缺这些前置且网络不可用。
+当前分支全绿：`typecheck` 0、全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例、`docs:check` 723 文件 0 失败、`db:validate` 通过、`size-governance --fail-on-new` PASS。真实来源验收（2026-09-22）：`bun run test:real:bilibili` 在同一连接下跑通 hot 与 feed 两个 Bilibili 计划的真实抓取（各 20 条，exit 0）。命令、结果与未运行项见 [`walkthrough.md`](walkthrough.md)；**仍未运行**的是第 4 步 contract 的迁移验证（单独排期）。
 
 > 浏览器全量在本机跑约 1~2 分钟；与单元测试并发跑会因资源竞争出现超时 flake（1c-1c-c 轮遇到一次 `phase2-organization`），单独复跑与串行复跑均全绿。屏外 `loading="lazy"` 图片的断言必须先把元素滚进视口，否则依赖浏览器预加载时机（切片 2 轮据此修掉 `offline.spec.ts` 的一处脆弱断言）。
 
@@ -98,5 +98,4 @@ capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内�
 
 - 迁移第 4 步（contract）单独排期与授权。
 - 重叠策略其余值与「同一目标多个计划」按 ADR-0023 的 Revisit Gate 重新评估。
-- **真实来源验收**（Bilibili 双计划跑真实抓取）需要在有 OpenCLI 与网络的环境补跑。
 - AUT-009 的连接可见性／绑定入口未做（计划列表按连接分组、表单可选连接已具备，但连接自身的可见性面板仍是 Phase 1 形态）；对应 [`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) 的 P1-3。

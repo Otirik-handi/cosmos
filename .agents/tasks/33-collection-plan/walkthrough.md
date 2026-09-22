@@ -3,6 +3,8 @@
 > 2026-09-20 按文档大小治理拆出历史分册：定义阶段与数据面切片 1a～1c-1c-a 的逐片证据移入 [`walkthrough/slices-0-1c1a.md`](walkthrough/slices-0-1c1a.md)（只搬位置、不改写条目）。本文件保留仍然有效的决定与当前切片记录。
 >
 > 2026-09-21 再拆一册：1c-1c 的 b1 与 b2 逐片证据移入 [`walkthrough/slices-1c1c-b1-b2.md`](walkthrough/slices-1c1c-b1-b2.md)。
+>
+> 2026-09-22 再拆一册：切片 2（Web 计划管理面）与切片 3（连接器与 manifest 驱动表单）的逐片证据移入 [`walkthrough/slices-2-3.md`](walkthrough/slices-2-3.md)。
 
 ## 2026-09-20：把已完成的数据面切片并入 master，冻结剩余顺序
 
@@ -75,69 +77,7 @@
 - **未运行**：真实来源验收（切片 3）。
 - **下一步**：1c-1c 整片收口。接着按冻结顺序做切片 2（Web 计划管理面），再切片 3（连接器与 schema 驱动表单）。
 
-## 2026-09-21：切片 2 开工前 —— 产品面形态与三处合同补充
-
-- **本轮切片**：把产品面从「来源健康」改造成「采集计划」并按连接分组，新建流程能选连接，从而在一个连接下建出第二个计划。1c-1c 已让计划行成为唯一事实，界面形态此时才定。
-- **决定（维护者确认，记录）**：
-  1. **把「来源健康」改造成「采集计划」并按连接分组**（不新增并存区块）。符合 ADR-0023 决策 5；来源名作为内容出处保留在 Feed 卡片。
-  2. **`POST /sources` 增加可选 `connectionId`**：与既有 `scheduleIntervalMs` 同例——创建命令在同一步里建出来源与默认计划，连接也是计划自有字段，一步原子，不会留下「建了来源但没绑上连接」的半成品。
-  3. **看板区块的 type 键 `source-health` 不动，只改显示标签**：type 是看板布局里已持久化的标识，改它要迁移；标签是用户看到的文字，随产品术语改为「采集计划」。
-- **三处合同补充（计划读投影要能独立支撑产品面，记录不静默）**：
-  - 计划快照增加 `lastRunAt`／`lastError`，取**归计划**的 Run／WorkflowRun（ADR-0023 决策 2 已把运行归属计划）。1c-2a 当时记的「等计划视图真正需要时再加」现在到期了。
-  - 计划快照增加 `sourceRevisionId`：v1 的删除仍是目标域命令（`DELETE /collection-plans/{id}` 是 Planned），产品面要拿目标的 revision 才能发它。这是「计划引用目标」的读投影，与 `SourceSnapshot.planRevisionId` 对称。
-- **仍有后果的假设**：v1 计划与目标一对一，所以按连接分组时「连接下有几个计划」等于「连接下有几个目标」；「同一目标多个计划」落地后分组逻辑不用改。
-- **下一步**：实现。
-
-## 2026-09-21：切片 2 —— Web 计划管理面
-
-- **本轮切片**：产品面从「来源健康」改造成「采集计划」并按连接分组，新建流程能选连接，从而在一个连接下建出第二个计划。验收 3（不打开数据库就能在一个连接下建出第二个计划，并看到两个计划各自的频率与最近一次失败）达成。
-- **改动文件**：
-  1. `packages/contracts/src/base.ts`：`createSourceCommandSchema` 增加可选 `connectionId`（与 `scheduleIntervalMs` 同例：创建命令在同一步里建出来源与默认计划）。
-  2. `packages/contracts/src/collection-plan.ts`：计划快照增加 `sourceRevisionId`（v1 删除仍是目标域命令）、`lastRunAt`／`lastError`（取归计划的 Run／WorkflowRun）。
-  3. `packages/storage-prisma/src/repository/helpers-4.ts`：把「最近一次运行诊断」抽成 `latestRunDiagnostics(db, where)`，来源与计划两个读投影共用同一套口径。
-  4. `packages/storage-prisma/src/repository/sources.ts`：`createSource` 把连接写进计划；`toCollectionPlanSnapshot` 变为类的 protected 方法（要取目标 revision 与运行诊断），新增 `CollectionPlanRow` 形状。
-  5. `apps/api/src/app.controller/sources.ts`：创建路由先校验连接存在（否则会撞外键变成 500）。
-  6. `apps/web/src/components/cosmos/collection-plan-list.tsx`（新，取代 `source-actions.tsx`）：按连接分组的计划列表，行数据来自 `CollectionPlanSnapshot`；「未绑定连接」组固定压尾。
-  7. `apps/web/src/components/cosmos/source-form.tsx`：新增连接选择；标题／按钮改为「新建采集计划」「保存计划（停用）」。
-  8. `apps/web/src/app/home/use-source-workspace.ts`、`page.tsx`、`status-summary.tsx`、`board-view.tsx`、`component-lab/*`：接线与术语同步（看板区块 type 键 `source-health` 不动，只改显示标签）。
-  9. `e2e/browser/collection-plan-multi.spec.ts`（新）：切片 2 的验收——一个连接下两个计划，各自频率、各自启停、跑一次后失败只落在坏的那一行，刷新后仍在。
-  10. 9 个既有 spec 的术语同步（`新建来源`→`新建计划` 等 36 处，先 dry run 再应用）。
-- **决定（维护者确认，见开工前记录）**：改造而非并存；创建命令带 `connectionId`；看板 type 键不动只改标签。
-- **连带修正（本轮发现并修掉的一处既有测试脆弱性）**：
-  - `offline.spec.ts` 的「已保存图片能从 API 渲染」断言原本依赖浏览器对**屏外** `loading="lazy"` 图片的预加载时机（该图在详情面板折叠线以下，约 y=900／面板高 720）。本切片给页面加了计划与连接的加载请求后，预加载被推迟，断言开始在默认轮询窗口内超时。**先做了对照实验**：同一 spec 在 master 上 `--repeat-each=3` 3/3 通过、在本分支 3/3 失败；加长轮询窗口后本分支也能通过（`naturalWidth: 32`），证明图片本身可取、几何位置与 master 完全一致（同为 y=956、面板 720）。因此这是断言的时机假设问题，不是图片服务回归——已改为**先滚进视口再断言**，`--repeat-each=3` 3/3 稳定通过。
-- **RED → GREEN**：RED（实现前实跑）为各文件的类型错误与既有断言失败（含 9 条单元用例、3 条浏览器用例）；GREEN：`bun run typecheck` 全仓 **0**；`bun run test` **116 文件 / 656 用例全绿**；`bun run test:e2e` **5 文件 / 6 用例全绿**；浏览器 E2E **26 用例全绿**（含新增的切片 2 验收）。
-- **门禁**：`bun run db:validate` 通过；`bun run docs:check` 722 文件 0 失败；`size-governance --fail-on-new` PASS；`git diff --check` 干净。
-- **未运行**：真实来源验收（切片 3）。
-- **下一步**：切片 3（连接器选择与 schema 驱动表单），使 Bilibili 双计划能在产品面建出并跑真实来源。
-
-## 2026-09-21：切片 3 开工前 —— 表单从硬编码 RSS 改为 manifest 驱动
-
-- **本轮切片**：新建计划时可选来源定义（不再硬编码 RSS），字段按所选 manifest 的 JSON Schema 渲染（含 `enum` 与认证提示），使 Bilibili 计划能在产品面建出。这是 Task 33 的最后一块。
-- **读到的现状（决定了改法）**：
-  - `readManifestFields` 只认 `type === "string" | "integer"`，而 Bilibili manifest 的 `mode` 是**只有 `enum` 没有 `type`** 的属性——照现状它会被整条跳过，表单根本渲染不出「动态 / 推荐流」这个必填选择。
-  - manifest 里 `profile` 与 `mode` 的**条件依赖**（`mode: "feed"` 才需要 `profile`）只写在 canonical Zod 的 `superRefine` 里，JSON Schema 投影表达不了。表单不做这个推断，交给服务端校验并把错误回显——这是有意的边界，不在这里复制一份规则。
-- **决定（记录，不静默选择）**：
-  1. **字段类型只由 manifest 的 JSON Schema 决定**：`enum` → 选择框、`integer` → 数字、`string` → 文本；三种以外不渲染，也不猜。
-  2. **客户端只做能从 JSON Schema 读出来的校验**（必填、整数、最小/最大、枚举取值）；更细的规则（如 Bilibili 的条件必填）由服务端 canonical schema 裁决，错误原样回显。
-  3. **认证提示按 `manifest.auth` 展示**：`kind !== "none"` 时显示 label（Bilibili 是「OpenCLI 浏览器登录态」），不在这里做凭证输入——连接才是凭证的载体（ADR-0017）。
-- **仍有后果的假设**：字段值与 config 的映射是「按 manifest 属性名一一对应」，不做重命名；`scheduleIntervalMs` 仍不进 config（定时是 TriggerBinding，ADR-0018）。
-- **下一步**：实现。
-
-## 2026-09-21：切片 3 —— 连接器选择与 manifest 驱动表单
-
-- **本轮切片**：新建计划时可选来源定义（不再硬编码 RSS），字段按所选 manifest 的 JSON Schema 渲染（含 `enum` 与认证提示），使 Bilibili 计划能在产品面建出。Task 33 的最后一块。
-- **改动文件**：
-  1. `apps/web/src/components/cosmos/source-form.tsx`：重写为 manifest 驱动——来源定义选择器；`readManifestFields` 支持 `enum`（→ 选择框）、`integer`/`number`（→ 数字）、`string`（→ 文本）；新增 `validateManifestFields`（必填、整数、范围、枚举取值）与 `toConfigFromFields`（按字段类型转换）；`auth.kind !== "none"` 时渲染认证提示与 label；配置字段收敛到 `config` 子对象（`config.<属性名>`）。
-  2. `apps/web/src/app/home/use-source-workspace.ts`：保留目录里全部 `enabled` 定义供选择；`selectedDefinitionRef` 状态与 `selectDefinition`（切换时整组重置配置字段）；probe 与创建都改用所选定义的 ref 与首个 operationId；提交前跑字段级校验并按字段报错。
-  3. `apps/web/src/app/page.tsx`、`home/page-runtime.ts`：接线与默认值（`config.feedUrl` 起始值）；删除只为 RSS 服务的 `toSourceConfig`。
-  4. `apps/web/src/component-lab/product-fixtures.tsx`：新增合成的 Bilibili 定义（`mode` 只有 `enum` 没有 `type`、`auth: external`），用来覆盖这两条分支。
-  5. `e2e/browser/collection-plan-connectors.spec.ts`（新）：切片 3 验收——一个 Bilibili 连接下建出「热门」与「动态」两个计划，字段来自 manifest，认证提示出现；另有一条断言必填枚举留空会在本地被拒、且切换定义会清空上一组字段。
-  6. `docs/spec/interfaces/0005-web-client.md`、`docs/api/0002-product-service-api.md`：把「表单固定 `source.rss@1`」的陈述改成选择器 + 按所选定义渲染，并补上创建命令接受 `connectionId`。
-- **连带修正（本轮发现的一处产品缺陷）**：必填枚举原先**静默取第一个选项**（选择框没有空选项），用户没选也会按「热门」建计划。已改为必填枚举同样保留空选项（“请选择…”），留空在本地就报「请填写采集模式。」。这是新验收 spec 的第二条用例逼出来的。
-- **RED → GREEN**：RED（实现前实跑）为各文件的类型错误与既有断言失败；GREEN：`bun run typecheck` 全仓 **0**；`bun run test` **116 文件 / 656 用例全绿**；`bun run test:e2e` **5 文件 / 6 用例全绿**；浏览器 E2E **28 用例全绿**（含新增的 2 条连接器验收）。
-- **门禁**：`bun run db:validate` 通过；`bun run docs:check` 723 文件 0 失败；`size-governance --fail-on-new` PASS；`git diff --check` 干净。
-- **未运行（明确记录）**：**真实来源验收**。`bun run test:real:bilibili` 需要 `COSMOS_OPENCLI_PATH`（外部 OpenCLI 可执行文件）、`OPENCLI_PROFILE`（浏览器里已登录的 profile）、`COSMOS_REAL_RSS_URL` 与 `COSMOS_ALLOW_REAL_NETWORK=true`，且本机网络不可用（同轮 `git fetch` 也因 schannel 凭证失败）。因此切片 3 的验收只完成了**产品面那一半**：Bilibili 双计划能在产品面建出（浏览器 E2E 已证），真实抓取未验证。
-- **下一步**：Task 33 的 v1 完成定义（expand + backfill + read switch + 产品面）已齐，剩真实来源验收与第 4 步 contract（单独排期）。
+> 切片 2（Web 计划管理面）与切片 3（连接器与 manifest 驱动表单）的逐片证据见 [`walkthrough/slices-2-3.md`](walkthrough/slices-2-3.md)。
 
 ## 2026-09-21：提交与编号登记
 
@@ -150,3 +90,39 @@
   1. **33 正式分配给本 Task**；README 的「编号 33 由 Agent 建议、待维护者确认」改为「编号 33 由维护者 2026-09-21 分配」，Follow-ups 里的待确认项删除。
   2. **`.agents/tasks/README.md` 的 Task 导航补上 32 与 33**（此前索引停在 31，32 就已经漏登记）。32 的条目未写「编号由维护者分配」，因为 Task 32 自己的 README 没有该记录，不替它补一个没有证据的日期。
 - **发现（对后续 Task 有影响）**：`01–24 → 26` 的跳号不是漏号，**25 是预留号**——[`ui-surface-ownership-v1`](../../../docs/proposals/ui-surface-ownership-v1.md) 写明界面职责重划那次尝试的分支已作废，「重做时可复用编号 **Task 25**（它只存在于已作废的分支上，`master` 没有这个 Task）」。按「最大号 +1」顺延会误占它。另有 17、20、21、22、23、24 六条至今挂着「编号待维护者确认」。
+
+## 2026-09-22：真实来源验收 —— 同一连接下 hot 与 feed 两个 Bilibili 计划
+
+- **本轮切片**：Task 33 的最后一块验收。切片 3 当时只完成了产品面那一半（Bilibili 双计划能在产品面建出，浏览器 E2E 已证），真实抓取记为未运行。本轮把 `bun run test:real:bilibili` 从「单来源」升级为「同一连接下两个计划」，并真跑一次。
+- **开工前纠正的两条既有记录**：
+  1. **「本机网络不可用」是误判**。切片 3 那轮把 `git fetch` 的 schannel `SEC_E_NO_CREDENTIALS` 当成了断网；本轮实测 `node fetch https://api.bilibili.com/x/web-interface/popular` 返回 200（125ms）。缺的从来不是网络，而是 Browser Bridge 连接与浏览器里的 Bilibili 登录态。
+  2. **`test:real:bilibili` 当时只建一个来源**，所以即便跑通也覆盖不到验收 2 的「同一连接下两个计划」；它的激活路径本身已随 1c-1c-b1 改成计划端点，跟得上合同。
+- **改动文件**：
+  1. `scripts/e2e/real-bilibili-plans.ts`（新）：双计划场景——建一个连接，在同一连接下建 hot（`mode: hot`）与 feed（`mode: feed` + `profile`）两个计划，各自启用、各跑一次 Run（**串行**：Browser Bridge 只有一个登录态，并发抓取会互相干扰浏览器窗口，那证明不了计划隔离），断言两条 Run 都 succeeded、item 数有界，再核对归属。
+  2. `scripts/e2e/real-source.ts`：单来源流程收进 `runSingleSourceAcceptance`，入口按 kind 分派；`bilibili` 走双计划场景，`rss`／`aihot`／`bilibili-hot` 行为不变。
+  3. `scripts/e2e/helpers.ts`：`requestJson`／`readString`／`expectJsonObject`／`waitForTerminalRun`／`assertRunSucceeded`／`boundedItemCount` 提为共享，单来源与双计划共用同一套「成功」口径（此前 `requestJson`／`readString` 是 `real-source.ts` 的私有函数）。
+  4. `docs/testing/README.md`：**未改**。该段落的通用陈述（要求 Run 成功、item 数有界、日志脱敏）对双计划仍然成立，而该文件已在 [`docs/doc-governance/`](../../../docs/doc-governance/) 基线内增长到 29.3 KB（警戒 30 KB），治理目标是只减不增；入口语义变化记录在本 walkthrough。
+- **验收命令与结果**（worktree `feat/t33-plan-read-switch`，`apps/api`／`apps/worker` 的 dist 为分支代码）：
+
+  ```text
+  COSMOS_ALLOW_REAL_NETWORK=true COSMOS_OPENCLI_PATH=<worktree>/node_modules/.bin/opencli.exe OPENCLI_PROFILE=<已登录 profile> bun run test:real:bilibili
+  ```
+
+  PASS（exit 0）：`Real bilibili dual-plan acceptance passed: connection <connectionId>; plan:<...>（hot）Run run_<...> with 20 items; plan:<...>（feed）Run run_<...> with 20 items; runs, checkpoints and plan diagnostics stayed per-plan.`
+
+  断言修正后连续跑两次（两次的 connectionId 与 Run id 都不同），两次都是 hot 与 feed 各 20 items、exit 0——真实抓取结果随热门榜与动态流变化，但「两个计划各自成功且归属不串台」稳定成立。
+- **断言的实际内容**（归属读隔离库的落库事实，不是 API 自报）：
+  1. 两个计划都列在同一个 `connectionId` 下，且计划与来源两两不同。
+  2. 两条 `WorkflowRun`（产品 Run id 就是它的主键）各自的 `planId`／`sourceInstanceId` 指向自己的计划与来源。
+  3. 每个计划恰有一行 `Checkpoint`，落在自己的来源上。
+  4. 每个计划读投影的 `lastRunAt` 非空、`lastError` 为 null——各自的运行诊断不串台。
+- **一个必须纠正的断言假设**：最初还断言 legacy `Run` 表按 `planId` 归属，实测为空——验收栈开着 `COSMOS_WORKFLOW_HOST_ENABLED=true`，产品 Run 由 `WorkflowRun` 承载，legacy `Run` 行在这条路径上不产生。断言已按实际载体改写，**未放宽**。
+- **真实环境的两次瞬时失败（如实记录，未用重试掩盖）**：
+  1. `opencli bilibili feed` 首次调用返回 `COMMAND_EXEC: Pre-navigation to https://www.bilibili.com failed: Navigation rejected`，同一条命令立即重试成功——Browser Bridge 的导航竞争，与计划归属无关。
+  2. 验收首跑时 hot 计划的 Run 内 `connector.opencli` 退出码 1（映射 `dependency_unavailable`，可重试），worker 按既有重试语义再跑一次成功，Run 最终 succeeded。这是**真实重试路径**的现场证据，不是脚本的补偿逻辑。
+- **未覆盖（明确记录）**：本轮没有制造「错误只落在某一个计划」的真实失败（例如用未登录 profile 触发 `authentication_required`），所以「错误互不混淆」仍由行为测试与浏览器 E2E 覆盖（`e2e/browser/collection-plan-multi.spec.ts`）。Bilibili connector 不产生游标（`fetchItems` 恒返回 `nextCursor: null`），「游标互不混淆」在 Bilibili 上只能落到 checkpoint 行按计划分开，不能验成「两个游标值不同」。
+- **门禁**：`bun run typecheck`（packages + apps）**0**；`scripts/e2e/**` 另用 `bunx tsc --noEmit --strict --module nodenext --types node ...` 单独检查 **0**（仓库 `typecheck` 不覆盖 `scripts/`，见发现 1）；`bun run test` **116 文件 / 656 用例全绿**；`bun run test:e2e` **5 文件 / 6 用例全绿**（本机需先设 `BUN_BINARY`，见发现 2）；`bun run docs:check` **725 文件 0 失败**；`size-governance --fail-on-new` PASS（含基线内增长 warning，未新增超标文件）；`git diff --check` 干净。
+- **发现（对后续真实来源验收有影响）**：
+  1. **`scripts/` 不在 `bun run typecheck` 覆盖内**。`typecheck:packages` 与 `typecheck:apps` 都不含它，所以真实来源脚本此前带着 6 个严格模式错误（`stopManagedProcess(undefined)`、闭包赋值后收窄成 `never`）也没被门禁发现；本轮顺带修掉。
+  2. **本机 PATH 上的 `bun` 只有 `.ps1`**（`C:\Program Files\nodejs\bun.ps1`），`bun.exe` 在 `node_modules/bun/bin/`。`scripts/e2e/helpers.ts` 的 `applyMigrations` 用 `spawnSync("bun")`，而 vitest 是 node 进程（没有 bun 进程注入的 `BUN_BINARY`），于是 `bun run test:e2e` 在本机全部报 `spawnSync bun ENOENT`；设 `BUN_BINARY=<...>/bun.exe` 后 5 文件 / 6 用例全绿。这是本机环境问题，不是本分支回归。
+- **下一步**：Task 33 的 v1 完成定义与真实来源验收都已达成；剩第 4 步 contract（从来源移除连接／触发器／预算字段）单独排期与授权，以及分支合并。
