@@ -265,8 +265,23 @@ export const sourceFetchOutputSchema = z.object({
 }).strict();
 export type SourceFetchOutput = z.infer<typeof sourceFetchOutputSchema>;
 
-export const ingestTriggerKindSchema = z.enum(["manual", "schedule"]);
+export const ingestTriggerKindSchema = z.enum(["manual", "schedule", "webhook"]);
 export type IngestTriggerKind = z.infer<typeof ingestTriggerKindSchema>;
+
+/**
+ * 触发证据（AUT-004 / ADR-0024）：triggerKind 只回答「哪一类触发」，这个对象回答
+ * 「哪一次触发」。三个字段同进同出——没有证据（manual/schedule 的既有 Run 快照）
+ * 就是 undefined，不允许半份证据，否则审计时无法判断原因是否完整。
+ */
+export const ingestTriggerEvidenceSchema = z.object({
+    /** 触发的绑定标识；webhook 形态下是入口的不透明标识，不是实体 id。 */
+    bindingId: z.string().trim().min(1),
+    /** 外部事件的标识，与入队幂等键同源：重复投递不会产生第二个 Run。 */
+    externalEventId: z.string().trim().min(1),
+    /** 入口收到请求的时间；与 Run.createdAt（入队时间）区分外部发生与系统接收。 */
+    receivedAt: z.string().trim().min(1),
+}).strict();
+export type IngestTriggerEvidence = z.infer<typeof ingestTriggerEvidenceSchema>;
 
 /** Frozen media policy handed to the retry step from the Run's source snapshot. */
 export const mediaRetryPolicySnapshotSchema = z.object({

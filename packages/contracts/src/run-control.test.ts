@@ -47,4 +47,33 @@ describe("Run control contracts (RUN-004 / ADR-0016)", () => {
     it("rejects a run control result missing the explanation fields", () => {
         expect(() => runControlResultSchema.parse({ action: "rerun", run: runSnapshot })).toThrow();
     });
+
+    it("carries webhook trigger evidence on the RunSnapshot (AUT-004 / ADR-0024)", () => {
+        const result = runControlResultSchema.parse({
+            action: "cancelled",
+            run: {
+                ...runSnapshot,
+                triggerKind: "webhook",
+                triggerEvidence: {
+                    bindingId: "hook_abc",
+                    externalEventId: "evt-1",
+                    receivedAt: "2026-09-22T10:00:00.000Z",
+                },
+            },
+            reuse: "已入库内容保留",
+            sideEffects: "取消是终态",
+        });
+        expect(result.run.triggerKind).toBe("webhook");
+        expect(result.run.triggerEvidence?.externalEventId).toBe("evt-1");
+    });
+
+    it("keeps triggerEvidence optional so manual and schedule Runs still parse", () => {
+        const result = runControlResultSchema.parse({
+            action: "cancelled",
+            run: runSnapshot,
+            reuse: "已入库内容保留",
+            sideEffects: "取消是终态",
+        });
+        expect(result.run.triggerEvidence).toBeUndefined();
+    });
 });

@@ -107,6 +107,50 @@ function createHarness(existing: WorkflowEnvelope | null) {
     };
 }
 
+describe("IngestWorkflowControlService.enqueue", () => {
+    const evidence = {
+        bindingId: "hook_abc",
+        externalEventId: "evt-1",
+        receivedAt: "2026-09-22T08:00:00.000Z",
+    };
+
+    it("persists webhook trigger evidence in the input snapshot and the product Run", async () => {
+        const harness = createHarness(null);
+        const result = await harness.service.enqueue({
+            sourceId: "source-1",
+            triggerKind: "webhook",
+            idempotencyKey: "evt-1",
+            triggerEvidence: evidence,
+        });
+
+        expect(result.inputSnapshot).toMatchObject({ triggerKind: "webhook", triggerEvidence: evidence });
+        expect(result.productRun).toMatchObject({ triggerKind: "webhook", triggerEvidence: evidence });
+        expect(harness.createCount).toBe(1);
+    });
+
+    it("rejects a webhook Run without trigger evidence", async () => {
+        const harness = createHarness(null);
+        await expect(harness.service.enqueue({
+            sourceId: "source-1",
+            triggerKind: "webhook",
+            idempotencyKey: "evt-2",
+        })).rejects.toThrow(/trigger evidence/i);
+        expect(harness.createCount).toBe(0);
+    });
+
+    it("keeps the manual snapshot shape free of the evidence key", async () => {
+        const harness = createHarness(null);
+        const result = await harness.service.enqueue({
+            sourceId: "source-1",
+            triggerKind: "manual",
+            idempotencyKey: "k-manual",
+        });
+
+        expect(result.inputSnapshot).not.toHaveProperty("triggerEvidence");
+        expect(result.productRun).not.toHaveProperty("triggerEvidence");
+    });
+});
+
 describe("IngestWorkflowControlService.rerun", () => {
     it("enqueues a fresh manual Run for a terminal ingest Run", async () => {
         const harness = createHarness(ingestEnvelope());

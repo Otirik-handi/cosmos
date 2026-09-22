@@ -1,4 +1,4 @@
-import { sourceKindSchema, sourceConfigSchema, sourceMediaPolicySchema, type FeedItem, type FeedPage, type HealthResponse, type CollectionDetail, type CollectionSummary, type BoardBlock, type BoardDetail } from "@cosmos/contracts";
+import { sourceKindSchema, sourceConfigSchema, sourceMediaPolicySchema, type FeedItem, type FeedPage, type HealthResponse, type CollectionDetail, type CollectionSummary, type BoardBlock, type BoardDetail, type IngestTriggerKind } from "@cosmos/contracts";
 import { BoardBlockNotFoundError, BoardNotFoundError, BoardSectionNotFoundError, type MediaCleanupCandidate, type RepositoryHealth, type WorkflowAttemptSnapshot } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { appendDomainEvent, parseCursor, parseJson, projectWorkflowAttempts, toBoardBlock } from "./repository-internals.js";
@@ -390,7 +390,7 @@ export class PrismaCosmosRepositoryHelpers3 extends PrismaCosmosRepositoryHelper
         return {
             id: run.id,
             sourceId: run.sourceInstanceId,
-            triggerKind: run.triggerKind as "manual" | "schedule",
+            triggerKind: run.triggerKind as IngestTriggerKind,
             status: run.status as "queued" | "running" | "succeeded" | "failed" | "cancelled",
             createdAt: run.createdAt.toISOString(),
             startedAt: run.startedAt?.toISOString() ?? null,

@@ -345,7 +345,7 @@ export type SourceTestResult = SourceProbeResult;
 
 export const ingestCommandSchema = z.object({
     sourceId: z.string().min(1),
-    triggerKind: z.enum(["manual", "schedule"]).default("manual"),
+    triggerKind: z.enum(["manual", "schedule", "webhook"]).default("manual"),
     idempotencyKey: idempotencyKeySchema.optional(),
 });
 export type IngestCommand = z.input<typeof ingestCommandSchema>;
@@ -434,10 +434,11 @@ export const updateConnectionCommandSchema = z.object({
 export type UpdateConnectionCommand = z.infer<typeof updateConnectionCommandSchema>;
 
 /**
- * First-class trigger (ADR-0018). v1 covers schedule + manual only; webhook,
- * internal-event and upstream-workflow triggers are deferred.
+ * First-class trigger (ADR-0018). ADR-0024 adds webhook as the only remaining
+ * Phase 2 form; internal-event, condition and upstream-workflow triggers stay
+ * deferred to Phase 3, so the binding kind must not grow silently.
  */
-export const triggerKindSchema = z.enum(["schedule", "manual"]);
+export const triggerKindSchema = z.enum(["schedule", "manual", "webhook"]);
 export type TriggerKind = z.infer<typeof triggerKindSchema>;
 
 export const triggerConfigSchema = z.object({

@@ -36,6 +36,8 @@ const statusVariant = {
 const triggerLabel: Record<RunSnapshot["triggerKind"], string> = {
     manual: "手动",
     schedule: "定时",
+    // 面向用户说「谁触发的」：webhook 是外部系统调入口（ADR-0024），不暴露内部类型名。
+    webhook: "外部触发",
 };
 
 function formatTime(value: string | null): string {

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
     createSourceCommandSchema,
+    ingestTriggerEvidenceSchema,
+    ingestTriggerKindSchema,
     sourceDefinitionManifestSchema,
     triggerBindingSchema,
     triggerConfigSchema,
@@ -34,6 +36,39 @@ describe("Trigger/SDK contracts (ADR-0018)", () => {
             config: { feedUrl: "https://example.com/feed.xml" },
             scheduleIntervalMs: 60_000,
         }).scheduleIntervalMs).toBe(60_000);
+    });
+
+    it("accepts a webhook binding and rejects the trigger kinds deferred to Phase 3", () => {
+        const binding = triggerBindingSchema.parse({
+            id: "trigger:plan-1",
+            sourceId: "source-1",
+            kind: "webhook",
+            config: {},
+            enabled: true,
+            revisionId: "plan-1:1",
+            createdAt: "2026-09-22T08:00:00.000Z",
+            updatedAt: "2026-09-22T08:00:00.000Z",
+        });
+        expect(binding.kind).toBe("webhook");
+        for (const deferred of ["event", "condition", "dependency"]) {
+            expect(() => triggerBindingSchema.parse({ ...binding, kind: deferred })).toThrow();
+        }
+    });
+
+    it("accepts webhook as an ingest trigger kind and rejects unknown kinds", () => {
+        expect(ingestTriggerKindSchema.parse("webhook")).toBe("webhook");
+        expect(() => ingestTriggerKindSchema.parse("event")).toThrow();
+    });
+
+    it("keeps trigger evidence whole: three fields in, no partial or extra fields", () => {
+        const evidence = {
+            bindingId: "hook_abc",
+            externalEventId: "evt-1",
+            receivedAt: "2026-09-22T08:00:00.000Z",
+        };
+        expect(ingestTriggerEvidenceSchema.parse(evidence)).toEqual(evidence);
+        expect(() => ingestTriggerEvidenceSchema.parse({ ...evidence, externalEventId: undefined })).toThrow();
+        expect(() => ingestTriggerEvidenceSchema.parse({ ...evidence, secret: "s" })).toThrow();
     });
 
     it("validates a source definition manifest with auth and per-operation declarations", () => {

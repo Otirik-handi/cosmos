@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { ingestTriggerEvidenceSchema, ingestTriggerKindSchema } from "./action.js";
+
 export const runStatusSchema = z.enum([
     "queued",
     "running",
@@ -14,7 +16,13 @@ export type RunStatus = z.infer<typeof runStatusSchema>;
 export const runSnapshotSchema = z.object({
     id: z.string(),
     sourceId: z.string().nullable(),
-    triggerKind: z.enum(["manual", "schedule"]),
+    triggerKind: ingestTriggerKindSchema,
+    /**
+     * 触发原因（AUT-004）。可选是为了兼容两类既有生产者：legacy SQL Run 行没有证据
+     * 概念，durable 快照里 manual/schedule 的 Run 也没有。null 表示「这一类触发没有
+     * 证据」，与 undefined（生产者还没提供该字段）区分。
+     */
+    triggerEvidence: ingestTriggerEvidenceSchema.nullable().optional(),
     status: runStatusSchema,
     createdAt: z.string(),
     startedAt: z.string().nullable(),

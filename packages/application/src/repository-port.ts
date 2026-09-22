@@ -5,7 +5,7 @@ import type {
     CollectionPlanSnapshot,
     UpdateConnectionCommand, StorageStats, BackupSnapshot, FeedPage,
     EntryDetail, EntryPage, JobSnapshot, RevisionDetail,
-    RunSnapshot, SearchPage, SearchQuery,
+    IngestTriggerKind, RunSnapshot, SearchPage, SearchQuery,
     SourceCheckpointOutput, SourceConfigProbeCommand, SourceSnapshot,
     StoryDetail, StoryUserStateMigrationResult, TopicDetail, TopicPage,
     UpdateCollectionPlanCommand, UpdateSourceCommand,
@@ -95,11 +95,11 @@ export interface CosmosRepository {
     exportUserData(): Promise<UserDataExport>;
     createRun(input: {
         sourceId: string;
-        triggerKind: "manual" | "schedule";
+        triggerKind: IngestTriggerKind;
     }): Promise<RunSnapshot>;
     createQueuedRun(input: {
         sourceId: string;
-        triggerKind: "manual" | "schedule";
+        triggerKind: IngestTriggerKind;
         idempotencyKey?: string;
     }): Promise<RunSnapshot>;
     createProbeJob(input: {
@@ -206,7 +206,7 @@ export interface CosmosRepository {
     persistWorkflowIngestItem(input: {
         sourceId: string;
         workflowRunId: string;
-        triggerKind: "manual" | "schedule";
+        triggerKind: IngestTriggerKind;
         item: NormalizedIngestItem;
         fence: HostActionExecutionFence;
         idempotencyKey: string;

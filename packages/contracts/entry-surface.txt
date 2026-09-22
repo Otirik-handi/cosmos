@@ -86,6 +86,7 @@ type	FixtureRssSourceConfig
 type	HealthResponse
 type	IngestCommand
 type	IngestResult
+type	IngestTriggerEvidence
 type	IngestTriggerKind
 type	JobKind
 type	JobSnapshot
@@ -319,6 +320,7 @@ value	healthResponseSchema
 value	idempotencyKeySchema
 value	ingestCommandSchema
 value	ingestResultSchema
+value	ingestTriggerEvidenceSchema
 value	ingestTriggerKindSchema
 value	jobKindSchema
 value	jobListSchema
