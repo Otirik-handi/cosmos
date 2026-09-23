@@ -210,6 +210,8 @@ Connection 下的多 Operation/多计划管理。默认计划不是第二套调�
 Webhook payload 先存受控引用和触发证据，再创建 Run；不能把未校验 payload 直接
 当 Workflow input 或 Event。
 
+**v1 落地与本节草案的差异（2026-09-22，Task 23／ADR-0024）**：实际交付的入口是 `POST /hooks/collection-plans/{token}`——路径用**不可猜的入口标识**而不是 binding id，并额外要求凭证 header（`x-cosmos-credential`）与外部事件标识（`x-cosmos-event-id`，同时作为入队幂等键）；**v1 不持久化 webhook payload**（请求体不进日志与事件 payload，只保留事件标识与触发证据）。本节的 `/trigger-bindings` CRUD 与 `/hooks/{bindingId}` 仍是后续阶段的目标草案，不是当前实现；当前实现合同见 [`docs/spec/interfaces/0006-webhook-entry-http.md`](../spec/interfaces/0006-webhook-entry-http.md)。
+
 ## 5. Workflow 控制与运行诊断
 
 ### 5.1 Definition Binding

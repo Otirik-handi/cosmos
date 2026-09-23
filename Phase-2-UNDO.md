@@ -1,28 +1,31 @@
 # Phase 2 UNDO（未完成清单）
 
-> 复核日期：2026-09-20 ｜ 代码基线：`5cbb670`（本地 = `origin/master`，与 [`PROJECT-STATUS.md`](PROJECT-STATUS.md) 的 2026-09-20 快照同一基线）
+> 复核日期：2026-09-20（2026-09-22 增量更新：P0-1 与 P0-2 已闭合）｜ 代码基线：`5cbb670`（2026-09-20 复核时的基线；当前 `master` 为 `89f86c4`，与 [`PROJECT-STATUS.md`](PROJECT-STATUS.md) 的最新快照同一基线）
 >
 > 本文只回答一件事：**按 PRD 口径，Phase 2 还差什么**。按优先级从高到低排列，每条给出「需求要求什么 / 现在实际是什么 / 证据 / 建议下一步」。
 >
 > 证据等级：**【代码核实】**= 本次直接读了实现、合同或数据库模型；**【文档核实】**= 只读了仓库记录，未运行验证；**【未验证】**= 没有可考察的路径。
 >
-> 最近更新：2026-09-22（P0-1 已交付并合并，见下方「当前暂停点」）
+> 最近更新：2026-09-22（P0-1 与 P0-2 均已交付并合并，见下方「当前暂停点」）
 
 ## 一句话结论
 
-Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 四条验收标准里前三条有自动化与真人两层证据。**仍未闭合的是 4 行需求（1 行完全未交付、3 行部分交付）和 1 条无法判定的验收条件**；另有 2 条已 accepted 但未落地的界面决定、3 条证据与门禁欠账。P0-1（AUT-010 一个连接下的多个采集计划）已于 2026-09-22 交付并合并。
+Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 四条验收标准里前三条有自动化与真人两层证据。**仍未闭合的是 3 行需求（全部为部分交付）和 1 条无法判定的验收条件**；另有 2 条已 accepted 但未落地的界面决定、3 条证据与门禁欠账。P0-1（AUT-010 一个连接下的多个采集计划）与 P0-2（AUT-004 的 webhook 形态）均已交付并合并，**P0 已清空**。
 
-## 当前暂停点（2026-09-22 更新：P0-1 已交付）
+## 当前暂停点（2026-09-22 更新：P0-1 与 P0-2 均已交付）
+
+**P0-2（AUT-004 的 webhook 形态）已交付并合并**：Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 的切片 3–7，`--no-ff` 合并 `da932cd`。先按 2026-09-22 的口径裁定收窄——Phase 2 只欠 `webhook` 形态，`event`／`condition`／`dependency` 记 Phase 3（ADR [`0024`](docs/adr/0024-trigger-forms-v1.md)）；实现为「一个计划可持有多个触发器」（ADR [`0025`](docs/adr/0025-multi-trigger-per-plan.md)，取代 ADR-0018 的单绑定口径）＋入口标识与凭证（凭证进 SecretStore、明文只回显一次）＋独立于 `/api/v1` 的 inbound 端点（体积上限、速率上限、常量时间凭证校验、事件标识幂等）＋计划面板入口＋真实消费者验收。合并后门禁：单元 119 文件／685 用例、Node 进程 E2E 6 文件／11 用例、浏览器 E2E 29 用例、真实来源 `test:real:entry`（真实外网 RSS 经入口触发，20 条条目、证据匹配）全绿。
 
 **P0-1（AUT-010 一个连接下的多个采集计划）已交付并合并**：Task [`33`](.agents/tasks/33-collection-plan/README.md)，`--no-ff` 合并 `4ef3636`。v1 形态按 ADR [`0023`](docs/adr/0023-collection-plan-v1.md)——`CollectionPlan` 与采集目标一对一，持有连接、触发器、媒体预算、计划级 checkpoint 与状态命名空间；迁移按 expand／backfill／read switch 落地，第 4 步 contract 单独排期与授权（不纳入该 Task）。产品面从「来源健康」改造为按连接分组的「采集计划」，新建计划可选连接与连接器、字段按 manifest 声明渲染。Task 33 的验证：全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例全绿；真实来源验收 `test:real:bilibili` 在同一连接下跑通 hot 与 feed 两个 Bilibili 计划（各 `itemCount=20`，连续两次 exit 0）。过程、偏差与未运行项见 Task 33 walkthrough。
 
-**本清单的下一个缺口**：按优先级从 P0-2（AUT-004 事件类触发）或 P1-1（ING-012 状态备份／恢复／迁移）继续；顺序尚未排定。
+**本清单的下一个缺口**：按优先级从 P1-1（ING-012 状态备份／恢复／迁移）或 P1-3（AUT-009 连接可见性面板）继续；顺序尚未排定。
 
 ## 优先级总表
 
+> P0-2（AUT-004 的 webhook 形态）已于 2026-09-22 交付并合并（见「当前暂停点」），因此不再列入下表；P0 已清空。
+
 | 优先级 | 编号 | 缺口 | 性质 | 卡住什么 |
 | --- | --- | --- | --- | --- |
-| P0 | P0-2 | AUT-004：Webhook／内部事件／条件变化／上游 Workflow 触发 | 完全未交付 | Phase 2 按需求表字面未完成 |
 | P1 | P1-1 | ING-012：Connector 状态的备份、恢复、迁移与范围隔离 | 部分交付 | 该行验收条件未满足 |
 | P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | 部分交付 | 该行验收条件未满足 |
 | P1 | P1-3 | AUT-009：连接状态／授权范围／失效原因的可见性与来源绑定入口 | 部分交付（本次新增登记） | 该行验收条件未满足，此前未记入任何清单 |
@@ -35,14 +38,15 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 
 ---
 
-## P0：完全未交付（Phase 2 按需求表字面未完成）
+## P0：完全未交付（2026-09-22 已清空）
 
-### P0-2 AUT-004 事件类触发
+### P0-2 AUT-004 事件类触发 → 已交付（webhook 形态）
 
 - **需求要求**（[`part-07-1.md`](docs/requirements/0002-product-requirements/part-07-1.md) §7.1）：Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发；每次触发保存触发原因、输入、时间和对应定义版本。
-- **现状【代码核实】**：触发器类型枚举只有「定时」和「手动」两种，代码注释明确写着 Webhook、内部事件与上游 Workflow 触发**已推迟**（[`base.ts`](packages/contracts/src/base.ts) 的 `triggerKindSchema`）。Task 23 的标题写了 AUT-004，实际交付的是「单绑定 schedule／manual」这一半。
-- **影响**：目前只能靠定时轮询和手动点击，任何「有新内容就立刻进来」的形态都做不到；上游 Workflow 结果触发又依赖 Phase 3 的 Workflow 产品面。
-- **建议下一步**：先做一个口径裁定，而不是直接实现——AUT-004 的四种触发形态里，「Webhook」不依赖 Phase 3，「内部事件／上游 Workflow 结果」依赖。要么按 EXT-008／Gateway 的先例把依赖部分改标 Phase 3，要么明确 Phase 2 只欠 Webhook 形态。**不做这个裁定，Phase 2 会重复 ORG-021 那种「按需求表字面无法完成」的自相矛盾**（同类问题已见 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)）。
+- **当时的现状【代码核实】**：触发器类型枚举只有「定时」和「手动」两种，代码注释明确写着 Webhook、内部事件与上游 Workflow 触发**已推迟**（`packages/contracts/src/base.ts` 的 `triggerKindSchema`）。Task 23 的标题写了 AUT-004，实际交付的是「单绑定 schedule／manual」这一半。
+- **裁定（2026-09-22）**：按 ADR [`0024`](docs/adr/0024-trigger-forms-v1.md) 收窄——Phase 2 只交付 `webhook`，`event`／`condition`／`dependency` 记 Phase 3。裁定同时纠正了本文原先的判断：`event`／`condition` 并不依赖 Phase 3 的交付物（它们缺的是订阅分发与条件求值），只有 `dependency` 真依赖用户自定义 Workflow 产品面；三者后置的理由是价值峰值在 Knowledge Workflow 之后，而不是依赖关系。
+- **交付**：Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 切片 3–7，合并 `da932cd`（入口端点、一计划多触发器 ADR [`0025`](docs/adr/0025-multi-trigger-per-plan.md)、计划面板入口、真实消费者验收）；证据见 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 2026-09-22 的三条记录与 Task 23 的验证段。
+- **剩余**：三种形态仍属 Phase 3；`dependency` 依赖用户自定义 Workflow 产品面，`event`／`condition` 依赖订阅分发与条件求值（见 ADR-0024 的 Revisit Gate）。
 
 ---
 
