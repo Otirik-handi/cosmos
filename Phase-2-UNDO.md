@@ -18,7 +18,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 
 **P0-1（AUT-010 一个连接下的多个采集计划）已交付并合并**：Task [`33`](.agents/tasks/33-collection-plan/README.md)，`--no-ff` 合并 `4ef3636`。v1 形态按 ADR [`0023`](docs/adr/0023-collection-plan-v1.md)——`CollectionPlan` 与采集目标一对一，持有连接、触发器、媒体预算、计划级 checkpoint 与状态命名空间；迁移按 expand／backfill／read switch 落地，第 4 步 contract 单独排期与授权（不纳入该 Task）。产品面从「来源健康」改造为按连接分组的「采集计划」，新建计划可选连接与连接器、字段按 manifest 声明渲染。Task 33 的验证：全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例全绿；真实来源验收 `test:real:bilibili` 在同一连接下跑通 hot 与 feed 两个 Bilibili 计划（各 `itemCount=20`，连续两次 exit 0）。过程、偏差与未运行项见 Task 33 walkthrough。
 
-**本清单的下一个缺口**：**P1-1（ING-012）已于 2026-09-23 实现**——归属登记与状态导出／导入落在分支 `feat/t22-connector-state-export`（Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2，**尚未合并**，见下方 P1-1 节）；下一个缺口按优先级从 P1-2（EXT-006）或 P1-3（AUT-009 连接可见性面板）继续，顺序尚未排定。
+**本清单的下一个缺口**：**P1-1（ING-012）已于 2026-09-23 交付并合并**（Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2，`--no-ff` 合并 `1b5cabc`，见下方 P1-1 节）；下一个缺口按优先级从 P1-2（EXT-006）或 P1-3（AUT-009 连接可见性面板）继续，顺序尚未排定。
 
 ## 优先级总表
 
@@ -26,7 +26,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 
 | 优先级 | 编号 | 缺口 | 性质 | 卡住什么 |
 | --- | --- | --- | --- | --- |
-| P1 | P1-1 | ING-012：Connector 状态的备份、恢复、迁移与范围隔离 | **已在分支上交付（待合并）** | 验收条件已满足；合并后本行可闭合 |
+| P1 | P1-1 | ING-012：Connector 状态的备份、恢复、迁移与范围隔离 | **已交付并合并 `1b5cabc`** | 已闭合 |
 | P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | 部分交付 | 该行验收条件未满足 |
 | P1 | P1-3 | AUT-009：连接状态／授权范围／失效原因的可见性与来源绑定入口 | 部分交付（本次新增登记） | 该行验收条件未满足，此前未记入任何清单 |
 | P2 | P2-1 | §12 第 4 条「重分析不覆盖用户批注和人工关系修正」＋ LIB-003 同类验收 | 无法判定 | Phase 2 验收第 4 条不能宣布通过；风险外溢到 Phase 3 |
@@ -58,7 +58,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 - **现状【代码核实】**：已交付的一半是真的——命名空间化、带版本号的状态存储已落地并被内置 RSS 连接器实际使用（保存 ETag／Last-Modified，写入按版本做冲突拒绝）。缺的一半是运维入口：备份只有整库复制（`POST /backups` 走 SQLite `VACUUM INTO`），没有按命名空间导出／恢复／迁移的入口；用户数据导出**明确排除**状态表（测试直接断言导出文本里不含状态值）。
 - **影响**：换机、换来源命名空间、状态损坏后重建，目前都只能整库搬；NFR-012「可迁移」在这块没有兑现。
 - **建议下一步**：这是一个独立小切片（导出／导入某个命名空间的 JSON + 范围过滤 + 与整库备份的关系说明），不需要新 Proposal，可直接复用 Task 22 或新开 Task。
-- **交付（2026-09-23，分支 `feat/t22-connector-state-export`，尚未合并）**：讨论中确认了本行原先没写出来的第二个问题——**归属不是数据**：命名空间是宿主按 manifest 模板算出来的字符串，库里没有「这个抽屉属于谁」的记录，所以「按连接导出」必须每次绕道计划表 + 解析模板，「从命名空间反查归属」完全做不到。用户裁定改为表结构方案（而不是每次现算）：新增 `ConnectorStateNamespace`（namespace 主键 + `planId`，migration `20260923120000_connector_state_namespace_owner` 建表并回填默认模板的现状），宿主在解析状态句柄时登记一次；`GET /connector-state/namespaces` 给清单与归属，`GET /exports/connector-state` 按命名空间／计划／连接／来源四选一导出（未归属抽屉只能点名），`POST /imports/connector-state` 默认只补缺失、显式 `overwrite` 时 `version = 本地 + 1`、单抽屉可改名；Web 存储面板提供导出下载与导入上传。决定见 Proposal [`connector-state-export-v1`](docs/proposals/connector-state-export-v1.md)（accepted）与 ADR [`0026`](docs/adr/0026-connector-state-export-v1.md)；实现与验证记录见 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2（全量单元 122 文件／698 用例、Node 进程 E2E 2/2、浏览器 E2E 1 passed、组件实验室 14 passed、`docs:check` 747 文件 0 失败）。
+- **交付（2026-09-23，`--no-ff` 合并 `1b5cabc`）**：讨论中确认了本行原先没写出来的第二个问题——**归属不是数据**：命名空间是宿主按 manifest 模板算出来的字符串，库里没有「这个抽屉属于谁」的记录，所以「按连接导出」必须每次绕道计划表 + 解析模板，「从命名空间反查归属」完全做不到。用户裁定改为表结构方案（而不是每次现算）：新增 `ConnectorStateNamespace`（namespace 主键 + `planId`，migration `20260923120000_connector_state_namespace_owner` 建表并回填默认模板的现状），宿主在解析状态句柄时登记一次；`GET /connector-state/namespaces` 给清单与归属，`GET /exports/connector-state` 按命名空间／计划／连接／来源四选一导出（未归属抽屉只能点名），`POST /imports/connector-state` 默认只补缺失、显式 `overwrite` 时 `version = 本地 + 1`、单抽屉可改名；Web 存储面板提供导出下载与导入上传。决定见 Proposal [`connector-state-export-v1`](docs/proposals/connector-state-export-v1.md)（accepted）与 ADR [`0026`](docs/adr/0026-connector-state-export-v1.md)；实现与验证记录见 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2（全量单元 122 文件／698 用例、Node 进程 E2E 2/2、浏览器 E2E 1 passed、组件实验室 14 passed、`docs:check` 0 失败）。
 
 ### P1-2 EXT-006 manifest 多 operation 声明与登录状态展示
 

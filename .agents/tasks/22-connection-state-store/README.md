@@ -62,7 +62,7 @@ Non-goals（见 Proposal / ADR-0017）：
 
 ## Current State
 
-- 生命周期阶段：**切片 1 已完成并合并**（`master` commit `9c4cf72`，worktree 与分支已清理）；**切片 2（2026-09-23）在 worktree `.worktree/connector-state-export` / 分支 `feat/t22-connector-state-export` 上实现**，生命周期停在「实现完成、聚焦与门禁验证已跑、已提交在分支上」，**未合并**。
+- 生命周期阶段：**切片 1 已完成并合并**（`master` commit `9c4cf72`）；**切片 2（2026-09-23）已完成、验证、`--no-ff` 合并 `1b5cabc` 并推送**；worktree `.worktree/connector-state-export` 与分支 `feat/t22-connector-state-export` 已清理。
 - 连贯目标（切片 2）：让「这个抽屉属于哪个计划」成为数据，并补上状态的导出／导入入口，闭合 ING-012 的后半个验收条件。
 - 可观察验收（切片 2，≤3 条）：
   1. 抽屉清单与导出按范围收窄：按连接／计划／来源导出只含该范围下的抽屉，未归属抽屉（如 `other-namespace`）默认不出现；
@@ -134,6 +134,7 @@ Non-goals（见 Proposal / ADR-0017）：
 - 组件实验室 E2E：`bunx playwright test --config playwright.component-lab.config.ts` → 14 passed（`StoragePanel` 的夹具客户端已补三个新方法的桩）。
 - `bun run docs:check`：747 文件 failures=[]；`git diff --check` 干净；路由表守卫 `app.controller.route-table.test.ts` 3/3（快照已按三条新路由更新）；`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` PASS（含既有基线内增长 warning；本片首次跑时 `PROJECT-STATUS.md` 因 token 轨道跨过 9k 触发「新增警戒区文件」FAIL，已通过精简本轮增补压回 8,735 token）。
 - 未运行：`test:real:rss`／`test:real:bilibili` 等真实来源验收（本片不触碰连接器的抓取行为）、Windows smoke、Docker、发布部署。
+- 合并后复跑（2026-09-23，主工作区，合并提交 `1b5cabc`）：`bun run typecheck` 0、`bun run test` 122 文件／698 用例、`docs:check` 755 文件 0 失败、size 门禁 PASS、`git diff --check` 干净。**第一次复跑失败**：typecheck 与 5 个用例报 `connectorStateNamespace` 不存在，根因是主工作区的 Prisma 客户端还是合并前的 schema 生成的；`bun run db:generate` 刷新后全绿——schema 变更合并后必须先重生成客户端。
 
 ## Follow-ups
 
