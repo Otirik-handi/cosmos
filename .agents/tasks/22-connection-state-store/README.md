@@ -6,7 +6,9 @@
 
 2026-09-10 用户指示「继续平台面开发」，下一块为 Connection/StateStore（AUT-009/AUT-010、ING-012、OPS-009、待决定 16）。Proposal [`connection-state-store-v1`](../../../docs/proposals/connection-state-store-v1.md) 起草后列出四项裁决（ConnectionInstance 可空外键、SecretStore 第一版后端、ConnectorStateStore 不迁 Checkpoint、Secret 脱敏与所有权边界）；用户接受四项默认并授权创建 worktree `.worktree/connection-state-store` / 分支 `feat/t22-connection-state-store`。稳定决定沉淀于 [`ADR-0017`](../../../docs/adr/0017-connection-secret-state-v1.md)，PRD 注记与 ADR 索引已同步。
 
-**追加切片 2（2026-09-23，归属登记与状态导出／导入）**：Phase 2 缺口复核（[`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) P1-1）指出 ING-012 只兑现了一半——状态存储已交付且被 RSS 消费，但「状态可备份、恢复、迁移并按 Connection／Source 范围隔离」没有入口，而且**归属不是数据**：命名空间是宿主按 manifest 模板算出来的字符串，库里没有「这个抽屉属于谁」的记录，所以「按连接导出」必须每次绕道计划表 + 解析模板，「从命名空间反查归属」则完全做不到。用户在讨论中要求「不要每次靠计算绕道，改成表结构」，并认可 Proposal [`connector-state-export-v1`](../../../docs/proposals/connector-state-export-v1.md) 的 C 方案与全部推荐项（未归属抽屉默认排除、单抽屉可改名、导入默认只补缺失、入口为 API + transport + Web）。稳定决定沉淀于 [`ADR-0026`](../../../docs/adr/0026-connector-state-export-v1.md)。复用本 Task 的理由：`ConnectorState` 的合同与文件边界都在这里，本切片只增归属与导出／导入面，不新建编号。
+**追加切片 2（2026-09-23，归属登记与状态导出／导入）**：Phase 2 缺口复核（[`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) P1-1）指出 ING-012 只兑现了一半——状态存储已交付且被 RSS 消费，但「状态可备份、恢复、迁移并按 Connection／Source 范围隔离」没有入口，而且**归属不是数据**：命名空间是宿主按 manifest 模板算出来的字符串，库里没有「这个抽屉属于谁」的记录，所以「按连接导出」必须每次绕道计划表 + 解析模板，「从命名空间反查归属」则完全做不到。用户在讨论中要求「不要每次靠计算绕道，改成表结构」，并认可 Proposal [`connector-state-export-v1`](../../../docs/proposals/connector-state-export-v1.md) 的 C 方案与全部推荐项（未归属抽屉默认排除、单抽屉可改名、导入默认只补缺失、入口为 API + transport + Web）。稳定决定沉淀于 [`ADR-0026`](../../../docs/adr/0026-connector-state-export-v1.md)。复用本 Task 的理由：`ConnectorState` 的合同与文件边界都在这里，本切片只增归属与导出／导入面，不新建编号。该切片已 `--no-ff` 合并 `1b5cabc`。
+
+**追加切片 3（2026-09-23，连接可见性）**：用户选择做 [`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) 的 P1-3（AUT-009）。复核时发现缺口比缺口台账写的更深一层：面板确实没有「授权范围」与「失效原因」两行，但**这两个字段今天没有任何自动写入方**（`scopeJson` 只在建连接时可写、Web 表单没这个输入框；`lastError` 只有 `PATCH /connections/:id` 能写，全仓只有测试调用过），所以只补显示等于两行永远为空。用户裁决走「显示 + 补写入路径」，且**只用现有合同**（`createConnection.scopeJson`、`updateConnection.status`/`lastError`）——因此不需要 Proposal、不改公共 DTO。授权范围输入要求合法 JSON（`scopeJson` 是 JSON 字符串，将来真实 Adapter 写入时格式一致）。复用本 Task 的理由同上：`ConnectionInstance` 的合同与 `ConnectionPanel` 都在这里。
 
 ## Goal
 
@@ -53,6 +55,18 @@ Non-goals（见 Proposal / ADR-0017）：
 - Workflow 级状态的归属（`ownerKind`／`ownerId` 泛化留给 Revisit Gate）；导出落盘产物、定时备份、加密、签名、压缩。
 - 按 Adapter 声明的状态 schema 做值校验（该能力本身尚未落地）。
 
+切片 3 追加 Scope：
+
+- Web：`ConnectionPanel` 加「授权范围」输入（本地 JSON 校验、提交前规范化）、每行的「授权范围／失效原因」两行展示、以及「标记失效」（内联原因 + `status=error`）与「恢复可用」（`status=active` + 清空原因）。
+- Web：组件实验室的连接面板夹具补 `updateConnection` 桩、示例连接补授权范围与一条失效连接。
+- 测试：`e2e/component-lab/connection-panel.spec.ts`（渲染 + 内联输入 + 非法 JSON 拦截）、`e2e/browser/connection-visibility.spec.ts`（真实栈上的记录 → 标记失效 → 恢复）。
+
+切片 3 追加 Non-goals：
+
+- **不改任何公共 DTO**：全部用现有 `createConnection.scopeJson` 与 `updateConnection.status`/`lastError`；因此不需要 Proposal 与新 ADR。
+- 授权范围的形状不做校验（只要求是合法 JSON）；`scopeJson` 仍只在建连接时可写，编辑入口留给真实认证 Adapter。
+- 连接器的 catalog 下拉校验、「来源 → 连接」绑定 UI 仍后置。
+
 ## 权威合同
 
 - Proposal [`connection-state-store-v1`](../../../docs/proposals/connection-state-store-v1.md)（accepted，2026-09-10，用户确认四项默认）。
@@ -71,6 +85,15 @@ Non-goals（见 Proposal / ADR-0017）：
 - 依赖：切片 1（`ConnectorState`）、Task 33（计划 id 与命名空间按计划解析）。
 - 受影响合同（切片 2）：contracts（清单／导出信封／导入命令与结果／导出范围查询）、application（`ConnectorStateStorePort.registerNamespace` + 三个仓储方法 + 一个域错误）、storage（新表与 migration + 三个仓储方法 + `PrismaConnectorStateStore.registerNamespace`）、API（三条路由）、transport（三个客户端方法）、Web（`StoragePanel`）。
 - 验证层级：focused（contracts/storage/application/api/transport/web）→ Node 进程 E2E → 全量门禁。
+- 生命周期阶段（切片 3）：**在 worktree `.worktree/connection-visibility` / 分支 `feat/t22-connection-visibility` 上实现**，停在「实现完成、验证已跑、未合并」。
+- 连贯目标（切片 3）：让 AUT-009 的「用户能看到授权范围与失效原因」成立——不只是显示，还要有内容来源。
+- 可观察验收（切片 3，≤3 条）：
+  1. 建连接时记录的授权范围在连接行上按可读形式回显（`read: true · comment: false`），非法 JSON 在本地被拦下且不清空表单；
+  2. 标记失效后该行同时显示「错误」徽标与失效原因，恢复可用后原因回到「未记录」；
+  3. 全程只用现有合同（无公共 DTO 变化）。
+- 依赖：切片 1（`ConnectionInstance`、`updateConnection`）、Task 33（计划按连接分组，绑定的另一半已交付）。
+- 受影响合同（切片 3）：只有 Web（`ConnectionPanel`）与组件实验室夹具；contracts／application／storage／API／transport **零改动**。
+- 验证层级：focused（web typecheck + lint）→ 组件实验室 E2E → 浏览器产品 E2E → 全量门禁。
 
 ## Decisions and Deviations
 
@@ -88,6 +111,13 @@ Non-goals（见 Proposal / ADR-0017）：
 - 导入命令把整份导出件作为 body 的一个字段（`{mode, targetNamespace?, export}`），而不是"原始文件 + 查询参数"：导入边界因此只有一个被校验的输入。
 - **偏差（既有欠账，非本片引入）**：`packages/application/entry-surface.txt` 在 `master` 上已落后一行——Task 23 的 `CollectionPlanWebhookEntryTarget` 类型导出没进快照。本片必须重生成该文件（新增 2 个类型 + 1 个值），机械重生成顺带补齐了那一行；`entry-contract.test.ts` 只比对运行时值导出，所以这条类型漂移此前不会被测试拦住。
 - **偏差（既有欠账）**：`docs/spec/storage/0001-prisma-repository.md` 的模型表此前没有 `ConnectorState`／`ConnectionInstance` 行。本片只补 `ConnectorState` 与新增的 `ConnectorStateNamespace`（新行引用了前者，不补会读不通），`ConnectionInstance` 仍缺，已记入 Follow-ups。
+
+切片 3 追加：
+
+- **不改公共 DTO**：`createConnection` 已有 `scopeJson`、`updateConnection` 已有 `status`/`lastError`，本片只补 Web 侧的入口与显示，因此不需要 Proposal 与新 ADR（准入表里这是「当前合同可判定的局部」，AUT-009 的验收条件本来就写着要能看到这两项）。
+- 授权范围输入**只校验是不是合法 JSON**，不校验形状；提交前用 `JSON.stringify` 规范化，用户输入的空格与换行不进入存储值。
+- 面板把「这两个字段今天没有自动写入方」当成产品事实处理：动作入口的措辞是用户视角的「标记失效／恢复可用」，而不是假装系统探测到了原因；将来真实 Adapter 接上后由系统写同一对字段，面板不用改。
+- 授权范围的可读渲染只处理「顶层标量值对象」这一常见形状，其它形状（嵌套、数组）回退紧凑 JSON；解析不了的值原样显示，不隐藏手工改库写进来的内容。
 
 ## Implementation Walkthrough
 
@@ -110,6 +140,13 @@ Non-goals（见 Proposal / ADR-0017）：
 7. **Web**：`StoragePanel` 并行加载抽屉清单；「连接器状态」一组提供范围下拉（含「未归属」标记）、导出下载、文件导入（本地先用 `connectorStateExportSchema` 解析）、模式选择与结果条数；组件实验室补三个桩。
 8. **宿主接线**：`apps/worker/src/main.ts` 的 `resolveConnectorStateHandle` 改为 async，在解析句柄时登记归属，冲突与失败只记 `connector.state.owner_conflict`／`connector.state.registration_skipped`。
 9. **文档**：Proposal 定稿 `accepted`、ADR-0026、ADR-0017 关联、ADR 索引、spec 五处、路由快照、PRD 注记与勘误台账、`PROJECT-STATUS.md`。
+
+切片 3（2026-09-23，连接可见性）：
+
+1. **Web**：`ConnectionPanel` 加三块——建连接表单的「授权范围」输入（本地 `JSON.parse` 校验、提交前 `JSON.stringify` 规范化）、每行 `dl` 里的「授权范围／失效原因」（空值显示「未记录」，范围按 `键: 值` 渲染）、行内动作「标记失效」（内联原因输入 + `updateConnection({status:"error", lastError})`）与「恢复可用」（`{status:"active", lastError:null}`）；动作入口按状态二选一显示。
+2. **组件实验室**：连接夹具的示例连接补授权范围、新增一条失效连接（状态 `error` + 原因），夹具客户端补 `updateConnection` 桩。
+3. **测试**：`e2e/component-lab/connection-panel.spec.ts` 两例（两行渲染 + 内联输入的启用/收起；非法 JSON 在本地被拦下且表单不清空）；`e2e/browser/connection-visibility.spec.ts` 一例（真实栈：建连接记录范围 → 回显 → 标记失效 → 原因与「错误」徽标 → 恢复可用 → 原因清空 → 删除连接）。
+4. **文档**：Task 记录、`docs/spec/interfaces/0005-web-client.md`、`Phase-2-UNDO.md`、`PROJECT-STATUS.md`、`ERRATA.md`（AUT-009 按四条验收条件收口）。
 
 ## Verification / Gate
 
@@ -136,6 +173,13 @@ Non-goals（见 Proposal / ADR-0017）：
 - 未运行：`test:real:rss`／`test:real:bilibili` 等真实来源验收（本片不触碰连接器的抓取行为）、Windows smoke、Docker、发布部署。
 - 合并后复跑（2026-09-23，主工作区，合并提交 `1b5cabc`）：`bun run typecheck` 0、`bun run test` 122 文件／698 用例、`docs:check` 755 文件 0 失败、size 门禁 PASS、`git diff --check` 干净。**第一次复跑失败**：typecheck 与 5 个用例报 `connectorStateNamespace` 不存在，根因是主工作区的 Prisma 客户端还是合并前的 schema 生成的；`bun run db:generate` 刷新后全绿——schema 变更合并后必须先重生成客户端。
 
+切片 3 验证（2026-09-23，实际运行）：
+
+- `bun run --cwd apps/web tsc --noEmit` 0 error；`bun run lint:web` 0 error（79 条既有 warning）；`bun run typecheck` 全仓通过。
+- 组件实验室 E2E：`bunx playwright test --config playwright.component-lab.config.ts e2e/component-lab/connection-panel.spec.ts` → 2 passed（两行渲染与内联输入的启用/收起；非法 JSON 在本地拦下且表单不清空）。**注意**：跑实验室 dev server 前必须先 `bun run build:packages`，否则 Next 报 `Cannot find module '@cosmos/logging'`。
+- 浏览器产品 E2E：`bun run build` 后 `bunx playwright test --config playwright.config.ts e2e/browser/connection-visibility.spec.ts` → 1 passed（真实栈：建连接记录授权范围 → 行上按 `read: true · comment: false` 回显 → 标记失效 → 「错误」徽标 + 原因 → 恢复可用 → 原因回到「未记录」→ 删除用例连接）。
+- 未运行：全量浏览器 E2E（其余 spec）、`test:real:*`、Windows smoke、Docker、发布部署。
+
 ## Follow-ups
 
 - CollectionPlan / 多采集计划（AUT-010）与 Checkpoint → 按计划的 ConnectorStateStore 迁移。
@@ -143,6 +187,12 @@ Non-goals（见 Proposal / ADR-0017）：
 - 真实认证类 Adapter 接入（Bilibili 从 OpenCLI profile 迁到 Connection + SecretRef）。
 - Connection Web 面板的 connectorId 校验（改为 catalog 下拉）与「来源 → 连接」的绑定 UI。
 - Phase 2 平台面其余切片：Trigger/SDK、OPS-003/004（按既定排序继续）。
+
+切片 3 追加 Follow-ups：
+
+- `scopeJson` 仍只能在**建连接时**写入（`updateConnectionCommandSchema` 不含该字段）；编辑入口随真实认证 Adapter 一起定——那时它由系统写，用户手填的语义要重新裁定。
+- 授权范围的形状没有校验（只要求合法 JSON）；真实 Adapter 接入时需要一份 scope schema 才能校验与展示。
+- 连接面板仍没有编辑名称/账号的入口（既有边界，未在本片扩大范围）。
 
 切片 2 追加 Follow-ups：
 

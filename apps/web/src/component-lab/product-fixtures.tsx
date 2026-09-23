@@ -418,10 +418,22 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         name: "我的 Bilibili 主账号",
         connectorId: "bilibili",
         account: "example",
-        scopeJson: null,
+        scopeJson: '{"read":true,"comment":false}',
         status: "active",
         secretRef: "secret:connection-bilibili",
         lastError: null,
+        createdAt: "2026-09-10T08:00:00.000Z",
+        updatedAt: "2026-09-10T08:00:00.000Z",
+    },
+    {
+        id: "connection-lab-expired",
+        name: "示例站登录态",
+        connectorId: "generic",
+        account: null,
+        scopeJson: null,
+        status: "error",
+        secretRef: null,
+        lastError: "登录态已过期",
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -431,6 +443,15 @@ const connectionLabClient = {
     listConnections: async () => connectionLabConnections,
     createConnection: async () => connectionLabConnections[0],
     deleteConnection: async () => ({ ok: true, id: "connection-bilibili", action: "connection.deleted" }),
+    updateConnection: async (
+        connectionId: string,
+        input: { status?: ConnectionInstance["status"]; lastError?: string | null },
+    ) => ({
+        ...(connectionLabConnections.find((item) => item.id === connectionId)
+            ?? connectionLabConnections[0]),
+        ...(input.status === undefined ? {} : { status: input.status }),
+        ...(input.lastError === undefined ? {} : { lastError: input.lastError }),
+    }),
 } as unknown as HttpCosmosClient;
 
 export function renderConnectionPanelLab(props: LabProps) {

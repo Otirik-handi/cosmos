@@ -93,15 +93,18 @@
 
 ## 5. `e2e/component-lab/source-form.spec.ts:67` 的单次失败
 
-**状态（2026-09-18，一次观察，未归因）**：源表单「恢复的 token 在字段 blur 但未编辑时保留」用例在整套组件实验室里失败一次，随后两次复跑（单文件、整套）都通过。
+**状态（2026-09-23 更新，两次观察，未归因）**：源表单「恢复的 token 在字段 blur 但未编辑时保留」用例在整套组件实验室里失败，随后复跑（单文件、整套）都通过。
 
 | 跑法 | 结果 |
 |---|---|
 | Task 31 worktree，整套组件实验室（`bun run test:browser:component-lab`） | 13 passed / 1 failed：`source-form.spec.ts:67 preserves a restored token when its field blurs without editing` |
 | 单跑该文件（`bunx playwright test --config playwright.component-lab.config.ts e2e/component-lab/source-form.spec.ts`） | **6 passed**（含该用例） |
 | 同内容整套再跑一次 | **14 passed (16.8s)** |
+| 2026-09-23 Task 22 切片 3 worktree（新增 `connection-panel.spec.ts` 后整套 16 例） | 15 passed / 1 failed：**同一条** `source-form.spec.ts:67` |
+| 单跑该文件 | **6 passed** |
+| 同内容整套再跑一次 | **16 passed (18.1s)** |
 
-**当前判断**：一次观察、两次复跑均通过，符合环境抖动；机制未查清。与 Task 31 的改动（公开 Asset 投影与相关类型）没有可解释的因果关系——该用例不消费内容查询投影，也不碰媒体展示。**建议**：再出现时先看 trace 里失败步骤与同一 worker 上前一个用例是否共享状态（组件实验室是 1 worker 串行、共用同一个 dev server）。
+**当前判断**：两次观察、四次复跑均通过，符合环境抖动；机制未查清。两次都发生在**整套的第一轮**（dev server 刚冷启动、Next 在编译），后一次整套是好几次运行之后——这个相关性只是观察，未经证实。与两次改动（Task 31 的公开 Asset 投影、Task 22 切片 3 的 ConnectionPanel 与连接夹具）都没有可解释的因果关系：该用例不消费内容查询投影，也不消费连接夹具。**建议**：再出现时先看 trace 里失败步骤与同一 worker 上前一个用例是否共享状态（组件实验室是 1 worker 串行、共用同一个 dev server），并记录该次是否为冷启动首轮。
 
 ## 6. 组件实验室整套在紧跟浏览器套件后启动 dev server 超时
 

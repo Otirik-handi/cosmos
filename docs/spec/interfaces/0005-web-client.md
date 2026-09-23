@@ -272,6 +272,14 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     读用户选择的文件、先用 `connectorStateExportSchema` 在本地解析（选错文件时给出「不是导出件」而不是
     服务端 400），再调 `client.importConnectorState({mode, targetNamespace?, export})` 并显示新增／覆盖／
     跳过的条数；模式默认「只补缺失」，「覆盖本地」需用户显式选择。
+23. **连接面板（AUT-009）**：侧栏“连接”区的 `ConnectionPanel` 挂载时调 `client.listConnections()`。
+    新建连接调 `client.createConnection({name, connectorId, scopeJson?})`：`connectorId` 为空时回退
+    `generic`，`scopeJson` 为空时不发送该字段；授权范围是 JSON 字符串，输入只要求合法 JSON——
+    非法时在本地拦下（显示错误、保留表单、不发请求），合法时先 `JSON.stringify` 规范化再提交。
+    “标记失效”在行内收集原因后调 `client.updateConnection(id, {status: "error", lastError: 原因})`，
+    “恢复可用”调 `client.updateConnection(id, {status: "active", lastError: null})`；两者成功后重取列表，
+    “删除”调 `client.deleteConnection(id)`。**这两个字段今天没有自动写入方**（真实认证 Adapter 后置，
+    见 EXT-006），所以面板提供的是用户侧记录入口，不假装系统探测到了原因。
 
 ## 输入
 
@@ -326,8 +334,11 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
   状态（“Webhook 入口：已配置/未生成”）；行内按钮打开入口面板，面板给出入口地址（与页面同源，
   Next 把 `/hooks/*` 透传给 API）、凭证状态、生成/轮换与撤销按钮，生成或轮换成功后在同一面板
   显示**唯一一次**的明文凭证与 curl 调用示例（ADR-0024）。
-- Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；
-  ready 时先显示来源定义选择器，再按所选 manifest 渲染字段（含 `enum` 选择框与认证提示），
+- 连接面板（AUT-009）：侧栏“连接”区列出可复用连接；每行显示状态徽标、名称、账号，以及
+  **授权范围**与**失效原因**两行——空值显示“未记录”，授权范围按 `键: 值` 渲染顶层标量对象、
+  其它形状回退紧凑 JSON、解析不了的值原样显示。行内动作按状态二选一（“标记失效”或“恢复可用”），
+  删除始终可用；新建连接提供名称、Connector 与可选的授权范围输入。
+- Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；ready 时先显示来源定义选择器，再按所选 manifest 渲染字段（含 `enum` 选择框与认证提示），
   测试结果区显示 running/成功统计/失败原因/超时四态。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
   时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多；
