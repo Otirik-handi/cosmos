@@ -59,3 +59,20 @@ test("rejects a non-JSON authorized scope before creating the connection", async
     // 表单没有被清空：用户不必重新输入名称。
     await expect(preview.getByLabel("连接名称")).toHaveValue("范围格式用例");
 });
+
+/**
+ * 适配器配置同样必须是合法 JSON（Proposal connection-login-lifecycle-v1 决定 1）：
+ * Bilibili 的 OpenCLI profile 就是从这里进的连接，非法输入在本地拦下。
+ */
+test("rejects a non-JSON adapter configuration before creating the connection", async ({page}) => {
+    await page.goto("/dev/components?component=connection-panel&scene=populated");
+    const preview = page.locator(PREVIEW_ROOT);
+    await expect(preview).toBeVisible();
+
+    await preview.getByLabel("连接名称").fill("适配器配置格式用例");
+    await preview.getByLabel("连接适配器配置").fill("{profile: chrome-main}");
+    await preview.getByRole("button", { name: "新建连接" }).click();
+
+    await expect(preview.getByRole("alert")).toContainText("适配器配置必须是合法 JSON");
+    await expect(preview.getByLabel("连接名称")).toHaveValue("适配器配置格式用例");
+});

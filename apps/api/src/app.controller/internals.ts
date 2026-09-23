@@ -140,7 +140,7 @@ export function toPublicSource(source: SourceSnapshot) {
     const config: Record<string, unknown> = {};
     if (typeof source.config.feedUrl === "string") config.feedUrl = source.config.feedUrl;
     if (source.kind === "bilibili") {
-        for (const key of ["mode", "limit", "profile", "schemaVersion"] as const) {
+        for (const key of ["mode", "limit", "schemaVersion"] as const) {
             const value = source.config[key];
             if (value !== undefined) config[key] = value;
         }

@@ -34,9 +34,15 @@ describe("source and job contracts", () => {
             limit: 5,
         });
 
-        expect(() => bilibiliSourceConfigSchema.parse({
+        // `feed` 不再要求配置里有 profile：profile 归连接（Proposal
+        // connection-login-lifecycle-v1 决定 1），本用例只守 mode 的取值域。
+        expect(bilibiliSourceConfigSchema.parse({
             mode: "feed",
             limit: 5,
+        })).toMatchObject({ mode: "feed" });
+
+        expect(() => bilibiliSourceConfigSchema.parse({
+            mode: "search",
         })).toThrow();
 
         expect(() => bilibiliSourceConfigSchema.parse({
@@ -192,6 +198,54 @@ describe("source and job contracts", () => {
         expect(snapshot.mediaPolicy).toBeNull();
     });
 
+    /**
+     * 连接投影随入队冻结（Proposal connection-login-lifecycle-v1 决定 1；AUT-016 明确
+     * 写「排队后修改 Connection 配置不会改变已创建 Run 的输入」）。只冻身份与非秘密
+     * 配置，`status`/`lastError` 这类活诊断不得进入——它们冻下来之后只会误导。
+     */
+    it("freezes the connection projection into the execution snapshot", () => {
+        const base = {
+            id: "source-1",
+            name: "Bilibili feed",
+            kind: "bilibili",
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "fetch",
+            connectorId: "bilibili",
+            config: { mode: "feed", limit: 20 },
+            enabled: true,
+            planId: "plan:source-1",
+            mediaPolicy: null,
+            revisionId: "source-1:1",
+            createdAt: "2026-08-24T00:00:00.000Z",
+            updatedAt: "2026-08-24T00:00:00.000Z",
+        };
+        const connection = {
+            id: "connection-1",
+            connectorId: "bilibili",
+            configJson: '{"profile":"chrome-main"}',
+        };
+
+        expect(sourceExecutionSnapshotSchema.parse({ ...base, connection }).connection).toEqual(connection);
+        // 未保存配置的探测路径没有连接：缺省与显式 null 都必须可解析。
+        expect(sourceExecutionSnapshotSchema.parse({ ...base }).connection).toBeUndefined();
+        expect(sourceExecutionSnapshotSchema.parse({ ...base, connection: null }).connection).toBeNull();
+        expect(() => sourceExecutionSnapshotSchema.parse({
+            ...base,
+            connection: { ...connection, status: "active" },
+        })).toThrow();
+    });
+
+    /**
+     * profile 归连接之后，来源配置里再出现它就是错的：迁移必须把它搬走，而不是让
+     * 一份配置同时有两个所有者（ADR-0017 决策 1 由此被本片部分取代）。
+     */
+    it("no longer accepts the OpenCLI profile inside the Bilibili source config", () => {
+        expect(bilibiliSourceConfigSchema.parse({ mode: "feed", limit: 5 })).toMatchObject({
+            mode: "feed",
+            limit: 5,
+        });
+        expect(() => bilibiliSourceConfigSchema.parse({ mode: "feed", profile: "chrome-main" })).toThrow();
+    });
 
     it("validates probe results and job snapshots", () => {
         expect(sourceProbeResultSchema.parse({

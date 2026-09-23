@@ -2,7 +2,7 @@
 
 import {
     getSourceConfigurationSchema, type SourceConfigProbeCommand,
-    type SourceConfigProbeResult, type SourceConfig, type SourceExecutionSnapshot,
+    type SourceConfigProbeResult, type SourceConfig, type SourceConnectionProjection, type SourceExecutionSnapshot,
     type SourceProbeResult,
 } from "@cosmos/contracts";
 
@@ -143,6 +143,14 @@ export class SourceConfigProbeService {
         private readonly connectors: ConnectorRegistry,
         private readonly now: () => string = () => new Date().toISOString(),
         logger?: LoggerPort,
+        /**
+         * 未保存配置的探测也要能读到连接的非秘密配置（Proposal connection-login-lifecycle-v1
+         * 决定 1）：`feed` 这类需要登录态的操作要靠它拿到 profile。这是个只读回调——
+         * 服务本身仍然拿不到仓储，所以结构上依然无法持久化 observation/entry/asset/checkpoint。
+         */
+        private readonly resolveConnection?: (
+            connectionId: string,
+        ) => Promise<SourceConnectionProjection | null>,
     ) {
         this.logger = resolveLogger(logger);
     }
@@ -164,6 +172,19 @@ export class SourceConfigProbeService {
             }
             const config = configurationSchema.parse(command.config) as SourceConfig;
             stage = "validate";
+            // `feed` 这类需要登录态的操作要靠连接（Proposal connection-login-lifecycle-v1）：
+            // 给了连接却查不到是无效输入，不能悄悄降级成「没有连接」。
+            const requestedConnectionId = command.connectionId ?? null;
+            const connection = requestedConnectionId === null
+                ? null
+                : await this.resolveConnection?.(requestedConnectionId) ?? null;
+            if (requestedConnectionId !== null && connection === null) {
+                throw new ConnectorExecutionError(
+                    "invalid_configuration",
+                    `Connection not found: ${requestedConnectionId}`,
+                    false,
+                );
+            }
             // Connectors only read config (and log kind); the remaining
             // identity fields exist to satisfy the execution snapshot without
             // inventing a persisted source row. A probe has no plan, so the
@@ -177,6 +198,7 @@ export class SourceConfigProbeService {
                 connectorId: manifest.connectorId,
                 kind: manifest.id,
                 config,
+                connection,
                 enabled: false,
                 planId: "config-probe",
                 mediaPolicy: null,

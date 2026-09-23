@@ -2,6 +2,8 @@
 
 > 状态：Accepted design contract
 >
+> 部分取代：决定 1 的「Bilibili 的 OpenCLI profile 继续作为外部登录态例外留在 `config.profile`」由 ADR [`0027`](0027-connection-login-lifecycle-v1.md) 取代（2026-09-23，profile 归连接的非秘密配置 `configJson`）；决策 2/4 的 SecretStore 与租约形状不变（本片不实现凭证读取）。
+>
 > 日期：2026-09-10
 >
 > 关联：[`connection-state-store-v1 Proposal`](../proposals/connection-state-store-v1.md)、[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md) §4.2/§5.2、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) AUT-009/AUT-010/ING-012/OPS-009、ADR [`0001`](0001-durable-workflow-runtime.md)、ADR [`0026`](0026-connector-state-export-v1.md)（`ConnectorState` 的归属登记、导出与导入）

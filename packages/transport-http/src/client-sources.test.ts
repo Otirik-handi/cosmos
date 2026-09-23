@@ -300,6 +300,7 @@ describe("HttpCosmosClient 来源与运行", () => {
             connectorId: "bilibili",
             account: null,
             scopeJson: null,
+            configJson: null,
             status: "active",
             secretRef: "secret:c1",
             lastError: null,

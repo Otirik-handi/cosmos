@@ -167,6 +167,7 @@ type	SourceConfig
 type	SourceConfigProbeCommand
 type	SourceConfigProbeJobSnapshot
 type	SourceConfigProbeResult
+type	SourceConnectionProjection
 type	SourceConnectorId
 type	SourceDefinitionManifest
 type	SourceDefinitionPage
@@ -374,6 +375,7 @@ value	moveEntryToStoryCommandSchema
 value	normalizedAssetInputSchema
 value	normalizedIngestItemSchema
 value	observationSnapshotSchema
+value	openCliProfileSchema
 value	parseActionRef
 value	pinSpotlightCommandSchema
 value	protocolVersion

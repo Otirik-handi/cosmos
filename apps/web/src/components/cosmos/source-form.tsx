@@ -31,7 +31,7 @@ import {Input} from "@/components/ui/input";
 /**
  * 表单只校验它能自己判断的部分（名称、定时、连接）；目标配置的每个字段由所选
  * manifest 的 JSON Schema 驱动，逐字段校验见 `validateManifestFields`，更细的规则
- * （例如 Bilibili 的「mode=feed 才需要 profile」）由服务端 canonical schema 裁决。
+ * （例如 Bilibili 的「feed 需要绑一条带登录态的连接」）由连接器在探测/抓取时裁决。
  */
 export const sourceFormSchema = z.object({
     name: z.string().trim().min(1, "请填写来源名称。").max(200, "来源名称不能超过 200 字符。"),
@@ -135,8 +135,8 @@ export function readManifestFields(manifest: SourceDefinitionManifest): Manifest
 
 /**
  * 客户端能自行判断的字段校验（必填、整数、范围、枚举取值）。返回「字段名 → 消息」。
- * 这里不复制服务端的条件规则：JSON Schema 表达不了 Bilibili 的「mode=feed 才需要
- * profile」，硬猜会在合法输入上误报。
+ * 这里不复制服务端的条件规则：JSON Schema 表达不了跨字段与跨连接的条件（例如
+ * 「feed 需要一条带 OpenCLI profile 的连接」），硬猜会在合法输入上误报。
  */
 export function validateManifestFields(
     fields: readonly ManifestField[],
@@ -209,11 +209,6 @@ const fieldPresentation: Record<string, {
     mode: {
         label: "采集模式",
         optionLabels: {hot: "热门", feed: "动态"},
-    },
-    profile: {
-        label: "OpenCLI Profile",
-        placeholder: "chrome-main",
-        description: "采集动态时需要；与浏览器里已登录的 OpenCLI profile 同名。",
     },
     limit: {
         label: "每次条数",

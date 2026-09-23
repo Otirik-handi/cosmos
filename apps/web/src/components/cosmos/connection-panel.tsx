@@ -24,10 +24,11 @@ const statusVariant = {
 } as const satisfies Record<ConnectionInstance["status"], NonNullable<ComponentProps<typeof Badge>["variant"]>>;
 
 /**
- * 授权范围是 JSON 字符串（`scopeJson`）。这里只判断「是不是合法 JSON」，不约束形状：
- * 真实认证 Adapter 接上之前它的内容是用户自己的记录，形状由用户与将来的 Adapter 约定。
+ * 授权范围（`scopeJson`）与适配器配置（`configJson`）都是 JSON 字符串。这里只判断
+ * 「是不是合法 JSON」，不约束形状：授权范围是用户自己的记录，适配器配置的形状由各
+ * Adapter 约定（Bilibili 是 `{"profile":"…"}`）。
  */
-function parseScope(raw: string): { ok: true; value: unknown } | { ok: false } {
+function parseJsonText(raw: string): { ok: true; value: unknown } | { ok: false } {
     try {
         return { ok: true, value: JSON.parse(raw) as unknown };
     } catch {
@@ -36,15 +37,15 @@ function parseScope(raw: string): { ok: true; value: unknown } | { ok: false } {
 }
 
 /**
- * 可读渲染：顶层是「标量值对象」时按 `键: 值` 列出（授权范围的常见形状），其它形状
+ * 可读渲染：顶层是「标量值对象」时按 `键: 值` 列出（这两个字段的常见形状），其它形状
  * 回退到紧凑 JSON。解析不了的值原样显示——手工改库写进来的内容不该被隐藏。
  */
-function formatScope(scopeJson: string): string {
+function formatJsonRecord(json: string): string {
     let parsed: unknown;
     try {
-        parsed = JSON.parse(scopeJson) as unknown;
+        parsed = JSON.parse(json) as unknown;
     } catch {
-        return scopeJson;
+        return json;
     }
     if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         const entries = Object.entries(parsed as Record<string, unknown>);
@@ -53,7 +54,7 @@ function formatScope(scopeJson: string): string {
             return entries.map(([key, value]) => `${key}: ${String(value)}`).join(" · ");
         }
     }
-    return JSON.stringify(parsed) ?? scopeJson;
+    return JSON.stringify(parsed) ?? json;
 }
 
 type ConnectionPanelProps = {
@@ -64,11 +65,12 @@ type ConnectionPanelProps = {
 
 /**
  * 连接面板（ADR-0017 / AUT-009）：列出可复用连接、新建、删除，并让用户看到与记录
- * 每个连接的**授权范围**与**失效原因**。Secret 只以 `secretRef` 不透明引用存在，
- * 本面板不展示也不读取凭证本体。
+ * 每个连接的**适配器配置**、**授权范围**与**失效原因**。Secret 只以 `secretRef`
+ * 不透明引用存在，本面板不展示也不读取凭证本体。
  *
- * 这两个字段今天没有自动写入方（真实认证 Adapter 属于后续切片），所以面板同时提供
- * 用户侧入口：建连接时记录授权范围，失效时自己写下原因、恢复后清除。
+ * 「适配器配置」是连接的非秘密配置（Proposal connection-login-lifecycle-v1 决定 1）：
+ * Bilibili 的 OpenCLI profile 住在这里，连接器抓取时读它。授权范围与失效原因今天仍
+ * 没有自动写入方（登录探测属本 Task 的切片 4b），所以面板同时提供用户侧记录入口。
  */
 export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelProps) {
     const [connections, setConnections] = useState<readonly ConnectionInstance[] | null>(null);
@@ -77,6 +79,8 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
     const [connectorId, setConnectorId] = useState("");
     const [scope, setScope] = useState("");
     const [scopeError, setScopeError] = useState<string | null>(null);
+    const [adapterConfig, setAdapterConfig] = useState("");
+    const [adapterConfigError, setAdapterConfigError] = useState<string | null>(null);
     /** 正在填写失效原因的那个连接；同一时刻只开一个。 */
     const [failingId, setFailingId] = useState<string | null>(null);
     const [failureReason, setFailureReason] = useState("");
@@ -120,7 +124,7 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
         const trimmedScope = scope.trim();
         let scopeJson: string | undefined;
         if (trimmedScope !== "") {
-            const parsed = parseScope(trimmedScope);
+            const parsed = parseJsonText(trimmedScope);
             if (!parsed.ok) {
                 setScopeError('授权范围必须是合法 JSON，例如 {"read": true}');
                 return;
@@ -128,16 +132,29 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
             // 存规范化后的文本：用户输入的空格与换行不该成为合同的一部分。
             scopeJson = JSON.stringify(parsed.value);
         }
+        const trimmedConfig = adapterConfig.trim();
+        let configJson: string | undefined;
+        if (trimmedConfig !== "") {
+            const parsed = parseJsonText(trimmedConfig);
+            if (!parsed.ok) {
+                setAdapterConfigError('适配器配置必须是合法 JSON，例如 {"profile": "chrome-main"}');
+                return;
+            }
+            configJson = JSON.stringify(parsed.value);
+        }
         setScopeError(null);
+        setAdapterConfigError(null);
         client.createConnection({
             name: trimmedName,
             connectorId: connectorId.trim() || "generic",
             ...(scopeJson === undefined ? {} : { scopeJson }),
+            ...(configJson === undefined ? {} : { configJson }),
         })
             .then(() => {
                 setName("");
                 setConnectorId("");
                 setScope("");
+                setAdapterConfig("");
                 load();
             })
             .catch(() => setState("error"));
@@ -223,11 +240,19 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                             </div>
                             <dl className="grid gap-0.5 text-xs text-muted-foreground">
                                 <div className="flex gap-1">
+                                    <dt className="shrink-0">适配器配置</dt>
+                                    <dd className="min-w-0 break-words">
+                                        {connection.configJson === null
+                                            ? "未记录"
+                                            : formatJsonRecord(connection.configJson)}
+                                    </dd>
+                                </div>
+                                <div className="flex gap-1">
                                     <dt className="shrink-0">授权范围</dt>
                                     <dd className="min-w-0 break-words">
                                         {connection.scopeJson === null
                                             ? "未记录"
-                                            : formatScope(connection.scopeJson)}
+                                            : formatJsonRecord(connection.scopeJson)}
                                     </dd>
                                 </div>
                                 <div className="flex gap-1">
@@ -286,6 +311,18 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                     value={connectorId}
                     onChange={(event) => setConnectorId(event.target.value)}
                 />
+                <Input
+                    aria-label="连接适配器配置"
+                    placeholder={'适配器配置（JSON，可选，如 {"profile": "chrome-main"}）'}
+                    value={adapterConfig}
+                    onChange={(event) => {
+                        setAdapterConfig(event.target.value);
+                        setAdapterConfigError(null);
+                    }}
+                />
+                {adapterConfigError ? (
+                    <p role="alert" className="text-xs text-destructive">{adapterConfigError}</p>
+                ) : null}
                 <Input
                     aria-label="连接授权范围"
                     placeholder={'授权范围（JSON，可选，如 {"read": true}）'}

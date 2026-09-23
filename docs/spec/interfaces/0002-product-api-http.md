@@ -155,7 +155,7 @@ the current code has not removed it or replaced it with a permanent redirect.
 
 Webhook 入口的 `entryPath` 会出现在 URL 与日志里，所以它不是凭证；凭证本体只在生成/轮换响应里出现一次，读投影只回答 `credentialConfigured`（ADR-0024）。
 
-Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。
+Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。`configJson` 是连接的**非秘密**适配器配置（Bilibili 的 OpenCLI profile 住在这里），创建与更新都可写、读取原样回显。`POST /source-config-probes` 接受可选 `connectionId`：未保存配置的探测没有来源与计划，需要登录态的操作靠它拿连接；不存在的连接当场 404 `not_found`。
 
 | `GET /storage-stats` | 无 | HTTP 200 返回 `StorageStats`（数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层 `categories`）；只读。 |
 | `GET /backups` | 无 | HTTP 200 返回 `BackupSnapshot[]`（数据根 `backups/` 下的数据库备份，按时间升序）。 |

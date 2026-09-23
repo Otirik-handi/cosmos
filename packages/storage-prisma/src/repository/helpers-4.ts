@@ -502,7 +502,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         // 来源侧的同名列在读取切换后不再被读，也不再被写。
         const plan = await db.collectionPlan.findUnique({
             where: { sourceId: source.id },
-            include: { triggerBindings: true },
+            include: { triggerBindings: true, connection: true },
         });
         if (!plan) {
             throw new Error(`Source has no collection plan: ${source.id}`);
@@ -532,6 +532,18 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             planId: plan.id,
             planRevisionId: `${plan.id}:${plan.revision}`,
             connectionId: plan.connectionId,
+            /**
+             * 连接投影随执行快照一起冻住（Proposal connection-login-lifecycle-v1 决定 1）。
+             * 只取身份与非秘密配置：`status`/`lastError` 是活诊断，冻进 Run 的输入只会
+             * 让后来读它的人以为那就是当轮的连接状态。
+             */
+            connection: plan.connection
+                ? {
+                    id: plan.connection.id,
+                    connectorId: plan.connection.connectorId,
+                    configJson: plan.connection.configJson,
+                }
+                : null,
             scheduleIntervalMs: typeof triggerConfig?.intervalMs === "number" ? triggerConfig.intervalMs : null,
         };
     }
@@ -543,6 +555,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             connectorId: connection.connectorId,
             account: connection.account,
             scopeJson: connection.scopeJson,
+            configJson: connection.configJson,
             status: connection.status as ConnectionInstance["status"],
             secretRef: connection.secretRef,
             lastError: connection.lastError,

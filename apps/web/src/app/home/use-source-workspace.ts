@@ -169,6 +169,9 @@ export function useSourceWorkspace(
                 sourceDefinitionRef: selectedManifest.ref,
                 operationId: selectedManifest.operationIds[0] ?? RSS_OPERATION_ID,
                 config,
+                // 未保存配置的探测也要给连接（Proposal connection-login-lifecycle-v1 决定 1）：
+                // `feed` 这类需要登录态的操作靠它拿 profile；没选连接就是 null。
+                connectionId: values.connectionId === "" ? null : values.connectionId,
             });
             const deadline = Date.now() + PROBE_POLL_TIMEOUT_MS;
             while (

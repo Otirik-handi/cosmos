@@ -19,11 +19,14 @@ test("builds two Bilibili plans under one connection from the manifest-driven fo
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
 
-    // 连接按 Bilibili 连接器建：认证由连接承载，表单只做提示。
+    // 连接按 Bilibili 连接器建：登录态（OpenCLI profile）归连接，表单只做提示。
     await page.getByLabel("连接名称").fill(connectionName);
     await page.getByLabel("连接 Connector").fill("bilibili");
+    await page.getByLabel("连接适配器配置").fill('{"profile":"chrome-main"}');
     await page.getByRole("button", { name: "新建连接" }).click();
     await expect(page.getByText(connectionName, { exact: true })).toBeVisible();
+    // 适配器配置按可读形式回显（Proposal connection-login-lifecycle-v1 决定 1）。
+    await expect(page.getByText("profile: chrome-main")).toBeVisible();
 
     await createBilibiliPlan(page, {
         name: hotName,
@@ -34,7 +37,6 @@ test("builds two Bilibili plans under one connection from the manifest-driven fo
     await createBilibiliPlan(page, {
         name: feedName,
         mode: "feed",
-        profile: "chrome-main",
         limit: "50",
         connectionName,
     });
@@ -63,7 +65,6 @@ async function createBilibiliPlan(
     input: {
         name: string;
         mode: "hot" | "feed";
-        profile?: string;
         limit: string;
         connectionName: string;
     },
@@ -77,9 +78,6 @@ async function createBilibiliPlan(
     await page.getByLabel("名称", { exact: true }).fill(input.name);
     // `mode` 在 manifest 里只有 enum、没有 type：渲染成选择框而不是被跳过。
     await page.locator("#source-config-mode").selectOption(input.mode);
-    if (input.profile !== undefined) {
-        await page.locator("#source-config-profile").fill(input.profile);
-    }
     await page.locator("#source-config-limit").fill(input.limit);
     await page.locator("#source-connection").selectOption({ label: `${input.connectionName}（bilibili）` });
     await page.getByRole("button", { name: "保存计划" }).click();

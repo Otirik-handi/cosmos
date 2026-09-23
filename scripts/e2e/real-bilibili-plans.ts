@@ -15,9 +15,9 @@ import {
  * Task 33（ADR-0023）的真实来源验收：同一连接下的 hot / feed 两个 Bilibili 计划。
  *
  * 单来源路径（rss / aihot / bilibili-hot）只证明一条链路能真实抓取；本场景要证明同一采集
- * 账号下的两个计划各自的 Run、checkpoint 与最近一次运行状态互不覆盖。连接在这里只是
- * 「两个计划属于同一账号」的分组事实：Bilibili 的凭证仍由 OpenCLI profile 引用承载
- * （ADR-0017），连接尚未参与认证，所以两个计划各自带 `config.profile`。
+ * 账号下的两个计划各自的 Run、checkpoint 与最近一次运行状态互不覆盖。连接在这里既是
+ * 「两个计划属于同一账号」的分组事实，也是登录态的**所有者**：OpenCLI profile 住在连接的
+ * `configJson` 里（Proposal connection-login-lifecycle-v1 决定 1），来源配置不再带它。
  *
  * Bilibili connector 不产生游标（`fetchItems` 恒返回 `nextCursor: null`），所以这里能验证的
  * 是 checkpoint 行与归属按计划分开，而不是「两个游标值不同」。
@@ -40,16 +40,17 @@ export async function runBilibiliDualPlanAcceptance(
     options: BilibiliPlanAcceptanceOptions,
 ): Promise<string> {
     const apiBaseUrl = `http://127.0.0.1:${options.apiPort}/api/v1`;
-    const connectionId = await createConnection(apiBaseUrl);
+    const connectionId = await createConnection(apiBaseUrl, options.profile);
     const hot = await createPlan(apiBaseUrl, connectionId, {
         label: "hot",
         name: "Explicit Bilibili hot plan",
         config: { mode: "hot", limit: 20 },
     });
+    // 登录态归连接（Proposal connection-login-lifecycle-v1 决定 1）：profile 在连接上，不在来源配置里。
     const feed = await createPlan(apiBaseUrl, connectionId, {
         label: "feed",
         name: "Explicit Bilibili feed plan",
-        config: { mode: "feed", profile: options.profile, limit: 20 },
+        config: { mode: "feed", limit: 20 },
     });
     if (hot.planId === feed.planId || hot.sourceId === feed.sourceId) {
         throw new Error("The two Bilibili plans must be distinct objects.");
@@ -82,7 +83,7 @@ export async function runBilibiliDualPlanAcceptance(
     ].join(" ");
 }
 
-async function createConnection(apiBaseUrl: string): Promise<string> {
+async function createConnection(apiBaseUrl: string, profile: string): Promise<string> {
     const created = expectJsonObject(
         await requestJson(`${apiBaseUrl}/connections`, {
             method: "POST",
@@ -90,6 +91,8 @@ async function createConnection(apiBaseUrl: string): Promise<string> {
             body: JSON.stringify({
                 name: "Explicit Bilibili connection",
                 connectorId: "bilibili",
+                // 适配器的非秘密配置（Proposal connection-login-lifecycle-v1 决定 1）。
+                configJson: JSON.stringify({ profile }),
             }),
         }),
         201,

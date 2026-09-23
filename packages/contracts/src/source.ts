@@ -182,6 +182,11 @@ export const sourceConfigProbeCommandSchema = z.object({
     sourceDefinitionRef: sourceDefinitionRefSchema,
     operationId: sourceOperationIdSchema,
     config: z.unknown(),
+    /**
+     * 未保存配置的探测没有来源、也就没有计划，所以连接必须显式给：`feed` 这类需要
+     * 登录态的操作要靠它拿到 profile（Proposal connection-login-lifecycle-v1）。
+     */
+    connectionId: z.string().trim().min(1).max(100).nullable().optional(),
 }).strict();
 
 export type SourceConfigProbeCommand = z.infer<typeof sourceConfigProbeCommandSchema>;

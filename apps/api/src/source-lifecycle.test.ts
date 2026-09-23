@@ -49,7 +49,12 @@ describe("AppController Source mutations", () => {
         expect(repository.updateSource).not.toHaveBeenCalled();
     });
 
-    it("rejects a Bilibili feed config without a profile before creating", async () => {
+    /**
+     * 登录态校验的归属变了（Proposal connection-login-lifecycle-v1 决定 1）：profile 从
+     * 来源配置搬到连接，所以建目标时不再能判定「feed 有没有登录态」——那条判断在连接器
+     * 读到连接投影时发生（见 `plugins/collectors/src/index.test.ts` 的同名场景）。
+     */
+    it("accepts a Bilibili feed config without a profile at create time", async () => {
         const repository = {
             createSource: vi.fn(),
         };
@@ -58,16 +63,15 @@ describe("AppController Source mutations", () => {
             new SourceProbeService(createBuiltinManifestCatalog()) as never,
         );
 
-        const error = await controller.createSource({
+        const result = await controller.createSource({
             name: "Bilibili feed",
             sourceDefinitionRef: "source.bilibili@1",
             operationId: "fetch",
             config: { mode: "feed" },
         }).catch((value) => value);
 
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
-        expect(repository.createSource).not.toHaveBeenCalled();
+        expect(result).not.toBeInstanceOf(BadRequestException);
+        expect(repository.createSource).toHaveBeenCalled();
     });
 
     it("validates the saved target config before enabling the plan", async () => {

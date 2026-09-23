@@ -135,11 +135,14 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    第一个值。另有 `scheduleIntervalMinutes`（分钟输入，默认 30，清空表示不自动抓取；
    保存时换算为 canonical `scheduleIntervalMs`）与连接选择。定义声明了认证
    （`auth.kind !== "none"`）时展示提示与 label（Bilibili 为“OpenCLI 浏览器登录态”），
-   表单不收集凭证——凭证的载体是连接（ADR-0017）。切换定义会整组重置配置字段。
+   表单不收集凭证，也**不收集适配器配置**——登录态（OpenCLI profile）是连接的非秘密
+   配置，在连接面板里填（Proposal connection-login-lifecycle-v1；凭证的载体同样是连接，
+   ADR-0017）。切换定义会整组重置配置字段。
    表单通过 React Hook Form + Zod 校验。
 2. **测试未保存配置**：点击“测试配置”先触发表单校验，通过后 `POST
-   /api/v1/source-config-probes`（携带所选定义的 `sourceDefinitionRef` 与其首个
-   `operationId`，不携带幂等键，服务端生成缺省键），随后每 1.5s 轮询
+   /api/v1/source-config-probes`（携带所选定义的 `sourceDefinitionRef`、其首个
+   `operationId` 与表单里选中的 `connectionId`——未保存配置没有来源与计划，需要登录态的
+   操作只能靠它拿连接；不携带幂等键，服务端生成缺省键），随后每 1.5s 轮询
    `GET /api/v1/source-config-probes/:jobId`，30s 未达终态显示超时提示；`succeeded`
    展示抓取条数、耗时、样例标题与“还有更多内容”提示，`failed_terminal`/`cancelled`
    显示错误文本。全程不创建 Source、不写事实数据；表单字段变化会使结果立即作废。
@@ -273,13 +276,16 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     服务端 400），再调 `client.importConnectorState({mode, targetNamespace?, export})` 并显示新增／覆盖／
     跳过的条数；模式默认「只补缺失」，「覆盖本地」需用户显式选择。
 23. **连接面板（AUT-009）**：侧栏“连接”区的 `ConnectionPanel` 挂载时调 `client.listConnections()`。
-    新建连接调 `client.createConnection({name, connectorId, scopeJson?})`：`connectorId` 为空时回退
-    `generic`，`scopeJson` 为空时不发送该字段；授权范围是 JSON 字符串，输入只要求合法 JSON——
+    新建连接调 `client.createConnection({name, connectorId, configJson?, scopeJson?})`：`connectorId`
+    为空时回退 `generic`，两个 JSON 字段为空时不发送该字段。**适配器配置**（`configJson`）是连接的
+    非秘密适配器配置，Bilibili 的 OpenCLI profile 就填在这里（Proposal connection-login-lifecycle-v1）；
+    每行把它按 `键: 值` 渲染（空值显示「未记录」）。它与**授权范围**（`scopeJson`）都只要求合法 JSON——
     非法时在本地拦下（显示错误、保留表单、不发请求），合法时先 `JSON.stringify` 规范化再提交。
     “标记失效”在行内收集原因后调 `client.updateConnection(id, {status: "error", lastError: 原因})`，
     “恢复可用”调 `client.updateConnection(id, {status: "active", lastError: null})`；两者成功后重取列表，
-    “删除”调 `client.deleteConnection(id)`。**这两个字段今天没有自动写入方**（真实认证 Adapter 后置，
-    见 EXT-006），所以面板提供的是用户侧记录入口，不假装系统探测到了原因。
+    “删除”调 `client.deleteConnection(id)`。授权范围与失效原因**今天仍没有自动写入方**（登录探测属
+    本 Task 的切片 4b，见 EXT-006），所以面板对这两个字段提供的是用户侧记录入口，不假装系统探测到了原因；
+    适配器配置则已经由连接器在抓取时读取。
 
 ## 输入
 

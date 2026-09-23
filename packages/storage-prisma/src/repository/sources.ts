@@ -304,6 +304,7 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                 connectorId: input.connectorId,
                 account: input.account ?? null,
                 scopeJson: input.scopeJson ?? null,
+                configJson: input.configJson ?? null,
                 secretRef: input.secretRef ?? null,
             },
         });
@@ -334,6 +335,7 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
             data: {
                 ...(input.name !== undefined ? { name: input.name } : {}),
                 ...(input.status !== undefined ? { status: input.status } : {}),
+                ...(input.configJson !== undefined ? { configJson: input.configJson } : {}),
                 ...(input.secretRef !== undefined ? { secretRef: input.secretRef } : {}),
                 ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
             },

@@ -164,12 +164,13 @@ Registry 按业务 `Source.kind` resolve connector，不根据 capability、可�
 | `schemaVersion` | 正整数 | `1` |
 | `mode` | 只能是 `hot` 或 `feed` | 无 |
 | `limit` | `1..100` 的整数 | `20` |
-| `profile` | 可选；长度 `1..100`；只允许 `A-Z`、`a-z`、`0-9`、`.`、`_`、`-` | 无 |
 | `scheduleIntervalMs` | 共享的可选调度值 | 无 |
 
-当 `mode=feed` 时必须提供合法 `profile`。无效 config 抛出不可重试的 `invalid_configuration`。
+`profile` **不在**来源配置里：它是连接的非秘密适配器配置（`ConnectionInstance.configJson`），由宿主随执行快照冻结后交给连接器。无效 config 抛出不可重试的 `invalid_configuration`。
 
-若提供 profile，OpenCLI 子进程环境包含：
+`mode=feed` 需要登录态，因此要求当轮快照带一条**含合法 profile 的连接**；没有连接、连接里没有 profile、或 profile 形状非法时，`validate` 与 `fetchItems` 都以不可重试的 `invalid_configuration` 失败。`mode=hot` 匿名可用，没有连接也照常抓取。
+
+若当轮连接提供 profile，OpenCLI 子进程环境包含：
 
 ```text
 OPENCLI_PROFILE=<profile>
@@ -384,11 +385,11 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 
 1. 构造 builtin registry 后，读取 descriptor ID 序列必须严格等于 `["rss", "fixture-rss", "bilibili", "aihot"]`，且不存在第五项。
 2. 使用 `Source.kind=opencli` resolve 时必须失败；使用 `bilibili` 和 `aihot` 时必须分别得到对应 connector。
-3. 对 Bilibili 的非法 mode、越界或非整数 limit、非法 profile、缺少 feed profile 进行 fetch，必须得到不可重试的 `invalid_configuration`，且 runner 未执行业务命令。
+3. 对 Bilibili 的非法 mode、越界或非整数 limit、以及 `mode=feed` 缺少「带合法 profile 的连接」进行 validate/fetch，必须得到不可重试的 `invalid_configuration`，且 runner 未执行业务命令。
 4. 使用默认 Bilibili 配置获取时，业务参数必须严格等于 `bilibili hot --limit 20 -f json`；feed 配置必须只将 mode 和合法 limit 替换到相同参数结构中。
 5. 同一 Bilibili connector 实例连续成功 fetch 两次且 `checkVersion=true` 时，`--version` 必须只调用一次；版本 major 非 `1` 时必须得到不可重试的 `unsupported_version`。
 6. `preflight=true` 时，每次 Bilibili 业务命令前必须调用 `doctor`；doctor 输出任一已规定断连标记时，业务命令不得执行，并得到可重试的 `dependency_unavailable`。
-7. 配置 profile 后，版本检查、doctor 和业务命令接收到的 `OPENCLI_PROFILE` 必须相同。
+7. 当轮连接提供 profile 后，版本检查、doctor 和业务命令接收到的 `OPENCLI_PROFILE` 必须相同；连接里的 profile 形状非法时必须按 `invalid_configuration` 拒绝，而不是不带 profile 去抓。
 8. OpenCLI 退出码 `66` 必须产生零 items 和 `nextCursor=null`；退出码 `69`、`77`、超时状态及普通执行失败必须分别符合错误映射表。
 9. Bilibili 直接 JSON、带前后噪声的首个闭合 JSON 候选、顶层数组、`items/data/results` 数组和单对象必须按规定解析；数组中出现非对象元素必须整体返回不可重试的 `malformed_payload`。
 10. 给定覆盖全部字段优先级的 Bilibili fixture 行，标准化结果必须可逐字段断言 external ID、title fallback、URL fallback、`Asia/Shanghai` 时间、publisher、source locator、cover asset、metrics、raw payload、MIME 和固定 null cursor。

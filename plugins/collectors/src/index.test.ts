@@ -13,6 +13,8 @@ import {
 function source(input: {
     kind: "bilibili" | "aihot";
     config: Record<string, unknown>;
+    /** 连接投影（Proposal connection-login-lifecycle-v1）：profile 现在住在这里。 */
+    connection?: SourceExecutionSnapshot["connection"];
 }): SourceExecutionSnapshot {
     return {
         id: `source-${input.kind}`,
@@ -24,12 +26,22 @@ function source(input: {
         connectorId: input.kind,
         kind: input.kind,
         config: input.config,
+        ...(input.connection === undefined ? {} : { connection: input.connection }),
         enabled: true,
         mediaPolicy: null,
         planId: `plan:source-${input.kind}`,
         revisionId: `source-${input.kind}:1`,
         createdAt: "2026-08-08T00:00:00.000Z",
         updatedAt: "2026-08-08T00:00:00.000Z",
+    };
+}
+
+/** Bilibili 连接投影：OpenCLI profile 走连接的 `configJson`，不再是来源配置。 */
+function bilibiliConnection(profile: string): NonNullable<SourceExecutionSnapshot["connection"]> {
+    return {
+        id: "connection-bilibili",
+        connectorId: "bilibili",
+        configJson: JSON.stringify({ profile }),
     };
 }
 
@@ -125,28 +137,32 @@ describe("built-in collectors", () => {
     });
 
     it("normalizes a Bilibili feed video with publisher id and metrics", async () => {
+        const profiles: unknown[] = [];
         const connector = createBilibiliConnector({
             runner: {
-                run: async (args) => ({
-                    stdout: args[0] === "--version"
-                        ? "1.8.6"
-                        : args[0] === "doctor"
-                            ? "[OK] Extension: connected\n[OK] Connectivity: passed"
-                            : JSON.stringify([{
-                                bvid: "BV1FEED",
-                                title: "Feed video",
-                                owner: {
-                                    mid: 9988,
-                                    name: "Feed author",
-                                },
-                                view: 100,
-                                like: 8,
-                                favorite: 3,
-                                pubdate: 1_786_170_123,
-                            }]),
-                    stderr: "",
-                    exitCode: 0,
-                }),
+                run: async (args, options) => {
+                    profiles.push(options?.env?.OPENCLI_PROFILE);
+                    return {
+                        stdout: args[0] === "--version"
+                            ? "1.8.6"
+                            : args[0] === "doctor"
+                                ? "[OK] Extension: connected\n[OK] Connectivity: passed"
+                                : JSON.stringify([{
+                                    bvid: "BV1FEED",
+                                    title: "Feed video",
+                                    owner: {
+                                        mid: 9988,
+                                        name: "Feed author",
+                                    },
+                                    view: 100,
+                                    like: 8,
+                                    favorite: 3,
+                                    pubdate: 1_786_170_123,
+                                }]),
+                        stderr: "",
+                        exitCode: 0,
+                    };
+                },
             },
         });
 
@@ -155,12 +171,15 @@ describe("built-in collectors", () => {
                 kind: "bilibili",
                 config: {
                     mode: "feed",
-                    profile: "chrome-main",
                     limit: 1,
                 },
+                connection: bilibiliConnection("chrome-main"),
             }),
             cursor: null,
         });
+
+        // 连接上的 profile 必须到达每一条子进程调用（版本、doctor、业务命令同一份）。
+        expect(profiles).toEqual(["chrome-main", "chrome-main", "chrome-main"]);
 
         expect(result.items[0]).toMatchObject({
             kind: "video",
@@ -180,7 +199,7 @@ describe("built-in collectors", () => {
         });
     });
 
-    it("keeps the logged-in Bilibili feed bound to a named profile", () => {
+    it("keeps the logged-in Bilibili feed bound to a named profile on the connection", () => {
         const connector = createBilibiliConnector({
             runner: {
                 run: async () => ({
@@ -191,14 +210,36 @@ describe("built-in collectors", () => {
             },
         });
 
+        // feed 的判断现在读的是连接投影：没有连接、或连接里没有 profile，都必须拒绝。
         expect(() => connector.validate(source({
             kind: "bilibili",
             config: { mode: "feed", limit: 20 },
         }))).toThrow();
         expect(() => connector.validate(source({
             kind: "bilibili",
-            config: { mode: "feed", profile: "chrome-main", limit: 20 },
+            config: { mode: "feed", limit: 20 },
+            connection: { id: "connection-bilibili", connectorId: "bilibili", configJson: "{}" },
+        }))).toThrow();
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            config: { mode: "feed", limit: 20 },
+            connection: bilibiliConnection("chrome-main"),
         }))).not.toThrow();
+        // hot 匿名可用：没有连接也照常通过。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            config: { mode: "hot" },
+        }))).not.toThrow();
+        // 连接里的 profile 形状非法时按配置错误拒绝，而不是悄悄不带 profile 去抓。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            config: { mode: "hot" },
+            connection: {
+                id: "connection-bilibili",
+                connectorId: "bilibili",
+                configJson: '{"profile":"bad profile!"}',
+            },
+        }))).toThrow();
     });
 
     it("reports a disconnected Browser Bridge before running a source command", async () => {

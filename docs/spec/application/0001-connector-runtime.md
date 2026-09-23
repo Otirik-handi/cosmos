@@ -60,6 +60,8 @@ fetchItems(input: {
 
 `ConnectorStateHandle` 只暴露 `get(key)`/`put(key, value, expectedVersion)`——命名空间由宿主按 manifest 的 `stateStoreNamespace` 解析（`{id}` 替换为**采集计划 id**，ADR-0023 决策 2；声明为 null 就不给句柄），连接器不接触命名空间与并发控制。Ingest Workflow 的 `source.fetch@1` 通过 `IngestActionOptions.connectorState` 注入它；legacy 采集路径不注入，连接器必须退化成无状态抓取。该回调允许返回 Promise：宿主在解析句柄时会登记抽屉归属（`ConnectorStateStorePort.registerNamespace`，ADR-0026），登记失败或与别的计划冲突只记 `connector.state.registration_skipped`／`connector.state.owner_conflict` 日志，不影响这一轮抓取。
 
+连接也随执行快照交给连接器：`SourceExecutionSnapshot.connection` 是宿主在**入队时冻结**的非秘密连接投影（`{id, connectorId, configJson}`，AUT-016 要求排队后改连接配置不改变已创建 Run 的输入），连接器从它读自己的适配器配置——Bilibili 的 OpenCLI profile 就在这里，不再在 `config` 里。该字段可选：未保存配置的探测与 legacy 路径没有连接，连接器必须容忍缺省，需要登录态的操作改用 `invalid_configuration` 拒绝。未保存配置的探测（`SourceConfigProbeService`）通过一个**只读** `resolveConnection` 回调拿到同一份投影；该服务仍然拿不到 `CosmosRepository`，所以结构上无法持久化 observation/entry/asset/checkpoint。
+
 `validate` 接收 Source 对象本身，绝不是 `{ source }` 包装对象；只有 `fetchItems` 使用对象参数。`validate` 不返回连接器结果，验证失败通过抛出异常表示。
 
 采集项采用 [NormalizedIngestItem](../domain/0001-normalized-content.md)；来源及其他共享契约采用 [公共契约](../contracts/0001-public-contracts.md)。

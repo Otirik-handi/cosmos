@@ -274,7 +274,7 @@ function resolveAcceptance(value: string | undefined): Acceptance {
                     name: "Explicit Bilibili Hot",
                     sourceDefinitionRef: "source.bilibili@1",
                     operationId: "fetch",
-                    config: { mode: "hot", profile, limit: 20 },
+                    config: { mode: "hot", limit: 20 },
                 },
             };
         }

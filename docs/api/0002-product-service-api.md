@@ -98,6 +98,12 @@ API 返回。
 Browser Bridge/OpenCLI profile 可以投影为一种外部管理的 Connection，不把 Cookie
 复制进 Cosmos。
 
+**2026-09-23 实现现状**：连接已经是登录态的载体——`ConnectionInstance.configJson` 装适配器的
+非秘密配置（Bilibili 的 OpenCLI profile），来源配置不再带它；未保存配置的探测
+（`POST /source-config-probes`）接受可选 `connectionId`。本节的 `authorization-sessions`、
+`revocations` 与 `scopes: string[]` 与落地形态不一致，收敛动作见 Proposal
+[`connection-login-lifecycle-v1`](../proposals/connection-login-lifecycle-v1.md) 的待裁定项 3。
+
 ### 4.2 Source
 
 | 成熟度 | Method | Path | 结果 |

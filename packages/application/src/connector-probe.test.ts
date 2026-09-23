@@ -222,6 +222,48 @@ describe("SourceConfigProbeService", () => {
         })).rejects.toThrow("Source definition is not available: source.unknown@1");
     });
 
+    /**
+     * 未保存配置的探测要能把连接交给连接器（Proposal connection-login-lifecycle-v1）：
+     * `feed` 这类需要登录态的操作靠它拿 profile。查不到连接是无效输入，不能悄悄降级。
+     */
+    it("hands the requested connection projection to the connector", async () => {
+        const { connector, seenSources } = rssConnectorFixture([{ title: "Alpha" }]);
+        const service = new SourceConfigProbeService(
+            createBuiltinManifestCatalog(),
+            new ConnectorRegistry([connector]),
+            undefined,
+            undefined,
+            async (connectionId) => (connectionId === "connection-1"
+                ? { id: "connection-1", connectorId: "rss", configJson: '{"profile":"chrome-main"}' }
+                : null),
+        );
+
+        await service.run({ ...probeCommand, connectionId: "connection-1" });
+
+        expect(seenSources[0]?.connection).toEqual({
+            id: "connection-1",
+            connectorId: "rss",
+            configJson: '{"profile":"chrome-main"}',
+        });
+    });
+
+    it("rejects a connection id that does not resolve", async () => {
+        const { connector } = rssConnectorFixture([{ title: "Alpha" }]);
+        const service = new SourceConfigProbeService(
+            createBuiltinManifestCatalog(),
+            new ConnectorRegistry([connector]),
+            undefined,
+            undefined,
+            async () => null,
+        );
+
+        await expect(service.run({ ...probeCommand, connectionId: "connection-gone" }))
+            .rejects.toMatchObject({
+                code: "invalid_configuration",
+                retryable: false,
+            });
+    });
+
     it("rejects configs that violate the canonical schema at the prepare stage", async () => {
         const { logger, records } = captureLogger();
         const service = new SourceConfigProbeService(

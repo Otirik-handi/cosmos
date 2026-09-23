@@ -103,7 +103,7 @@ API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程�
 | --- | --- | --- | --- | --- |
 | 1 | `rss` | `source.rss@1` | `source:read`、`cursor` | `feedUrl`、`scheduleIntervalMs` |
 | 2 | `fixture-rss` | `source.fixture-rss@1` | `source:read`、`cursor` | `scheduleIntervalMs` |
-| 3 | `bilibili` | `source.bilibili@1` | `source:read`、`cursor`、`external:opencli` | `mode`、`profile`、`limit`、`scheduleIntervalMs` |
+| 3 | `bilibili` | `source.bilibili@1` | `source:read`、`cursor`、`external:opencli` | `mode`、`limit`、`scheduleIntervalMs` |
 | 4 | `aihot` | `source.aihot@1` | `source:read`、`cursor` | `scheduleIntervalMs` |
 
 内置 Workflow 仅有 `cosmos.ingest@1`，其 catalog `manifestHash` 是对象 `{ algorithm: "builtin", value: "builtin:cosmos.ingest@1:source-snapshot-v1" }`。`requiredActionRefs` 顺序为 `source.fetch@1`、`library.ingest@1`、`collection-plan.checkpoint@1`；`requiredBackendCapabilities.processRestart`、`multiWorker`、`leases`、`externalReceipts`、`valueReferences` 均为 `true`。

@@ -267,6 +267,18 @@ export class AppControllerSources extends AppControllerBase {
         try {
             const command = sourceConfigProbeCommandSchema.parse(body);
             this.validateSourceDefinition(command);
+            // 未保存配置的探测也要给连接做同样的存在性检查（Proposal
+            // connection-login-lifecycle-v1 决定 1）：不存在就当场 404，别等 Worker 里失败。
+            if (command.connectionId) {
+                const connection = await this.repository.getConnection(command.connectionId);
+                if (!connection) {
+                    throw new NotFoundException({
+                        code: "not_found",
+                        message: `Connection not found: ${command.connectionId}`,
+                        retryable: false,
+                    });
+                }
+            }
             const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
             const job = await this.repository.createConfigProbeJob({
                 command,

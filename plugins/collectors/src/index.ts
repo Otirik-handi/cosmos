@@ -11,6 +11,7 @@ import {
 import {
     aiHotSourceConfigSchema,
     bilibiliSourceConfigSchema,
+    openCliProfileSchema,
     type SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import type {
@@ -216,10 +217,11 @@ export function createBilibiliConnector(
         configVersion: "v1",
         capabilities: ["bilibili", "opencli", "browser-bridge"],
         validate(source) {
-            parseBilibiliConfig(source);
+            resolveBilibiliProfile(source, parseBilibiliConfig(source));
         },
         async fetchItems({ source, signal }) {
             const config = parseBilibiliConfig(source);
+            const profile = resolveBilibiliProfile(source, config);
             const args = [
                 "bilibili",
                 config.mode,
@@ -229,7 +231,7 @@ export function createBilibiliConnector(
                 "json",
             ];
             const env = {
-                OPENCLI_PROFILE: config.profile,
+                OPENCLI_PROFILE: profile ?? undefined,
             };
             if (checkVersion && !versionChecked) {
                 const version = await runner.run(["--version"], { env });
@@ -417,6 +419,68 @@ function parseBilibiliConfig(source: SourceExecutionSnapshot) {
     }
 }
 
+/**
+ * 连接上的 Bilibili 适配器配置（Proposal connection-login-lifecycle-v1 决定 1）：
+ * profile 归连接，来源配置里已经没有它。格式规则与合同共用 `openCliProfileSchema`。
+ */
+function readBilibiliConnectionProfile(source: SourceExecutionSnapshot): string | null {
+    const raw = source.connection?.configJson;
+    if (raw === null || raw === undefined) {
+        return null;
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (error) {
+        throw new ConnectorExecutionError(
+            "invalid_configuration",
+            "Bilibili connection configuration is not valid JSON.",
+            false,
+            { cause: error },
+        );
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new ConnectorExecutionError(
+            "invalid_configuration",
+            "Bilibili connection configuration must be a JSON object.",
+            false,
+        );
+    }
+    const profile = (parsed as { profile?: unknown }).profile;
+    if (profile === undefined || profile === null) {
+        return null;
+    }
+    const checked = openCliProfileSchema.safeParse(profile);
+    if (!checked.success) {
+        throw new ConnectorExecutionError(
+            "invalid_configuration",
+            "Bilibili connection profile is invalid.",
+            false,
+            { cause: checked.error },
+        );
+    }
+    return checked.data;
+}
+
+/**
+ * `feed` 需要登录态：校验从「配置里有 profile」搬到「连接上有 profile」（Proposal 决定 1），
+ * 因此这个判断属于连接器，不属于来源配置 schema。hot 匿名可用，没有连接也照常抓。
+ */
+function resolveBilibiliProfile(
+    source: SourceExecutionSnapshot,
+    config: { mode: "hot" | "feed" },
+): string | null {
+    const profile = readBilibiliConnectionProfile(source);
+    if (config.mode === "feed" && profile === null) {
+        throw new ConnectorExecutionError(
+            "invalid_configuration",
+            "Bilibili feed requires a connection with an OpenCLI profile.",
+            false,
+        );
+    }
+    return profile;
+}
+
 function parseAiHotConfig(source: SourceExecutionSnapshot) {
     try {
         return aiHotSourceConfigSchema.parse(source.config);
@@ -429,7 +493,6 @@ function parseAiHotConfig(source: SourceExecutionSnapshot) {
         );
     }
 }
-
 function normalizeBilibiliOutput(
     output: string,
     mode: "hot" | "feed",

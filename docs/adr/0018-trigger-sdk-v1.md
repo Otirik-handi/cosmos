@@ -65,4 +65,4 @@ PRD 把 Trigger/SDK 拆成两块：AUT-004（Trigger 由 Webhook/内部事件/�
 - 引入 webhook、内部事件、条件变化或上游 Workflow 结果触发（AUT-004 完整形态）——**webhook 形态已于 2026-09-22 引入**（ADR [`0024`](0024-trigger-forms-v1.md)、[`0025`](0025-multi-trigger-per-plan.md)）；`event`／`condition`／`dependency` 三种形态仍待触发；
 - CollectionPlan / 多采集计划进入实现（TriggerBinding 需支持一个来源多个触发与 overlap policy）；
 - 自定义 Trigger/Action 的插件运行时注册（AUT-005）；
-- 引入真实认证 Adapter，manifest 的 auth 声明需要实际驱动登录生命周期。
+- 引入真实认证 Adapter，manifest 的 auth 声明需要实际驱动登录生命周期——**2026-09-23 命中**：连接成为登录态的载体、`feed` 的登录态校验改由连接器读入队冻结的连接投影完成（ADR [`0027`](0027-connection-login-lifecycle-v1.md)）；`auth` 声明本身仍只驱动产品面的认证提示，探测声明随切片 4b 落地。

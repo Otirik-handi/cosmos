@@ -134,6 +134,16 @@ async function bootstrap(): Promise<void> {
             connectors,
             undefined,
             logger,
+            async (connectionId) => {
+                const connection = await repository.getConnection(connectionId);
+                return connection === null
+                    ? null
+                    : {
+                        id: connection.id,
+                        connectorId: connection.connectorId,
+                        configJson: connection.configJson,
+                    };
+            },
         );
         const workflowHost = config.workflowHostEnabled
             ? createWorkflowHost({

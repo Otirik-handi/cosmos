@@ -267,7 +267,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             capabilities: ["source:read", "cursor", "external:opencli"],
             configurationSchema: builtinSchema("source.bilibili.config@1", {
                 type: "object",
-                properties: { mode: { enum: ["hot", "feed"] }, profile: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 } },
+                properties: { mode: { enum: ["hot", "feed"] }, limit: { type: "integer", minimum: 1, maximum: 100 } },
                 required: ["mode"],
                 additionalProperties: false,
             }),
