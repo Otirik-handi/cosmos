@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-23。代码基线 `1b5cabc`（Task 22 追加切片 2：ING-012 的归属登记与状态导出／导入，`--no-ff` 合并；上一基线 `b80e43e`，再前 `da932cd` 为 AUT-004 的 webhook 形态）。**`master` 与 `origin/master` 同步、无保留的 worktree 或任务分支**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 2 行未闭合**：LIB-004（延后 Phase 3）、EXT-006（部分交付）；**ING-012 已由本片收口**，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-23。代码基线 `1b5cabc`（Task 22 追加切片 2：ING-012 的归属登记与状态导出／导入，`--no-ff` 合并；上一基线 `b80e43e`，再前 `da932cd` 为 AUT-004 的 webhook 形态）。**`master` 与 `origin/master` 同步**；**有一个活跃 worktree 与任务分支**：`.worktree/connection-visibility` / `feat/t22-connection-visibility`（Task 22 追加切片 3：AUT-009 连接可见性，已过门禁、**未合并**）。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 2 行未闭合**：LIB-004（延后 Phase 3）、EXT-006（部分交付）；**ING-012 已由切片 2 收口**，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -49,7 +49,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
 - **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。
-- **Phase 2 仍未闭合的 2 行（2026-09-23 更新）**：**ING-012 已交付并合并**——归属登记（`ConnectorStateNamespace`）与按命名空间／计划／连接／来源的导出、导入（默认只补缺失）与 Web 入口由 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 的追加切片 2 补齐（`--no-ff` 合并 `1b5cabc`；决定见 ADR [`0026`](docs/adr/0026-connector-state-export-v1.md)）；剩余 **EXT-006**（manifest 声明面已交付，缺真实认证 Adapter 的登录状态展示）与延后到 Phase 3 的 **LIB-004** 正文片段字符级锚点。AUT-010／EXT-007 已由采集计划 v1 收口（`4ef3636`），AUT-009 的「多个来源／计划引用同一连接」随之成立、连接可见性面板仍未做；LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口（`d7af0cc`）。逐条证据在勘误台账。
+- **Phase 2 仍未闭合的 2 行（2026-09-23 更新）**：**ING-012 已交付并合并**——归属登记（`ConnectorStateNamespace`）与按命名空间／计划／连接／来源的导出、导入（默认只补缺失）与 Web 入口由 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 的追加切片 2 补齐（`--no-ff` 合并 `1b5cabc`；决定见 ADR [`0026`](docs/adr/0026-connector-state-export-v1.md)）；剩余 **EXT-006**（manifest 声明面已交付，缺真实认证 Adapter 的登录状态展示）与延后到 Phase 3 的 **LIB-004** 正文片段字符级锚点。AUT-010／EXT-007 已由采集计划 v1 收口（`4ef3636`），AUT-009 的「多个来源／计划引用同一连接」随之成立；**AUT-009 的可见性半边由切片 3 补齐**（连接面板显示并记录授权范围与失效原因，分支上、未合并），连接可见性面板至此闭合。LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口（`d7af0cc`）。逐条证据在勘误台账与 [`Phase-2-UNDO.md`](Phase-2-UNDO.md)。
 - **Phase 2 第四条验收条件尚无写入路径可考**：「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，未被真正考验；Phase 3 的 Knowledge Workflow 落地后需重新回归。
 - **真人验收暴露的三条界面方向**（维护者 2026-09-15，尚未排期）：Topic/Entity/用户组织缺独立操作面板、看板需要拖拽、文案过于专业化。前两条对应已 accepted 的 [`ui-surface-ownership-v1`](docs/proposals/ui-surface-ownership-v1.md)（PRD §8 / 架构 §11.4 / 新 ADR 与 Task 在 `master` 上尚未执行）；第三条对应仍 `reviewing` 的 [`ui-copy-review-v1`](docs/proposals/ui-copy-review-v1.md)。
 

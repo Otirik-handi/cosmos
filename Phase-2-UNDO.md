@@ -18,7 +18,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 
 **P0-1（AUT-010 一个连接下的多个采集计划）已交付并合并**：Task [`33`](.agents/tasks/33-collection-plan/README.md)，`--no-ff` 合并 `4ef3636`。v1 形态按 ADR [`0023`](docs/adr/0023-collection-plan-v1.md)——`CollectionPlan` 与采集目标一对一，持有连接、触发器、媒体预算、计划级 checkpoint 与状态命名空间；迁移按 expand／backfill／read switch 落地，第 4 步 contract 单独排期与授权（不纳入该 Task）。产品面从「来源健康」改造为按连接分组的「采集计划」，新建计划可选连接与连接器、字段按 manifest 声明渲染。Task 33 的验证：全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例全绿；真实来源验收 `test:real:bilibili` 在同一连接下跑通 hot 与 feed 两个 Bilibili 计划（各 `itemCount=20`，连续两次 exit 0）。过程、偏差与未运行项见 Task 33 walkthrough。
 
-**本清单的下一个缺口**：**P1-1（ING-012）已于 2026-09-23 交付并合并**（Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2，`--no-ff` 合并 `1b5cabc`，见下方 P1-1 节）；下一个缺口按优先级从 P1-2（EXT-006）或 P1-3（AUT-009 连接可见性面板）继续，顺序尚未排定。
+**本清单的下一个缺口**：**P1-1（ING-012）已交付并合并**（Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2，`--no-ff` 合并 `1b5cabc`）；**P1-3（AUT-009 连接可见性）已于 2026-09-23 实现**（同 Task 追加切片 3，分支 `feat/t22-connection-visibility`，尚未合并）。**P1 只剩 P1-2（EXT-006）**：它缺的是真实认证 Adapter 的接入（Bilibili 登录态从 OpenCLI profile 迁到 Connection + SecretRef）与 manifest 多 operation 的真实消费者，成本明显高于前两项，是否现在做请维护者裁定。
 
 ## 优先级总表
 
@@ -28,7 +28,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 | --- | --- | --- | --- | --- |
 | P1 | P1-1 | ING-012：Connector 状态的备份、恢复、迁移与范围隔离 | **已交付并合并 `1b5cabc`** | 已闭合 |
 | P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | 部分交付 | 该行验收条件未满足 |
-| P1 | P1-3 | AUT-009：连接状态／授权范围／失效原因的可见性与来源绑定入口 | 部分交付（本次新增登记） | 该行验收条件未满足，此前未记入任何清单 |
+| P1 | P1-3 | AUT-009：连接状态／授权范围／失效原因的可见性与来源绑定入口 | **已交付（待合并）** | 已闭合；验收条件四条全部满足 |
 | P2 | P2-1 | §12 第 4 条「重分析不覆盖用户批注和人工关系修正」＋ LIB-003 同类验收 | 无法判定 | Phase 2 验收第 4 条不能宣布通过；风险外溢到 Phase 3 |
 | P3 | P3-1 | 界面职责重划：Topic／Entity／用户组织独立面板 | 已 accepted 未落地 | 真人验收第一条结论未解决；PRD／架构／ADR 未同步 |
 | P3 | P3-2 | UI 文案专业化 | Proposal 仍 `reviewing` | 真人验收第三条结论未解决 |
@@ -75,6 +75,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 - **现状【代码核实】**：连接对象、凭证存储、API 与「撤销凭证不删历史」都已交付。产品界面仍缺一半：连接面板只显示**状态徽标、名称和账号**，不显示授权范围（`scopeJson`）与失效原因（`lastError`）。**绑定入口已由 2026-09-22 的采集计划 v1 补上**（Task 33 切片 2／3：新建采集计划时可选连接，计划列表按连接分组），本行剩下的只有连接自身的可见性面板。
 - **影响**：用户看得到「已过期／错误」，看不到为什么；连接复用在产品面上不可操作，等于半个功能只有接口可用。
 - **建议下一步**：小切片即可（连接面板补授权范围与失效原因两行），可与 P1-1 同批；若维护者认为「授权范围／失效原因」要等真实认证 Adapter，则应像 EXT-006 一样登记进勘误台账，而不是留成一条静默的部分交付。
+- **交付（2026-09-23，分支 `feat/t22-connection-visibility`，尚未合并）**：复核时发现缺口比本行写的更深一层——面板确实缺两行，但**这两个字段今天没有任何自动写入方**（`scopeJson` 只在建连接时可写、Web 表单没有这个输入框；`lastError` 只有 `PATCH /connections/:id` 能写，全仓只有测试调用过），所以只补显示等于两行永远为空。用户裁决走「显示 + 补写入路径」，且**只用现有合同**（`createConnection.scopeJson`、`updateConnection.status`/`lastError`），因此不需要 Proposal、不改公共 DTO：建连接可填授权范围（要求合法 JSON、提交前规范化），每行显示授权范围（顶层标量对象按 `键: 值` 渲染）与失效原因（空值「未记录」），行内可「标记失效」（填原因 → `status=error`）与「恢复可用」（`status=active` + 清空原因）。实现与验证记录见 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 3（web typecheck 0、组件实验室 E2E 2 passed、浏览器产品 E2E 1 passed）。AUT-009 的四条验收条件（可创建可复用连接并被多个来源／计划引用、能看到状态／授权范围／失效原因、撤销凭证不删历史、普通配置与日志不含凭证明文）至此全部满足；「真实认证 Adapter 自动写这两个字段」仍属 P1-2。
 
 ---
 
