@@ -135,6 +135,109 @@ describe("HttpCosmosClient 平台面", () => {
         expect(payload.counts.labels).toBe(0);
     });
 
+    it("lists connector state namespaces and exports one scope (ING-012 / ADR-0026)", async () => {
+        const requests: string[] = [];
+        const exported = {
+            schemaVersion: 1,
+            exportedAt: "2026-09-23T12:30:00.000Z",
+            scope: { kind: "plan", value: "plan:source-1" },
+            counts: { namespaces: 1, keys: 1 },
+            namespaces: [{
+                namespace: "plan:source-1",
+                owner: { planId: "plan:source-1", sourceId: "source-1", connectionId: null },
+                entries: [{
+                    key: "http-cache",
+                    value: { etag: 'W/"1"' },
+                    version: 2,
+                    updatedAt: "2026-09-23T12:00:00.000Z",
+                }],
+            }],
+        };
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input) => {
+                const url = String(input);
+                requests.push(url);
+                return new Response(JSON.stringify(
+                    url.includes("/connector-state/namespaces")
+                        ? [{
+                            namespace: "plan:source-1",
+                            keyCount: 1,
+                            planId: "plan:source-1",
+                            sourceId: "source-1",
+                            connectionId: null,
+                            unattributed: false,
+                        }]
+                        : exported,
+                ), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const listed = await client.listConnectorStateNamespaces();
+        expect(listed[0]).toMatchObject({ namespace: "plan:source-1", keyCount: 1 });
+
+        const payload = await client.exportConnectorState({ kind: "plan", planId: "plan:source-1" });
+        expect(payload.counts).toEqual({ namespaces: 1, keys: 1 });
+
+        // 缺省范围不带查询参数：全部已归属是服务端的默认口径。
+        await client.exportConnectorState();
+        expect(requests).toEqual([
+            "http://localhost:4310/api/v1/connector-state/namespaces",
+            "http://localhost:4310/api/v1/exports/connector-state?planId=plan%3Asource-1",
+            "http://localhost:4310/api/v1/exports/connector-state",
+        ]);
+    });
+
+    it("imports a connector state export through the versioned endpoint (ADR-0026)", async () => {
+        const requests: { url: string; body: string | undefined }[] = [];
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), body: init?.body === undefined ? undefined : String(init.body) });
+                return new Response(JSON.stringify({
+                    mode: "skip-existing",
+                    namespaces: 1,
+                    created: 1,
+                    overwritten: 0,
+                    skipped: 0,
+                }), {
+                    status: 201,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const result = await client.importConnectorState({
+            targetNamespace: "plan:source-2",
+            export: {
+                schemaVersion: 1,
+                exportedAt: "2026-09-23T12:30:00.000Z",
+                scope: { kind: "namespace", value: "plan:source-old" },
+                counts: { namespaces: 1, keys: 1 },
+                namespaces: [{
+                    namespace: "plan:source-old",
+                    owner: null,
+                    entries: [{
+                        key: "http-cache",
+                        value: { etag: "old" },
+                        version: 4,
+                        updatedAt: "2026-09-23T12:00:00.000Z",
+                    }],
+                }],
+            },
+        });
+
+        expect(result.created).toBe(1);
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/imports/connector-state");
+        expect(JSON.parse(requests[0]?.body ?? "{}")).toMatchObject({
+            targetNamespace: "plan:source-2",
+            export: { namespaces: [{ namespace: "plan:source-old" }] },
+        });
+    });
+
     it("opens the versioned SSE endpoint and validates event envelopes", () => {
         let instance: CosmosEventSource | undefined;
         let openedUrl = "";

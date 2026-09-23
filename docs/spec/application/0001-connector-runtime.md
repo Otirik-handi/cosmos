@@ -58,7 +58,7 @@ fetchItems(input: {
 }>;
 ```
 
-`ConnectorStateHandle` 只暴露 `get(key)`/`put(key, value, expectedVersion)`——命名空间由宿主按 manifest 的 `stateStoreNamespace` 解析（`{id}` 替换为**采集计划 id**，ADR-0023 决策 2；声明为 null 就不给句柄），连接器不接触命名空间与并发控制。Ingest Workflow 的 `source.fetch@1` 通过 `IngestActionOptions.connectorState` 注入它；legacy 采集路径不注入，连接器必须退化成无状态抓取。
+`ConnectorStateHandle` 只暴露 `get(key)`/`put(key, value, expectedVersion)`——命名空间由宿主按 manifest 的 `stateStoreNamespace` 解析（`{id}` 替换为**采集计划 id**，ADR-0023 决策 2；声明为 null 就不给句柄），连接器不接触命名空间与并发控制。Ingest Workflow 的 `source.fetch@1` 通过 `IngestActionOptions.connectorState` 注入它；legacy 采集路径不注入，连接器必须退化成无状态抓取。该回调允许返回 Promise：宿主在解析句柄时会登记抽屉归属（`ConnectorStateStorePort.registerNamespace`，ADR-0026），登记失败或与别的计划冲突只记 `connector.state.registration_skipped`／`connector.state.owner_conflict` 日志，不影响这一轮抓取。
 
 `validate` 接收 Source 对象本身，绝不是 `{ source }` 包装对象；只有 `fetchItems` 使用对象参数。`validate` 不返回连接器结果，验证失败通过抛出异常表示。
 

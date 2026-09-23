@@ -15,6 +15,8 @@ import type {
     Annotation, AnnotationList, SavedView, SavedViewList,
     BoardDetail, BoardList, SpotlightPlacement, SpotlightPlacementList,
     UserDataExport,
+    ConnectorStateExport, ConnectorStateExportScope, ConnectorStateImportCommand,
+    ConnectorStateImportResult, ConnectorStateNamespaceSummary,
 } from "@cosmos/contracts";
 import type {
     EntityRelationType, EntityType, EntryRelationType, EntryStoryRelationType, FavoriteTargetType,
@@ -125,6 +127,18 @@ export interface CosmosRepository {
     restoreBackup(backupId: string): Promise<void>;
     /** 用户真相对象的可带走副本（LIB-008 / OPS-004）；只读，不落盘。 */
     exportUserData(): Promise<UserDataExport>;
+    /**
+     * 抽屉清单（ING-012 / ADR-0026）：以实际存在的抽屉为准，归属从登记表查；
+     * 算不出归属的标 `unattributed`，它们默认不进入导出件。
+     */
+    listConnectorStateNamespaces(): Promise<readonly ConnectorStateNamespaceSummary[]>;
+    /** 导出连接器状态（ING-012 / ADR-0026）；只读、不落盘。 */
+    exportConnectorState(scope: ConnectorStateExportScope): Promise<ConnectorStateExport>;
+    /**
+     * 导入连接器状态（ADR-0026）。输入已在 API 边界按契约校验；只写 ConnectorState，
+     * 不触发采集、不写事件、不改计划与连接。
+     */
+    importConnectorState(command: ConnectorStateImportCommand): Promise<ConnectorStateImportResult>;
     createRun(input: {
         sourceId: string;
         triggerKind: IngestTriggerKind;

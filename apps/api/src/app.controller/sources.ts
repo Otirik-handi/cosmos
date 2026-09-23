@@ -4,10 +4,13 @@ import {
     Delete,
     Get,
     HttpCode,
+    HttpException,
+    HttpStatus,
     NotFoundException,
     Param,
     Patch,
     Post,
+    Query,
     StreamableFile,
     Body,
     Headers,
@@ -15,6 +18,8 @@ import {
 import { randomUUID } from "node:crypto";
 import { createHealthSnapshot, WorkflowHostConflictError } from "@cosmos/application";
 import {
+    connectorStateExportQuerySchema,
+    connectorStateImportCommandSchema,
     createSourceCommandSchema,
     deleteSourceCommandSchema,
     sourceConfigProbeCommandSchema,
@@ -22,6 +27,8 @@ import {
     updateSourceCommandSchema,
     createConnectionCommandSchema,
     updateConnectionCommandSchema,
+    type ConnectorStateExportQuery,
+    type ConnectorStateExportScope,
     type HealthResponse,
 } from "@cosmos/contracts";
 import "reflect-metadata";
@@ -29,8 +36,28 @@ import { AppControllerBase } from "./base.js";
 import { requireIdempotencyKey, sourceCommandError, connectionError, catalogPage, parsePositiveInteger, toPublicSource, toPublicWorkflowRun } from "./internals.js";
 
 /** 导出文件名：时间戳里的 `:` 在 Windows 上是非法字符，统一换成 `-`。 */
-function exportFileName(exportedAt: string): string {
-    return `cosmos-user-data-${exportedAt.replaceAll(":", "-")}.json`;
+function exportFileName(prefix: string, exportedAt: string): string {
+    return `${prefix}-${exportedAt.replaceAll(":", "-")}.json`;
+}
+
+/**
+ * 连接器状态导入件的体积上限。状态条目本身很小，上限的作用是让超大 body 在我们的
+ * 契约里就被拒绝，而不是先被 HTTP 层按自己的错误形状挡掉。
+ */
+export const CONNECTOR_STATE_IMPORT_MAX_BODY_BYTES = 64 * 1024;
+
+/**
+ * 查询参数到导出范围的映射。`connectorStateExportQuerySchema` 已经保证四选一，
+ * 这里只挑出唯一给出的那一个；一个都没给就是"全部已归属"。
+ */
+function connectorStateScope(query: ConnectorStateExportQuery): ConnectorStateExportScope {
+    if (query.namespace !== undefined) return { kind: "namespace", namespace: query.namespace };
+    if (query.planId !== undefined) return { kind: "plan", planId: query.planId };
+    if (query.connectionId !== undefined) {
+        return { kind: "connection", connectionId: query.connectionId };
+    }
+    if (query.sourceId !== undefined) return { kind: "source", sourceId: query.sourceId };
+    return { kind: "attributed" };
 }
 
 export class AppControllerSources extends AppControllerBase {
@@ -452,9 +479,71 @@ export class AppControllerSources extends AppControllerBase {
             Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, "utf8"),
             {
                 type: "application/json",
-                disposition: `attachment; filename="${exportFileName(payload.exportedAt)}"`,
+                disposition: `attachment; filename="${exportFileName("cosmos-user-data", payload.exportedAt)}"`,
             },
         );
+    }
+
+    // ---- Connector state export/import (ING-012 / ADR-0026). ----
+
+    @Get("connector-state/namespaces")
+    async listConnectorStateNamespaces() {
+        return this.repository.listConnectorStateNamespaces();
+    }
+
+    /**
+     * 导出连接器状态（ING-012）：只读、不落盘，返回 JSON 附件。范围四选一，缺省是
+     * 全部已归属；未归属抽屉只能按名字点名，不会被"全部"顺手带走。
+     */
+    @Get("exports/connector-state")
+    @Bind(Query())
+    async exportConnectorState(query: Record<string, unknown>) {
+        try {
+            const scope = connectorStateScope(connectorStateExportQuerySchema.parse(query));
+            const payload = await this.repository.exportConnectorState(scope);
+            return new StreamableFile(
+                Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, "utf8"),
+                {
+                    type: "application/json",
+                    disposition: `attachment; filename="${exportFileName("cosmos-connector-state", payload.exportedAt)}"`,
+                },
+            );
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    /**
+     * 导入连接器状态（ADR-0026）：导出件是外部输入，先按契约整批校验再在单个事务里写。
+     * 只写 `ConnectorState`，不触发采集、不写事件、不改计划与连接。
+     */
+    @Post("imports/connector-state")
+    @Bind(Headers("content-length"), Body())
+    async importConnectorState(contentLength?: string, body?: unknown) {
+        const declaredLength = Number.parseInt(contentLength ?? "", 10);
+        if (Number.isFinite(declaredLength) && declaredLength > CONNECTOR_STATE_IMPORT_MAX_BODY_BYTES) {
+            throw this.connectorStateImportTooLarge();
+        }
+        if (
+            body !== undefined
+            && Buffer.byteLength(JSON.stringify(body) ?? "", "utf8") > CONNECTOR_STATE_IMPORT_MAX_BODY_BYTES
+        ) {
+            throw this.connectorStateImportTooLarge();
+        }
+        try {
+            const command = connectorStateImportCommandSchema.parse(body);
+            return await this.repository.importConnectorState(command);
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    private connectorStateImportTooLarge(): HttpException {
+        return new HttpException({
+            code: "payload_too_large",
+            message: `Connector state import must not exceed ${CONNECTOR_STATE_IMPORT_MAX_BODY_BYTES} bytes.`,
+            retryable: false,
+        }, HttpStatus.PAYLOAD_TOO_LARGE);
     }
 
     @Post("sources/:sourceId/runs")

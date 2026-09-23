@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import {
     ConnectorStateConflictError,
     type ConnectorStateEntry,
+    type ConnectorStateNamespaceRegistration,
+    type ConnectorStateOwner,
     type ConnectorStateStorePort,
 } from "@cosmos/application";
 import type { JsonValue } from "@notnotype/nb-workflow";
@@ -56,6 +58,29 @@ export class PrismaConnectorStateStore implements ConnectorStateStorePort {
             throw new ConnectorStateConflictError(namespace, key, expectedVersion);
         }
         return { version: expectedVersion + 1 };
+    }
+
+    async registerNamespace(
+        namespace: string,
+        owner: ConnectorStateOwner,
+    ): Promise<ConnectorStateNamespaceRegistration> {
+        try {
+            await this.prisma.connectorStateNamespace.create({
+                data: { namespace, planId: owner.planId },
+            });
+            return "registered";
+        } catch (error) {
+            if (!isUniqueConstraintError(error)) {
+                throw error;
+            }
+            // 每轮抓取都会登记一次，同一计划的重复登记是常态而不是冲突；只有抽屉已经
+            // 属于别的计划才算冲突，此时保留首个登记（ADR-0026）。
+            const existing = await this.prisma.connectorStateNamespace.findUnique({
+                where: { namespace },
+                select: { planId: true },
+            });
+            return existing !== null && existing.planId !== owner.planId ? "conflict" : "registered";
+        }
     }
 }
 

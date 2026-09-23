@@ -162,8 +162,15 @@ Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 S
 | `POST /backups` | 无 | HTTP 201 返回 `BackupSnapshot`；用 `VACUUM INTO` 生成一致快照到 `backups/backup-<timestamp>.sqlite`（不依赖源码 checkout，Blob 不随备份）。 |
 | `POST /backups/:backupId/restores` | path `backupId` | HTTP 200 返回 ack；恢复前生成 `pre-restore-*.sqlite` 保护备份后覆盖当前 SQLite；不存在 404；需重启 API/Worker 生效。 |
 | `GET /exports/user-data` | 无 | HTTP 200 返回 JSON 附件（`UserDataExport`，`Content-Disposition: attachment; filename="cosmos-user-data-<exportedAt>.json"`，文件名里的 `:` 换成 `-`）；只读、不落盘、不改状态。 |
+| `GET /connector-state/namespaces` | 无 | HTTP 200 返回 `ConnectorStateNamespaceSummary[]`；每个抽屉的 key 条数、归属（`planId`／`sourceId`／`connectionId`）与 `unattributed`；只读。 |
+| `GET /exports/connector-state` | query `namespace`／`planId`／`connectionId`／`sourceId` 四选一，缺省 = 全部已归属 | HTTP 200 返回 JSON 附件（`ConnectorStateExport`，`filename="cosmos-connector-state-<exportedAt>.json"`）；只读、不落盘；同时给出多个范围参数按 400 `validation_failed` 拒绝。 |
+| `POST /imports/connector-state` | body `ConnectorStateImportCommand` | HTTP 201 返回 `ConnectorStateImportResult`；默认 `skip-existing`，`overwrite` 时 `version = 本地 + 1`；body 超过 64 KB 返回 413 `payload_too_large`；`targetNamespace` 只在导出件含单个抽屉且目标抽屉已有归属登记时接受，否则 400 `validation_failed`。 |
 
 `GET /exports/user-data` 的内容是七类用户真相对象（Label、Collection、Favorite、Annotation、Saved View、Board 树、Spotlight）加一份被引用目标的摘要（`targets`：目标类型、id、标题、条目的 `webUrl`）；字段直接复用各对象的公开读投影。它**不含**采集内容与派生投影、运行记录、连接与来源配置、Secret 字节、`ConnectorState` 与 `storageKey`；整库副本由 `POST /backups` 承担（ADR-0019 决策 5）。导出读取不加事务，是尽力而为的一致快照，`exportedAt` 是它的时间标记。
+
+`GET /exports/connector-state` 只导出 `ConnectorState`：按抽屉（命名空间）切分，每项带归属快照与 `key`／`value`／`version`／`updatedAt`。归属来自 `ConnectorStateNamespace`，所以范围过滤是一次 join，不解析 manifest 模板；**未归属抽屉不属于任何一种范围**，默认不带走，只能按名字点名（`namespace`），此时导出件里 `owner` 为 `null`（ADR-0026）。它不含 Secret、连接配置、`Checkpoint` 与其它表；整库副本仍由 `POST /backups` 承担。
+
+`POST /imports/connector-state` 只写 `ConnectorState`，不触发采集、不写事件、不改计划与连接。导入是数据写入：回滚代码不会撤销已经写进库的状态，需要时用同一入口的 `overwrite` 反向导入旧件，或整库恢复。非法输入（结构不符、超出体积上限）整批拒绝，不做部分写入；合法输入在单个事务内写完。
 
 Catalog page 当前固定 `nextCursor: null`，`snapshotAt` 是响应生成时的 ISO 时间。Builtin
 catalog 包含 `rss`、`fixture-rss`、`bilibili`、`aihot` Source definitions，Workflow

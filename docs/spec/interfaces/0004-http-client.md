@@ -104,6 +104,7 @@ Phase 2 编排方法（同一 transport 形态：先 parse 命令 schema，再 P
 | `listSourceDefinitions` / `createSourceConfigProbe` / `getSourceConfigProbe` | `GET /api/v1/source-definitions`、`POST /api/v1/source-config-probes`、`GET /api/v1/source-config-probes/:encodedId` | `SourceDefinitionPage`、`SourceConfigProbeJobSnapshot` |
 | `storageStats()` / `listBackups()` / `createBackup()` / `restoreBackup(backupId)` | `GET /api/v1/storage-stats`、`GET /api/v1/backups`、`POST /api/v1/backups`、`POST /api/v1/backups/:encodedId/restores` | `StorageStats`、`BackupSnapshot[]`、`BackupSnapshot`、`UserOrganizationAck` |
 | `exportUserData()` | `GET /api/v1/exports/user-data` | `UserDataExport`（响应是附件下载，客户端仍按 JSON 校验） |
+| `listConnectorStateNamespaces()` / `exportConnectorState(scope?)` / `importConnectorState(input)` | `GET /api/v1/connector-state/namespaces`、`GET /api/v1/exports/connector-state`（范围参数由 `scope` 生成，缺省不带查询参数）、`POST /api/v1/imports/connector-state` | `ConnectorStateNamespaceSummary[]`、`ConnectorStateExport`、`ConnectorStateImportResult` |
 
 `feed`、`search`、`entries` 即使没有 query 也会生成带 `?` 的 path（例如
 `/api/v1/feed?`）；这是当前实现的 URL 结果，不影响服务器解析。Fetch options 默认

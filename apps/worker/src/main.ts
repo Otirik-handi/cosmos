@@ -22,7 +22,7 @@ import { createLogger } from "@cosmos/logging";
 import { createBuiltInConnectorRegistry } from "@cosmos/plugin-collectors";
 import { PrismaConnectorStateStore, PrismaCosmosRepository } from "@cosmos/storage-prisma";
 import { createWorkerAdminServer, type ComponentHealth, type WorkerAdminServer } from "@cosmos/worker-admin";
-import type { ConnectorStateHandle, ConnectorStateStorePort } from "@cosmos/application";
+import type { ConnectorStateHandle, ConnectorStateStorePort, LoggerPort } from "@cosmos/application";
 import type { CatalogPort } from "@cosmos/application/catalog";
 import type { SourceExecutionSnapshot } from "@cosmos/contracts";
 import { parseWorkerRuntimeConfig } from "./config.js";
@@ -34,13 +34,14 @@ import { createWorkflowHost } from "./workflow-host.js";
 /**
  * 把执行快照解析成连接器状态句柄：命名空间取自 manifest 的 `stateStoreNamespace`
  * （ADR-0018，声明为 null 就不给句柄，连接器退化成无状态抓取），`{id}` 换成**计划 id**
- * （ADR-0023 决策 2：状态按计划隔离）。
+ * （ADR-0023 决策 2：状态按计划隔离），并在这里登记抽屉归属（ADR-0026）。
  */
-function resolveConnectorStateHandle(
+async function resolveConnectorStateHandle(
     store: ConnectorStateStorePort,
     catalog: CatalogPort,
     source: SourceExecutionSnapshot,
-): ConnectorStateHandle | undefined {
+    logger: LoggerPort,
+): Promise<ConnectorStateHandle | undefined> {
     const definition = catalog.getSourceDefinitionByRef(source.sourceDefinitionRef);
     const namespace = definition?.operations
         .find((operation) => operation.operationId === source.operationId)
@@ -49,6 +50,23 @@ function resolveConnectorStateHandle(
         return undefined;
     }
     const resolved = namespace.replaceAll("{id}", source.planId);
+    // 登记是尽力而为的元数据：失败或与别的计划冲突都只记日志。状态写入本来就允许
+    // 降级（连接器把 CAS 冲突吞成一条调试日志），不该因为归属登记让采集失败。
+    try {
+        const registration = await store.registerNamespace(resolved, { planId: source.planId });
+        if (registration === "conflict") {
+            logger.debug("connector.state.owner_conflict", {
+                namespace: resolved,
+                planId: source.planId,
+            });
+        }
+    } catch (error) {
+        logger.debug("connector.state.registration_skipped", {
+            namespace: resolved,
+            planId: source.planId,
+            reason: error instanceof Error ? error.name : "unknown",
+        });
+    }
     return {
         get: (key) => store.getState(resolved, key),
         put: (key, value, expectedVersion) => store.putState(resolved, key, value, expectedVersion),
@@ -135,7 +153,7 @@ async function bootstrap(): Promise<void> {
                         mediaRetrier: mediaAcquirer,
                         retryCandidates: repository,
                         connectorState: (source) =>
-                            resolveConnectorStateHandle(connectorStateStore, catalog, source),
+                            resolveConnectorStateHandle(connectorStateStore, catalog, source, logger),
                         logger,
                     }),
                     ...createMediaCleanupActions({ domain: repository, logger }),

@@ -52,7 +52,9 @@ export {
     type SecretStorePort,
 } from "./secret-store.js";
 export {
-    ConnectorStateConflictError, type ConnectorStateEntry, type ConnectorStateStorePort,
+    ConnectorStateConflictError, type ConnectorStateEntry,
+    type ConnectorStateNamespaceRegistration, type ConnectorStateOwner,
+    type ConnectorStateStorePort,
 } from "./connector-state-store.js";
 
 export {
@@ -65,6 +67,7 @@ export {
 export {
     SourceNotFoundError, SourceRevisionConflictError, ConnectionNotFoundError,
     CollectionPlanNotFoundError, CollectionPlanRevisionConflictError,
+    ConnectorStateImportRejectedError,
     StoryNotFoundError, StoryRevisionConflictError, StoryMergeConflictError,
     StorySplitConflictError, StorySubtypeInvalidError, StoryUserStateMigrationConflictError,
     TopicNotFoundError,
