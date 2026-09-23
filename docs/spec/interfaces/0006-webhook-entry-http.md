@@ -8,6 +8,8 @@
 
 与相邻组件的边界：入口不抓取、不解析、不写领域数据；它只创建 queued 的 WorkflowEnvelope。计划与触发器的读写归 [Product API](0002-product-api-http.md) 与 [Prisma 仓储](../storage/0001-prisma-repository.md)。
 
+产品面把 `/hooks/*` 透传给 API（`apps/web/next.config.ts` 的 rewrite），所以计划面板给出的入口地址与用户当前访问的地址同源、复制即可用；入口本身仍由 API 进程提供，Web 只是透传。
+
 ## 概念与定义
 
 - **入口标识**（`TriggerBinding.webhookToken`）：URL 路径里的不可猜随机值，定位到某条 `kind = webhook` 的触发器。它会出现在 URL 与日志里，所以**它不是凭证**。

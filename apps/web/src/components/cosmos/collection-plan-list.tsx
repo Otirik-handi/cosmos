@@ -1,8 +1,9 @@
-import { Play, Power, PowerOff, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Play, Power, PowerOff, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type {
     CollectionPlanSnapshot,
+    CollectionPlanWebhookEntry,
     ConnectionInstance,
     MediaCleanupReport,
     SourceMediaPolicy,
@@ -25,6 +26,12 @@ type CollectionPlanListProps = {
     onDelete?: (plan: CollectionPlanSnapshot) => Promise<void>;
     /** 保存计划级媒体策略（ADR-0014）：只影响之后入队的采集。 */
     onSaveMediaPolicy: (plan: CollectionPlanSnapshot, policy: SourceMediaPolicy) => Promise<void>;
+    /**
+     * Webhook 入口（ADR-0024）：生成/轮换返回唯一一次明文凭证，撤销删掉入口与凭证字节。
+     * 两者都省略时该行的入口面板不出现（组件实验室等只读场景）。
+     */
+    onRotateWebhookEntry?: (plan: CollectionPlanSnapshot) => Promise<CollectionPlanWebhookEntry>;
+    onRevokeWebhookEntry?: (plan: CollectionPlanSnapshot) => Promise<void>;
     /** 保留期清理：预览（dryRun）与确认执行（ADR-0015 决策 7）。 */
     onPreviewMediaCleanup?: () => Promise<MediaCleanupReport>;
     onConfirmMediaCleanup?: () => Promise<MediaCleanupReport>;
@@ -121,6 +128,8 @@ export function CollectionPlanList({
     onToggleActivation,
     onDelete,
     onSaveMediaPolicy,
+    onRotateWebhookEntry,
+    onRevokeWebhookEntry,
     onPreviewMediaCleanup,
     onConfirmMediaCleanup,
     activatingPlanId = null,
@@ -144,7 +153,45 @@ export function CollectionPlanList({
     const [cleanupResult, setCleanupResult] = useState<MediaCleanupReport | null>(null);
     const [cleanupBusy, setCleanupBusy] = useState(false);
     const [cleanupError, setCleanupError] = useState<string | null>(null);
+    // 入口面板同一时刻只开一个；明文凭证只保留在打开它的这一次交互里。
+    const [webhookPlanId, setWebhookPlanId] = useState<string | null>(null);
+    const [webhookEntry, setWebhookEntry] = useState<CollectionPlanWebhookEntry | null>(null);
+    const [webhookBusy, setWebhookBusy] = useState(false);
+    const [webhookError, setWebhookError] = useState<string | null>(null);
     const groups = useMemo(() => groupPlans(plans, connections), [plans, connections]);
+
+    const toggleWebhookPanel = (plan: CollectionPlanSnapshot): void => {
+        setWebhookEntry(null);
+        setWebhookError(null);
+        setWebhookPlanId((current) => (current === plan.id ? null : plan.id));
+    };
+
+    const rotateWebhookEntry = async (plan: CollectionPlanSnapshot): Promise<void> => {
+        if (!onRotateWebhookEntry) return;
+        setWebhookBusy(true);
+        setWebhookError(null);
+        try {
+            setWebhookEntry(await onRotateWebhookEntry(plan));
+        } catch (error) {
+            setWebhookError(error instanceof Error ? error.message : "生成 Webhook 入口失败。");
+        } finally {
+            setWebhookBusy(false);
+        }
+    };
+
+    const revokeWebhookEntry = async (plan: CollectionPlanSnapshot): Promise<void> => {
+        if (!onRevokeWebhookEntry) return;
+        setWebhookBusy(true);
+        setWebhookError(null);
+        try {
+            await onRevokeWebhookEntry(plan);
+            setWebhookEntry(null);
+        } catch (error) {
+            setWebhookError(error instanceof Error ? error.message : "撤销 Webhook 入口失败。");
+        } finally {
+            setWebhookBusy(false);
+        }
+    };
 
     const previewCleanup = async (): Promise<void> => {
         if (!onPreviewMediaCleanup) return;
@@ -224,6 +271,7 @@ export function CollectionPlanList({
                                     const deleting = deletingPlanId === plan.id;
                                     const confirmingDelete = confirmingDeleteId === plan.id;
                                     const editingPolicy = editingPolicyId === plan.id;
+                                    const webhookOpen = webhookPlanId === plan.id;
                                     return (
                                         <li
                                             key={plan.id}
@@ -241,6 +289,11 @@ export function CollectionPlanList({
                                                         <span className="truncate text-sm font-medium">{plan.name}</span>
                                                     </div>
                                                     <span className="text-xs">{scheduleLine(plan)}</span>
+                                                    {onRotateWebhookEntry && (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            Webhook 入口：{plan.webhook ? "已配置" : "未生成"}
+                                                        </span>
+                                                    )}
                                                     <span className="text-xs text-muted-foreground">
                                                         媒体策略：{describeMediaPolicy(plan.mediaPolicy)}
                                                     </span>
@@ -277,6 +330,18 @@ export function CollectionPlanList({
                                                         <Play aria-hidden={true} />
                                                         <span className="sr-only">{plan.name}</span>
                                                     </Button>
+                                                    {onRotateWebhookEntry && (
+                                                        <Button
+                                                            size="icon-sm"
+                                                            variant="outline"
+                                                            aria-expanded={webhookOpen}
+                                                            disabled={webhookBusy && webhookOpen}
+                                                            onClick={() => toggleWebhookPanel(plan)}
+                                                        >
+                                                            <Webhook aria-hidden={true} />
+                                                            <span className="sr-only">Webhook 入口 {plan.name}</span>
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         size="icon-sm"
                                                         variant="outline"
@@ -325,6 +390,67 @@ export function CollectionPlanList({
                                                     删除计划只移除采集配置与定时：已录入的条目、来源历史与媒体都保留。
                                                     再次点击该按钮确认删除，或点其它地方取消。
                                                 </p>
+                                            )}
+                                            {webhookOpen && onRotateWebhookEntry && (
+                                                <div className="flex flex-col gap-2 rounded-[var(--radius-control)] border bg-muted/30 p-3">
+                                                    <p className="text-xs leading-5 text-muted-foreground">
+                                                        入口给外部自动化调用：带上凭证与事件标识请求它，Cosmos 立刻为这个计划排一次采集。
+                                                        凭证只在生成时显示一次；轮换会立即作废旧凭证。计划停用时入口会拒绝请求。
+                                                    </p>
+                                                    {plan.webhook ? (
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="text-xs text-muted-foreground">入口地址</span>
+                                                            <code className="break-all rounded-sm border bg-card px-2 py-1 text-xs">
+                                                                {entryAddress(plan.webhook.entryPath)}
+                                                            </code>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                凭证：{plan.webhook.credentialConfigured ? "已配置" : "缺失，请轮换"}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            这个计划还没有入口。生成后把它填进你的脚本或定时任务。
+                                                        </span>
+                                                    )}
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={webhookBusy}
+                                                            onClick={() => void rotateWebhookEntry(plan)}
+                                                        >
+                                                            {plan.webhook ? "轮换入口" : "生成入口"}
+                                                        </Button>
+                                                        {plan.webhook && onRevokeWebhookEntry && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                disabled={webhookBusy}
+                                                                onClick={() => void revokeWebhookEntry(plan)}
+                                                            >
+                                                                撤销入口
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    {webhookEntry?.planId === plan.id && (
+                                                        <div
+                                                            role="status"
+                                                            className="flex flex-col gap-1 rounded-[var(--radius-control)] border border-dashed bg-card p-2"
+                                                        >
+                                                            <span className="text-xs font-medium">
+                                                                凭证只显示这一次，请立即保存
+                                                            </span>
+                                                            <code className="break-all text-xs">{webhookEntry.credential}</code>
+                                                            <span className="text-xs text-muted-foreground">调用示例</span>
+                                                            <code className="break-all text-xs">
+                                                                {webhookCallExample(webhookEntry.entryPath, webhookEntry.credential)}
+                                                            </code>
+                                                        </div>
+                                                    )}
+                                                    {webhookError && (
+                                                        <span className="text-xs text-destructive">{webhookError}</span>
+                                                    )}
+                                                </div>
                                             )}
                                             {editingPolicy && (
                                                 <form
@@ -530,6 +656,19 @@ export function CollectionPlanList({
             )}
         </section>
     );
+}
+
+/**
+ * 入口由 Cosmos API 提供；产品面把 `/hooks/*` 透传给 API，所以「当前访问地址 + 入口路径」
+ * 就是用户可以直接复制使用的入口地址。
+ */
+function entryAddress(entryPath: string): string {
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    return `${origin}${entryPath}`;
+}
+
+function webhookCallExample(entryPath: string, credential: string): string {
+    return `curl -X POST ${entryAddress(entryPath)} -H "x-cosmos-credential: ${credential}" -H "x-cosmos-event-id: <事件 id>"`;
 }
 
 function formatBytes(value: number): string {

@@ -271,6 +271,8 @@ export default function Home() {
         onCreateSource,
         onTestSourceConfig,
         probeState,
+        revokeWebhookEntry,
+        rotateWebhookEntry,
         runMediaCleanup,
         runRefreshToken,
         runPlan,
@@ -513,6 +515,8 @@ export default function Home() {
             onToggleActivation={toggleActivation}
             onDelete={deletePlan}
             onSaveMediaPolicy={saveMediaPolicy}
+            onRotateWebhookEntry={rotateWebhookEntry}
+            onRevokeWebhookEntry={revokeWebhookEntry}
             onPreviewMediaCleanup={() => runMediaCleanup(true)}
             onConfirmMediaCleanup={() => runMediaCleanup(false)}
             activatingPlanId={activatingPlanId}

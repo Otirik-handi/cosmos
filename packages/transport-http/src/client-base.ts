@@ -62,7 +62,7 @@ import { CosmosTransportError } from "./types.js";export class HttpCosmosClientB
     protected async request<TSchema extends { parse: (value: unknown) => unknown }>(
         path: string,
         options: {
-            method?: "GET" | "POST" | "PATCH";
+            method?: "GET" | "POST" | "PATCH" | "DELETE";
             body?: unknown;
             headers?: Record<string, string>;
             schema: TSchema;
