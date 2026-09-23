@@ -26,16 +26,25 @@ import { runBilibiliDualPlanAcceptance } from "./real-bilibili-plans.js";
 type SourceCommand = {
     name: string;
     sourceDefinitionRef: string;
-    operationId: "fetch";
+    operationId: "fetch" | "search";
     config: Record<string, unknown>;
 };
 
 /**
- * 真实来源验收有两种形态：单来源（rss / aihot / bilibili-hot）只证明一条链路能抓，
- * 双计划（bilibili）是 Task 33 的验收——同一连接下的 hot 与 feed 两个计划。
+ * 真实来源验收有两种形态：单来源（rss / aihot / bilibili-hot / bilibili-search）只证明一条
+ * 链路能抓，双计划（bilibili）是 Task 33 的验收——同一连接下的 hot 与 feed 两个计划。
  */
 type Acceptance =
-    | { mode: "single"; environment: NodeJS.ProcessEnv; command: SourceCommand }
+    | {
+        mode: "single";
+        environment: NodeJS.ProcessEnv;
+        command: SourceCommand;
+        /**
+         * 期望来源落库并在公开投影里回读到的 `operationId`（EXT-006）：第二个 operation
+         * 必须真的被持久化、而且它的配置字段不能被投影丢掉。
+         */
+        expectOperationId?: string;
+    }
     | { mode: "dual-plan"; environment: NodeJS.ProcessEnv; profile: string };
 
 const kind = process.argv[2];
@@ -106,6 +115,7 @@ try {
             apiPort,
             command: acceptance.command,
             viaEntry,
+            expectOperationId: acceptance.expectOperationId,
         });
 
     const records = await readStructuredLogs(stack.logRoot);
@@ -134,6 +144,7 @@ async function runSingleSourceAcceptance(input: {
     apiPort: number;
     command: SourceCommand;
     viaEntry: boolean;
+    expectOperationId?: string;
 }): Promise<string> {
     const apiBaseUrl = `http://127.0.0.1:${input.apiPort}/api/v1`;
     const apiOrigin = `http://127.0.0.1:${input.apiPort}`;
@@ -148,6 +159,9 @@ async function runSingleSourceAcceptance(input: {
     );
     const sourceId = readString(created, "id");
     const planId = readString(created, "planId");
+    if (input.expectOperationId !== undefined) {
+        await assertPersistedOperation(apiBaseUrl, input.kind, sourceId, input);
+    }
     // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
     expectJsonObject(
         await requestJson(
@@ -202,6 +216,41 @@ async function runSingleSourceAcceptance(input: {
         return `Real ${input.kind} acceptance through the webhook entry passed: Run ${runId}, bounded item count ${itemCount}, event ${triggered.eventId}.`;
     }
     return `Real ${input.kind} acceptance passed: Run ${runId}, bounded item count ${itemCount}.`;
+}
+
+/**
+ * 第二个 operation 的真实消费者（EXT-006）：读回来的来源必须仍是那个 operation，而且
+ * 公开投影必须带上它声明的配置字段——按 connectorId 白名单化的投影会把 `query` 丢掉，
+ * 这条断言就是那个缺口的守卫。
+ */
+async function assertPersistedOperation(
+    apiBaseUrl: string,
+    kind: string | undefined,
+    sourceId: string,
+    input: { command: SourceCommand; expectOperationId: string },
+): Promise<void> {
+    const persisted = expectJsonObject(
+        await requestJson(`${apiBaseUrl}/sources/${encodeURIComponent(sourceId)}`),
+        200,
+        `Real ${kind} source read-back`,
+    );
+    const operationId = readString(persisted, "operationId");
+    if (operationId !== input.expectOperationId) {
+        throw new Error(
+            `Real ${kind}: expected operationId=${input.expectOperationId}, got ${operationId}.`,
+        );
+    }
+    const config = persisted.config;
+    if (!isRecord(config)) {
+        throw new Error(`Real ${kind}: the public source projection has no config object.`);
+    }
+    for (const [key, value] of Object.entries(input.command.config)) {
+        if (config[key] !== value) {
+            throw new Error(
+                `Real ${kind}: the public projection dropped ${key} of operation ${input.expectOperationId} (got ${JSON.stringify(config)}).`,
+            );
+        }
+    }
 }
 
 /**
@@ -288,9 +337,32 @@ function resolveAcceptance(value: string | undefined): Acceptance {
                 profile,
             };
         }
+        case "bilibili-search": {
+            requireNetworkPermission();
+            const openCliPath = requiredEnvironment("COSMOS_OPENCLI_PATH");
+            // 搜索匿名可用（EXT-006）：只给可执行文件路径，**不给** profile——这条验收同时
+            // 证明第二个 operation 不需要登录态，也不该被要求绑连接。
+            return {
+                mode: "single",
+                environment: {
+                    COSMOS_OPENCLI_PATH: openCliPath,
+                    COSMOS_ALLOW_REAL_NETWORK: "true",
+                },
+                command: {
+                    name: "Explicit Bilibili Search",
+                    sourceDefinitionRef: "source.bilibili@1",
+                    operationId: "search",
+                    config: {
+                        query: process.env.COSMOS_REAL_BILIBILI_QUERY?.trim() || "宇宙",
+                        limit: 20,
+                    },
+                },
+                expectOperationId: "search",
+            };
+        }
         default:
             throw new Error(
-                "Usage: bun run scripts/e2e/real-source.ts <rss|aihot|bilibili|bilibili-hot>.",
+                "Usage: bun run scripts/e2e/real-source.ts <rss|aihot|bilibili|bilibili-hot|bilibili-search>.",
             );
     }
 }

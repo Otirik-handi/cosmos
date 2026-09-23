@@ -188,11 +188,13 @@ Action manifests；这些是当前实现锚点，不是允许客户端执行的�
 
 `CreateSourceCommand` 的 `name` 去空格后 1–200 字符；`sourceDefinitionRef` 必须命中当前
 Catalog 的 enabled manifest，`operationId` 必须出现在其 operationIds 内；`config` 由
-contracts 的 `getSourceConfigurationSchema(ref)` strict Zod schema 校验——这是 canonical
-校验真相，manifest JSON Schema 只是发布投影。命令不接受 `enabled`：创建固定停用，
-只能通过 activation command 启用。Source 公开 config 仍按 Controller 白名单投影
-（通用保留 `feedUrl`、`scheduleIntervalMs`；Bilibili 另含 `mode`、`limit`、`profile`、
-`schemaVersion`），其余配置不回显。
+contracts 的 `getSourceConfigurationSchema(ref, operationId)` strict Zod schema 校验——这是
+canonical 校验真相，manifest JSON Schema 只是发布投影。命令不接受 `enabled`：创建固定停用，
+只能通过 activation command 启用。Source 公开 config 按**该 operation 声明的字段**投影：键取自
+同一份 canonical schema（RSS 为 `feedUrl`；Bilibili `fetch` 为 `mode`/`limit`/`schemaVersion`，
+`search` 为 `query`/`limit`/`schemaVersion`），未声明的键不回显；读不到 canonical schema 的来源
+（历史 kind 投影）退回只保留 `feedUrl`。投影**不含**凭证：OpenCLI profile 住连接的 `configJson`，
+不在来源 config 里。
 
 `POST /sources/:sourceId/runs` 只接受已启用的 Source：未启用返回 409 `conflict`；
 可选 `Idempotency-Key` 超过 300 字符按 400 `validation_failed` 拒绝，缺失时生成随机

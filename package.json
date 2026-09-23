@@ -56,6 +56,8 @@
         "test:real:entry": "bun run scripts/e2e/real-source.ts rss --via-entry",
         "test:real:aihot": "bun run scripts/e2e/real-source.ts aihot",
         "test:real:bilibili": "bun run scripts/e2e/real-source.ts bilibili",
+        "test:real:bilibili-hot": "bun run scripts/e2e/real-source.ts bilibili-hot",
+        "test:real:bilibili-search": "bun run scripts/e2e/real-source.ts bilibili-search",
         "db:validate": "bun run scripts/prisma.ts validate",
         "db:generate": "bun run scripts/prisma.ts generate",
         "db:migrate": "bun run scripts/prisma.ts migrate deploy",

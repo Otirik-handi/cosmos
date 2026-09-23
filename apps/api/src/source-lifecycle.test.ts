@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createBuiltinManifestCatalog } from "@cosmos/application";
 import { AppController } from "./app.controller.js";
+import { toPublicSource } from "./app.controller/internals.js";
 import { SourceProbeService } from "./source-probe.service.js";
 
 const source = {
@@ -171,5 +172,37 @@ describe("AppController Source mutations", () => {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
         expect(repository.updateSource).not.toHaveBeenCalled();
+    });
+
+    /**
+     * EXT-006 的「API 按声明展示配置」：公开投影的 `config` 白名单来自该 operation 的
+     * canonical 配置 schema，而不是按 `connectorId` 硬编码——否则第二个 operation 的字段
+     * （Bilibili `search` 的查询词）读回来就没了。
+     */
+    it("projects the config fields declared by the operation", () => {
+        const projected = (input: Record<string, unknown>) =>
+            toPublicSource({...source, ...input} as never).config;
+
+        expect(projected({
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "search",
+            config: { schemaVersion: 1, query: "cosmos", limit: 20 },
+        })).toEqual({ schemaVersion: 1, query: "cosmos", limit: 20 });
+
+        // 同一个定义的 `fetch` 仍然只投影它自己声明的字段。
+        expect(projected({
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "fetch",
+            config: { mode: "hot", limit: 20, query: "stale" },
+        })).toEqual({ mode: "hot", limit: 20 });
+
+        // RSS 与未登记 canonical schema 的来源：仍是 feedUrl，未声明的键不投影。
+        expect(projected({
+            config: { feedUrl: "https://example.test/feed.xml", profile: "chrome-main" },
+        })).toEqual({ feedUrl: "https://example.test/feed.xml" });
+        expect(projected({
+            sourceDefinitionRef: "source.unknown@1",
+            config: { feedUrl: "https://example.test/feed.xml", profile: "chrome-main" },
+        })).toEqual({ feedUrl: "https://example.test/feed.xml" });
     });
 });

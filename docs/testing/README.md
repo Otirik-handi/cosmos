@@ -108,7 +108,10 @@ bun run test:docker
 COSMOS_REAL_RSS_URL=<url> bun run test:real:rss
 COSMOS_ALLOW_REAL_NETWORK=true bun run test:real:aihot
 COSMOS_ALLOW_REAL_NETWORK=true COSMOS_OPENCLI_PATH=<path> OPENCLI_PROFILE=<profile> bun run test:real:bilibili
+COSMOS_ALLOW_REAL_NETWORK=true COSMOS_OPENCLI_PATH=<path> bun run test:real:bilibili-search
 ```
+
+`test:real:bilibili` 是同一连接下的 hot+feed 双计划验收；`test:real:bilibili-search` 走 Bilibili 的第二个 operation（EXT-006），**不需要 profile**（搜索匿名可用），并断言读回的 `operationId` 与配置字段都在。
 
 真实来源脚本使用隔离 API/Worker/SQLite，要求 Run 成功、item count 在 bounded 范围内并通过日志脱敏检查。缺变量、联网许可或 OpenCLI/Browser Bridge 前置时立即失败；这些命令不进入默认 CI，也不把网络错误解释为离线 Worker 回归。
 

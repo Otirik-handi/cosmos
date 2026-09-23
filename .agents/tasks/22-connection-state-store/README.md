@@ -200,7 +200,7 @@ Non-goals（见 Proposal / ADR-0017）：
 
 切片 8 验证暴露的既有问题（2026-09-23，非本片引入，**已在本分支修复**）：
 
-- **侧栏溢出盖住计划列表**：1280×720 下左侧固定轨道（`lg` 300px／`xl` 330px）里的连接面板内容不收缩——`min-content` 实测 398px，授权范围写长 JSON 时 1015px——因此画到右侧计划列表上，浏览器全套件里表现为点击计划行的 Webhook 按钮被拦截。修法是把 `min-w-0` 铺到那条 flex/grid 链上（面板根、列表、条目、`dl` 行）；修后 `aside.scrollWidth` 在两个断点都等于列宽（330／300），连接名仍截断、三个按钮仍在列内、长授权范围在栏内换行。浏览器全套件从「累积数据下 1–2 例失败」变为 **33 passed**（耗时 5.4m → 2.3m）。证据：修复前的截图与 error-context 在 `.agent/tmp/browser-flake-2026-09-23/`，修复后的量测与截图在 `.agent/tmp/measure-sidebar.mjs`／`.agent/tmp/sidebar-after-1280.png`（诊断脚本与证据均不入库）。
+- **侧栏溢出盖住计划列表**：1280×720 下左侧固定轨道（`lg` 300px／`xl` 330px）里的连接面板内容不收缩——`min-content` 实测 398px，授权范围写长 JSON 时 1015px——因此画到右侧计划列表上，浏览器全套件里表现为点击计划行的 Webhook 按钮被拦截。修法是把 `min-w-0` 铺到那条 flex/grid 链上（面板根、列表、条目、`dl` 行）；修后 `aside.scrollWidth` 在两个断点都等于列宽（330／300），连接名仍截断、三个按钮仍在列内、长授权范围在栏内换行，且两次整套运行都没再出现 `webhook-entry` 那次失败（其中一次 **33/33 通过**）。另一次整套运行的 2 例失败（`phase2-organization.spec.ts:103` 与 `ingest.spec.ts:119` 的 `toBeFocused`）是**在册的既有抖动**，见 [`known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md) 第 1 条——与本片改动无因果关系，也未用重跑结案。证据：修复前的截图与 error-context 在 `.agent/tmp/browser-flake-2026-09-23/`，修复后的量测与截图在 `.agent/tmp/measure-sidebar.mjs`／`.agent/tmp/sidebar-after-1280.png`（诊断脚本与证据均不入库）。
 
 切片 2 追加 Follow-ups：
 
