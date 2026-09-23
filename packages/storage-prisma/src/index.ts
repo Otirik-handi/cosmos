@@ -1,7 +1,7 @@
-import { PrismaCosmosRepositoryUserDataExport } from "./repository/user-data-export.js";
+import { PrismaCosmosRepositoryConnectorStateExport } from "./repository/connector-state-export.js";
 import type { CosmosRepository } from "@cosmos/application";
 
-export class PrismaCosmosRepository extends PrismaCosmosRepositoryUserDataExport implements CosmosRepository {}
+export class PrismaCosmosRepository extends PrismaCosmosRepositoryConnectorStateExport implements CosmosRepository {}
 
 export { PrismaWorkflowBackend } from "./workflow-backend.js";
 export { PrismaWorkflowHostStore } from "./workflow-host-store.js";

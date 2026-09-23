@@ -31,6 +31,9 @@ GET       /backups                                     listBackups
 POST      /backups                                     createBackup
 POST      /backups/:backupId/restores                  restoreBackup
 GET       /exports/user-data                           exportUserData
+GET       /connector-state/namespaces                  listConnectorStateNamespaces
+GET       /exports/connector-state                     exportConnectorState
+POST      /imports/connector-state                     importConnectorState
 POST      /sources/:sourceId/runs                      runSource
 GET       /runs                                        listRuns
 GET       /runs/:runId                                 run

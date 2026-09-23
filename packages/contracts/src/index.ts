@@ -67,10 +67,16 @@ export {
     type RunControlResult, type RunSnapshot, type RunStatus,
 } from "./run-control.js";
 export {
-    backupSnapshotSchema, eventSnapshotSchema, healthResponseSchema, serviceErrorCodeSchema,
+    backupSnapshotSchema, connectorStateExportQuerySchema, connectorStateExportSchema,
+    connectorStateImportCommandSchema,
+    connectorStateImportResultSchema, connectorStateNamespaceSummarySchema,
+    eventSnapshotSchema, healthResponseSchema, serviceErrorCodeSchema,
     serviceErrorSchema, snapshotRequiredPayloadSchema, sseEventSchema, storageStatsSchema,
     userDataExportSchema, userDataExportTargetSchema,
-    type BackupSnapshot, type EventEnvelope, type EventSnapshot, type HealthResponse,
+    type BackupSnapshot, type ConnectorStateExport, type ConnectorStateExportQuery,
+    type ConnectorStateExportScope, type ConnectorStateImportCommand,
+    type ConnectorStateImportResult, type ConnectorStateNamespaceSummary,
+    type EventEnvelope, type EventSnapshot, type HealthResponse,
     type ServiceError, type ServiceErrorCode, type SnapshotRequiredPayload, type SseEvent,
     type StorageStats, type UserDataExport, type UserDataExportTarget,
 } from "./platform.js";

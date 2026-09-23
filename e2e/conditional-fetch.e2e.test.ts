@@ -143,6 +143,13 @@ describe("conditional fetch Node process E2E (AUT-003)", () => {
             return state?.etag === etag && state.lastModified === lastModified;
         }, 30_000, 200);
 
+        // 归属登记由宿主在解析状态句柄时写入（ADR-0026）：没有它，「按连接导出」就只能
+        // 每次反查计划表 + 解析 manifest 模板。
+        await waitForCondition("connector state namespace is registered to the plan", async () => {
+            const owner = await readConnectorStateOwner();
+            return owner?.planId === `plan:${sourceId}`;
+        }, 30_000, 200);
+
         const feed = await requestJson(`${apiBaseUrl}/api/v1/feed?limit=10`);
         expect(isRecord(feed.body) ? (feed.body.items as unknown[]) : []).toHaveLength(3);
     }, 120_000);
@@ -209,6 +216,22 @@ async function readConnectorState(): Promise<{ etag?: string; lastModified?: str
         });
         if (!row) return null;
         return JSON.parse(row.valueJson) as { etag?: string; lastModified?: string };
+    } finally {
+        await prisma.$disconnect();
+    }
+}
+
+/** 直接读归属登记表：证明宿主在解析状态句柄时登记了抽屉（ADR-0026）。 */
+async function readConnectorStateOwner(): Promise<{ namespace: string; planId: string } | null> {
+    const { PrismaClient } = await import("@prisma/client");
+    const prisma = new PrismaClient({
+        datasources: { db: { url: databaseUrl(stack.dataRoot) } },
+    });
+    try {
+        return await prisma.connectorStateNamespace.findUnique({
+            where: { namespace: `plan:${sourceId}` },
+            select: { namespace: true, planId: true },
+        });
     } finally {
         await prisma.$disconnect();
     }

@@ -498,6 +498,47 @@ const storagePanelLabClient = {
             targets: [{ targetType: "story", targetId: "story-lab", title: "示例 Story", webUrl: null }],
         },
     }),
+    listConnectorStateNamespaces: async () => [
+        {
+            namespace: "plan:source-lab",
+            keyCount: 1,
+            planId: "plan:source-lab",
+            sourceId: "source-lab",
+            connectionId: null,
+            unattributed: false,
+        },
+        {
+            namespace: "other-namespace",
+            keyCount: 1,
+            planId: null,
+            sourceId: null,
+            connectionId: null,
+            unattributed: true,
+        },
+    ],
+    exportConnectorState: async () => ({
+        schemaVersion: 1,
+        exportedAt: "2026-09-10T08:00:00.000Z",
+        scope: { kind: "attributed", value: null },
+        counts: { namespaces: 1, keys: 1 },
+        namespaces: [{
+            namespace: "plan:source-lab",
+            owner: { planId: "plan:source-lab", sourceId: "source-lab", connectionId: null },
+            entries: [{
+                key: "http-cache",
+                value: { etag: 'W/"lab"' },
+                version: 1,
+                updatedAt: "2026-09-10T08:00:00.000Z",
+            }],
+        }],
+    }),
+    importConnectorState: async () => ({
+        mode: "skip-existing",
+        namespaces: 1,
+        created: 1,
+        overwritten: 0,
+        skipped: 0,
+    }),
 } as unknown as HttpCosmosClient;
 
 export function renderStoragePanelLab() {

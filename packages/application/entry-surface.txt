@@ -8,12 +8,15 @@ type	CatalogPort
 type	ClaimActivityJobInput
 type	ClaimWorkflowCompletionInput
 type	ClaimWorkflowRunInput
+type	CollectionPlanWebhookEntryTarget
 type	CompleteActivityInput
 type	CompleteActivityResult
 type	ConnectorErrorCode
 type	ConnectorResolver
 type	ConnectorStateEntry
 type	ConnectorStateHandle
+type	ConnectorStateNamespaceRegistration
+type	ConnectorStateOwner
 type	ConnectorStateStorePort
 type	CosmosRepository
 type	CreateWorkflowEnvelopeInput
@@ -107,6 +110,7 @@ value	ConnectorExecutionError
 value	ConnectorProbeService
 value	ConnectorRegistry
 value	ConnectorStateConflictError
+value	ConnectorStateImportRejectedError
 value	EntityAliasConflictError
 value	EntityNotFoundError
 value	EntityRelationConflictError

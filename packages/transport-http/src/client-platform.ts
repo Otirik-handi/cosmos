@@ -1,5 +1,8 @@
 import {
     connectorDescriptorSchema,
+    connectorStateExportSchema,
+    connectorStateImportResultSchema,
+    connectorStateNamespaceSummarySchema,
     healthResponseSchema,
     jobListSchema,
     jobSnapshotSchema,
@@ -9,6 +12,10 @@ import {
     backupSnapshotSchema,
     userDataExportSchema,
     type ConnectorDescriptor,
+    type ConnectorStateExport,
+    type ConnectorStateExportScope,
+    type ConnectorStateImportResult,
+    type ConnectorStateNamespaceSummary,
     type HealthResponse,
     type JobSnapshot,
     type RunSnapshot,
@@ -76,6 +83,53 @@ export class PlatformClient extends HttpCosmosClientBase {
     async exportUserData(): Promise<UserDataExport> {
         return this.request("/api/v1/exports/user-data", {
             schema: userDataExportSchema,
+        });
+    }
+
+    /** 抽屉清单（ING-012 / ADR-0026）：归属来自登记表，未归属的标出来。 */
+    async listConnectorStateNamespaces(): Promise<readonly ConnectorStateNamespaceSummary[]> {
+        return this.request("/api/v1/connector-state/namespaces", {
+            schema: connectorStateNamespaceSummarySchema.array(),
+        });
+    }
+
+    /** 导出连接器状态（ING-012）；范围四选一，缺省是全部已归属。 */
+    async exportConnectorState(
+        scope: ConnectorStateExportScope = { kind: "attributed" },
+    ): Promise<ConnectorStateExport> {
+        const params = new URLSearchParams();
+        switch (scope.kind) {
+            case "namespace":
+                params.set("namespace", scope.namespace);
+                break;
+            case "plan":
+                params.set("planId", scope.planId);
+                break;
+            case "connection":
+                params.set("connectionId", scope.connectionId);
+                break;
+            case "source":
+                params.set("sourceId", scope.sourceId);
+                break;
+            case "attributed":
+                break;
+        }
+        return this.request(
+            `/api/v1/exports/connector-state${params.size > 0 ? `?${params.toString()}` : ""}`,
+            { schema: connectorStateExportSchema },
+        );
+    }
+
+    /** 导入连接器状态（ADR-0026）；默认只补缺失，显式 overwrite 才覆盖本地较新的状态。 */
+    async importConnectorState(input: {
+        mode?: "skip-existing" | "overwrite";
+        targetNamespace?: string;
+        export: ConnectorStateExport;
+    }): Promise<ConnectorStateImportResult> {
+        return this.request("/api/v1/imports/connector-state", {
+            method: "POST",
+            body: input,
+            schema: connectorStateImportResultSchema,
         });
     }
 

@@ -84,6 +84,7 @@ model CollectionPlan {
     checkpoint      Checkpoint?
     runs            Run[]
     workflowRuns    WorkflowRun[]
+    stateNamespaces ConnectorStateNamespace[]
 
     @@index([connectionId])
 }
@@ -118,6 +119,20 @@ model ConnectorState {
     updatedAt DateTime @updatedAt
 
     @@unique([namespace, key])
+}
+
+// 命名空间归属（ING-012 的范围隔离，ADR-0026）：抽屉名是宿主按 manifest 模板算出来的
+// 字符串，登记在这里让「这个抽屉属于哪个计划」成为记录的事实，而不是每次反查计划表 +
+// 解析模板现算。刻意不给 ConnectorState.namespace 加指向本表的外键：登记是尽力而为的
+// 元数据，不能成为状态写入的前置条件（登记失败或遗留抽屉会让写入撞 FK 报错）。
+model ConnectorStateNamespace {
+    namespace String         @id
+    planId    String
+    createdAt DateTime       @default(now())
+    updatedAt DateTime       @updatedAt
+    plan      CollectionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+    @@index([planId])
 }
 
 model Checkpoint {

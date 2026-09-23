@@ -53,6 +53,20 @@ export class CollectionPlanRevisionConflictError extends Error {
     }
 }
 
+/**
+ * 连接器状态导入被拒绝（ADR-0026）：导出件含多个抽屉时不允许指定目标抽屉名，或者
+ * 指定的目标抽屉在新环境没有归属登记——那说明没有计划的模板会算出这个名字，
+ * 导进去没人会读。与 `conflict` 区分：请求本身不可满足，不是本地状态的问题。
+ */
+export class ConnectorStateImportRejectedError extends Error {
+    readonly code = "validation" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "ConnectorStateImportRejectedError";
+    }
+}
+
 export class StoryNotFoundError extends Error {
     readonly code = "not_found" as const;
 

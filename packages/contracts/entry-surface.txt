@@ -36,6 +36,12 @@ type	CollectionSummary
 type	ConnectionInstance
 type	ConnectionStatus
 type	ConnectorDescriptor
+type	ConnectorStateExport
+type	ConnectorStateExportQuery
+type	ConnectorStateExportScope
+type	ConnectorStateImportCommand
+type	ConnectorStateImportResult
+type	ConnectorStateNamespaceSummary
 type	ContentKind
 type	ContentMetrics
 type	CreateAnnotationCommand
@@ -272,6 +278,11 @@ value	collectionSummarySchema
 value	connectionInstanceSchema
 value	connectionStatusSchema
 value	connectorDescriptorSchema
+value	connectorStateExportQuerySchema
+value	connectorStateExportSchema
+value	connectorStateImportCommandSchema
+value	connectorStateImportResultSchema
+value	connectorStateNamespaceSummarySchema
 value	contentKindSchema
 value	contentMetricsSchema
 value	createAnnotationCommandSchema

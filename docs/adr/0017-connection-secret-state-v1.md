@@ -4,7 +4,7 @@
 >
 > 日期：2026-09-10
 >
-> 关联：[`connection-state-store-v1 Proposal`](../proposals/connection-state-store-v1.md)、[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md) §4.2/§5.2、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) AUT-009/AUT-010/ING-012/OPS-009、ADR [`0001`](0001-durable-workflow-runtime.md)
+> 关联：[`connection-state-store-v1 Proposal`](../proposals/connection-state-store-v1.md)、[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md) §4.2/§5.2、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) AUT-009/AUT-010/ING-012/OPS-009、ADR [`0001`](0001-durable-workflow-runtime.md)、ADR [`0026`](0026-connector-state-export-v1.md)（`ConnectorState` 的归属登记、导出与导入）
 
 ## Context
 
