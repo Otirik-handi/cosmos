@@ -270,13 +270,19 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
     };
 
     return (
-        <div className="flex flex-col gap-2">
+        /**
+         * 侧栏是固定宽度的网格轨道（300px／330px），而这里的行内有「徽标 + 连接名 + 三个按钮」
+         * 与可能很长的适配器配置／授权范围文本：不给这条 flex/grid 链铺 `min-w-0`，它们会把
+         * 自动最小尺寸撑到轨道之外，画到右侧计划列表上并挡住它的按钮（实测 398px，长授权范围
+         * 时 1015px）。只要侧栏还是固定轨道、行内还是这类不换行的内容，这些 `min-w-0` 就不能删。
+         */
+        <div className="flex min-w-0 flex-col gap-2">
             {connections && connections.length > 0 ? (
-                <ul className="grid gap-1">
+                <ul className="grid min-w-0 gap-1">
                     {connections.map((connection) => (
                         <li
                             key={connection.id}
-                            className="flex flex-col gap-1 rounded-sm border bg-card px-3 py-2 text-sm"
+                            className="flex min-w-0 flex-col gap-1 rounded-sm border bg-card px-3 py-2 text-sm"
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <span className="flex min-w-0 items-center gap-2">
@@ -334,8 +340,8 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                                     </Button>
                                 </span>
                             </div>
-                            <dl className="grid gap-0.5 text-xs text-muted-foreground">
-                                <div className="flex gap-1">
+                            <dl className="grid min-w-0 gap-0.5 text-xs text-muted-foreground">
+                                <div className="flex min-w-0 gap-1">
                                     <dt className="shrink-0">适配器配置</dt>
                                     <dd className="min-w-0 break-words">
                                         {connection.configJson === null
@@ -343,7 +349,7 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                                             : formatJsonRecord(connection.configJson)}
                                     </dd>
                                 </div>
-                                <div className="flex gap-1">
+                                <div className="flex min-w-0 gap-1">
                                     <dt className="shrink-0">授权范围</dt>
                                     <dd className="min-w-0 break-words">
                                         {connection.scopeJson === null
@@ -351,13 +357,13 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                                             : formatJsonRecord(connection.scopeJson)}
                                     </dd>
                                 </div>
-                                <div className="flex gap-1">
+                                <div className="flex min-w-0 gap-1">
                                     <dt className="shrink-0">失效原因</dt>
                                     <dd className="min-w-0 break-words">
                                         {connection.lastError ?? "未记录"}
                                     </dd>
                                 </div>
-                                <div className="flex gap-1">
+                                <div className="flex min-w-0 gap-1">
                                     <dt className="shrink-0">上次检查</dt>
                                     <dd className="min-w-0 break-words">
                                         {connection.lastCheckedAt === null
