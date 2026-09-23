@@ -106,6 +106,7 @@ value	CollectionNotFoundError
 value	CollectionPlanNotFoundError
 value	CollectionPlanRevisionConflictError
 value	ConnectionNotFoundError
+value	ConnectionProbeService
 value	ConnectorExecutionError
 value	ConnectorProbeService
 value	ConnectorRegistry

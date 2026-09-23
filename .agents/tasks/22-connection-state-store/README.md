@@ -95,6 +95,19 @@ Non-goals（见 Proposal / ADR-0017）：
 - 受影响合同（切片 3）：只有 Web（`ConnectionPanel`）与组件实验室夹具；contracts／application／storage／API／transport **零改动**。
 - 验证层级：focused（web typecheck + lint）→ 组件实验室 E2E → 浏览器产品 E2E → 全量门禁。
 
+切片 4（2026-09-23，连接登录生命周期）按 Proposal [`connection-login-lifecycle-v1`](../../../docs/proposals/connection-login-lifecycle-v1.md)（accepted）的「切片 1」再拆两半：**4a 连接承载 profile**、**4b 登录探测**。EXT-006 由本 Task 的 4a/4b 与 Task [`23`](../23-trigger-sdk/README.md) 的切片 8（per-operation 配置 schema + Bilibili `search`，即该 Proposal 的「切片 2」）共同闭合。
+
+- 生命周期阶段（切片 4a／4b）：**代码、验证与权威文档同步完成并提交**（2026-09-23；worktree `.worktree/ext-006-login-lifecycle`、分支 `feat/t22-ext-006-login-lifecycle`，基线 `61ac764`；切片 4a `bd9a9c0`、切片 4b `94c6dec`）。剩余动作是**合并**（需维护者授权）与合并后的 `PROJECT-STATUS.md` 更新（沿用仓库惯例：进行中的状态记在 Task，合并后写状态快照）。
+- 连贯目标（切片 4a）：让「连接」在运行时真实存在——`ConnectionInstance` 新增非秘密适配器配置字段，OpenCLI profile 从 `Source.config.profile` 迁到连接，执行快照带连接投影，连接器从连接读 profile。
+- 可观察验收（切片 4a，≤3 条）：
+  1. 迁移后来源配置不再有 `profile`；同一 profile 的多个来源合并到同一条连接，且这些计划的 `connectionId` 指向它；迁移可重复执行且结果相同；
+  2. `feed` 的「必须有登录态」校验从「配置里必须有 profile」改为「来源必须绑定有用 profile 的连接」，绑定后连接器收到的 profile 与迁移前一致（既有连接器行为测试不改断言）；
+  3. 执行快照冻结当轮连接的 `{id, connectorId, configJson}`，排队后再改连接配置不改变已创建 Run 的输入（AUT-016）；公开 DTO、Job payload 与日志里没有凭证明文（本片不引入凭证）。
+- 依赖：Proposal（accepted）；ADR-0017 决策 1（本片部分取代它）；Task 33（计划持有 `connectionId`）。
+- 受影响合同（切片 4a）：contracts（`connectionInstanceSchema` + 创建/更新命令、`sourceExecutionSnapshotSchema` 的连接投影、Bilibili canonical config schema 去掉 profile）；storage（Prisma 加列 + 三段式迁移 + 投影填充）；`plugins/collectors`（Bilibili 读连接而非 `config.profile`）；API（`toPublicSource` 的连接投影与命令校验）。
+- 验证层级（切片 4a）：focused（contracts/storage/collectors/api）→ 全量 `bun run test` → 真实来源 `test:real:bilibili`（需本机 OpenCLI，不满足则记未运行）→ `docs:check` 与 size 门禁。
+- **本轮假设与后果（实施前记录）**：AUT-016 明确写「排队后修改 Source、**Connection** 或 Workflow 配置不会改变已创建 Run 的输入」，因此连接的非秘密配置必须**随入队冻结进执行快照**，而不是抓取时现查库。后果有二：①`sourceExecutionSnapshotSchema`（以及产品读投影 `sourceSnapshotSchema`）要带连接投影，且冻结的是身份与非秘密配置，**不含** `status`/`lastError` 这类活诊断；②未保存配置的 `source-config-probe` 路径没有连接，`feed` 的登录态校验因此会改变该入口的语义——本片裁定处理方式并在此记录。
+
 ## Decisions and Deviations
 
 - 以 ADR-0017 四条为稳定边界。
@@ -119,68 +132,44 @@ Non-goals（见 Proposal / ADR-0017）：
 - 面板把「这两个字段今天没有自动写入方」当成产品事实处理：动作入口的措辞是用户视角的「标记失效／恢复可用」，而不是假装系统探测到了原因；将来真实 Adapter 接上后由系统写同一对字段，面板不用改。
 - 授权范围的可读渲染只处理「顶层标量值对象」这一常见形状，其它形状（嵌套、数组）回退紧凑 JSON；解析不了的值原样显示，不隐藏手工改库写进来的内容。
 
+切片 4a 追加：
+
+- **连接投影随入队冻结，不是抓取时查库**：AUT-016 明确写「排队后修改 Source、**Connection** 或 Workflow 配置不会改变已创建 Run 的输入」，所以执行快照带 `{id, connectorId, configJson}`；只冻身份与非秘密配置，`status`/`lastError` 这类活诊断不进（冻下来只会让后来读它的人以为那是当轮状态）。
+- 连接投影在 schema 里是 `.optional()` 而不是 required-nullable：未保存配置的探测与 legacy 路径**真的没有连接**，与本文件已记录的 `sourceSnapshotSchema.connectionId` 同一理由。
+- **迁移里「复用已存在的同 profile 连接」不可达**：`configJson` 是本迁移才加的列，迁移前不可能有连接带着 profile，所以去重只靠确定性 id（`connection:bilibili:<profile>`）+ `INSERT OR IGNORE`；没有为测不到的分支写测试，也不留那段代码。
+- **行为变化（用户可见）**：`feed` 的「必须有登录态」判断从**建目标时**（配置 schema 要求 `config.profile`）推迟到**测试配置/抓取时**（连接器读连接投影）。原因是 profile 已不在配置里，而只有连接器知道 `mode=feed` 需要登录态；在 API 里写 Bilibili 专用判断正是 EXT-006 要消灭的「核心表/Worker 专用分支」。`apps/api` 的旧用例按新合同重写，collectors 侧新增正反两向断言。
+- 墓碑（`deletedAt` 非空）来源的配置**不改写**：它是历史记录，且已删除的目标不会再抓取；只有 live 来源参与建连接、补绑定与移除 profile。
+- 只读回调而非仓储：`SourceConfigProbeService` 仍旧拿不到 `CosmosRepository`，「未保存配置的探测结构上无法持久化」这条性质不变。
+
+切片 4b 追加：
+
+- **探测是连接级能力，不是 Source Operation**（ADR-0027 决定 2）：ingest 管线对 operation 一视同仁（抓到的 items 全部入库），一个「不返回内容」的操作要么造垃圾条目、要么得新造「operation 种类」概念。探测不产生 Run、不产生条目。
+- **能不能探测由声明决定**：`auth.probeSupported` 同时驱动 API 的 409 判断与 Web 的按钮显示，宿主不硬编码 connectorId。副作用是 Web 上「没声明就不显示按钮」，避免给用户一个必然失败的动作。
+- **`lastCheckedAt` 到 4b 才引入**：Proposal 的决定 1 把它列在连接字段里，但那时没有任何写入方——先造一个没人写的字段正是本片一直反对的模式，所以 4a 只落 `configJson`，检查时间随探测一起落地。
+- **`recordConnectionProbe` 是独立仓储方法**，不复用 `updateConnection`：写回的是系统观测而不是用户编辑，`lastCheckedAt` 也刻意不从公开命令写；四个字段一次写入。
+- **适配器把预期失败说成 outcome**（`expired`／`error`），只有真正的意外才抛异常；`ConnectionProbeService` 仍兜住 `ConnectorExecutionError` 作为安全网（适配器漏翻的错误也不会让 Job 白跑）。
+- **认领清单显式加 kind，且只在接线该服务时才认领**：否则 Worker 会领到一个自己只能判失败的作业。
+- **面板的轮询上限必须大于连接器的子进程超时**（150s > 120s）：旧上限 60s 会让一次慢但会成功的探测永远显示成超时（本机实测一次探测 52s）。
+
 ## Implementation Walkthrough
 
-1. **migration**：`20260910120000_connection_state_store_v1` 建 `ConnectionInstance`/`ConnectorState` 两表 + `SourceInstance.connectionId`（forward-only、无回填）。
-2. **contracts**：Connection DTO/命令 + `sourceSnapshotSchema.connectionId`（optional）+ `updateSourceCommandSchema.connectionId`。
-3. **application**：`secret-store.ts`（`SecretStorePort`）、`connector-state-store.ts`（`ConnectorStateStorePort` + `ConnectorStateConflictError`）、`CosmosRepository` 增 Connection CRUD、`ConnectionNotFoundError`。
-4. **storage**：`secret-store.ts`（`FileSecretStore`）、`connector-state-store.ts`（`PrismaConnectorStateStore`）、`PrismaCosmosRepository` 的 Connection CRUD + `toConnectionSnapshot` + `toSourceSnapshot`/`updateSource` 联动 connectionId。
-5. **API**：五个 Connection 端点 + `connectionError` 漏斗。
-6. **transport**：五个 Connection 客户端方法。
-7. **Web**：`ConnectionPanel` + `renderConnectionPanelLab` + `registry.tsx` 登记 + page.tsx 侧栏「连接」区。
+> 切片 1 与切片 2 的实施步骤已归档到 [`readme/slices-2026-09-10-23.md`](readme/slices-2026-09-10-23.md)（历史，只搬位置，不改内容）。
 
-切片 2（2026-09-23，归属登记与状态导出／导入）：
+切片 3（2026-09-23，连接可见性）的实施步骤已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)（历史，只搬位置）。
 
-1. **Prisma**：`ConnectorStateNamespace`（namespace 主键、planId + FK 到 `CollectionPlan`、Cascade）+ migration `20260923120000_connector_state_namespace_owner`；回填按 `ConnectorState.namespace = CollectionPlan.id` 匹配（默认模板 `{id}` 的现状），匹配不到的保持未归属，`WHERE NOT EXISTS` 保证可重跑。
-2. **contracts**：清单／导出信封／导入命令与结果／导出范围查询五个 schema（导出信封 strict，`scope` 只记 `kind` + `value`）；`ConnectorStateExportScope` 是类型（运行时不校验，范围由查询 schema 把关）；`entry-surface.txt` 用 `scripts/entry-export-surface.ts` 显式重生成（contracts +11 行）。
-3. **application**：`ConnectorStateStorePort.registerNamespace` 返回 `"registered" | "conflict"`；`CosmosRepository` 三个方法；`ConnectorStateImportRejectedError`（`code = "validation"`）；`IngestActionOptions.connectorState` 改为可返回 Promise。
-4. **storage**：`PrismaConnectorStateStore.registerNamespace`（唯一约束冲突时回读并区分「同计划重复登记」与「别的计划抢抽屉」）；`PrismaCosmosRepositoryConnectorStateExport` 作为新的 mixin 链尾，清单用 `groupBy` + 登记表 left join，导出按范围解析抽屉名，导入在单事务内按 `mode` 写。
-5. **API**：三条路由 + 查询参数到范围的映射 + 64 KB 体积上限（`content-length` 与实际 body 双判，413 `payload_too_large`）；`exportFileName` 泛化成带前缀的版本，用户数据导出的文件名不变。
-6. **transport**：三个客户端方法（范围 → 查询参数，缺省不带参数）。
-7. **Web**：`StoragePanel` 并行加载抽屉清单；「连接器状态」一组提供范围下拉（含「未归属」标记）、导出下载、文件导入（本地先用 `connectorStateExportSchema` 解析）、模式选择与结果条数；组件实验室补三个桩。
-8. **宿主接线**：`apps/worker/src/main.ts` 的 `resolveConnectorStateHandle` 改为 async，在解析句柄时登记归属，冲突与失败只记 `connector.state.owner_conflict`／`connector.state.registration_skipped`。
-9. **文档**：Proposal 定稿 `accepted`、ADR-0026、ADR-0017 关联、ADR 索引、spec 五处、路由快照、PRD 注记与勘误台账、`PROJECT-STATUS.md`。
+切片 4a（2026-09-23，连接承载 profile）的实施步骤（10 项，含权威文档同步）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)（历史，只搬位置）。
 
-切片 3（2026-09-23，连接可见性）：
-
-1. **Web**：`ConnectionPanel` 加三块——建连接表单的「授权范围」输入（本地 `JSON.parse` 校验、提交前 `JSON.stringify` 规范化）、每行 `dl` 里的「授权范围／失效原因」（空值显示「未记录」，范围按 `键: 值` 渲染）、行内动作「标记失效」（内联原因输入 + `updateConnection({status:"error", lastError})`）与「恢复可用」（`{status:"active", lastError:null}`）；动作入口按状态二选一显示。
-2. **组件实验室**：连接夹具的示例连接补授权范围、新增一条失效连接（状态 `error` + 原因），夹具客户端补 `updateConnection` 桩。
-3. **测试**：`e2e/component-lab/connection-panel.spec.ts` 两例（两行渲染 + 内联输入的启用/收起；非法 JSON 在本地被拦下且表单不清空）；`e2e/browser/connection-visibility.spec.ts` 一例（真实栈：建连接记录范围 → 回显 → 标记失效 → 原因与「错误」徽标 → 恢复可用 → 原因清空 → 删除连接）。
-4. **文档**：Task 记录、`docs/spec/interfaces/0005-web-client.md`、`Phase-2-UNDO.md`、`PROJECT-STATUS.md`、`part-07-1.md` 的 AUT-009 注记；随后按维护者要求补勘误台账（5. 见下）。
-5. **勘误台账归档与收口登记（2026-09-23，docs-only）**：`ERRATA.md` 已到 8,911/9,000 token，加不进新行，因此按 [`oversized-doc-splitting-v1`](../../../docs/proposals/oversized-doc-splitting-v1.md) §4.3／§4.5 做**滚动归档**——前 20 条（2026-09-15 ~ 2026-09-20）移入 `docs/requirements/0002-product-requirements/ERRATA/history-2026-09-15-20.md`（同目录同名子文件夹，封口后只读），主文档保留最近 5 条 + 分册索引表。搬迁**只搬位置**：除给 31 个相对链接各加一级 `../` 前缀外不改写内容；归档后主文档 27.5 KB → **11.9 KB（约 1,979 token）**，分册 20.9 KB（约 3,645 token），两册都在健康区。同批补四行口径：**LIB-004**（批注核心 Phase 2 已交付，Artifact 目标与片段字符级锚点改标 Phase 3）、**AUT-009**、**AUT-010**、**EXT-007** 的交付状态。维护者要求这三条收口行**逐条复核验收条件后**再写，复核结论落在各行里（AUT-010 的两处如实说明：来源操作由「计划与目标一对一」承接、迁移第 4 步单独排期；EXT-007 的「校验能力／版本／预算／恢复语义」四半句各自对应到代码锚点；LIB-004 说明 `quote` 只是文本快照、不是可定位的字符级锚点）。
+切片 4b（2026-09-23，登录探测）的实施步骤（10 项，含权威文档同步）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)（历史，只搬位置）。
 
 ## Verification / Gate
 
-验证（2026-09-10，实际运行）：
+> 切片 1 与切片 2 的验证记录（含合并后复跑）已归档到 [`readme/slices-2026-09-10-23.md`](readme/slices-2026-09-10-23.md)。
 
-- `bun run typecheck` 全仓通过（含 apps/api、apps/worker、apps/web tsc --noEmit）；`git diff --check` 干净；`bun run docs:check` 402 文件 failures=[]。
-- focused 测试：
-  - contracts `connection.test.ts` 3/3；
-  - storage `secret-store.test.ts` 2/2（put/read/delete + 路径逃逸拒绝）、`connection-state-store.test.ts` 3/3（Connection CRUD + 来源联动 SetNull + State version CAS 冲突）；
-  - api `app.controller.connection.test.ts` 3/3；
-  - transport-http 17/17（含 Connection 1 例）、web component-lab 27/27（含 ConnectionPanel 登记）。
-- storage 串行（`bunx vitest run --no-file-parallelism packages/storage-prisma`）：16 文件 / 123 用例全部通过（含新增 5 例 + 全部既有用例，确认 migration 与 `toSourceSnapshot`/`updateSource` 改动无回归）。
-- 未运行：全量 `bun run test`、浏览器产品/组件实验室 E2E、Windows smoke、Docker、发布部署（均记为未运行/既有后置边界）。
+切片 3 验证（2026-09-23，实际运行）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)。
 
-切片 2 验证（2026-09-23，实际运行）：
+切片 4a 验证（2026-09-23，实际运行）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)。
 
-- `bun run typecheck` 全仓通过（packages + apps/api、apps/worker、apps/web `tsc --noEmit`）；`bun run lint:web` 0 error（79 条既有 warning）。
-- 全量单元测试 `bun run test`：**122 文件 / 698 用例全部通过**（切片 1 基线 119 文件 / 685 用例；本片新增 3 个测试文件与 13 个用例：storage `connector-state-export.test.ts` 4 例、storage `connector-state-namespace-backfill.test.ts` 1 例、api `app.controller.connector-state.test.ts` 6 例、transport `client-platform.test.ts` +2 例）。
-- 迁移回填用例按真实迁移顺序两段式部署（`20260922140000_trigger_binding_webhook_entry` → 全部），断言默认模板 `{id}` 的抽屉登记到同名计划、`other-namespace` 不登记、状态行的 key/value/version 一字不动。
-- Node 进程 E2E：`bunx vitest run --config vitest.e2e.config.ts e2e/conditional-fetch.e2e.test.ts` → 2/2 通过；用例新增一条断言（真实 Worker 抓取一次后 `ConnectorStateNamespace` 里有指向 `plan:<sourceId>` 的归属登记），证明宿主接线不是死代码。**注意**：本机跑 e2e 必须设 `BUN_BINARY` 指向 `bun.exe`（`scripts/e2e/helpers.ts` 用 `spawnSync("bun", …)`，PowerShell 环境下 `bun` 是 `.ps1` 垫片，会报 `spawnSync bun ENOENT`）。
-- 浏览器 E2E：`bun run build` 后 `bunx playwright test --config playwright.config.ts e2e/browser/connector-state-export.spec.ts` → 1 passed；断言「导出连接器状态」下载的文件名与内容（`schemaVersion`、`counts` 与条目数一致、不含 `secretRef`），以及把同一份件回导时按默认模式全部跳过。
-- 组件实验室 E2E：`bunx playwright test --config playwright.component-lab.config.ts` → 14 passed（`StoragePanel` 的夹具客户端已补三个新方法的桩）。
-- `bun run docs:check`：747 文件 failures=[]；`git diff --check` 干净；路由表守卫 `app.controller.route-table.test.ts` 3/3（快照已按三条新路由更新）；`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` PASS（含既有基线内增长 warning；本片首次跑时 `PROJECT-STATUS.md` 因 token 轨道跨过 9k 触发「新增警戒区文件」FAIL，已通过精简本轮增补压回 8,735 token）。
-- 未运行：`test:real:rss`／`test:real:bilibili` 等真实来源验收（本片不触碰连接器的抓取行为）、Windows smoke、Docker、发布部署。
-- 合并后复跑（2026-09-23，主工作区，合并提交 `1b5cabc`）：`bun run typecheck` 0、`bun run test` 122 文件／698 用例、`docs:check` 755 文件 0 失败、size 门禁 PASS、`git diff --check` 干净。**第一次复跑失败**：typecheck 与 5 个用例报 `connectorStateNamespace` 不存在，根因是主工作区的 Prisma 客户端还是合并前的 schema 生成的；`bun run db:generate` 刷新后全绿——schema 变更合并后必须先重生成客户端。
-
-切片 3 验证（2026-09-23，实际运行）：
-
-- `bun run --cwd apps/web tsc --noEmit` 0 error；`bun run lint:web` 0 error（79 条既有 warning）；`bun run typecheck` 全仓通过。
-- 组件实验室 E2E：`bunx playwright test --config playwright.component-lab.config.ts e2e/component-lab/connection-panel.spec.ts` → 2 passed（两行渲染与内联输入的启用/收起；非法 JSON 在本地拦下且表单不清空）。**注意**：跑实验室 dev server 前必须先 `bun run build:packages`，否则 Next 报 `Cannot find module '@cosmos/logging'`。
-- 浏览器产品 E2E：`bun run build` 后 `bunx playwright test --config playwright.config.ts e2e/browser/connection-visibility.spec.ts` → 1 passed（真实栈：建连接记录授权范围 → 行上按 `read: true · comment: false` 回显 → 标记失效 → 「错误」徽标 + 原因 → 恢复可用 → 原因回到「未记录」→ 删除用例连接）。
-- 未运行：全量浏览器 E2E（其余 spec）、`test:real:*`、Windows smoke、Docker、发布部署。
-- 合并后复跑（2026-09-23，主工作区，合并提交 `2cfe379`）：`bun run typecheck` 0、`bun run test` 122 文件／698 用例、`docs:check` 757 文件 0 失败、size 门禁 PASS、`git diff --check` 干净。本片**没有 schema 变更**，所以不需要像切片 2 那样先 `bun run db:generate`。
+切片 4b 验证（2026-09-23，实际运行）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)。
 
 ## Follow-ups
 
@@ -190,11 +179,28 @@ Non-goals（见 Proposal / ADR-0017）：
 - Connection Web 面板的 connectorId 校验（改为 catalog 下拉）与「来源 → 连接」的绑定 UI。
 - Phase 2 平台面其余切片：Trigger/SDK、OPS-003/004（按既定排序继续）。
 
+切片 4a 追加 Follow-ups：
+
+- **「连接变更后作废探测结果」没有实现**：既有代码里 `watchedConfig`／`watchedScheduleInterval` 只声明未使用（属既有 lint warning），`probeConfigKeyRef` 实际只是「有没有在跑的探测」标志；连接现在也影响探测结果，应与配置一并纳入作废条件。
+- 连接面板**只在建连接时**能写 `configJson`（命令已支持 `updateConnection.configJson`，面板没有编辑入口）；填错 profile 的用户今天只能删了重建。编辑入口与切片 4b 的登录探测一起定——那时系统会读它，改错要能改。
+- `configJson` 只要求「合法 JSON」，profile 的形状由连接器读时裁决；接入更多 Adapter 时需要一份 per-connector 的连接配置 schema（与 `sourceConfigurationSchemas` 同构）。
+
+切片 4b 追加 Follow-ups：
+
+- 连接面板**仍不能在建连接之后**改 `configJson`：探测如果报出「需要重新登录」或 profile 写错了，用户今天只能删了重建。这是 4b 之后最疼的缺口，编辑入口应当紧随其后（命令层已经支持）。
+- 探测结论不进 DomainEvent／审计：今天只写 `job.queued.v1`。「谁在什么时候探测了哪条登录态」将来要做审计时需要新决定（含是否记录探测来源）。
+- 探测没有速率限制：连点会排多个 Job（幂等键由 UI 每次新生成），需要时按 ADR 决定限流与合并策略。
+- 真实登录态验收（`test:real:bilibili` 扩展成「探测 + feed 抓取」一条链）仍未进自动化：本机有 OpenCLI 环境时应补。
+
 切片 3 追加 Follow-ups：
 
 - `scopeJson` 仍只能在**建连接时**写入（`updateConnectionCommandSchema` 不含该字段）；编辑入口随真实认证 Adapter 一起定——那时它由系统写，用户手填的语义要重新裁定。
 - 授权范围的形状没有校验（只要求合法 JSON）；真实 Adapter 接入时需要一份 scope schema 才能校验与展示。
 - 连接面板仍没有编辑名称/账号的入口（既有边界，未在本片扩大范围）。
+
+切片 8 验证暴露的既有问题（2026-09-23，非本片引入，**已在本分支修复**）：
+
+- **侧栏溢出盖住计划列表**：1280×720 下左侧固定轨道（`lg` 300px／`xl` 330px）里的连接面板内容不收缩——`min-content` 实测 398px，授权范围写长 JSON 时 1015px——因此画到右侧计划列表上，浏览器全套件里表现为点击计划行的 Webhook 按钮被拦截。修法是把 `min-w-0` 铺到那条 flex/grid 链上（面板根、列表、条目、`dl` 行）；修后 `aside.scrollWidth` 在两个断点都等于列宽（330／300），连接名仍截断、三个按钮仍在列内、长授权范围在栏内换行，且两次整套运行都没再出现 `webhook-entry` 那次失败（其中一次 **33/33 通过**）。另一次整套运行的 2 例失败（`phase2-organization.spec.ts:103` 与 `ingest.spec.ts:119` 的 `toBeFocused`）是**在册的既有抖动**，见 [`known-unstable-cases.md`](../../../docs/testing/known-unstable-cases.md) 第 1 条——与本片改动无因果关系，也未用重跑结案。证据：修复前的截图与 error-context 在 `.agent/tmp/browser-flake-2026-09-23/`，修复后的量测与截图在 `.agent/tmp/measure-sidebar.mjs`／`.agent/tmp/sidebar-after-1280.png`（诊断脚本与证据均不入库）。
 
 切片 2 追加 Follow-ups：
 

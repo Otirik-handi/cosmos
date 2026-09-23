@@ -59,3 +59,37 @@ test("rejects a non-JSON authorized scope before creating the connection", async
     // 表单没有被清空：用户不必重新输入名称。
     await expect(preview.getByLabel("连接名称")).toHaveValue("范围格式用例");
 });
+
+/**
+ * 适配器配置同样必须是合法 JSON（Proposal connection-login-lifecycle-v1 决定 1）：
+ * Bilibili 的 OpenCLI profile 就是从这里进的连接，非法输入在本地拦下。
+ */
+test("rejects a non-JSON adapter configuration before creating the connection", async ({page}) => {
+    await page.goto("/dev/components?component=connection-panel&scene=populated");
+    const preview = page.locator(PREVIEW_ROOT);
+    await expect(preview).toBeVisible();
+
+    await preview.getByLabel("连接名称").fill("适配器配置格式用例");
+    await preview.getByLabel("连接适配器配置").fill("{profile: chrome-main}");
+    await preview.getByRole("button", { name: "新建连接" }).click();
+
+    await expect(preview.getByRole("alert")).toContainText("适配器配置必须是合法 JSON");
+    await expect(preview.getByLabel("连接名称")).toHaveValue("适配器配置格式用例");
+});
+
+/**
+ * 登录探测入口按 manifest 声明出现（Proposal connection-login-lifecycle-v1 决定 2）：
+ * 夹具里只有 bilibili 声明 `auth.probeSupported`，探测返回一条「已登录」结论，面板把它
+ * 显示成可读文本并把结论写回连接（状态徽标与检查时间都来自系统观测）。
+ */
+test("probes the connection login state and shows the conclusion", async ({page}) => {
+    await page.goto("/dev/components?component=connection-panel&scene=populated");
+    const preview = page.locator(PREVIEW_ROOT);
+    await expect(preview).toBeVisible();
+
+    const row = preview.locator("li", { hasText: "我的 Bilibili 主账号" });
+    await expect(row).toContainText("上次检查");
+    await row.getByRole("button", { name: "检查登录状态 我的 Bilibili 主账号" }).click();
+
+    await expect(row.getByRole("status")).toContainText("登录状态正常：example");
+});

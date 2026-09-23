@@ -219,6 +219,55 @@ export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
         }
     }
 
+    /**
+     * 连接登录探测 Job（Proposal connection-login-lifecycle-v1 决定 2）：payload 只带连接标识，
+     * 探测由 Worker 执行——API 不访问外部平台。
+     */
+    async createConnectionProbeJob(input: {
+        connectionId: string;
+        idempotencyKey?: string;
+    }): Promise<JobSnapshot> {
+        try {
+            const job = await this.prisma.$transaction(async (tx) => {
+                if (input.idempotencyKey) {
+                    const existing = await tx.job.findUnique({
+                        where: { idempotencyKey: input.idempotencyKey },
+                    });
+                    if (existing) {
+                        return existing;
+                    }
+                }
+
+                const created = await tx.job.create({
+                    data: {
+                        kind: "connection-probe",
+                        status: "queued",
+                        payloadJson: JSON.stringify({ connectionId: input.connectionId }),
+                        idempotencyKey: input.idempotencyKey
+                            ?? `connection-probe:${randomUUID()}`,
+                    },
+                });
+                await appendDomainEvent(tx, {
+                    type: "job.queued.v1",
+                    aggregateType: "Job",
+                    aggregateId: created.id,
+                    payload: {
+                        jobId: created.id,
+                        kind: created.kind,
+                        sourceId: null,
+                    },
+                });
+                return created;
+            });
+            return this.toJobSnapshot(job);
+        } catch (error) {
+            this.logger?.error("storage.job.queue.failed", {
+                kind: "connection-probe",
+            }, error);
+            throw error;
+        }
+    }
+
     async startRun(runId: string, lease?: JobLease) {
         const now = new Date();
         let run: Prisma.RunGetPayload<{}>;

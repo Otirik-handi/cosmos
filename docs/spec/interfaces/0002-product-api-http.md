@@ -86,7 +86,12 @@ Source 和手动 Run 是 HTTP 201；Source probe 是显式 HTTP 202。SSE 是长
 
 - `SourceDefinitionManifest`：`id`、正整数 `version`、`ref`、`provider`、`displayName`、可空
   `description`、`manifestHash: { algorithm, value }`、`status`、`operationIds[]`、
-  `capabilities[]` 和 `configurationSchema: { id, version, hash: { algorithm, value }, schema? }`。
+  `capabilities[]`、`configurationSchema: { id, version, hash: { algorithm, value }, schema? }`
+  和 `operations[]`（每项：`operationId`、`inputSchema`/`outputSchema`、可空
+  `configurationSchema`——这个 operation 的用户可填配置，`null` 表示沿用定义级那份，
+  `externalKey`、`discoveryContext`、`media`、可空 `stateStoreNamespace`）与 `auth`
+  （认证方式 + `secretRefRequired` + `probeSupported`）。Bilibili 是当前唯一声明两个
+  operation 的定义（`fetch` 沿用定义级 schema，`search` 自带 `query`/`limit`）。
 - `WorkflowDefinitionManifest`：`id`、`version`、`ref`、`kind`、`provider`、`manifestHash`、
   `status`、`requiredActionRefs[]`、`requiredBackendCapabilities`（字符串到 boolean 的对象）、
   `inputSchema` 和 `outputSchema`（均为上述 JsonSchemaRef）。
@@ -147,6 +152,8 @@ the current code has not removed it or replaced it with a permanent redirect.
 | `POST /connections` | body `CreateConnectionCommand` | HTTP 201 返回 `ConnectionInstance`（status 缺省 `active`）；非法 body 400 `validation_failed`。 |
 | `PATCH /connections/:connectionId` | body `UpdateConnectionCommand`（全可选） | HTTP 200 返回更新后的 `ConnectionInstance`；不存在 404。 |
 | `POST /connections/:connectionId/removals` | path `connectionId` | HTTP 200 返回 ack；同事务把引用该连接的 Source `connectionId` 置空，不删除来源。 |
+| `POST /connections/:connectionId/probes` | path `connectionId`；可选 `Idempotency-Key` header（≤300 字符） | HTTP 202 返回 `ConnectionProbeJobSnapshot`，创建 `connection-probe` Job（ADR-0027 决定 2）；连接不存在 404；该连接的 Connector 没在 manifest 里声明 `auth.probeSupported` 时 409 `conflict`；无 header 时由 API 生成 `connection-probe:<uuid>` 幂等键。探测由 Worker 执行——API 不访问外部平台。 |
+| `GET /connection-probes/:jobId` | path `jobId` | HTTP 200 返回 `ConnectionProbeJobSnapshot`；不存在或不是 `connection-probe` 的作业 404（不泄露其它种类的作业）。 |
 | `GET /collection-plans` | 无 | HTTP 200 返回 `CollectionPlanSnapshot[]`（按 createdAt 升序；墓碑来源的计划不出现）。 |
 | `GET /collection-plans/:planId` | path `planId` | HTTP 200 返回 `CollectionPlanSnapshot`；不存在或来源已删除 404。 |
 | `PATCH /collection-plans/:planId` | body `UpdateCollectionPlanCommand`：必填 `baseRevisionId`，可选 `name`/`connectionId`/`scheduleIntervalMs`/`mediaPolicy`/`enabled` | HTTP 200 返回更新后投影；不存在 404；revision 过期 409；`enabled: true` 前先按 canonical schema 校验已保存的目标配置，不合法 400。`scheduleIntervalMs` 只增/改/删 schedule 触发器，不触碰 webhook 入口（ADR-0025）。 |
@@ -155,7 +162,7 @@ the current code has not removed it or replaced it with a permanent redirect.
 
 Webhook 入口的 `entryPath` 会出现在 URL 与日志里，所以它不是凭证；凭证本体只在生成/轮换响应里出现一次，读投影只回答 `credentialConfigured`（ADR-0024）。
 
-Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。
+Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。`configJson` 是连接的**非秘密**适配器配置（Bilibili 的 OpenCLI profile 住在这里），创建与更新都可写、读取原样回显。`POST /source-config-probes` 接受可选 `connectionId`：未保存配置的探测没有来源与计划，需要登录态的操作靠它拿连接；不存在的连接当场 404 `not_found`。
 
 | `GET /storage-stats` | 无 | HTTP 200 返回 `StorageStats`（数据库/Blob/Artifact/Cache/Log/Secret 字节 + 分层 `categories`）；只读。 |
 | `GET /backups` | 无 | HTTP 200 返回 `BackupSnapshot[]`（数据根 `backups/` 下的数据库备份，按时间升序）。 |
@@ -181,11 +188,13 @@ Action manifests；这些是当前实现锚点，不是允许客户端执行的�
 
 `CreateSourceCommand` 的 `name` 去空格后 1–200 字符；`sourceDefinitionRef` 必须命中当前
 Catalog 的 enabled manifest，`operationId` 必须出现在其 operationIds 内；`config` 由
-contracts 的 `getSourceConfigurationSchema(ref)` strict Zod schema 校验——这是 canonical
-校验真相，manifest JSON Schema 只是发布投影。命令不接受 `enabled`：创建固定停用，
-只能通过 activation command 启用。Source 公开 config 仍按 Controller 白名单投影
-（通用保留 `feedUrl`、`scheduleIntervalMs`；Bilibili 另含 `mode`、`limit`、`profile`、
-`schemaVersion`），其余配置不回显。
+contracts 的 `getSourceConfigurationSchema(ref, operationId)` strict Zod schema 校验——这是
+canonical 校验真相，manifest JSON Schema 只是发布投影。命令不接受 `enabled`：创建固定停用，
+只能通过 activation command 启用。Source 公开 config 按**该 operation 声明的字段**投影：键取自
+同一份 canonical schema（RSS 为 `feedUrl`；Bilibili `fetch` 为 `mode`/`limit`/`schemaVersion`，
+`search` 为 `query`/`limit`/`schemaVersion`），未声明的键不回显；读不到 canonical schema 的来源
+（历史 kind 投影）退回只保留 `feedUrl`。投影**不含**凭证：OpenCLI profile 住连接的 `configJson`，
+不在来源 config 里。
 
 `POST /sources/:sourceId/runs` 只接受已启用的 Source：未启用返回 409 `conflict`；
 可选 `Idempotency-Key` 超过 300 字符按 400 `validation_failed` 拒绝，缺失时生成随机

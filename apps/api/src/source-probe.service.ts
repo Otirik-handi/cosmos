@@ -26,7 +26,7 @@ export class SourceProbeService {
         // The canonical Zod schema owns validation semantics; the manifest's
         // JSON Schema stays a published projection and cannot express
         // connector-specific conditionals on its own.
-        const configurationSchema = getSourceConfigurationSchema(input.sourceDefinitionRef);
+        const configurationSchema = getSourceConfigurationSchema(input.sourceDefinitionRef, input.operationId);
         if (!configurationSchema) {
             throw new Error(`No canonical configuration schema is registered for ${input.sourceDefinitionRef}.`);
         }

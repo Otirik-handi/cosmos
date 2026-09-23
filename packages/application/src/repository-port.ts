@@ -1,7 +1,7 @@
 /** 仓储端口与证据链接输入。 */
 
 import type {
-    CreateSourceCommand, ConnectionInstance, CreateConnectionCommand,
+    CreateSourceCommand, ConnectionInstance, ConnectionStatus, CreateConnectionCommand,
     CollectionPlanSnapshot,
     CollectionPlanWebhookEntry,
     UpdateConnectionCommand, StorageStats, BackupSnapshot, FeedPage,
@@ -89,6 +89,20 @@ export interface CosmosRepository {
     listConnections(): Promise<readonly ConnectionInstance[]>;
     getConnection(connectionId: string): Promise<ConnectionInstance | null>;
     updateConnection(connectionId: string, input: UpdateConnectionCommand): Promise<ConnectionInstance>;
+    /**
+     * 记录一次登录探测的结果（Proposal connection-login-lifecycle-v1 决定 2）：状态、账号、
+     * 失效原因与检查时间由系统一次写入。它与公开的 `updateConnection` 分开——这是系统观测
+     * 而不是用户编辑，`lastCheckedAt` 也刻意不从公开命令写。
+     */
+    recordConnectionProbe(
+        connectionId: string,
+        result: {
+            status: ConnectionStatus;
+            account: string | null;
+            lastError: string | null;
+            checkedAt: string;
+        },
+    ): Promise<ConnectionInstance>;
     deleteConnection(connectionId: string): Promise<boolean>;
     /** 计划读投影（ADR-0023）：产品面的对象是计划，按计划读取连接、频率与媒体预算。 */
     listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]>;
@@ -154,6 +168,11 @@ export interface CosmosRepository {
     }): Promise<JobSnapshot>;
     createConfigProbeJob(input: {
         command: SourceConfigProbeCommand;
+        idempotencyKey?: string;
+    }): Promise<JobSnapshot>;
+    /** 连接登录探测 Job（Proposal connection-login-lifecycle-v1 决定 2）：只带连接标识。 */
+    createConnectionProbeJob(input: {
+        connectionId: string;
         idempotencyKey?: string;
     }): Promise<JobSnapshot>;
     startRun(runId: string, lease?: JobLease): Promise<RunSnapshot>;

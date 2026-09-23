@@ -90,17 +90,24 @@ model CollectionPlan {
 }
 
 // Reusable user login/authorization on an external platform (ADR-0017). A
-// Connection keeps only identity, scope, status and an opaque SecretRef;
-// credentials live in the SecretStore, never in config/Job/Event/log.
+// Connection keeps only identity, non-secret adapter configuration, scope,
+// status and an opaque SecretRef; credentials live in the SecretStore, never in
+// config/Job/Event/log.
 model ConnectionInstance {
     id          String           @id @default(cuid())
     name        String
     connectorId String
     account     String?
     scopeJson   String?
+    // 适配器的非秘密配置（Proposal connection-login-lifecycle-v1 决定 1）：OpenCLI
+    // profile 这类标识住在这里，与 scopeJson 同形是 JSON 文本。凭证永远不在这里。
+    configJson  String?
     status      String           @default("active")
     secretRef   String?
     lastError   String?
+    // 最近一次登录探测的时间（Proposal connection-login-lifecycle-v1 决定 2）：由探测回写，
+    // 不走公开的更新命令，所以「从没探测过」与「探测过且正常」在库里可区分。
+    lastCheckedAt DateTime?
     createdAt   DateTime         @default(now())
     updatedAt   DateTime         @updatedAt
     sources     SourceInstance[]

@@ -242,28 +242,41 @@ export const fixtureRssSourceConfigSchema = z.object({
 }).strict();
 export type FixtureRssSourceConfig = z.infer<typeof fixtureRssSourceConfigSchema>;
 
-const safeProfileSchema = z.string()
+/**
+ * OpenCLI profile 的格式规则。profile 从来源配置搬到连接的 `configJson`
+ * （Proposal connection-login-lifecycle-v1 决定 1），但格式规则的**唯一出处**留在这里：
+ * 连接器读连接配置时用它，避免同一条规则在适配器与合同两处漂移。
+ */
+export const openCliProfileSchema = z.string()
     .trim()
     .min(1)
     .max(100)
     .regex(/^[A-Za-z0-9._-]+$/);
 
+/**
+ * `feed` 需要登录态这件事不再由来源配置表达：profile 已不在 config 里，校验发生在
+ * 连接器读到连接投影之后（Proposal 决定 1；见 Task 22 切片 4a 记录的后果）。
+ */
 export const bilibiliSourceConfigSchema = z.object({
     schemaVersion: z.coerce.number().int().positive().default(1),
     mode: z.enum(["hot", "feed"]),
     limit: z.coerce.number().int().min(1).max(100).default(20),
-    profile: safeProfileSchema.optional(),
     ...scheduleConfigShape,
-}).strict().superRefine((value, context) => {
-    if (value.mode === "feed" && !value.profile) {
-        context.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["profile"],
-            message: "Bilibili feed requires an OpenCLI profile.",
-        });
-    }
-});
+}).strict();
 export type BilibiliSourceConfig = z.infer<typeof bilibiliSourceConfigSchema>;
+
+/**
+ * Bilibili 第二个 operation（`search`）的用户配置：搜索要一个查询词，`fetch` 的 mode/limit
+ * 对它没有意义——这正是「按 operation 声明配置 schema」要解决的事（EXT-006）。搜索匿名
+ * 可用，所以它**不要求连接**（对比 `fetch` 的 mode=feed）。
+ */
+export const bilibiliSearchSourceConfigSchema = z.object({
+    schemaVersion: z.coerce.number().int().positive().default(1),
+    query: z.string().trim().min(1).max(200),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    ...scheduleConfigShape,
+}).strict();
+export type BilibiliSearchSourceConfig = z.infer<typeof bilibiliSearchSourceConfigSchema>;
 
 export const aiHotSourceConfigSchema = z.object({
     schemaVersion: z.coerce.number().int().positive().default(1),
@@ -284,9 +297,28 @@ export const sourceConfigurationSchemas = {
     "source.aihot@1": aiHotSourceConfigSchema,
 } as const;
 
+/**
+ * 按 operation 覆盖定义级配置 schema（EXT-006）。一个 Adapter 的第二个 operation 往往要
+ * 用户填完全不同的东西（Bilibili 的 `search` 要查询词），所以「用户可填配置」不能只有一份；
+ * 未登记的 operation 回退定义级那份（`bilibili.fetch` 就是这种：它沿用 mode/limit）。
+ */
+export const sourceOperationConfigurationSchemas: Record<
+    string,
+    Record<string, z.ZodTypeAny>
+> = {
+    "source.bilibili@1": { search: bilibiliSearchSourceConfigSchema },
+};
+
 export function getSourceConfigurationSchema(
     sourceDefinitionRef: string,
+    operationId?: string,
 ): z.ZodTypeAny | null {
+    if (operationId !== undefined) {
+        const override = sourceOperationConfigurationSchemas[sourceDefinitionRef]?.[operationId];
+        if (override) {
+            return override;
+        }
+    }
     return sourceConfigurationSchemas[sourceDefinitionRef as keyof typeof sourceConfigurationSchemas] ?? null;
 }
 
@@ -350,6 +382,18 @@ export const ingestCommandSchema = z.object({
 });
 export type IngestCommand = z.input<typeof ingestCommandSchema>;
 
+/**
+ * 冻结进执行快照的连接投影（Proposal connection-login-lifecycle-v1 决定 1）。只带身份与
+ * 非秘密适配器配置；`status`/`lastError` 这类活诊断**不进**——AUT-016 要求排队后改连接
+ * 配置不改变已创建 Run 的输入，而活诊断冻下来只会误导后来读它的人。
+ */
+export const sourceConnectionProjectionSchema = z.object({
+    id: z.string(),
+    connectorId: z.string(),
+    configJson: z.string().nullable(),
+}).strict();
+export type SourceConnectionProjection = z.infer<typeof sourceConnectionProjectionSchema>;
+
 /** Immutable source data captured when a workflow is enqueued. */
 export const sourceExecutionSnapshotSchema = z.object({
     id: z.string(),
@@ -372,6 +416,12 @@ export const sourceExecutionSnapshotSchema = z.object({
      */
     mediaPolicy: sourceMediaPolicySchema.nullable(),
     revisionId: sourceRevisionIdSchema,
+    /**
+     * 当轮连接的投影（Proposal connection-login-lifecycle-v1）。`.optional()` 与本文件
+     * `sourceSnapshotSchema.connectionId` 同例：未保存配置的探测路径没有连接，连接器
+     * 必须容忍缺省，不能假定它一定存在。
+     */
+    connection: sourceConnectionProjectionSchema.nullable().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
 });
@@ -408,9 +458,19 @@ export const connectionInstanceSchema = z.object({
     connectorId: z.string(),
     account: z.string().nullable(),
     scopeJson: z.string().nullable(),
+    /**
+     * 适配器的**非秘密**配置（Proposal connection-login-lifecycle-v1 决定 1），与
+     * `scopeJson` 同形是 JSON 文本。凭证永远不在这里——`secretRef` 只是不透明引用。
+     */
+    configJson: z.string().nullable(),
     status: connectionStatusSchema,
     secretRef: z.string().nullable(),
     lastError: z.string().nullable(),
+    /**
+     * 最近一次登录探测的时间（Proposal connection-login-lifecycle-v1 决定 2）；从未探测为 null。
+     * 它由探测回写，不走公开的更新命令。
+     */
+    lastCheckedAt: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
 }).strict();
@@ -421,6 +481,7 @@ export const createConnectionCommandSchema = z.object({
     connectorId: z.string().trim().min(1).max(100),
     account: z.string().trim().max(200).nullable().optional(),
     scopeJson: z.string().max(4000).nullable().optional(),
+    configJson: z.string().max(4000).nullable().optional(),
     secretRef: z.string().trim().min(1).max(300).nullable().optional(),
 }).strict();
 export type CreateConnectionCommand = z.infer<typeof createConnectionCommandSchema>;
@@ -428,6 +489,7 @@ export type CreateConnectionCommand = z.infer<typeof createConnectionCommandSche
 export const updateConnectionCommandSchema = z.object({
     name: z.string().trim().min(1).max(200).optional(),
     status: connectionStatusSchema.optional(),
+    configJson: z.string().max(4000).nullable().optional(),
     secretRef: z.string().trim().min(1).max(300).nullable().optional(),
     lastError: z.string().max(500).nullable().optional(),
 }).strict();

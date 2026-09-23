@@ -98,6 +98,15 @@ API 返回。
 Browser Bridge/OpenCLI profile 可以投影为一种外部管理的 Connection，不把 Cookie
 复制进 Cosmos。
 
+**2026-09-23 实现现状**：连接已经是登录态的载体——`ConnectionInstance.configJson` 装适配器的
+非秘密配置（Bilibili 的 OpenCLI profile），来源配置不再带它；未保存配置的探测
+（`POST /source-config-probes`）接受可选 `connectionId`。**登录探测已落地**：`POST
+/connections/{id}/probes` 返回 `202` 作业快照并通过 `GET /connection-probes/{jobId}` 读结论
+（`outcome` 为 `active`/`expired`/`error` + 账号标签 + 可读原因），结论由系统写回连接的
+`status`/`account`/`lastError`/`lastCheckedAt`——本节 DTO 里的 `lastCheckedAt` 因此不再是 Planned。
+本节的 `authorization-sessions`、`revocations` 与 `scopes: string[]` 仍与落地形态不一致，收敛动作见
+Proposal [`connection-login-lifecycle-v1`](../proposals/connection-login-lifecycle-v1.md) 的待裁定项 3。
+
 ### 4.2 Source
 
 | 成熟度 | Method | Path | 结果 |
@@ -122,6 +131,15 @@ Browser Bridge/OpenCLI profile 可以投影为一种外部管理的 Connection�
 ### 4.2.1 配置优先产品流程合同（Phase 1 remainder）
 
 本切片以一个 `SourceInstance` 同时保存来源名称、版本化 `sourceDefinitionRef`、`operationId`、已校验配置、revision 和可选调度字段；`sourceDefinitionRef` 是唯一业务身份，不新增独立 `CollectionPlan` 持久对象或第二套 Draft 状态机。`CollectionPlan` 仍是后续扩展边界。
+
+> **2026-09-23 实现现状**：canonical 配置 schema 按 `(sourceDefinitionRef, operationId)` 检索——
+> manifest 的 operation 项带一个可空 `configurationSchema`（`null` = 沿用定义级那份），
+> `getSourceConfigurationSchema(ref, operationId)` 未登记时回退定义级，因此 `source.rss@1` 与
+> `bilibili.fetch` 的校验结果不变；`bilibili.search` 用自己的那份（要求 `query`，可选 `limit`），
+> 建来源与未保存配置探测都按调用方提交的 `operationId` 取 schema。Web 的来源定义选择器旁因此
+> 多一个操作选择器。落地的命令与端点是 `POST /sources`、`POST /source-config-probes` 与
+> `POST /connections/{id}/probes`（决定见 Proposal
+> [`connection-login-lifecycle-v1`](../proposals/connection-login-lifecycle-v1.md) 决定 3）。
 
 产品流程固定为：
 

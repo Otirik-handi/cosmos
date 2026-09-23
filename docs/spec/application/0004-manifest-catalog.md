@@ -46,7 +46,7 @@ API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程�
 
 ### Catalog manifest 字段
 
-- Source manifest：`id`、`version`、`ref`、`provider`、`displayName`、`description`、`manifestHash`、`status`、`operationIds`、`capabilities`、`configurationSchema`
+- Source manifest：`id`、`version`、`ref`、`provider`、`displayName`、`description`、`manifestHash`、`status`、`operationIds`、`capabilities`、`configurationSchema`、`auth`、`operations`（每项含 operationId、input/output schema、可空 `configurationSchema`——`null` 表示沿用定义级那份）
 - Workflow manifest：`id`、`version`、`ref`、`kind`、`provider`、`manifestHash`、`status`、`requiredActionRefs`、`requiredBackendCapabilities`、`inputSchema`、`outputSchema`
 - Action manifest：`id`、`version`、`ref`、`provider`、`manifestHash`、`effectMode`、`executionPlacement`、`requiredCapabilities`、`status`、`inputSchema`、`outputSchema`
 
@@ -103,8 +103,10 @@ API 要展示可用 Source、Workflow、Action 或 Connector，或重建进程�
 | --- | --- | --- | --- | --- |
 | 1 | `rss` | `source.rss@1` | `source:read`、`cursor` | `feedUrl`、`scheduleIntervalMs` |
 | 2 | `fixture-rss` | `source.fixture-rss@1` | `source:read`、`cursor` | `scheduleIntervalMs` |
-| 3 | `bilibili` | `source.bilibili@1` | `source:read`、`cursor`、`external:opencli` | `mode`、`profile`、`limit`、`scheduleIntervalMs` |
+| 3 | `bilibili` | `source.bilibili@1` | `source:read`、`cursor`、`external:opencli` | `mode`、`limit`、`scheduleIntervalMs` |
 | 4 | `aihot` | `source.aihot@1` | `source:read`、`cursor` | `scheduleIntervalMs` |
+
+表里的业务属性是**定义级** `configurationSchema`。Bilibili 是唯一声明两个 operation 的定义（`operationIds` 为 `["fetch", "search"]`）：`fetch` 的 operation 级 `configurationSchema` 是 `null`（沿用定义级的 `mode`/`limit`），`search` 自带一份（`query` 必填、`limit` 可选），其 `discoveryContext` 为 `search`、`media` 为 `metadata_only`、`stateStoreNamespace` 为 `null`（搜索没有游标要存）。其余三个定义的 operation 级 schema 都是 `null`。
 
 内置 Workflow 仅有 `cosmos.ingest@1`，其 catalog `manifestHash` 是对象 `{ algorithm: "builtin", value: "builtin:cosmos.ingest@1:source-snapshot-v1" }`。`requiredActionRefs` 顺序为 `source.fetch@1`、`library.ingest@1`、`collection-plan.checkpoint@1`；`requiredBackendCapabilities.processRestart`、`multiWorker`、`leases`、`externalReceipts`、`valueReferences` 均为 `true`。
 

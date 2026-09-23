@@ -4,13 +4,15 @@
  */
 
 export {
-    aiHotSourceConfigSchema, assetErrorCodeSchema, assetErrorCodes, bilibiliSourceConfigSchema,
+    aiHotSourceConfigSchema, assetErrorCodeSchema, assetErrorCodes, bilibiliSearchSourceConfigSchema,
+    bilibiliSourceConfigSchema,
     connectionInstanceSchema, connectionStatusSchema, contentKindSchema, contentMetricsSchema,
     createConnectionCommandSchema, createSourceCommandSchema, deleteSourceCommandSchema,
     discoveryChannelSchema,
     fixtureRssSourceConfigSchema,
     getSourceConfigurationSchema, idempotencyKeySchema, ingestCommandSchema,
     mediaPolicyCeilings, mediaPolicyImagesSchema, mediaRetryCeiling, mediaRetryPolicySchema,
+    openCliProfileSchema,
     protocolVersion, publisherKindSchema, publisherMetricsSchema, publisherSchema,
     retryableAssetErrorCodes, rssSourceConfigSchema,
     sourceConfigSchema, sourceConfigurationSchemas, sourceConnectorIdSchema,
@@ -25,7 +27,7 @@ export {
     type CreateSourceCommand, type DeleteSourceCommand, type DiscoveryChannel, type FixtureRssSourceConfig, type IngestCommand,
     type MediaPolicyImages, type MediaRetryPolicy, type Publisher, type PublisherKind,
     type PublisherMetrics, type RssSourceConfig,
-    type SourceConfig, type SourceConnectorId, type SourceDefinitionRef,
+    type SourceConfig, type SourceConnectionProjection, type SourceConnectorId, type SourceDefinitionRef,
     type SourceExecutionSnapshot, type SourceKind, type SourceMediaPolicy,
     type SourceOperationId, type SourceProbeResult, type SourceRevisionId, type SourceSnapshot,
     type SourceTestResult, type TemporalFallback, type TemporalPrecision, type TemporalValue,
@@ -43,7 +45,9 @@ export {
 } from "./collection-plan.js";
 
 export {
-    assetSnapshotSchema, assetStatusSchema, connectorDescriptorSchema, ingestResultSchema,
+    assetSnapshotSchema, assetStatusSchema, connectionProbeJobPayloadSchema,
+    connectionProbeJobSnapshotSchema, connectionProbeOutcomeSchema, connectionProbeResultSchema,
+    connectorDescriptorSchema, ingestResultSchema,
     jobKindSchema, jobListSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
     mediaCleanupCommandSchema, mediaCleanupEntrySchema, mediaCleanupReportSchema,
     mediaCleanupRunSnapshotSchema, publicAssetSnapshotSchema, sourceAuthSchema,
@@ -51,7 +55,9 @@ export {
     sourceConfigProbeJobPayloadSchema, sourceConfigProbeJobSnapshotSchema,
     sourceConfigProbeResultSchema, sourceDefinitionManifestSchema, sourceDefinitionPageSchema,
     sourceDefinitionStatusSchema, sourceOperationManifestSchema, stepStatusSchema,
-    type AssetSnapshot, type AssetStatus, type ConnectorDescriptor, type IngestResult,
+    type AssetSnapshot, type AssetStatus, type ConnectionProbeJobPayload,
+    type ConnectionProbeJobSnapshot, type ConnectionProbeOutcome, type ConnectionProbeResult,
+    type ConnectorDescriptor, type IngestResult,
     type JobKind, type JobSnapshot, type JobStatus, type JsonSchemaRef, type ManifestHash,
     type MediaCleanupCommand, type MediaCleanupEntry, type MediaCleanupReport,
     type MediaCleanupRunSnapshot, type PublicAssetSnapshot, type SourceAuth,

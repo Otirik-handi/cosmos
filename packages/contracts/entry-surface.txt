@@ -34,6 +34,10 @@ type	CollectionPlanSnapshot
 type	CollectionPlanWebhookEntry
 type	CollectionSummary
 type	ConnectionInstance
+type	ConnectionProbeJobPayload
+type	ConnectionProbeJobSnapshot
+type	ConnectionProbeOutcome
+type	ConnectionProbeResult
 type	ConnectionStatus
 type	ConnectorDescriptor
 type	ConnectorStateExport
@@ -167,6 +171,7 @@ type	SourceConfig
 type	SourceConfigProbeCommand
 type	SourceConfigProbeJobSnapshot
 type	SourceConfigProbeResult
+type	SourceConnectionProjection
 type	SourceConnectorId
 type	SourceDefinitionManifest
 type	SourceDefinitionPage
@@ -255,6 +260,7 @@ value	assetErrorCodes
 value	assetSnapshotSchema
 value	assetStatusSchema
 value	backupSnapshotSchema
+value	bilibiliSearchSourceConfigSchema
 value	bilibiliSourceConfigSchema
 value	blobRefSchema
 value	blockConfigSchemaFor
@@ -276,6 +282,10 @@ value	collectionPlanWebhookEntryPath
 value	collectionPlanWebhookEntrySchema
 value	collectionSummarySchema
 value	connectionInstanceSchema
+value	connectionProbeJobPayloadSchema
+value	connectionProbeJobSnapshotSchema
+value	connectionProbeOutcomeSchema
+value	connectionProbeResultSchema
 value	connectionStatusSchema
 value	connectorDescriptorSchema
 value	connectorStateExportQuerySchema
@@ -374,6 +384,7 @@ value	moveEntryToStoryCommandSchema
 value	normalizedAssetInputSchema
 value	normalizedIngestItemSchema
 value	observationSnapshotSchema
+value	openCliProfileSchema
 value	parseActionRef
 value	pinSpotlightCommandSchema
 value	protocolVersion

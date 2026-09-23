@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { z, ZodError } from "zod";
 import { WorkflowHostError, ConnectionNotFoundError, type WorkflowEnvelope } from "@cosmos/application";
-import { idempotencyKeySchema, ingestTriggerEvidenceSchema, ingestTriggerKindSchema, type RunStatus, type SourceSnapshot } from "@cosmos/contracts";
+import { idempotencyKeySchema, getSourceConfigurationSchema, ingestTriggerEvidenceSchema, ingestTriggerKindSchema, type RunStatus, type SourceSnapshot } from "@cosmos/contracts";
 import "reflect-metadata";
 
 export const productRunSchema = z.object({
@@ -136,15 +136,32 @@ export function parsePositiveInteger(value: string): number {
     return parsed;
 }
 
-export function toPublicSource(source: SourceSnapshot) {
+/**
+ * 公开投影只带该 operation 声明的用户可填字段：白名单来自 canonical 配置 schema 的键
+ * （EXT-006 的「API 按声明展示配置」），不再按 connectorId 硬编码——否则第二个 operation
+ * 的字段（Bilibili `search` 的查询词）会被投影丢掉。读不到 schema 的来源（历史 kind
+ * 投影）退回旧的 `feedUrl` 白名单。
+ */
+function projectSourceConfig(source: SourceSnapshot): Record<string, unknown> {
+    const schema = getSourceConfigurationSchema(source.sourceDefinitionRef, source.operationId);
     const config: Record<string, unknown> = {};
-    if (typeof source.config.feedUrl === "string") config.feedUrl = source.config.feedUrl;
-    if (source.kind === "bilibili") {
-        for (const key of ["mode", "limit", "profile", "schemaVersion"] as const) {
-            const value = source.config[key];
-            if (value !== undefined) config[key] = value;
+    if (!(schema instanceof z.ZodObject)) {
+        if (typeof source.config.feedUrl === "string") {
+            config.feedUrl = source.config.feedUrl;
+        }
+        return config;
+    }
+    for (const key of Object.keys(schema.shape)) {
+        const value = source.config[key];
+        if (value !== undefined) {
+            config[key] = value;
         }
     }
+    return config;
+}
+
+export function toPublicSource(source: SourceSnapshot) {
+    const config = projectSourceConfig(source);
     return {
         id: source.id,
         name: source.name,

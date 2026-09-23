@@ -63,6 +63,8 @@ export function useSourceWorkspace(
     const [definitionState, setDefinitionState] = useState<SourceDefinitionState>({status: "loading"});
     /** 表单当前选中的来源定义；默认 RSS（唯一无需额外前置条件的定义）。 */
     const [selectedDefinitionRef, setSelectedDefinitionRef] = useState<string>(RSS_SOURCE_DEFINITION_REF);
+    /** 表单当前选中的操作；默认 RSS 的抓取操作（EXT-006）。 */
+    const [selectedOperationId, setSelectedOperationId] = useState<string>(RSS_OPERATION_ID);
     const [probeState, setProbeState] = useState<ProbeState>({status: "idle"});
     const [plans, setPlans] = useState<readonly CollectionPlanSnapshot[]>([]);
     const [connections, setConnections] = useState<readonly ConnectionInstance[]>([]);
@@ -135,18 +137,31 @@ export function useSourceWorkspace(
         }
     }, []);
 
-    /** 当前来源定义与它的字段规则；字段规则同时驱动校验与 config 构造。 */
+    /** 当前来源定义、操作与它的字段规则；字段规则同时驱动校验与 config 构造。 */
     const selectedManifest = definitionState.status === "ready"
         ? definitionState.manifests.find((item) => item.ref === selectedDefinitionRef) ?? null
         : null;
     const manifestFields = useMemo(
-        () => (selectedManifest ? readManifestFields(selectedManifest) : []),
-        [selectedManifest],
+        () => (selectedManifest ? readManifestFields(selectedManifest, selectedOperationId) : []),
+        [selectedManifest, selectedOperationId],
     );
 
     /** 换来源定义就整组重置配置字段：旧定义的字段值对新定义没有意义。 */
     const selectDefinition = useCallback((ref: string): void => {
         setSelectedDefinitionRef(ref);
+        // 操作也跟着换：旧定义的操作 id 在新定义里可能不存在（EXT-006）。
+        const nextManifest = definitionState.status === "ready"
+            ? definitionState.manifests.find((item) => item.ref === ref) ?? null
+            : null;
+        setSelectedOperationId(nextManifest?.operationIds[0] ?? RSS_OPERATION_ID);
+        sourceForm.setValue("config", {});
+        setProbeState({status: "idle"});
+        probeConfigKeyRef.current = null;
+    }, [definitionState, sourceForm]);
+
+    /** 换操作同样重置配置字段：search 的查询词对 fetch 没有意义（EXT-006）。 */
+    const selectOperation = useCallback((operationId: string): void => {
+        setSelectedOperationId(operationId);
         sourceForm.setValue("config", {});
         setProbeState({status: "idle"});
         probeConfigKeyRef.current = null;
@@ -167,8 +182,11 @@ export function useSourceWorkspace(
         try {
             let snapshot = await client.createSourceConfigProbe({
                 sourceDefinitionRef: selectedManifest.ref,
-                operationId: selectedManifest.operationIds[0] ?? RSS_OPERATION_ID,
+                operationId: selectedOperationId,
                 config,
+                // 未保存配置的探测也要给连接（Proposal connection-login-lifecycle-v1 决定 1）：
+                // `feed` 这类需要登录态的操作靠它拿 profile；没选连接就是 null。
+                connectionId: values.connectionId === "" ? null : values.connectionId,
             });
             const deadline = Date.now() + PROBE_POLL_TIMEOUT_MS;
             while (
@@ -224,7 +242,7 @@ export function useSourceWorkspace(
             await client.createSource(createSourceCommandSchema.parse({
                 name: values.name,
                 sourceDefinitionRef: selectedManifest.ref,
-                operationId: selectedManifest.operationIds[0] ?? RSS_OPERATION_ID,
+                operationId: selectedOperationId,
                 config: toConfigFromFields(manifestFields, values.config),
                 scheduleIntervalMs: toScheduleIntervalMs(values),
                 connectionId: values.connectionId === "" ? null : values.connectionId,
@@ -421,7 +439,9 @@ export function useSourceWorkspace(
         plans,
         probeConfigKeyRef,
         selectDefinition,
+        selectOperation,
         selectedDefinitionRef,
+        selectedOperationId,
         selectedManifest,
         setProbeState,
         onCreateSource,

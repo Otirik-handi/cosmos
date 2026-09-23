@@ -47,6 +47,24 @@ test("renders catalog and probe feedback states with synthetic fixtures", async 
     await expect(page.getByRole("button", {name: "重试读取"})).toBeVisible();
 });
 
+test("renders the config fields declared by the selected operation", async ({page}) => {
+    await page.goto("/dev/components?component=source-form&scene=default");
+    // RSS 只声明一个操作：不显示操作选择器。
+    await expect(page.locator("#source-operation")).toHaveCount(0);
+
+    await page.locator("#source-definition").selectOption("source.bilibili@1");
+    await expect(page.locator("#source-operation")).toBeVisible();
+    // 默认选中定义的第一个操作：fetch 沿用定义级 schema，渲染 mode/limit。
+    await expect(page.locator("#source-operation")).toHaveValue("fetch");
+    await expect(page.locator("#source-config-mode")).toBeVisible();
+    await expect(page.locator("#source-config-limit")).toBeVisible();
+
+    // search 自带配置 schema：查询词出现，fetch 的 mode 消失。
+    await page.locator("#source-operation").selectOption("search");
+    await expect(page.locator("#source-config-query")).toBeVisible();
+    await expect(page.locator("#source-config-mode")).toHaveCount(0);
+});
+
 test("keeps FeedBrowser fixture search inside the lab", async ({page}) => {
     await page.goto("/dev/components?component=feed-browser&scene=populated");
     await expect(page).toHaveURL(/viewport=responsive&theme=neurobook&colorway=macos-light/u);

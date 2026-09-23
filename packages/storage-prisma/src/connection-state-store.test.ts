@@ -74,6 +74,49 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
         }
     });
 
+    /**
+     * 登录探测的回写（Proposal connection-login-lifecycle-v1 决定 2）：状态、账号、失效原因
+     * 与检查时间一次写入。`lastCheckedAt` 刻意不走公开的更新命令——它是系统观测。
+     */
+    it("records a login probe onto the connection", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({
+                name: "主账号",
+                connectorId: "bilibili",
+                configJson: '{"profile":"chrome-main"}',
+            });
+            expect(connection.lastCheckedAt).toBeNull();
+            expect(connection.configJson).toBe('{"profile":"chrome-main"}');
+
+            const checked = await repository.recordConnectionProbe(connection.id, {
+                status: "expired",
+                account: "example",
+                lastError: "需要重新登录。",
+                checkedAt: "2026-09-23T09:00:00.000Z",
+            });
+            expect(checked).toMatchObject({
+                status: "expired",
+                account: "example",
+                lastError: "需要重新登录。",
+                lastCheckedAt: "2026-09-23T09:00:00.000Z",
+            });
+            await expect(repository.getConnection(connection.id)).resolves.toMatchObject({
+                status: "expired",
+                lastCheckedAt: "2026-09-23T09:00:00.000Z",
+            });
+
+            await expect(repository.recordConnectionProbe("missing", {
+                status: "active",
+                account: null,
+                lastError: null,
+                checkedAt: "2026-09-23T09:00:00.000Z",
+            })).rejects.toThrow("Connection not found: missing");
+        } finally {
+            await repository.close();
+        }
+    });
+
     it("links a source to a connection and detaches it on delete", async () => {
         const repository = await createRepository();
         try {

@@ -4,7 +4,7 @@ import type {
     JsonValue,
 } from "@notnotype/nb-workflow";
 import type {
-    SourceExecutionSnapshot,
+    SourceConnectionProjection, SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import type {
     NormalizedIngestItem,
@@ -52,6 +52,29 @@ export interface IngestConnector {
         items: readonly NormalizedIngestItem[];
         nextCursor: string | null;
     }>;
+    /**
+     * 连接级登录探测（Proposal connection-login-lifecycle-v1 决定 2）：可选。它按**连接**
+     * 而不是按来源调用——检查「这条登录态还能不能用」不需要来源。适配器不支持就不实现；
+     * 宿主按 manifest 的 `auth.probeSupported` 声明决定要不要允许发起探测，不按
+     * connectorId 硬编码。
+     */
+    probeAuthorization?(input: {
+        connection: SourceConnectionProjection;
+        signal?: AbortSignal;
+    }): Promise<ConnectorAuthorizationProbe>;
+}
+
+/**
+ * 探测结论。适配器只回答「这条连接现在能不能用」，产品语义由宿主映射：
+ * `active` = 可用，`expired` = 需要用户重新登录，`error` = 这次没得出结论
+ * （浏览器桥不可用、连接没配 profile、调用失败等）。
+ */
+export interface ConnectorAuthorizationProbe {
+    outcome: "active" | "expired" | "error";
+    /** 探测到的账号标签（如昵称）；未知为 null 或省略。 */
+    account?: string | null;
+    /** 面向用户的失效/失败原因；正常时省略或为 null。 */
+    reason?: string | null;
 }
 
 /** 命名空间已固定、只剩键的连接器状态视图。 */
@@ -83,6 +106,11 @@ export class ConnectorExecutionError extends Error {
 
 export type ConnectorResolver = (
     source: SourceExecutionSnapshot,
+) => IngestConnector;
+
+/** 按 `connectorId` 解析连接器：连接登录探测是连接的事实，没有来源可依据。 */
+export type ConnectionConnectorResolver = (
+    connectorId: string,
 ) => IngestConnector;
 
 /**

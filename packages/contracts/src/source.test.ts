@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     aiHotSourceConfigSchema,
+    bilibiliSearchSourceConfigSchema,
     bilibiliSourceConfigSchema,
     getSourceConfigurationSchema,
     publisherSchema,
@@ -10,7 +11,11 @@ import {
     mediaRetryCeiling,
     sourceConfigSchema,
     sourceMediaPolicySchema,
+    connectionProbeJobPayloadSchema,
+    connectionProbeJobSnapshotSchema,
+    connectionProbeResultSchema,
     createSourceCommandSchema,
+    jobKindSchema,
     jobSnapshotSchema,
     sourceConfigProbeCommandSchema,
     sourceConfigProbeJobPayloadSchema,
@@ -34,9 +39,15 @@ describe("source and job contracts", () => {
             limit: 5,
         });
 
-        expect(() => bilibiliSourceConfigSchema.parse({
+        // `feed` 不再要求配置里有 profile：profile 归连接（Proposal
+        // connection-login-lifecycle-v1 决定 1），本用例只守 mode 的取值域。
+        expect(bilibiliSourceConfigSchema.parse({
             mode: "feed",
             limit: 5,
+        })).toMatchObject({ mode: "feed" });
+
+        expect(() => bilibiliSourceConfigSchema.parse({
+            mode: "search",
         })).toThrow();
 
         expect(() => bilibiliSourceConfigSchema.parse({
@@ -57,10 +68,25 @@ describe("source and job contracts", () => {
         })).toThrow();
     });
 
-    it("resolves canonical configuration schemas by source definition ref", () => {
+    it("resolves canonical configuration schemas by source definition ref and operation", () => {
         expect(getSourceConfigurationSchema("source.rss@1")).toBe(rssSourceConfigSchema);
         expect(getSourceConfigurationSchema("source.bilibili@1")).toBe(bilibiliSourceConfigSchema);
         expect(getSourceConfigurationSchema("source.unknown@1")).toBeNull();
+        // EXT-006：登记的 operation 用自己的 schema，没登记的 operation 回退定义级那份。
+        expect(getSourceConfigurationSchema("source.bilibili@1", "search")).toBe(bilibiliSearchSourceConfigSchema);
+        expect(getSourceConfigurationSchema("source.bilibili@1", "fetch")).toBe(bilibiliSourceConfigSchema);
+        expect(getSourceConfigurationSchema("source.rss@1", "fetch")).toBe(rssSourceConfigSchema);
+    });
+
+    it("requires a query for the Bilibili search operation and rejects fetch fields", () => {
+        expect(bilibiliSearchSourceConfigSchema.parse({ query: "  cosmos  ", limit: 5 })).toEqual({
+            schemaVersion: 1,
+            query: "cosmos",
+            limit: 5,
+        });
+        expect(() => bilibiliSearchSourceConfigSchema.parse({ limit: 5 })).toThrow();
+        expect(() => bilibiliSearchSourceConfigSchema.parse({ query: "" })).toThrow();
+        expect(() => bilibiliSearchSourceConfigSchema.parse({ query: "cosmos", mode: "hot" })).toThrow();
     });
 
     it("keeps the media budget out of the source config", () => {
@@ -192,6 +218,54 @@ describe("source and job contracts", () => {
         expect(snapshot.mediaPolicy).toBeNull();
     });
 
+    /**
+     * 连接投影随入队冻结（Proposal connection-login-lifecycle-v1 决定 1；AUT-016 明确
+     * 写「排队后修改 Connection 配置不会改变已创建 Run 的输入」）。只冻身份与非秘密
+     * 配置，`status`/`lastError` 这类活诊断不得进入——它们冻下来之后只会误导。
+     */
+    it("freezes the connection projection into the execution snapshot", () => {
+        const base = {
+            id: "source-1",
+            name: "Bilibili feed",
+            kind: "bilibili",
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "fetch",
+            connectorId: "bilibili",
+            config: { mode: "feed", limit: 20 },
+            enabled: true,
+            planId: "plan:source-1",
+            mediaPolicy: null,
+            revisionId: "source-1:1",
+            createdAt: "2026-08-24T00:00:00.000Z",
+            updatedAt: "2026-08-24T00:00:00.000Z",
+        };
+        const connection = {
+            id: "connection-1",
+            connectorId: "bilibili",
+            configJson: '{"profile":"chrome-main"}',
+        };
+
+        expect(sourceExecutionSnapshotSchema.parse({ ...base, connection }).connection).toEqual(connection);
+        // 未保存配置的探测路径没有连接：缺省与显式 null 都必须可解析。
+        expect(sourceExecutionSnapshotSchema.parse({ ...base }).connection).toBeUndefined();
+        expect(sourceExecutionSnapshotSchema.parse({ ...base, connection: null }).connection).toBeNull();
+        expect(() => sourceExecutionSnapshotSchema.parse({
+            ...base,
+            connection: { ...connection, status: "active" },
+        })).toThrow();
+    });
+
+    /**
+     * profile 归连接之后，来源配置里再出现它就是错的：迁移必须把它搬走，而不是让
+     * 一份配置同时有两个所有者（ADR-0017 决策 1 由此被本片部分取代）。
+     */
+    it("no longer accepts the OpenCLI profile inside the Bilibili source config", () => {
+        expect(bilibiliSourceConfigSchema.parse({ mode: "feed", limit: 5 })).toMatchObject({
+            mode: "feed",
+            limit: 5,
+        });
+        expect(() => bilibiliSourceConfigSchema.parse({ mode: "feed", profile: "chrome-main" })).toThrow();
+    });
 
     it("validates probe results and job snapshots", () => {
         expect(sourceProbeResultSchema.parse({
@@ -342,11 +416,12 @@ describe("source definition catalog contracts", () => {
                 required: ["feedUrl"],
             },
         },
-        auth: { kind: "none", label: null, secretRefRequired: false },
+        auth: { kind: "none", label: null, secretRefRequired: false, probeSupported: false },
         operations: [{
             operationId: "fetch",
             inputSchema: { id: "source.rss.fetch.input@1", version: 1, hash: { algorithm: "builtin", value: "i" } },
             outputSchema: { id: "source.rss.fetch.output@1", version: 1, hash: { algorithm: "builtin", value: "o" } },
+            configurationSchema: null,
             externalKey: "url",
             discoveryContext: "",
             media: "download",
@@ -362,6 +437,35 @@ describe("source definition catalog contracts", () => {
             status: "enabled",
         });
         expect(manifest.configurationSchema.schema).toMatchObject({ type: "object" });
+    });
+
+    /**
+     * EXT-006：operation 可以覆盖配置 schema（null = 沿用定义级），也可以声明自己没有
+     * 状态要保存。两者都是 Web「按声明渲染」和宿主解析状态命名空间的输入。
+     */
+    it("carries a per-operation configuration schema that may fall back to the definition", () => {
+        const manifest = sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            operationIds: ["fetch", "search"],
+            operations: [
+                rssManifest.operations[0],
+                {
+                    ...rssManifest.operations[0],
+                    operationId: "search",
+                    configurationSchema: {
+                        id: "source.rss.search.config@1",
+                        version: 1,
+                        hash: { algorithm: "builtin", value: "source.rss.search.config@1" },
+                    },
+                    discoveryContext: "search",
+                    stateStoreNamespace: null,
+                },
+            ],
+        });
+
+        expect(manifest.operations[0]?.configurationSchema).toBeNull();
+        expect(manifest.operations[1]?.configurationSchema?.id).toBe("source.rss.search.config@1");
+        expect(manifest.operations[1]?.stateStoreNamespace).toBeNull();
     });
 
     it("rejects manifests with an unversioned ref or unknown fields", () => {
@@ -385,6 +489,59 @@ describe("source definition catalog contracts", () => {
         expect(page.snapshotAt).toBe("2026-09-02T00:00:00.000Z");
         expect(() => sourceDefinitionPageSchema.parse({
             items: [rssManifest],
+        })).toThrow();
+    });
+
+    /**
+     * 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：探测能不能发起由
+     * manifest 的 `auth.probeSupported` 声明，Job 载荷只带连接标识，结果带三种结论。
+     */
+    it("declares whether an adapter supports login probing", () => {
+        expect(sourceDefinitionManifestSchema.parse(rssManifest).auth.probeSupported).toBe(false);
+        expect(() => sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            auth: { kind: "none", label: null, secretRefRequired: false },
+        })).toThrow();
+    });
+
+    it("round-trips a connection probe job payload and snapshot", () => {
+        expect(connectionProbeJobPayloadSchema.parse({ connectionId: "connection-1" }))
+            .toEqual({ connectionId: "connection-1" });
+        expect(() => connectionProbeJobPayloadSchema.parse({ connectionId: "" })).toThrow();
+        expect(() => connectionProbeJobPayloadSchema.parse({
+            connectionId: "connection-1",
+            sourceId: "source-1",
+        })).toThrow();
+
+        const job = connectionProbeJobSnapshotSchema.parse({
+            id: "job-1",
+            kind: "connection-probe",
+            sourceId: null,
+            runId: null,
+            status: "succeeded",
+            attempts: 1,
+            maxAttempts: 3,
+            errorCode: null,
+            error: null,
+            createdAt: "2026-09-23T00:00:00.000Z",
+            updatedAt: "2026-09-23T00:00:00.000Z",
+            result: {
+                connectionId: "connection-1",
+                outcome: "expired",
+                account: null,
+                reason: "需要重新登录 Bilibili（浏览器里的登录态已失效）。",
+                checkedAt: "2026-09-23T00:00:00.000Z",
+            },
+        });
+        expect(job.result?.outcome).toBe("expired");
+        expect(jobKindSchema.parse("connection-probe")).toBe("connection-probe");
+        expect(() => connectionProbeJobSnapshotSchema.parse({ ...job, kind: "source-probe" })).toThrow();
+        expect(() => connectionProbeResultSchema.parse({
+            connectionId: "connection-1",
+            outcome: "unknown",
+            account: null,
+            reason: null,
+            checkedAt: "2026-09-23T00:00:00.000Z",
         })).toThrow();
     });
 });

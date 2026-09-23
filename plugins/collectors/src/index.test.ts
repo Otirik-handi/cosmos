@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createLogger } from "@cosmos/logging";
+import { ConnectorExecutionError } from "@cosmos/application";
 import type { SourceExecutionSnapshot } from "@cosmos/contracts";
 
 import {
@@ -13,6 +14,10 @@ import {
 function source(input: {
     kind: "bilibili" | "aihot";
     config: Record<string, unknown>;
+    /** 同一 manifest 下的第二个 operation（EXT-006）；默认 `fetch`。 */
+    operationId?: string;
+    /** 连接投影（Proposal connection-login-lifecycle-v1）：profile 现在住在这里。 */
+    connection?: SourceExecutionSnapshot["connection"];
 }): SourceExecutionSnapshot {
     return {
         id: `source-${input.kind}`,
@@ -20,16 +25,26 @@ function source(input: {
         sourceDefinitionRef: input.kind === "bilibili"
             ? "source.bilibili@1"
             : "source.aihot@1",
-        operationId: "fetch",
+        operationId: input.operationId ?? "fetch",
         connectorId: input.kind,
         kind: input.kind,
         config: input.config,
+        ...(input.connection === undefined ? {} : { connection: input.connection }),
         enabled: true,
         mediaPolicy: null,
         planId: `plan:source-${input.kind}`,
         revisionId: `source-${input.kind}:1`,
         createdAt: "2026-08-08T00:00:00.000Z",
         updatedAt: "2026-08-08T00:00:00.000Z",
+    };
+}
+
+/** Bilibili 连接投影：OpenCLI profile 走连接的 `configJson`，不再是来源配置。 */
+function bilibiliConnection(profile: string): NonNullable<SourceExecutionSnapshot["connection"]> {
+    return {
+        id: "connection-bilibili",
+        connectorId: "bilibili",
+        configJson: JSON.stringify({ profile }),
     };
 }
 
@@ -125,28 +140,32 @@ describe("built-in collectors", () => {
     });
 
     it("normalizes a Bilibili feed video with publisher id and metrics", async () => {
+        const profiles: unknown[] = [];
         const connector = createBilibiliConnector({
             runner: {
-                run: async (args) => ({
-                    stdout: args[0] === "--version"
-                        ? "1.8.6"
-                        : args[0] === "doctor"
-                            ? "[OK] Extension: connected\n[OK] Connectivity: passed"
-                            : JSON.stringify([{
-                                bvid: "BV1FEED",
-                                title: "Feed video",
-                                owner: {
-                                    mid: 9988,
-                                    name: "Feed author",
-                                },
-                                view: 100,
-                                like: 8,
-                                favorite: 3,
-                                pubdate: 1_786_170_123,
-                            }]),
-                    stderr: "",
-                    exitCode: 0,
-                }),
+                run: async (args, options) => {
+                    profiles.push(options?.env?.OPENCLI_PROFILE);
+                    return {
+                        stdout: args[0] === "--version"
+                            ? "1.8.6"
+                            : args[0] === "doctor"
+                                ? "[OK] Extension: connected\n[OK] Connectivity: passed"
+                                : JSON.stringify([{
+                                    bvid: "BV1FEED",
+                                    title: "Feed video",
+                                    owner: {
+                                        mid: 9988,
+                                        name: "Feed author",
+                                    },
+                                    view: 100,
+                                    like: 8,
+                                    favorite: 3,
+                                    pubdate: 1_786_170_123,
+                                }]),
+                        stderr: "",
+                        exitCode: 0,
+                    };
+                },
             },
         });
 
@@ -155,12 +174,15 @@ describe("built-in collectors", () => {
                 kind: "bilibili",
                 config: {
                     mode: "feed",
-                    profile: "chrome-main",
                     limit: 1,
                 },
+                connection: bilibiliConnection("chrome-main"),
             }),
             cursor: null,
         });
+
+        // 连接上的 profile 必须到达每一条子进程调用（版本、doctor、业务命令同一份）。
+        expect(profiles).toEqual(["chrome-main", "chrome-main", "chrome-main"]);
 
         expect(result.items[0]).toMatchObject({
             kind: "video",
@@ -180,7 +202,62 @@ describe("built-in collectors", () => {
         });
     });
 
-    it("keeps the logged-in Bilibili feed bound to a named profile", () => {
+    /**
+     * 第二个 operation 的真实消费者（EXT-006）：`search` 用自己的配置（query）跑
+     * `bilibili search`，匿名可用所以不带 profile，发现上下文是 search。
+     */
+    it("runs the search operation from its own config and marks the search channel", async () => {
+        const seenArgs: string[][] = [];
+        const seenProfiles: unknown[] = [];
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async (args, options) => {
+                    seenArgs.push([...args]);
+                    seenProfiles.push(options?.env?.OPENCLI_PROFILE);
+                    return {
+                        stdout: args[0] === "--version"
+                            ? "1.8.6"
+                            : args[0] === "doctor"
+                                ? "[OK] Extension: connected\n[OK] Connectivity: passed"
+                                : JSON.stringify([{
+                                    bvid: "BV1SEARCH",
+                                    title: "搜索结果",
+                                    author: "Search author",
+                                    url: "https://www.bilibili.com/video/BV1SEARCH",
+                                }]),
+                        stderr: "",
+                        exitCode: 0,
+                    };
+                },
+            },
+        });
+
+        const result = await connector.fetchItems({
+            source: source({
+                kind: "bilibili",
+                operationId: "search",
+                config: { query: "cosmos", limit: 3 },
+            }),
+            cursor: null,
+        });
+
+        expect(seenArgs[2]).toEqual(["bilibili", "search", "cosmos", "--limit", "3", "-f", "json"]);
+        // 搜索匿名可用：没有连接时三条子进程调用都不带 profile。
+        expect(seenProfiles).toEqual([undefined, undefined, undefined]);
+        expect(result.items[0]).toMatchObject({
+            externalId: "BV1SEARCH",
+            kind: "video",
+            discoveryChannel: "search",
+            sourceLocator: {
+                provider: "bilibili",
+                mode: "search",
+                rank: 1,
+                externalId: "BV1SEARCH",
+            },
+        });
+    });
+
+    it("rejects search sources without a query or with fetch-only fields", () => {
         const connector = createBilibiliConnector({
             runner: {
                 run: async () => ({
@@ -193,12 +270,63 @@ describe("built-in collectors", () => {
 
         expect(() => connector.validate(source({
             kind: "bilibili",
+            operationId: "search",
+            config: { limit: 3 },
+        }))).toThrow();
+        // `mode` 是 fetch 的字段：带上必须是配置错误，而不是被静默忽略后去搜别的东西。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            operationId: "search",
+            config: { query: "cosmos", mode: "hot" },
+        }))).toThrow();
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            operationId: "search",
+            config: { query: "cosmos" },
+        }))).not.toThrow();
+    });
+
+    it("keeps the logged-in Bilibili feed bound to a named profile on the connection", () => {
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async () => ({
+                    stdout: "[]",
+                    stderr: "",
+                    exitCode: 0,
+                }),
+            },
+        });
+
+        // feed 的判断现在读的是连接投影：没有连接、或连接里没有 profile，都必须拒绝。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
             config: { mode: "feed", limit: 20 },
         }))).toThrow();
         expect(() => connector.validate(source({
             kind: "bilibili",
-            config: { mode: "feed", profile: "chrome-main", limit: 20 },
+            config: { mode: "feed", limit: 20 },
+            connection: { id: "connection-bilibili", connectorId: "bilibili", configJson: "{}" },
+        }))).toThrow();
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            config: { mode: "feed", limit: 20 },
+            connection: bilibiliConnection("chrome-main"),
         }))).not.toThrow();
+        // hot 匿名可用：没有连接也照常通过。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            config: { mode: "hot" },
+        }))).not.toThrow();
+        // 连接里的 profile 形状非法时按配置错误拒绝，而不是悄悄不带 profile 去抓。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            config: { mode: "hot" },
+            connection: {
+                id: "connection-bilibili",
+                connectorId: "bilibili",
+                configJson: '{"profile":"bad profile!"}',
+            },
+        }))).toThrow();
     });
 
     it("reports a disconnected Browser Bridge before running a source command", async () => {
@@ -332,5 +460,69 @@ describe("built-in collectors", () => {
             "aihot",
         ]);
         expect(registry.descriptors().map((item) => item.id)).not.toContain("opencli");
+    });
+
+    /**
+     * 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：跑一次登录门控命令，
+     * 把退出状态翻译成宿主的三种 outcome。它按**连接**调用，不需要来源。
+     */
+    it("probes the connection login state through the login-gated command", async () => {
+        const seenArgs: string[][] = [];
+        const seenProfiles: unknown[] = [];
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async (args, options) => {
+                    seenArgs.push([...args]);
+                    seenProfiles.push(options?.env?.OPENCLI_PROFILE);
+                    return {
+                        stdout: JSON.stringify({ name: "我爱吃番茄酱", uid: 1909976659 }),
+                        stderr: "",
+                        exitCode: 0,
+                    };
+                },
+            },
+        });
+
+        await expect(connector.probeAuthorization?.({
+            connection: bilibiliConnection("chrome-main"),
+        })).resolves.toEqual({ outcome: "active", account: "我爱吃番茄酱", reason: null });
+        expect(seenArgs).toEqual([["bilibili", "me", "-f", "json"]]);
+        expect(seenProfiles).toEqual(["chrome-main"]);
+    });
+
+    it("maps a not-logged-in probe to expired, a broken bridge to error, and reaches for no profile", async () => {
+        const connectorThrowing = (error: ConnectorExecutionError) => createBilibiliConnector({
+            runner: {
+                run: async () => {
+                    throw error;
+                },
+            },
+        });
+
+        await expect(connectorThrowing(new ConnectorExecutionError(
+            "authentication_required",
+            "OpenCLI requires a logged-in browser profile.",
+            false,
+        )).probeAuthorization?.({ connection: bilibiliConnection("chrome-main") }))
+            .resolves.toMatchObject({ outcome: "expired" });
+
+        await expect(connectorThrowing(new ConnectorExecutionError(
+            "dependency_unavailable",
+            "OpenCLI Browser Bridge is unavailable.",
+            true,
+        )).probeAuthorization?.({ connection: bilibiliConnection("chrome-main") }))
+            .resolves.toMatchObject({ outcome: "error" });
+
+        // 连接没配 profile：探测没有可用的登录态可查，直接给出结论而不是去跑命令。
+        const noProfile = createBilibiliConnector({
+            runner: {
+                run: async () => {
+                    throw new Error("runner must not be called");
+                },
+            },
+        });
+        await expect(noProfile.probeAuthorization?.({
+            connection: { id: "connection-bilibili", connectorId: "bilibili", configJson: null },
+        })).resolves.toMatchObject({ outcome: "error" });
     });
 });

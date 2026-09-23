@@ -237,9 +237,9 @@ Operation、Trigger、WorkflowBinding、checkpoint namespace、发现上下文�
 凭证和普通 Adapter 状态分离：
 
 - `SecretStore` 由 Cosmos 统一提供；Adapter 负责登录协议和凭证格式，但不自行决定凭证的持久化位置。
-- `ConnectionInstance` 只保存连接状态、授权范围和 `SecretRef`；Cookie、Token、Refresh Token 不进入普通配置、Job payload、DomainEvent 或日志。
+- `ConnectionInstance` 只保存连接状态、授权范围、**适配器的非秘密配置**和 `SecretRef`；Cookie、Token、Refresh Token 不进入普通配置、Job payload、DomainEvent 或日志。
 - `ConnectorStateStore` 保存 cursor、ETag、分页 token、速率状态等非秘密状态。Adapter 可以定义状态 schema，Cosmos 负责命名空间、版本、备份、并发和恢复。
-- OpenCLI/Browser Bridge 可以作为外部登录态管理例外，Cosmos 只保存 profile 引用；长期仍需映射到统一 Connection 合同。
+- OpenCLI/Browser Bridge 是外部登录态管理例外，Cosmos 只把 profile 引用保存为**连接的非秘密适配器配置**（`ConnectionInstance.configJson`，Proposal [`connection-login-lifecycle-v1`](../../proposals/connection-login-lifecycle-v1.md)）；凭证仍由浏览器持有。抓取时宿主把该配置随执行快照**冻结**交给连接器（AUT-016：排队后改连接配置不改变已创建 Run 的输入）。
 
 
 ### 4.7 产品配置入口与可用性 E2E

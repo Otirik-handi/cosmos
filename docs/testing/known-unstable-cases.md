@@ -31,6 +31,10 @@
 | 2026-09-18 Task 31 worktree：同一 build 整套连跑 2 次（`bun run test:browser`） | 第 1 轮 **22/22 通过**；第 2 轮 **21/22**，失败在 `:186`「拆分场景」，同 build 单跑该用例 **1 passed (3.2s)** |
 | 2026-09-20 fork CI run 35502486397（`master` `263cc3c`，改动只有 `ERRATA.md` 一行） | Browser E2E **22 passed / 1 failed**，失败在 `:103`「证据关系反向视图」`toBeVisible` 10 秒超时；同 run 的 `ingest.spec.ts` 也三次（原始 + retry1 + retry2）报 `toBeFocused` 超时。**单独重跑 Browser E2E job 后全绿**（24 passed），与该 job 前一次运行（`fc7867f`）全绿一致 |
 | 2026-09-22 Task 33 合并后（`master` `deeab04`，含首屏计划加载改到 effect 内）同一 build 整套连跑 3 次 | 第 1 轮 **27/28**（失败 `:103`）；第 2 轮 **27/28**（失败**漂移**到 `collection-plan-multi.spec.ts:63`，等「录入任务已排队」15 秒超时）；第 3 轮 **28/28 通过**。两个失败 spec 单跑分别 **8/8** 与 **1/1** 通过 |
+| 2026-09-23 Task 22/23 EXT-006 分支（`feat/t22-ext-006-login-lifecycle`，整套 33 例）修复侧栏溢出**前**连跑 2 次 | 第 1 轮 **32/33**：失败 `webhook-entry.spec.ts`——点击计划行的「生成入口」被拦截；第 2 轮 **31/33**：`webhook-entry` + `:103` |
+| 同分支修复侧栏溢出**后**整套跑 2 次 | 第 1 轮 **33/33 通过**（2.3 分钟）；第 2 轮（同分支改了 API 公开 config 投影后 `bun run test:browser`）**31/33**：`ingest.spec.ts:119` 的 `toBeFocused` + `:103`——与 2026-09-20 那次 CI 观察是同一对 |
+
+**2026-09-23 补充（EXT-006 分支）**：`webhook-entry.spec.ts` 那次失败已查明**不是**本条的抖动，而是一个确定性布局缺陷——固定宽度侧栏（`lg` 300px／`xl` 330px）里的连接面板不收缩（`min-content` 实测 398px，授权范围写长 JSON 时 1015px），画到右侧计划列表上挡住按钮。修法是把 `min-w-0` 铺到那条 flex/grid 链上（提交 `3ce3322`）；修后两次整套运行都没再出现该失败。本条仍只覆盖 `:103` 与 `ingest.spec.ts` 的 `toBeFocused`——这两条在同一构建上单跑都通过、只在整套里出现，机制仍未查清，**不要用重跑结案**。
 
 **2026-09-17 关于 `:539` 的补充观察（Task 26 期间）**：失败现场 `role=status` 显示「搜索到 0 条结果。」，页面上却仍有 1 个 `article`（内容是刚录入来源的条目），于是 `expect(page.locator("article")).toHaveCount(0)` 10 秒内 23 次都读到 1。该 `article` 只能是页面级 `FeedBrowser` 渲染的（全仓只有它渲染 `<article>`；看板阅读流区块用 `<ul><li><button>`），而 `onSearch` 在同一次状态更新里同时写 `activeSearch`、`feed` 与提示语，所以「提示语说 0 条、列表还留着上一次的内容」在代码上无法解释——**这是一个未查清的观察，不排除应用存在搜索状态不一致**。没有改这条断言，也没有用重跑结案。
 

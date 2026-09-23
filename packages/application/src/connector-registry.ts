@@ -33,6 +33,18 @@ export class ConnectorRegistry {
         return connector;
     }
 
+    /**
+     * 按 `connectorId` 解析（Proposal connection-login-lifecycle-v1 决定 2）：连接登录探测
+     * 是**连接**的事实，没有来源可依据，所以它不能走 `resolve(source)`。
+     */
+    resolveByConnectorId(connectorId: string): IngestConnector {
+        const connector = this.connectors.get(connectorId);
+        if (!connector) {
+            throw new Error(`Unsupported connector: ${connectorId}`);
+        }
+        return connector;
+    }
+
     validate(source: SourceExecutionSnapshot): IngestConnector {
         const connector = this.resolve(source);
         connector.validate(source);

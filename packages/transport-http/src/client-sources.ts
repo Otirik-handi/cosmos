@@ -14,6 +14,7 @@ import {
     updateCollectionPlanCommandSchema,
     sourceConfigProbeCommandSchema,
     sourceConfigProbeJobSnapshotSchema,
+    connectionProbeJobSnapshotSchema,
     sourceSnapshotSchema,
     connectionInstanceSchema,
     createConnectionCommandSchema,
@@ -29,6 +30,7 @@ import {
     type SourceConfigProbeJobSnapshot,
     type SourceSnapshot,
     type ConnectionInstance,
+    type ConnectionProbeJobSnapshot,
     type CollectionPlanSnapshot,
     type CollectionPlanWebhookEntry,
     type CreateConnectionCommand,
@@ -162,6 +164,24 @@ export class SourcesClient extends PlatformClient {
             method: "PATCH",
             body: payload,
             schema: connectionInstanceSchema,
+        });
+    }
+
+    /** 发起一次连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）；结果由 Job 携带。 */
+    async createConnectionProbe(
+        connectionId: string,
+        idempotencyKey?: string,
+    ): Promise<ConnectionProbeJobSnapshot> {
+        return this.request(`/api/v1/connections/${encodeURIComponent(connectionId)}/probes`, {
+            method: "POST",
+            headers: idempotencyKey ? { "idempotency-key": idempotencyKey } : undefined,
+            schema: connectionProbeJobSnapshotSchema,
+        });
+    }
+
+    async getConnectionProbe(jobId: string): Promise<ConnectionProbeJobSnapshot> {
+        return this.request(`/api/v1/connection-probes/${encodeURIComponent(jobId)}`, {
+            schema: connectionProbeJobSnapshotSchema,
         });
     }
 

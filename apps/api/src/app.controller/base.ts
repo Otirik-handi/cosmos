@@ -55,6 +55,16 @@ export class AppControllerBase {
         }
     }
 
+    /**
+     * 连接登录探测能不能发起由 manifest 的 `auth.probeSupported` 声明决定（Proposal
+     * connection-login-lifecycle-v1 决定 2）：宿主不硬编码 connectorId。
+     */
+    protected supportsAuthProbe(connectorId: string): boolean {
+        return (this.catalog?.listSourceDefinitions() ?? []).some(
+            (definition) => definition.connectorId === connectorId && definition.auth.probeSupported,
+        );
+    }
+
     protected requireWorkflowStore(): WorkflowHostStore {
         if (!this.workflowStore) {
             throw new ConflictException({

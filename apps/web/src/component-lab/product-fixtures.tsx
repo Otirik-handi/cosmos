@@ -60,9 +60,11 @@ const labConnections: readonly ConnectionInstance[] = [{
     connectorId: "fixture-rss",
     account: "fixture@example.test",
     scopeJson: null,
+    configJson: null,
     status: "active",
     secretRef: null,
     lastError: null,
+    lastCheckedAt: null,
     createdAt: fixtureTimestamp,
     updatedAt: fixtureTimestamp,
 }];
@@ -142,11 +144,12 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
             additionalProperties: false,
         },
     },
-    auth: {kind: "none", label: null, secretRefRequired: false},
+    auth: {kind: "none", label: null, secretRefRequired: false, probeSupported: false},
     operations: [{
         operationId: "fetch",
         inputSchema: {id: "source.rss.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.input@1"}},
         outputSchema: {id: "source.rss.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.output@1"}},
+        configurationSchema: null,
         externalKey: "url",
         discoveryContext: "",
         media: "download",
@@ -156,7 +159,8 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
 
 /**
  * 合成 Bilibili 定义：`mode` 只有 `enum` 没有 `type`，是表单必须处理的那种属性；
- * 认证是 external（OpenCLI 登录态），用来覆盖「认证提示」分支。
+ * 认证是 external（OpenCLI 登录态），用来覆盖「认证提示」分支。第二个 operation
+ * 自带配置 schema（EXT-006），用来覆盖「操作选择器 + 按操作渲染字段」分支。
  */
 const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
     id: "bilibili",
@@ -168,7 +172,7 @@ const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
     description: "Read Bilibili data through a trusted OpenCLI profile.",
     manifestHash: {algorithm: "builtin", value: "builtin:source.bilibili@1"},
     status: "enabled",
-    operationIds: ["fetch"],
+    operationIds: ["fetch", "search"],
     capabilities: ["source:read", "cursor", "external:opencli"],
     configurationSchema: {
         id: "source.bilibili.config@1",
@@ -178,23 +182,48 @@ const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
             type: "object",
             properties: {
                 mode: {enum: ["hot", "feed"]},
-                profile: {type: "string"},
                 limit: {type: "integer", minimum: 1, maximum: 100},
             },
             required: ["mode"],
             additionalProperties: false,
         },
     },
-    auth: {kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false},
-    operations: [{
-        operationId: "fetch",
-        inputSchema: {id: "source.bilibili.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.input@1"}},
-        outputSchema: {id: "source.bilibili.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.output@1"}},
-        externalKey: "url",
-        discoveryContext: "",
-        media: "metadata_only",
-        stateStoreNamespace: "{id}",
-    }],
+    auth: {kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false, probeSupported: true},
+    operations: [
+        {
+            operationId: "fetch",
+            inputSchema: {id: "source.bilibili.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.input@1"}},
+            outputSchema: {id: "source.bilibili.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.output@1"}},
+            configurationSchema: null,
+            externalKey: "url",
+            discoveryContext: "",
+            media: "metadata_only",
+            stateStoreNamespace: "{id}",
+        },
+        {
+            operationId: "search",
+            inputSchema: {id: "source.bilibili.search.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.search.input@1"}},
+            outputSchema: {id: "source.bilibili.search.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.search.output@1"}},
+            configurationSchema: {
+                id: "source.bilibili.search.config@1",
+                version: 1,
+                hash: {algorithm: "builtin", value: "source.bilibili.search.config@1"},
+                schema: {
+                    type: "object",
+                    properties: {
+                        query: {type: "string"},
+                        limit: {type: "integer", minimum: 1, maximum: 100},
+                    },
+                    required: ["query"],
+                    additionalProperties: false,
+                },
+            },
+            externalKey: "url",
+            discoveryContext: "search",
+            media: "metadata_only",
+            stateStoreNamespace: null,
+        },
+    ],
 };
 
 const labProbeResult: SourceConfigProbeResult = {
@@ -215,7 +244,9 @@ export function renderSourceFormLab(props: LabProps) {
 function SourceFormLabFixture({props}: {props: LabProps}) {
     const name = textProp(props, "name", "Cosmos RSS");
     const feedUrl = textProp(props, "feedUrl", "https://example.com/feed.xml");
+    const manifests = [labSourceDefinitionManifest, labBilibiliDefinitionManifest];
     const [definitionRef, setDefinitionRef] = useState(labSourceDefinitionManifest.ref);
+    const [operationId, setOperationId] = useState(labSourceDefinitionManifest.operationIds[0] ?? "fetch");
     const definitionState = optionProp<SourceDefinitionState["status"]>(
         props,
         "definitionState",
@@ -242,8 +273,21 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
         defaultValues: values,
         values,
     });
+    // 与产品 hook 同口径（EXT-006）：换定义/换操作都丢掉旧配置字段。
+    const resetConfig = (): void => {
+        form.setValue("config", {});
+    };
+    const selectDefinition = (ref: string): void => {
+        setDefinitionRef(ref);
+        setOperationId(manifests.find((item) => item.ref === ref)?.operationIds[0] ?? "fetch");
+        resetConfig();
+    };
+    const selectOperation = (next: string): void => {
+        setOperationId(next);
+        resetConfig();
+    };
     const resolvedDefinitionState: SourceDefinitionState = definitionState === "ready"
-        ? {status: "ready", manifests: [labSourceDefinitionManifest, labBilibiliDefinitionManifest]}
+        ? {status: "ready", manifests}
         : definitionState === "error"
         ? {status: "error", message: "无法连接服务（HTTP 503）。"}
         : {status: "loading"};
@@ -257,7 +301,9 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
             form={form}
             definitionState={resolvedDefinitionState}
             selectedDefinitionRef={definitionRef}
-            onSelectDefinition={setDefinitionRef}
+            onSelectDefinition={selectDefinition}
+            selectedOperationId={operationId}
+            onSelectOperation={selectOperation}
             onSubmit={(event) => event.preventDefault()}
             onTest={() => undefined}
             probeState={resolvedProbeState}
@@ -419,9 +465,11 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         connectorId: "bilibili",
         account: "example",
         scopeJson: '{"read":true,"comment":false}',
+        configJson: '{"profile":"chrome-main"}',
         status: "active",
         secretRef: "secret:connection-bilibili",
         lastError: null,
+        lastCheckedAt: "2026-09-10T08:05:00.000Z",
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -431,9 +479,11 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         connectorId: "generic",
         account: null,
         scopeJson: null,
+        configJson: null,
         status: "error",
         secretRef: null,
         lastError: "登录态已过期",
+        lastCheckedAt: null,
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -452,12 +502,63 @@ const connectionLabClient = {
         ...(input.status === undefined ? {} : { status: input.status }),
         ...(input.lastError === undefined ? {} : { lastError: input.lastError }),
     }),
+    // 登录探测按声明出现（Proposal connection-login-lifecycle-v1 决定 2）：夹具只声明
+    // bilibili 支持探测，探测本身返回一条「已登录」的固定结论。
+    listSourceDefinitions: async () => [
+        {
+            id: "bilibili",
+            version: 1,
+            ref: "source.bilibili@1",
+            provider: "cosmos",
+            connectorId: "bilibili",
+            displayName: "Bilibili",
+            description: null,
+            manifestHash: { algorithm: "builtin", value: "builtin:source.bilibili@1" },
+            status: "enabled",
+            operationIds: ["fetch"],
+            capabilities: ["source:read"],
+            configurationSchema: { id: "c", version: 1, hash: { algorithm: "builtin", value: "c" } },
+            auth: { kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false, probeSupported: true },
+            operations: [],
+        },
+    ],
+    createConnectionProbe: async () => connectionProbeJob("succeeded"),
+    getConnectionProbe: async () => connectionProbeJob("succeeded"),
 } as unknown as HttpCosmosClient;
+
+/** 连接探测 Job 的夹具：终态 + 一条「已登录」结论。 */
+function connectionProbeJob(status: "queued" | "succeeded") {
+    return {
+        id: "job-connection-probe",
+        kind: "connection-probe" as const,
+        sourceId: null,
+        runId: null,
+        status,
+        attempts: 1,
+        maxAttempts: 3,
+        errorCode: null,
+        error: null,
+        createdAt: fixtureTimestamp,
+        updatedAt: fixtureTimestamp,
+        result: status === "succeeded"
+            ? {
+                connectionId: "connection-bilibili",
+                outcome: "active" as const,
+                account: "example",
+                reason: null,
+                checkedAt: fixtureTimestamp,
+            }
+            : null,
+    };
+}
 
 export function renderConnectionPanelLab(props: LabProps) {
     const state = optionProp(props, "state", "populated", ["populated", "empty"] as const);
     const client = state === "empty"
-        ? ({ listConnections: async () => [] } as unknown as HttpCosmosClient)
+        ? ({
+            listConnections: async () => [],
+            listSourceDefinitions: async () => [],
+        } as unknown as HttpCosmosClient)
         : connectionLabClient;
     return <ConnectionPanel client={client} />;
 }
