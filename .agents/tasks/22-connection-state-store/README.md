@@ -146,7 +146,8 @@ Non-goals（见 Proposal / ADR-0017）：
 1. **Web**：`ConnectionPanel` 加三块——建连接表单的「授权范围」输入（本地 `JSON.parse` 校验、提交前 `JSON.stringify` 规范化）、每行 `dl` 里的「授权范围／失效原因」（空值显示「未记录」，范围按 `键: 值` 渲染）、行内动作「标记失效」（内联原因输入 + `updateConnection({status:"error", lastError})`）与「恢复可用」（`{status:"active", lastError:null}`）；动作入口按状态二选一显示。
 2. **组件实验室**：连接夹具的示例连接补授权范围、新增一条失效连接（状态 `error` + 原因），夹具客户端补 `updateConnection` 桩。
 3. **测试**：`e2e/component-lab/connection-panel.spec.ts` 两例（两行渲染 + 内联输入的启用/收起；非法 JSON 在本地被拦下且表单不清空）；`e2e/browser/connection-visibility.spec.ts` 一例（真实栈：建连接记录范围 → 回显 → 标记失效 → 原因与「错误」徽标 → 恢复可用 → 原因清空 → 删除连接）。
-4. **文档**：Task 记录、`docs/spec/interfaces/0005-web-client.md`、`Phase-2-UNDO.md`、`PROJECT-STATUS.md`、`ERRATA.md`（AUT-009 按四条验收条件收口）。
+4. **文档**：Task 记录、`docs/spec/interfaces/0005-web-client.md`、`Phase-2-UNDO.md`、`PROJECT-STATUS.md`、`part-07-1.md` 的 AUT-009 注记；随后按维护者要求补勘误台账（5. 见下）。
+5. **勘误台账归档与收口登记（2026-09-23，docs-only）**：`ERRATA.md` 已到 8,911/9,000 token，加不进新行，因此按 [`oversized-doc-splitting-v1`](../../../docs/proposals/oversized-doc-splitting-v1.md) §4.3／§4.5 做**滚动归档**——前 20 条（2026-09-15 ~ 2026-09-20）移入 `docs/requirements/0002-product-requirements/ERRATA/history-2026-09-15-20.md`（同目录同名子文件夹，封口后只读），主文档保留最近 5 条 + 分册索引表。搬迁**只搬位置**：除给 31 个相对链接各加一级 `../` 前缀外不改写内容；归档后主文档 27.5 KB → **11.9 KB（约 1,979 token）**，分册 20.9 KB（约 3,645 token），两册都在健康区。同批补四行口径：**LIB-004**（批注核心 Phase 2 已交付，Artifact 目标与片段字符级锚点改标 Phase 3）、**AUT-009**、**AUT-010**、**EXT-007** 的交付状态。维护者要求这三条收口行**逐条复核验收条件后**再写，复核结论落在各行里（AUT-010 的两处如实说明：来源操作由「计划与目标一对一」承接、迁移第 4 步单独排期；EXT-007 的「校验能力／版本／预算／恢复语义」四半句各自对应到代码锚点；LIB-004 说明 `quote` 只是文本快照、不是可定位的字符级锚点）。
 
 ## Verification / Gate
 
