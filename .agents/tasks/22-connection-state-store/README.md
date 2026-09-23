@@ -85,7 +85,7 @@ Non-goals（见 Proposal / ADR-0017）：
 - 依赖：切片 1（`ConnectorState`）、Task 33（计划 id 与命名空间按计划解析）。
 - 受影响合同（切片 2）：contracts（清单／导出信封／导入命令与结果／导出范围查询）、application（`ConnectorStateStorePort.registerNamespace` + 三个仓储方法 + 一个域错误）、storage（新表与 migration + 三个仓储方法 + `PrismaConnectorStateStore.registerNamespace`）、API（三条路由）、transport（三个客户端方法）、Web（`StoragePanel`）。
 - 验证层级：focused（contracts/storage/application/api/transport/web）→ Node 进程 E2E → 全量门禁。
-- 生命周期阶段（切片 3）：**在 worktree `.worktree/connection-visibility` / 分支 `feat/t22-connection-visibility` 上实现**，停在「实现完成、验证已跑、未合并」。
+- 生命周期阶段（切片 3）：**已完成、验证、`--no-ff` 合并 `2cfe379` 并推送**；worktree `.worktree/connection-visibility` 与分支 `feat/t22-connection-visibility` 已清理。
 - 连贯目标（切片 3）：让 AUT-009 的「用户能看到授权范围与失效原因」成立——不只是显示，还要有内容来源。
 - 可观察验收（切片 3，≤3 条）：
   1. 建连接时记录的授权范围在连接行上按可读形式回显（`read: true · comment: false`），非法 JSON 在本地被拦下且不清空表单；
@@ -179,6 +179,7 @@ Non-goals（见 Proposal / ADR-0017）：
 - 组件实验室 E2E：`bunx playwright test --config playwright.component-lab.config.ts e2e/component-lab/connection-panel.spec.ts` → 2 passed（两行渲染与内联输入的启用/收起；非法 JSON 在本地拦下且表单不清空）。**注意**：跑实验室 dev server 前必须先 `bun run build:packages`，否则 Next 报 `Cannot find module '@cosmos/logging'`。
 - 浏览器产品 E2E：`bun run build` 后 `bunx playwright test --config playwright.config.ts e2e/browser/connection-visibility.spec.ts` → 1 passed（真实栈：建连接记录授权范围 → 行上按 `read: true · comment: false` 回显 → 标记失效 → 「错误」徽标 + 原因 → 恢复可用 → 原因回到「未记录」→ 删除用例连接）。
 - 未运行：全量浏览器 E2E（其余 spec）、`test:real:*`、Windows smoke、Docker、发布部署。
+- 合并后复跑（2026-09-23，主工作区，合并提交 `2cfe379`）：`bun run typecheck` 0、`bun run test` 122 文件／698 用例、`docs:check` 757 文件 0 失败、size 门禁 PASS、`git diff --check` 干净。本片**没有 schema 变更**，所以不需要像切片 2 那样先 `bun run db:generate`。
 
 ## Follow-ups
 
