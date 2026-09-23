@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type JobSnapshot, type SourceConfigProbeCommand } from "@cosmos/contracts";
+import { type IngestTriggerKind, type JobSnapshot, type SourceConfigProbeCommand } from "@cosmos/contracts";
 import { type CosmosRepository, type JobLease } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { appendDomainEvent, assertJobLease, resolvePlanId } from "./repository-internals.js";
@@ -8,7 +8,7 @@ import { PrismaCosmosRepositorySources } from "./sources.js";
 export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
     async createRun(input: {
         sourceId: string;
-        triggerKind: "manual" | "schedule";
+        triggerKind: IngestTriggerKind;
     }): Promise<Awaited<ReturnType<CosmosRepository["getRun"]>> extends infer T
         ? Exclude<T, null>
         : never> {
@@ -68,7 +68,7 @@ export class PrismaCosmosRepositoryRuns extends PrismaCosmosRepositorySources {
 
     async createQueuedRun(input: {
         sourceId: string;
-        triggerKind: "manual" | "schedule";
+        triggerKind: IngestTriggerKind;
         idempotencyKey?: string;
     }) {
         try {

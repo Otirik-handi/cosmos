@@ -24,6 +24,8 @@ POST      /connections/:connectionId/removals          deleteConnection
 GET       /collection-plans                            listCollectionPlans
 GET       /collection-plans/:planId                    collectionPlan
 PATCH     /collection-plans/:planId                    updateCollectionPlan
+POST      /collection-plans/:planId/webhook-entry      rotateCollectionPlanWebhookEntry
+DELETE    /collection-plans/:planId/webhook-entry      revokeCollectionPlanWebhookEntry
 GET       /storage-stats                               storageStats
 GET       /backups                                     listBackups
 POST      /backups                                     createBackup

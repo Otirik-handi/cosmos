@@ -35,8 +35,10 @@ export {
 
 export {
     collectionPlanOverlapPolicySchema, collectionPlanSnapshotSchema,
+    collectionPlanWebhookEntryPath, collectionPlanWebhookEntrySchema,
     createCollectionPlanCommandSchema, updateCollectionPlanCommandSchema,
     type CollectionPlanOverlapPolicy, type CollectionPlanSnapshot,
+    type CollectionPlanWebhookEntry,
     type CreateCollectionPlanCommand, type UpdateCollectionPlanCommand,
 } from "./collection-plan.js";
 
@@ -171,7 +173,8 @@ export {
 export {
     actionDefinitionSchema, actionDescriptorSchema, actionErrorCodeSchema,
     actionExecutionSchema, actionKindSchema, actionManifestSchema, actionRefSchema,
-    blobRefSchema, executionPlacementSchema, ingestTriggerKindSchema, libraryIngestInputSchema,
+    blobRefSchema, executionPlacementSchema, ingestTriggerEvidenceSchema,
+    ingestTriggerKindSchema, libraryIngestInputSchema,
     libraryIngestOutputSchema, mediaRetryApplyInputSchema, mediaRetryApplyOutputSchema,
     mediaRetryFetchInputSchema, mediaRetryFetchOutputSchema, mediaRetryOutcomeSchema,
     mediaRetryPolicySnapshotSchema, normalizedAssetInputSchema, normalizedIngestItemSchema,
@@ -179,7 +182,8 @@ export {
     sourceCheckpointOutputSchema, sourceFetchInputSchema, sourceFetchOutputSchema,
     type ActionDefinition, type ActionDescriptor, type ActionErrorCode, type ActionExecution,
     type ActionKind, type ActionManifest, type ActionRef, type BlobRef,
-    type ExecutionPlacement, type IngestTriggerKind, type JsonValue, type LibraryIngestInput,
+    type ExecutionPlacement, type IngestTriggerEvidence, type IngestTriggerKind, type JsonValue,
+    type LibraryIngestInput,
     type LibraryIngestOutput, type MediaRetryApplyInput, type MediaRetryApplyOutput,
     type MediaRetryFetchInput, type MediaRetryFetchOutput, type MediaRetryOutcomeContract,
     type MediaRetryPolicySnapshot, type NormalizedAssetInputContract,

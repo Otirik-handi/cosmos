@@ -9,6 +9,7 @@ import {
 } from "@cosmos/storage-prisma";
 
 import { AppController } from "./app.controller.js";
+import { HookController } from "./hook.controller.js";
 import { SourceProbeService } from "./source-probe.service.js";
 
 export const cosmosLogger = createLogger({
@@ -36,7 +37,7 @@ export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService(
 });
 
 @Module({
-    controllers: [AppController],
+    controllers: [AppController, HookController],
     providers: [
         {
             provide: "COSMOS_PRODUCT_PORT",

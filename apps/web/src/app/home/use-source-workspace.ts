@@ -8,6 +8,7 @@ import {
 import {
     createSourceCommandSchema,
     type CollectionPlanSnapshot,
+    type CollectionPlanWebhookEntry,
     type ConnectionInstance,
     type HealthResponse,
     type MediaCleanupReport,
@@ -261,6 +262,35 @@ export function useSourceWorkspace(
     };
 
     /**
+     * Webhook 入口（ADR-0024）：生成/轮换返回**唯一一次**明文凭证，之后读投影只回答
+     * 「已配置」；轮换会立即作废旧凭证，所以刷新计划列表让入口地址同步。
+     */
+    const rotateWebhookEntry = async (plan: CollectionPlanSnapshot): Promise<CollectionPlanWebhookEntry> => {
+        ctx.setError(null);
+        try {
+            const entry = await client.rotateCollectionPlanWebhookEntry(plan.id);
+            ctx.setNotice(`已为 ${plan.name} 生成 Webhook 入口；旧凭证（如果有）已立即失效。`);
+            await loadPlans();
+            return entry;
+        } catch (caught) {
+            ctx.setError(readError(caught));
+            throw caught;
+        }
+    };
+
+    const revokeWebhookEntry = async (plan: CollectionPlanSnapshot): Promise<void> => {
+        ctx.setError(null);
+        try {
+            await client.revokeCollectionPlanWebhookEntry(plan.id);
+            ctx.setNotice(`已撤销 ${plan.name} 的 Webhook 入口；需要重新生成才能再用。`);
+            await loadPlans();
+        } catch (caught) {
+            ctx.setError(readError(caught));
+            throw caught;
+        }
+    };
+
+    /**
      * 保留期清理是显式的维护 Run（ADR-0015）：预览用 dryRun，确认才删除字节。
      * Worker 异步执行，这里轮询到终态再回报结果。
      */
@@ -397,6 +427,8 @@ export function useSourceWorkspace(
         onCreateSource,
         onTestSourceConfig,
         probeState,
+        revokeWebhookEntry,
+        rotateWebhookEntry,
         runMediaCleanup,
         runRefreshToken,
         runPlan,

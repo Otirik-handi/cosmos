@@ -297,7 +297,7 @@ export function renderStatusSummaryLab(props: LabProps) {
 }
 
 export function renderCollectionPlanListLab(props: LabProps) {
-    const state = optionProp(props, "state", "configured", ["configured", "untimed", "empty", "disabled", "media-policy"] as const);
+    const state = optionProp(props, "state", "configured", ["configured", "untimed", "empty", "disabled", "media-policy", "webhook"] as const);
     const grouped = booleanProp(props, "grouped", false);
     const plans: readonly CollectionPlanSnapshot[] = state === "empty"
         ? []
@@ -307,7 +307,6 @@ export function renderCollectionPlanListLab(props: LabProps) {
             sourceId: "source-fixture",
             sourceRevisionId: "source-fixture:1",
             connectionId: grouped ? "connection-fixture" : null,
-            triggerBindingId: null,
             mediaPolicy: state === "media-policy"
                 ? { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 }
                 : null,
@@ -315,6 +314,9 @@ export function renderCollectionPlanListLab(props: LabProps) {
             enabled: state !== "disabled" && booleanProp(props, "enabled", true),
             revisionId: "plan:source-fixture:1",
             scheduleIntervalMs: state === "untimed" ? null : 1_800_000,
+            webhook: state === "webhook"
+                ? { entryPath: "/hooks/collection-plans/fixture-entry", credentialConfigured: true }
+                : null,
             lastRunAt: null,
             lastError: state === "disabled" ? "Fixture plan disabled" : null,
             createdAt: fixtureTimestamp,
@@ -325,6 +327,12 @@ export function renderCollectionPlanListLab(props: LabProps) {
             onRun={async () => undefined}
             onToggleActivation={async () => undefined}
             onSaveMediaPolicy={async () => undefined}
+            onRotateWebhookEntry={async () => ({
+                planId: "plan:source-fixture",
+                entryPath: "/hooks/collection-plans/fixture-entry",
+                credential: "fixture-credential-shown-once",
+            })}
+            onRevokeWebhookEntry={async () => undefined}
             plans={plans}
             connections={grouped ? labConnections : []}
         />

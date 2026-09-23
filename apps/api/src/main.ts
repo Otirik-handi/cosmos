@@ -1,5 +1,6 @@
 import "reflect-metadata";
 
+import { RequestMethod } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 
 import {
@@ -7,6 +8,7 @@ import {
     cosmosLogger,
     cosmosRepository,
 } from "./app.module.js";
+import { WEBHOOK_ENTRY_ROUTE_PATH } from "./hook.controller.js";
 import {
     RequestExceptionFilter,
     requestContextMiddleware,
@@ -36,7 +38,11 @@ async function bootstrap(): Promise<void> {
         app.enableCors({
             origin: process.env.COSMOS_ALLOWED_ORIGIN ?? true,
         });
-        app.setGlobalPrefix("api/v1");
+        // Webhook 入口不在产品 API 的版本前缀下（ADR-0024）：调用方是外部自动化，不是
+        // 产品客户端，所以它不带 /api/v1 的版本语义。路径取自入口控制器自己的常量。
+        app.setGlobalPrefix("api/v1", {
+            exclude: [{ path: WEBHOOK_ENTRY_ROUTE_PATH, method: RequestMethod.POST }],
+        });
         app.useGlobalInterceptors(new RequestLoggingInterceptor(cosmosLogger));
         app.useGlobalFilters(new RequestExceptionFilter(cosmosLogger));
 

@@ -39,6 +39,11 @@ type Acceptance =
     | { mode: "dual-plan"; environment: NodeJS.ProcessEnv; profile: string };
 
 const kind = process.argv[2];
+/**
+ * `--via-entry`（切片 7）：不手动触发，而是把 Webhook 入口当成「用户自己的自动化」调用它。
+ * 这正是 ADR-0024 决定 6 的 v1 消费者——验收它跑得通真实来源，而不是只跑通假数据。
+ */
+const viaEntry = process.argv.includes("--via-entry");
 const acceptance = resolveAcceptance(kind);
 const stack = await createIsolatedStackRoot(`real-${kind ?? "source"}`);
 let api: ManagedProcess | undefined;
@@ -100,6 +105,7 @@ try {
             kind,
             apiPort,
             command: acceptance.command,
+            viaEntry,
         });
 
     const records = await readStructuredLogs(stack.logRoot);
@@ -127,8 +133,10 @@ async function runSingleSourceAcceptance(input: {
     kind: string | undefined;
     apiPort: number;
     command: SourceCommand;
+    viaEntry: boolean;
 }): Promise<string> {
     const apiBaseUrl = `http://127.0.0.1:${input.apiPort}/api/v1`;
+    const apiOrigin = `http://127.0.0.1:${input.apiPort}`;
     const created = expectJsonObject(
         await requestJson(`${apiBaseUrl}/sources`, {
             method: "POST",
@@ -139,10 +147,11 @@ async function runSingleSourceAcceptance(input: {
         `Real ${input.kind} source creation`,
     );
     const sourceId = readString(created, "id");
+    const planId = readString(created, "planId");
     // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
     expectJsonObject(
         await requestJson(
-            `${apiBaseUrl}/collection-plans/${encodeURIComponent(readString(created, "planId"))}`,
+            `${apiBaseUrl}/collection-plans/${encodeURIComponent(planId)}`,
             {
                 method: "PATCH",
                 headers: { "content-type": "application/json" },
@@ -155,23 +164,76 @@ async function runSingleSourceAcceptance(input: {
         200,
         `Real ${input.kind} plan activation`,
     );
-    const queued = expectJsonObject(
-        await requestJson(
-            `${apiBaseUrl}/sources/${sourceId}/runs`,
-            {
-                method: "POST",
-                headers: { "idempotency-key": `real-${input.kind}-${Date.now()}` },
-            },
-        ),
-        201,
-        `Real ${input.kind} Run enqueue`,
-    );
-    const runId = readString(queued, "id");
-    const label = `real ${input.kind}`;
+    const triggered = input.viaEntry
+        ? await triggerThroughEntry(apiOrigin, apiBaseUrl, planId)
+        : {
+            run: expectJsonObject(
+                await requestJson(
+                    `${apiBaseUrl}/sources/${sourceId}/runs`,
+                    {
+                        method: "POST",
+                        headers: { "idempotency-key": `real-${input.kind}-${Date.now()}` },
+                    },
+                ),
+                201,
+                `Real ${input.kind} Run enqueue`,
+            ),
+            eventId: null as string | null,
+        };
+    const runId = readString(triggered.run, "id");
+    const label = input.viaEntry ? `real ${input.kind} via webhook entry` : `real ${input.kind}`;
     const terminal = await waitForTerminalRun(apiBaseUrl, runId, label);
     assertRunSucceeded(label, runId, terminal);
     const itemCount = boundedItemCount(label, terminal);
+    if (triggered.eventId !== null) {
+        // 触发证据必须能回答「谁触发的、哪一次」：入口触发的 Run 少了它就不算闭合 AUT-004。
+        const detail = expectJsonObject(
+            await requestJson(`${apiBaseUrl}/runs/${encodeURIComponent(runId)}`),
+            200,
+            `${label} Run detail`,
+        );
+        if (readString(detail, "triggerKind") !== "webhook") {
+            throw new Error(`${label}: expected triggerKind=webhook, got ${String(detail.triggerKind)}.`);
+        }
+        const evidence = detail.triggerEvidence;
+        if (!isRecord(evidence) || evidence.externalEventId !== triggered.eventId) {
+            throw new Error(`${label}: trigger evidence is missing or does not match the delivered event.`);
+        }
+        return `Real ${input.kind} acceptance through the webhook entry passed: Run ${runId}, bounded item count ${itemCount}, event ${triggered.eventId}.`;
+    }
     return `Real ${input.kind} acceptance passed: Run ${runId}, bounded item count ${itemCount}.`;
+}
+
+/**
+ * 切片 7 的消费者形态：生成入口 → 用凭证与事件标识调用它（模拟用户的脚本/定时任务）→
+ * 拿回 queued Run。入口不在 `/api/v1` 下，所以这里用 API 的根地址。
+ */
+async function triggerThroughEntry(
+    apiOrigin: string,
+    apiBaseUrl: string,
+    planId: string,
+): Promise<{ run: Record<string, unknown>; eventId: string }> {
+    const entry = expectJsonObject(
+        await requestJson(
+            `${apiBaseUrl}/collection-plans/${encodeURIComponent(planId)}/webhook-entry`,
+            { method: "POST" },
+        ),
+        201,
+        "Webhook entry creation",
+    );
+    const eventId = `real-entry-${Date.now()}`;
+    const accepted = expectJsonObject(
+        await requestJson(`${apiOrigin}${readString(entry, "entryPath")}`, {
+            method: "POST",
+            headers: {
+                "x-cosmos-credential": readString(entry, "credential"),
+                "x-cosmos-event-id": eventId,
+            },
+        }),
+        202,
+        "Webhook entry acceptance",
+    );
+    return { run: accepted, eventId };
 }
 
 function resolveAcceptance(value: string | undefined): Acceptance {

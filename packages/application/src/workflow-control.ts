@@ -1,8 +1,10 @@
 import { z } from "zod";
 
 import {
+    ingestTriggerEvidenceSchema,
     ingestTriggerKindSchema,
     sourceExecutionSnapshotSchema,
+    type IngestTriggerEvidence,
     type IngestTriggerKind,
 } from "@cosmos/contracts";
 import {
@@ -29,6 +31,18 @@ export const ingestWorkflowInputSnapshotSchema = z.object({
     cursor: z.string().nullable(),
     checkpointRevision: z.number().int().nonnegative(),
     triggerKind: ingestTriggerKindSchema,
+    /** 触发原因（AUT-004）。manual/schedule 的既有快照没有这个键。 */
+    triggerEvidence: ingestTriggerEvidenceSchema.optional(),
+}).superRefine((snapshot, context) => {
+    // ADR-0024 决定 4：webhook 触发的验收条件就是「每次触发保存原因」，缺证据的
+    // webhook Run 无法审计，所以在入队边界就拒绝，而不是留到读投影时才发现。
+    if (snapshot.triggerKind === "webhook" && !snapshot.triggerEvidence) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["triggerEvidence"],
+            message: "A webhook-triggered Run requires trigger evidence.",
+        });
+    }
 });
 export type IngestWorkflowInputSnapshot = z.infer<typeof ingestWorkflowInputSnapshotSchema>;
 
@@ -50,10 +64,14 @@ export class IngestWorkflowControlService {
         sourceId: string;
         triggerKind: IngestTriggerKind;
         idempotencyKey: string;
+        triggerEvidence?: IngestTriggerEvidence;
     }): Promise<WorkflowEnvelope> {
         const sourceId = input.sourceId.trim();
         const idempotencyKey = input.idempotencyKey.trim();
         const triggerKind = ingestTriggerKindSchema.parse(input.triggerKind);
+        const triggerEvidence = input.triggerEvidence === undefined
+            ? undefined
+            : ingestTriggerEvidenceSchema.parse(input.triggerEvidence);
         if (!sourceId || !idempotencyKey) {
             throw new Error("Workflow ingest enqueue requires sourceId and Idempotency-Key.");
         }
@@ -80,6 +98,7 @@ export class IngestWorkflowControlService {
             cursor: checkpoint.cursor,
             checkpointRevision: checkpoint.revision,
             triggerKind,
+            ...(triggerEvidence ? { triggerEvidence } : {}),
         });
         return this.options.store.createWorkflowEnvelope({
             runId: this.ids.nextId("run"),
@@ -96,6 +115,7 @@ export class IngestWorkflowControlService {
                 sourceId,
                 triggerKind,
                 idempotencyKey,
+                ...(triggerEvidence ? { triggerEvidence } : {}),
             }),
             sourceId,
             planId,

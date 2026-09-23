@@ -1,5 +1,6 @@
 import {
     collectionPlanSnapshotSchema,
+    collectionPlanWebhookEntrySchema,
     createSourceCommandSchema,
     deleteSourceCommandSchema,
     jobSnapshotSchema,
@@ -29,6 +30,7 @@ import {
     type SourceSnapshot,
     type ConnectionInstance,
     type CollectionPlanSnapshot,
+    type CollectionPlanWebhookEntry,
     type CreateConnectionCommand,
     type UpdateCollectionPlanCommand,
     type UpdateConnectionCommand,
@@ -182,6 +184,25 @@ export class SourcesClient extends PlatformClient {
         return this.request(`/api/v1/collection-plans/${encodeURIComponent(planId)}`, {
             method: "PATCH",
             body: payload,
+            schema: collectionPlanSnapshotSchema,
+        });
+    }
+
+    /**
+     * 生成或轮换 Webhook 入口（ADR-0024）。返回的 `credential` 是**唯一一次**明文，
+     * 之后读投影只回答「已配置」；轮换会立即作废旧凭证。
+     */
+    async rotateCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanWebhookEntry> {
+        return this.request(`/api/v1/collection-plans/${encodeURIComponent(planId)}/webhook-entry`, {
+            method: "POST",
+            schema: collectionPlanWebhookEntrySchema,
+        });
+    }
+
+    /** 撤销 Webhook 入口：删除入口标识与凭证字节，返回撤销后的计划投影（幂等）。 */
+    async revokeCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanSnapshot> {
+        return this.request(`/api/v1/collection-plans/${encodeURIComponent(planId)}/webhook-entry`, {
+            method: "DELETE",
             schema: collectionPlanSnapshotSchema,
         });
     }

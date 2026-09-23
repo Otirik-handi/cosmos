@@ -31,6 +31,7 @@ type	CollectionItemCommand
 type	CollectionList
 type	CollectionPlanOverlapPolicy
 type	CollectionPlanSnapshot
+type	CollectionPlanWebhookEntry
 type	CollectionSummary
 type	ConnectionInstance
 type	ConnectionStatus
@@ -86,6 +87,7 @@ type	FixtureRssSourceConfig
 type	HealthResponse
 type	IngestCommand
 type	IngestResult
+type	IngestTriggerEvidence
 type	IngestTriggerKind
 type	JobKind
 type	JobSnapshot
@@ -264,6 +266,8 @@ value	collectionItemCommandSchema
 value	collectionListSchema
 value	collectionPlanOverlapPolicySchema
 value	collectionPlanSnapshotSchema
+value	collectionPlanWebhookEntryPath
+value	collectionPlanWebhookEntrySchema
 value	collectionSummarySchema
 value	connectionInstanceSchema
 value	connectionStatusSchema
@@ -319,6 +323,7 @@ value	healthResponseSchema
 value	idempotencyKeySchema
 value	ingestCommandSchema
 value	ingestResultSchema
+value	ingestTriggerEvidenceSchema
 value	ingestTriggerKindSchema
 value	jobKindSchema
 value	jobListSchema

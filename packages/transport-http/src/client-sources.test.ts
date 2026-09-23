@@ -68,12 +68,12 @@ describe("HttpCosmosClient 来源与运行", () => {
                     sourceId: "source-1",
                     sourceRevisionId: "source-1:1",
                     connectionId: null,
-                    triggerBindingId: null,
                     mediaPolicy: null,
                     overlapPolicy: "forbid",
                     enabled: true,
                     revisionId: "plan:source-1:2",
                     scheduleIntervalMs: null,
+                    webhook: null,
                     lastRunAt: null,
                     lastError: null,
                     createdAt: "2026-08-24T00:00:00.000Z",
@@ -97,6 +97,52 @@ describe("HttpCosmosClient 来源与运行", () => {
             enabled: true,
             baseRevisionId: "plan:source-1:1",
         });
+    });
+
+    it("rotates and revokes the webhook entry (ADR-0024)", async () => {
+        const requests: { url: string; init?: RequestInit }[] = [];
+        const entry = {
+            planId: "plan:source-1",
+            entryPath: "/hooks/collection-plans/tok_abc",
+            credential: "plaintext-once",
+        };
+        const revokedPlan = {
+            id: "plan:source-1",
+            name: "RSS",
+            sourceId: "source-1",
+            sourceRevisionId: "source-1:1",
+            connectionId: null,
+            mediaPolicy: null,
+            overlapPolicy: "forbid",
+            enabled: true,
+            revisionId: "plan:source-1:2",
+            scheduleIntervalMs: null,
+            webhook: null,
+            lastRunAt: null,
+            lastError: null,
+            createdAt: "2026-09-20T08:00:00.000Z",
+            updatedAt: "2026-09-20T08:00:00.000Z",
+        };
+        const client = new HttpCosmosClient({
+            baseUrl: "http://localhost:4310",
+            fetch: async (input, init) => {
+                requests.push({ url: String(input), init });
+                const body = init?.method === "DELETE" ? revokedPlan : entry;
+                return new Response(JSON.stringify(body), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            },
+        });
+
+        const rotated = await client.rotateCollectionPlanWebhookEntry("plan:source-1");
+        expect(rotated.credential).toBe("plaintext-once");
+        expect(requests[0]?.url).toBe("http://localhost:4310/api/v1/collection-plans/plan%3Asource-1/webhook-entry");
+        expect(requests[0]?.init).toMatchObject({ method: "POST" });
+
+        const revoked = await client.revokeCollectionPlanWebhookEntry("plan:source-1");
+        expect(revoked.webhook).toBeNull();
+        expect(requests[1]?.init).toMatchObject({ method: "DELETE" });
     });
 
     it("reads the source definition catalog page", async () => {
@@ -288,12 +334,12 @@ describe("HttpCosmosClient 来源与运行", () => {
             sourceId: "s1",
             sourceRevisionId: "s1:1",
             connectionId: "c1",
-            triggerBindingId: "t1",
             mediaPolicy: null,
             overlapPolicy: "forbid",
             enabled: true,
             revisionId: "plan:s1:1",
             scheduleIntervalMs: 1_800_000,
+            webhook: null,
             lastRunAt: null,
             lastError: null,
             createdAt: "2026-09-20T08:00:00.000Z",

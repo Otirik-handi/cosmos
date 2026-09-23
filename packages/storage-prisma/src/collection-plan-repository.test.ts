@@ -164,12 +164,12 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                     sourceId: source.id,
                     sourceRevisionId: source.revisionId,
                     connectionId: null,
-                    triggerBindingId: expect.any(String),
                     mediaPolicy: { images: "metadata_only" },
                     overlapPolicy: "forbid",
                     enabled: false,
                     revisionId: `plan:${source.id}:2`,
                     scheduleIntervalMs: 1_800_000,
+                    webhook: null,
                     lastRunAt: null,
                     lastError: null,
                     createdAt: expect.any(String),
@@ -262,6 +262,54 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             });
             expect(cleared.mediaPolicy).toBeNull();
             await expect(repository.getSource(source.id)).resolves.toMatchObject({ mediaPolicy: null });
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("一个计划可以同时持有 schedule 与 webhook 触发器，删调度不动 webhook", async () => {
+        const repository = await createRepository();
+        try {
+            const source = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "https://example.test/feed.xml" },
+                scheduleIntervalMs: 1_800_000,
+            });
+
+            // ADR-0025：webhook 触发器是独立的行，而不是把 schedule 那行的 kind 改掉——
+            // 后者会让这个计划的定时抓取静默停止。
+            const webhookBinding = {
+                sourceId: source.id,
+                planId: source.planId,
+                kind: "webhook",
+                configJson: JSON.stringify({}),
+                enabled: true,
+                revision: 1,
+            };
+            await repository.prisma.triggerBinding.create({ data: webhookBinding });
+            const bindings = await repository.prisma.triggerBinding.findMany({ orderBy: { kind: "asc" } });
+            expect(bindings.map((binding) => binding.kind)).toEqual(["schedule", "webhook"]);
+
+            // 唯一约束是「每计划每种类型一行」：同类型第二行被数据库拒绝。
+            await expect(repository.prisma.triggerBinding.create({ data: webhookBinding })).rejects.toThrow();
+
+            // 删调度只删 schedule 行，webhook 触发器不受影响。
+            const cleared = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
+                scheduleIntervalMs: null,
+            });
+            expect(cleared.scheduleIntervalMs).toBeNull();
+            await expect(repository.prisma.triggerBinding.findMany({ where: { planId: source.planId } }))
+                .resolves.toMatchObject([{ kind: "webhook" }]);
+
+            // 调度列表只认 schedule 行：只剩 webhook 时不再有定时。
+            await repository.prisma.collectionPlan.update({
+                where: { id: source.planId },
+                data: { enabled: true },
+            });
+            await expect(repository.listScheduleTriggers()).resolves.toEqual([]);
         } finally {
             await repository.close();
         }

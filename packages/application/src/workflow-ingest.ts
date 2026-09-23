@@ -1,6 +1,7 @@
 import { readVerifiedBlob } from "@cosmos/blob-store";
 import { z } from "zod";
 import {
+    ingestTriggerEvidenceSchema,
     ingestTriggerKindSchema,
     libraryIngestInputSchema,
     libraryIngestOutputSchema,
@@ -84,6 +85,8 @@ export const ingestWorkflowInputSchema = z.object({
     cursor: z.string().nullable(),
     checkpointRevision: z.number().int().nonnegative(),
     triggerKind: ingestTriggerKindSchema,
+    /** 触发原因（AUT-004）；与入队快照同形，workflow 读得到但不依赖它。 */
+    triggerEvidence: ingestTriggerEvidenceSchema.optional(),
 });
 export type IngestWorkflowInput = z.infer<typeof ingestWorkflowInputSchema>;
 

@@ -1,12 +1,13 @@
 import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { z, ZodError } from "zod";
 import { WorkflowHostError, ConnectionNotFoundError, type WorkflowEnvelope } from "@cosmos/application";
-import { idempotencyKeySchema, type RunStatus, type SourceSnapshot } from "@cosmos/contracts";
+import { idempotencyKeySchema, ingestTriggerEvidenceSchema, ingestTriggerKindSchema, type RunStatus, type SourceSnapshot } from "@cosmos/contracts";
 import "reflect-metadata";
 
 export const productRunSchema = z.object({
     sourceId: z.string().nullable().optional(),
-    triggerKind: z.enum(["manual", "schedule"]).optional(),
+    triggerKind: ingestTriggerKindSchema.optional(),
+    triggerEvidence: ingestTriggerEvidenceSchema.optional(),
     itemCount: z.number().int().nonnegative().optional(),
     createdEntryCount: z.number().int().nonnegative().optional(),
     revisedEntryCount: z.number().int().nonnegative().optional(),
@@ -193,6 +194,9 @@ export function toPublicWorkflowRun(envelope: WorkflowEnvelope) {
         id: envelope.runId,
         sourceId: productRun.sourceId ?? null,
         triggerKind,
+        // 触发原因（AUT-004）：manual/schedule 的 Run 没有证据，显式给 null，让产品面
+        // 能区分「这一类触发没有原因可展示」与「投影漏了这个字段」。
+        triggerEvidence: productRun.triggerEvidence ?? null,
         status: toProductWorkflowRunStatus(envelope.status),
         createdAt: envelope.createdAt,
         startedAt: envelope.startedAt,
