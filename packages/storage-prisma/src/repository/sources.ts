@@ -1,8 +1,8 @@
 import { join } from "node:path";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { collectionPlanWebhookEntryPath, type CollectionPlanSnapshot, type CollectionPlanWebhookEntry, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
-import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
+import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError, type CollectionPlanWebhookEntryTarget } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parsePlanRevisionId, parseSourceRevisionId } from "../storage-root.js";
 import { appendDomainEvent } from "./repository-internals.js";
@@ -263,6 +263,38 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         const snapshot = await this.getCollectionPlan(planId);
         if (!snapshot) throw new CollectionPlanNotFoundError(planId);
         return snapshot;
+    }
+
+    /** 按入口标识解析目标（ADR-0024）：凭证明文不出仓储，这里只回答计划与启用状态。 */
+    async resolveCollectionPlanWebhookEntry(token: string): Promise<CollectionPlanWebhookEntryTarget | null> {
+        const trimmed = token.trim();
+        if (!trimmed) return null;
+        const binding = await this.prisma.triggerBinding.findFirst({
+            where: { webhookToken: trimmed, kind: "webhook" },
+            include: { plan: { include: { source: { select: { deletedAt: true } } } } },
+        });
+        // 墓碑来源的计划等同不存在（AUT-001）：已删除的来源不该还能被入口触发。
+        if (!binding?.plan || binding.plan.source.deletedAt !== null) return null;
+        return {
+            planId: binding.plan.id,
+            sourceId: binding.plan.sourceId,
+            bindingId: binding.id,
+            secretRef: binding.secretRef,
+            planEnabled: binding.plan.enabled,
+            bindingEnabled: binding.enabled,
+        };
+    }
+
+    /**
+     * 校验入口凭证（ADR-0024）：常量时间比较，只回答对与不对。两侧都先取等长摘要，
+     * 免得长度差异既影响耗时又暴露「猜对了几位」。
+     */
+    async verifyCollectionPlanWebhookCredential(secretRef: string, credential: string): Promise<boolean> {
+        const stored = await this.secrets.read(secretRef);
+        if (stored === null) return false;
+        const expected = createHash("sha256").update(stored, "utf8").digest();
+        const provided = createHash("sha256").update(credential, "utf8").digest();
+        return timingSafeEqual(expected, provided);
     }
 
     async createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance> {

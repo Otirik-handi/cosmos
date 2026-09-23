@@ -51,6 +51,20 @@ export interface EntityLinkProvenanceInput {
     evidence?: string | null;
 }
 
+/**
+ * 入口校验需要的目标信息（ADR-0024）。它只回答「这个入口属于哪个计划、现在能不能触发」，
+ * 凭证字节留在 SecretStore，这里只有引用。
+ */
+export interface CollectionPlanWebhookEntryTarget {
+    planId: string;
+    sourceId: string;
+    /** 触发证据里记录的绑定身份：它稳定，不像入口标识那样会随轮换改变。 */
+    bindingId: string;
+    secretRef: string | null;
+    planEnabled: boolean;
+    bindingEnabled: boolean;
+}
+
 export interface CosmosRepository {
     createSource(input: CreateSourceCommand): Promise<SourceSnapshot>;
     listSources(): Promise<readonly SourceSnapshot[]>;
@@ -84,6 +98,16 @@ export interface CosmosRepository {
     rotateCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanWebhookEntry>;
     /** 撤销 Webhook 入口：删除入口标识与凭证字节，需要重新生成才能再用（幂等）。 */
     revokeCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanSnapshot>;
+    /**
+     * 按入口标识解析目标（ADR-0024）：入口校验发生在 API 边界，它需要计划的启用状态、
+     * 触发器自身的启用状态与凭证引用；凭证明文不出仓储。
+     */
+    resolveCollectionPlanWebhookEntry(token: string): Promise<CollectionPlanWebhookEntryTarget | null>;
+    /**
+     * 校验入口凭证：常量时间比较，只回答对与不对。仓储是凭证字节的 owner，调用方
+     * 拿不到也不需要明文。
+     */
+    verifyCollectionPlanWebhookCredential(secretRef: string, credential: string): Promise<boolean>;
     /** Enabled schedule trigger bindings (ADR-0018) for the scheduler loop. */
     listScheduleTriggers(): Promise<readonly {
         planId: string;

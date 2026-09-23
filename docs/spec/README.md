@@ -116,6 +116,7 @@
 | WorkflowIngestDomainPort | Ingest Workflow 向领域/仓储提交 item 与 checkpoint 的 fence/idempotency 端口 | [`application/0006-ingest-workflow.md`](application/0006-ingest-workflow.md) |
 | SSE | 带 event id、协议版本、replay cursor 和 `snapshot_required` 语义的 Server-Sent Events | [`interfaces/0002-product-api-http.md`](interfaces/0002-product-api-http.md) |
 | Product API | 面向产品客户端的 Command、Query、Run 控制、查询和 SSE HTTP 面 | [`interfaces/0002-product-api-http.md`](interfaces/0002-product-api-http.md) |
+| Webhook 入口 | 外部自动化触发某个采集计划的入口；不在 `/api/v1` 下，鉴权、限流与幂等自成一面对外合同 | [`interfaces/0006-webhook-entry-http.md`](interfaces/0006-webhook-entry-http.md) |
 | Worker Admin | Worker 的 loopback 运维面：liveness/readiness/status/capability/metrics/drain | [`runtime/0003-worker-admin.md`](runtime/0003-worker-admin.md) |
 | Drain | 停止新 poll、等待已登记资源并按 deadline 给出终态的运维操作 | [`runtime/0003-worker-admin.md`](runtime/0003-worker-admin.md) |
 | Manifest | 不含 executable 的可序列化 Definition/Action/Source 描述及稳定 hash | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |

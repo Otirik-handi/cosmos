@@ -141,4 +141,49 @@ describe("CollectionPlan webhook 入口 (ADR-0024)", () => {
             await repository.close();
         }
     });
+
+    it("入口解析与凭证校验：只回答能不能触发，且轮换/停用后旧入口立刻失效", async () => {
+        const repository = await createRepository();
+        try {
+            const source = await createPlanWithSchedule(repository);
+            const entry = await repository.rotateCollectionPlanWebhookEntry(source.planId);
+            const tokenOf = (entryPath: string) => entryPath.split("/").pop() ?? "";
+            const token = tokenOf(entry.entryPath);
+
+            const target = await repository.resolveCollectionPlanWebhookEntry(token);
+            expect(target).toMatchObject({
+                planId: source.planId,
+                sourceId: source.id,
+                planEnabled: false,
+                bindingEnabled: true,
+            });
+            expect(target?.secretRef).not.toBeNull();
+            // 校验只回答对与不对；明文不出仓储。
+            await expect(repository.verifyCollectionPlanWebhookCredential(target?.secretRef ?? "", entry.credential))
+                .resolves.toBe(true);
+            await expect(repository.verifyCollectionPlanWebhookCredential(target?.secretRef ?? "", "wrong"))
+                .resolves.toBe(false);
+            await expect(repository.resolveCollectionPlanWebhookEntry("no-such-entry")).resolves.toBeNull();
+
+            // 轮换后旧标识解析不到，新标识可以。
+            const rotated = await repository.rotateCollectionPlanWebhookEntry(source.planId);
+            await expect(repository.resolveCollectionPlanWebhookEntry(token)).resolves.toBeNull();
+            await expect(repository.resolveCollectionPlanWebhookEntry(tokenOf(rotated.entryPath)))
+                .resolves.toMatchObject({ planEnabled: false });
+
+            // 计划启用后 planEnabled 跟着走：入口校验依赖它来拒绝停用计划。
+            await repository.prisma.collectionPlan.update({
+                where: { id: source.planId },
+                data: { enabled: true },
+            });
+            await expect(repository.resolveCollectionPlanWebhookEntry(tokenOf(rotated.entryPath)))
+                .resolves.toMatchObject({ planEnabled: true });
+
+            // 撤销后入口解析不到。
+            await repository.revokeCollectionPlanWebhookEntry(source.planId);
+            await expect(repository.resolveCollectionPlanWebhookEntry(tokenOf(rotated.entryPath))).resolves.toBeNull();
+        } finally {
+            await repository.close();
+        }
+    });
 });

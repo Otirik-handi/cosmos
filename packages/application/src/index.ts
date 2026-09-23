@@ -79,6 +79,7 @@ export {
 } from "./errors.js";
 export {
     type EntityLinkProvenanceInput, type CosmosRepository,
+    type CollectionPlanWebhookEntryTarget,
 } from "./repository-port.js";
 export {
     ConnectorExecutionError, type JobLease, type IngestConnector, type ConnectorErrorCode,
