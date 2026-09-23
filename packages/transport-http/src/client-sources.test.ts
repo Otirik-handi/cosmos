@@ -174,7 +174,7 @@ describe("HttpCosmosClient 来源与运行", () => {
                                 required: ["feedUrl"],
                             },
                         },
-                        auth: { kind: "none", label: null, secretRefRequired: false },
+                        auth: { kind: "none", label: null, secretRefRequired: false, probeSupported: false },
                         operations: [{
                             operationId: "fetch",
                             inputSchema: { id: "source.rss.fetch.input@1", version: 1, hash: { algorithm: "builtin", value: "i" } },
@@ -304,6 +304,7 @@ describe("HttpCosmosClient 来源与运行", () => {
             status: "active",
             secretRef: "secret:c1",
             lastError: null,
+            lastCheckedAt: null,
             createdAt: "2026-09-10T08:00:00.000Z",
             updatedAt: "2026-09-10T08:00:00.000Z",
         };

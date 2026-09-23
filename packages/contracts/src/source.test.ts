@@ -10,7 +10,11 @@ import {
     mediaRetryCeiling,
     sourceConfigSchema,
     sourceMediaPolicySchema,
+    connectionProbeJobPayloadSchema,
+    connectionProbeJobSnapshotSchema,
+    connectionProbeResultSchema,
     createSourceCommandSchema,
+    jobKindSchema,
     jobSnapshotSchema,
     sourceConfigProbeCommandSchema,
     sourceConfigProbeJobPayloadSchema,
@@ -396,7 +400,7 @@ describe("source definition catalog contracts", () => {
                 required: ["feedUrl"],
             },
         },
-        auth: { kind: "none", label: null, secretRefRequired: false },
+        auth: { kind: "none", label: null, secretRefRequired: false, probeSupported: false },
         operations: [{
             operationId: "fetch",
             inputSchema: { id: "source.rss.fetch.input@1", version: 1, hash: { algorithm: "builtin", value: "i" } },
@@ -439,6 +443,59 @@ describe("source definition catalog contracts", () => {
         expect(page.snapshotAt).toBe("2026-09-02T00:00:00.000Z");
         expect(() => sourceDefinitionPageSchema.parse({
             items: [rssManifest],
+        })).toThrow();
+    });
+
+    /**
+     * 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：探测能不能发起由
+     * manifest 的 `auth.probeSupported` 声明，Job 载荷只带连接标识，结果带三种结论。
+     */
+    it("declares whether an adapter supports login probing", () => {
+        expect(sourceDefinitionManifestSchema.parse(rssManifest).auth.probeSupported).toBe(false);
+        expect(() => sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            auth: { kind: "none", label: null, secretRefRequired: false },
+        })).toThrow();
+    });
+
+    it("round-trips a connection probe job payload and snapshot", () => {
+        expect(connectionProbeJobPayloadSchema.parse({ connectionId: "connection-1" }))
+            .toEqual({ connectionId: "connection-1" });
+        expect(() => connectionProbeJobPayloadSchema.parse({ connectionId: "" })).toThrow();
+        expect(() => connectionProbeJobPayloadSchema.parse({
+            connectionId: "connection-1",
+            sourceId: "source-1",
+        })).toThrow();
+
+        const job = connectionProbeJobSnapshotSchema.parse({
+            id: "job-1",
+            kind: "connection-probe",
+            sourceId: null,
+            runId: null,
+            status: "succeeded",
+            attempts: 1,
+            maxAttempts: 3,
+            errorCode: null,
+            error: null,
+            createdAt: "2026-09-23T00:00:00.000Z",
+            updatedAt: "2026-09-23T00:00:00.000Z",
+            result: {
+                connectionId: "connection-1",
+                outcome: "expired",
+                account: null,
+                reason: "需要重新登录 Bilibili（浏览器里的登录态已失效）。",
+                checkedAt: "2026-09-23T00:00:00.000Z",
+            },
+        });
+        expect(job.result?.outcome).toBe("expired");
+        expect(jobKindSchema.parse("connection-probe")).toBe("connection-probe");
+        expect(() => connectionProbeJobSnapshotSchema.parse({ ...job, kind: "source-probe" })).toThrow();
+        expect(() => connectionProbeResultSchema.parse({
+            connectionId: "connection-1",
+            outcome: "unknown",
+            account: null,
+            reason: null,
+            checkedAt: "2026-09-23T00:00:00.000Z",
         })).toThrow();
     });
 });

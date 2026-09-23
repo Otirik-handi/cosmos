@@ -147,6 +147,8 @@ the current code has not removed it or replaced it with a permanent redirect.
 | `POST /connections` | body `CreateConnectionCommand` | HTTP 201 返回 `ConnectionInstance`（status 缺省 `active`）；非法 body 400 `validation_failed`。 |
 | `PATCH /connections/:connectionId` | body `UpdateConnectionCommand`（全可选） | HTTP 200 返回更新后的 `ConnectionInstance`；不存在 404。 |
 | `POST /connections/:connectionId/removals` | path `connectionId` | HTTP 200 返回 ack；同事务把引用该连接的 Source `connectionId` 置空，不删除来源。 |
+| `POST /connections/:connectionId/probes` | path `connectionId`；可选 `Idempotency-Key` header（≤300 字符） | HTTP 202 返回 `ConnectionProbeJobSnapshot`，创建 `connection-probe` Job（ADR-0027 决定 2）；连接不存在 404；该连接的 Connector 没在 manifest 里声明 `auth.probeSupported` 时 409 `conflict`；无 header 时由 API 生成 `connection-probe:<uuid>` 幂等键。探测由 Worker 执行——API 不访问外部平台。 |
+| `GET /connection-probes/:jobId` | path `jobId` | HTTP 200 返回 `ConnectionProbeJobSnapshot`；不存在或不是 `connection-probe` 的作业 404（不泄露其它种类的作业）。 |
 | `GET /collection-plans` | 无 | HTTP 200 返回 `CollectionPlanSnapshot[]`（按 createdAt 升序；墓碑来源的计划不出现）。 |
 | `GET /collection-plans/:planId` | path `planId` | HTTP 200 返回 `CollectionPlanSnapshot`；不存在或来源已删除 404。 |
 | `PATCH /collection-plans/:planId` | body `UpdateCollectionPlanCommand`：必填 `baseRevisionId`，可选 `name`/`connectionId`/`scheduleIntervalMs`/`mediaPolicy`/`enabled` | HTTP 200 返回更新后投影；不存在 404；revision 过期 409；`enabled: true` 前先按 canonical schema 校验已保存的目标配置，不合法 400。`scheduleIntervalMs` 只增/改/删 schedule 触发器，不触碰 webhook 入口（ADR-0025）。 |

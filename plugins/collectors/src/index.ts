@@ -12,6 +12,7 @@ import {
     aiHotSourceConfigSchema,
     bilibiliSourceConfigSchema,
     openCliProfileSchema,
+    type SourceConnectionProjection,
     type SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import type {
@@ -254,7 +255,77 @@ export function createBilibiliConnector(
                 nextCursor: null,
             };
         },
+        /**
+         * 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：跑一次登录门控命令
+         * `bilibili me`，把结论翻译成宿主的三种 outcome。不跑 doctor——runner 已经把
+         * Browser Bridge 不可用（69）与需要登录（77）分成不同错误，这里只要分开翻译。
+         */
+        async probeAuthorization({ connection, signal }) {
+            const profile = readBilibiliProfileFromConnection(connection);
+            if (profile === null) {
+                return {
+                    outcome: "error",
+                    reason: "连接没有 OpenCLI profile，无法检查登录状态。",
+                };
+            }
+            const env = { OPENCLI_PROFILE: profile };
+            let stdout: string;
+            try {
+                const result = await runner.run(["bilibili", "me", "-f", "json"], { env, signal });
+                if (result.exitCode !== 0) {
+                    return {
+                        outcome: "error",
+                        reason: `OpenCLI bilibili me 以退出码 ${result.exitCode} 结束。`,
+                    };
+                }
+                stdout = result.stdout;
+            } catch (error) {
+                if (error instanceof ConnectorExecutionError) {
+                    if (error.code === "authentication_required") {
+                        return {
+                            outcome: "expired",
+                            reason: "需要重新登录 Bilibili（浏览器里的登录态已失效）。",
+                        };
+                    }
+                    // 浏览器桥不可用与超时都是「这次没得出结论」，按 outcome 返回而不是抛出：
+                    // 端口约定探测给出结论，宿主只把真正意外的异常留给 Job 失败。
+                    if (error.code === "dependency_unavailable" || error.code === "timeout") {
+                        return { outcome: "error", reason: error.message };
+                    }
+                }
+                throw error;
+            }
+            return {
+                outcome: "active",
+                account: readBilibiliAccountName(stdout),
+                reason: null,
+            };
+        },
     };
+}
+
+/**
+ * 从 `bilibili me` 的输出里取账号标签。实测字段是 `name` 与 `uid`（`-f json` 时是 JSON）；
+ * 取不到名字时退到 uid，两者都没有就返回 null——探测结论不因为标签缺失而改变。
+ */
+function readBilibiliAccountName(output: string): string | null {
+    let parsed: unknown;
+    try {
+        parsed = parseJsonDocument(output);
+    } catch {
+        return null;
+    }
+    const row = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (typeof row !== "object" || row === null) {
+        return null;
+    }
+    const record = row as Record<string, unknown>;
+    const name = firstText(record.name, record.uname, record.nickname, record.author);
+    if (name) {
+        return name.slice(0, 200);
+    }
+    const uid = firstText(record.uid, record.mid, record.id);
+    return uid ? uid.slice(0, 200) : null;
 }
 
 function assertOpenCliDoctor(output: string): void {
@@ -423,8 +494,10 @@ function parseBilibiliConfig(source: SourceExecutionSnapshot) {
  * 连接上的 Bilibili 适配器配置（Proposal connection-login-lifecycle-v1 决定 1）：
  * profile 归连接，来源配置里已经没有它。格式规则与合同共用 `openCliProfileSchema`。
  */
-function readBilibiliConnectionProfile(source: SourceExecutionSnapshot): string | null {
-    const raw = source.connection?.configJson;
+function readBilibiliProfileFromConnection(
+    connection: SourceConnectionProjection | null | undefined,
+): string | null {
+    const raw = connection?.configJson;
     if (raw === null || raw === undefined) {
         return null;
     }
@@ -470,7 +543,7 @@ function resolveBilibiliProfile(
     source: SourceExecutionSnapshot,
     config: { mode: "hot" | "feed" },
 ): string | null {
-    const profile = readBilibiliConnectionProfile(source);
+    const profile = readBilibiliProfileFromConnection(source.connection);
     if (config.mode === "feed" && profile === null) {
         throw new ConnectorExecutionError(
             "invalid_configuration",

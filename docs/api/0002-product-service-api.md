@@ -100,9 +100,12 @@ Browser Bridge/OpenCLI profile 可以投影为一种外部管理的 Connection�
 
 **2026-09-23 实现现状**：连接已经是登录态的载体——`ConnectionInstance.configJson` 装适配器的
 非秘密配置（Bilibili 的 OpenCLI profile），来源配置不再带它；未保存配置的探测
-（`POST /source-config-probes`）接受可选 `connectionId`。本节的 `authorization-sessions`、
-`revocations` 与 `scopes: string[]` 与落地形态不一致，收敛动作见 Proposal
-[`connection-login-lifecycle-v1`](../proposals/connection-login-lifecycle-v1.md) 的待裁定项 3。
+（`POST /source-config-probes`）接受可选 `connectionId`。**登录探测已落地**：`POST
+/connections/{id}/probes` 返回 `202` 作业快照并通过 `GET /connection-probes/{jobId}` 读结论
+（`outcome` 为 `active`/`expired`/`error` + 账号标签 + 可读原因），结论由系统写回连接的
+`status`/`account`/`lastError`/`lastCheckedAt`——本节 DTO 里的 `lastCheckedAt` 因此不再是 Planned。
+本节的 `authorization-sessions`、`revocations` 与 `scopes: string[]` 仍与落地形态不一致，收敛动作见
+Proposal [`connection-login-lifecycle-v1`](../proposals/connection-login-lifecycle-v1.md) 的待裁定项 3。
 
 ### 4.2 Source
 

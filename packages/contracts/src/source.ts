@@ -57,6 +57,11 @@ export const sourceAuthSchema = z.object({
     /** Human-readable label for the auth method; optional for none/external. */
     label: z.string().nullable(),
     secretRefRequired: z.boolean(),
+    /**
+     * 这个 Adapter 能不能对连接的登录态给出结论（Proposal connection-login-lifecycle-v1
+     * 决定 2）。宿主按声明决定要不要允许发起连接探测，不按 connectorId 硬编码。
+     */
+    probeSupported: z.boolean(),
 }).strict();
 
 export type SourceAuth = z.infer<typeof sourceAuthSchema>;
@@ -138,6 +143,7 @@ export const jobKindSchema = z.enum([
     "source-ingest",
     "source-probe",
     "source-config-probe",
+    "connection-probe",
     "workflow-activity",
 ]);
 
@@ -219,6 +225,40 @@ export const sourceConfigProbeJobSnapshotSchema = jobSnapshotSchema.extend({
 });
 
 export type SourceConfigProbeJobSnapshot = z.infer<typeof sourceConfigProbeJobSnapshotSchema>;
+
+
+/**
+ * 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：探测是**连接级**能力，
+ * 不是 Source Operation——它不返回内容条目，所以不能走 ingest 管线（那条路径抓到什么
+ * 都会入库）。`outcome` 是给产品面看的结论，`account` 是探测到的账号标签，`reason` 是
+ * 面向用户的失效/失败原因。
+ */
+export const connectionProbeOutcomeSchema = z.enum(["active", "expired", "error"]);
+export type ConnectionProbeOutcome = z.infer<typeof connectionProbeOutcomeSchema>;
+
+
+export const connectionProbeResultSchema = z.object({
+    connectionId: z.string(),
+    outcome: connectionProbeOutcomeSchema,
+    account: z.string().max(200).nullable(),
+    reason: z.string().max(500).nullable(),
+    checkedAt: z.string(),
+}).strict();
+export type ConnectionProbeResult = z.infer<typeof connectionProbeResultSchema>;
+
+
+/** Persisted Job payload shape for `connection-probe` Jobs. */
+export const connectionProbeJobPayloadSchema = z.object({
+    connectionId: z.string().trim().min(1).max(100),
+}).strict();
+export type ConnectionProbeJobPayload = z.infer<typeof connectionProbeJobPayloadSchema>;
+
+
+export const connectionProbeJobSnapshotSchema = jobSnapshotSchema.extend({
+    kind: z.literal("connection-probe"),
+    result: connectionProbeResultSchema.nullable(),
+});
+export type ConnectionProbeJobSnapshot = z.infer<typeof connectionProbeJobSnapshotSchema>;
 
 
 export const assetStatusSchema = z.enum([

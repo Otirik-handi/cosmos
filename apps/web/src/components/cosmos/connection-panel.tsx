@@ -57,6 +57,24 @@ function formatJsonRecord(json: string): string {
     return JSON.stringify(parsed) ?? json;
 }
 
+/**
+ * 登录探测的轮询节奏与上限（Proposal connection-login-lifecycle-v1 决定 2）。上限必须**大于**
+ * 连接器自己的子进程超时（OpenCLI 默认 120s），否则一次慢但会成功的探测永远显示成超时。
+ */
+const PROBE_POLL_INTERVAL_MS = 1_500;
+const PROBE_TIMEOUT_MS = 150_000;
+
+/** 稳定的中文时间；解析失败按「未检查」处理。 */
+function formatCheckedAt(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "未检查";
+    }
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hours}:${minutes}`;
+}
+
 type ConnectionPanelProps = {
     client: HttpCosmosClient;
     /** 页面在连接变化后递增，驱动列表重取。 */
@@ -84,6 +102,14 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
     /** 正在填写失效原因的那个连接；同一时刻只开一个。 */
     const [failingId, setFailingId] = useState<string | null>(null);
     const [failureReason, setFailureReason] = useState("");
+    /** 正在探测登录态的连接；同一时刻只开一个。 */
+    const [probingId, setProbingId] = useState<string | null>(null);
+    /** 探测结果只对发起它的那条连接显示。 */
+    const [probeNotice, setProbeNotice] = useState<
+        { connectionId: string; text: string; tone: "ok" | "error" } | null
+    >(null);
+    /** 声明了 `auth.probeSupported` 的 Connector：按声明决定「检查登录状态」是否出现。 */
+    const [probeSupportedConnectorIds, setProbeSupportedConnectorIds] = useState<readonly string[]>([]);
 
     const load = (): void => {
         client.listConnections()
@@ -105,6 +131,20 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
             })
             .catch(() => {
                 if (!cancelled) setState("error");
+            });
+        client.listSourceDefinitions()
+            .then((definitions) => {
+                if (!cancelled) {
+                    setProbeSupportedConnectorIds(
+                        definitions
+                            .filter((definition) => definition.auth.probeSupported)
+                            .map((definition) => definition.connectorId),
+                    );
+                }
+            })
+            .catch(() => {
+                // 声明读不到时不显示探测入口：宁可少一个按钮，也不要给用户一个必然 409 的动作。
+                if (!cancelled) setProbeSupportedConnectorIds([]);
             });
         return () => {
             cancelled = true;
@@ -184,6 +224,51 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
             .catch(() => setState("error"));
     };
 
+    /**
+     * 检查登录状态（Proposal connection-login-lifecycle-v1 决定 2）：探测由 Worker 执行，
+     * 这里轮询 Job；结论由 API 写回连接，所以成功后重取列表，让状态与失效原因反映的是
+     * **系统观测**而不是用户手填。
+     */
+    const checkLogin = (connectionId: string): void => {
+        setProbingId(connectionId);
+        setProbeNotice(null);
+        const poll = async (): Promise<void> => {
+            let job = await client.createConnectionProbe(connectionId);
+            const deadline = Date.now() + PROBE_TIMEOUT_MS;
+            while (
+                job.status !== "succeeded"
+                && job.status !== "failed_terminal"
+                && job.status !== "cancelled"
+            ) {
+                if (Date.now() >= deadline) {
+                    setProbeNotice({ connectionId, text: "探测超时，请稍后重试。", tone: "error" });
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, PROBE_POLL_INTERVAL_MS));
+                job = await client.getConnectionProbe(job.id);
+            }
+            if (job.status === "succeeded" && job.result) {
+                setProbeNotice({
+                    connectionId,
+                    text: job.result.outcome === "active"
+                        ? `登录状态正常${job.result.account === null ? "" : `：${job.result.account}`}`
+                        : job.result.reason ?? "登录状态不可用",
+                    tone: job.result.outcome === "active" ? "ok" : "error",
+                });
+                return;
+            }
+            setProbeNotice({ connectionId, text: job.error ?? "探测失败。", tone: "error" });
+        };
+        poll()
+            .then(load)
+            .catch(() => setProbeNotice({
+                connectionId,
+                text: "探测请求失败（该 Connector 可能没有声明支持登录探测）。",
+                tone: "error",
+            }))
+            .finally(() => setProbingId(null));
+    };
+
     return (
         <div className="flex flex-col gap-2">
             {connections && connections.length > 0 ? (
@@ -206,6 +291,17 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                                     ) : null}
                                 </span>
                                 <span className="flex shrink-0 items-center gap-1">
+                                    {probeSupportedConnectorIds.includes(connection.connectorId) ? (
+                                        <Button
+                                            size="xs"
+                                            variant="ghost"
+                                            disabled={probingId === connection.id}
+                                            aria-label={`检查登录状态 ${connection.name}`}
+                                            onClick={() => checkLogin(connection.id)}
+                                        >
+                                            {probingId === connection.id ? "检查中…" : "检查登录状态"}
+                                        </Button>
+                                    ) : null}
                                     {connection.status === "active" ? (
                                         <Button
                                             size="xs"
@@ -261,7 +357,25 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                                         {connection.lastError ?? "未记录"}
                                     </dd>
                                 </div>
+                                <div className="flex gap-1">
+                                    <dt className="shrink-0">上次检查</dt>
+                                    <dd className="min-w-0 break-words">
+                                        {connection.lastCheckedAt === null
+                                            ? "未检查"
+                                            : formatCheckedAt(connection.lastCheckedAt)}
+                                    </dd>
+                                </div>
                             </dl>
+                            {probeNotice?.connectionId === connection.id ? (
+                                <p
+                                    role="status"
+                                    className={probeNotice.tone === "ok"
+                                        ? "text-xs text-muted-foreground"
+                                        : "text-xs text-destructive"}
+                                >
+                                    {probeNotice.text}
+                                </p>
+                            ) : null}
                             {failingId === connection.id ? (
                                 <div className="flex items-center gap-2">
                                     <Input

@@ -95,6 +95,9 @@ export {
     ConnectorProbeService, SourceConfigProbeService,
 } from "./connector-probe.js";
 export {
+    ConnectionProbeService,
+} from "./connection-probe.js";
+export {
     IngestionService, type IngestionWorkerOptions, type WorkerJobResult,
 } from "./ingestion-service.js";
 export {

@@ -18,6 +18,7 @@ describe("Connection contracts (ADR-0017)", () => {
             status: "active",
             secretRef: "secret:c1",
             lastError: null,
+            lastCheckedAt: null,
             createdAt: "2026-09-10T08:00:00.000Z",
             updatedAt: "2026-09-10T08:00:00.000Z",
         });
@@ -51,6 +52,7 @@ describe("Connection contracts (ADR-0017)", () => {
             status: "active",
             secretRef: null,
             lastError: null,
+            lastCheckedAt: null,
             createdAt: "2026-09-10T08:00:00.000Z",
             updatedAt: "2026-09-10T08:00:00.000Z",
         });

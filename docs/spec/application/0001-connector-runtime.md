@@ -62,6 +62,19 @@ fetchItems(input: {
 
 连接也随执行快照交给连接器：`SourceExecutionSnapshot.connection` 是宿主在**入队时冻结**的非秘密连接投影（`{id, connectorId, configJson}`，AUT-016 要求排队后改连接配置不改变已创建 Run 的输入），连接器从它读自己的适配器配置——Bilibili 的 OpenCLI profile 就在这里，不再在 `config` 里。该字段可选：未保存配置的探测与 legacy 路径没有连接，连接器必须容忍缺省，需要登录态的操作改用 `invalid_configuration` 拒绝。未保存配置的探测（`SourceConfigProbeService`）通过一个**只读** `resolveConnection` 回调拿到同一份投影；该服务仍然拿不到 `CosmosRepository`，所以结构上无法持久化 observation/entry/asset/checkpoint。
 
+端口还有一个**可选**的连接级方法（ADR-0027 决定 2）：
+
+```ts
+probeAuthorization?(input: {
+  connection: SourceConnectionProjection;
+  signal?: AbortSignal;
+}): Promise<{ outcome: "active" | "expired" | "error"; account?: string | null; reason?: string | null }>;
+```
+
+它按**连接**而不是按来源调用——检查「这条登录态还能不能用」不需要来源——所以宿主按 `connection.connectorId` 解析连接器（`ConnectorRegistry.resolveByConnectorId`，不走 `resolve(source)`）。适配器不用实现它；能不能发起探测由 manifest 的 `auth.probeSupported` 声明。适配器把预期失败说成 `outcome`（`expired` = 需要重新登录，`error` = 没得出结论），只有真正的意外才抛异常。
+
+`ConnectionProbeService` 承载这条路径：读连接 → 解析连接器 → 调 `probeAuthorization` → 写回状态、账号、失效原因与 `lastCheckedAt`。它**不产生 Run、不产生条目**——探测是连接的事实，不是采集，所以它不能走 ingest 管线（那条路径抓到什么都会入库）。写回映射固定：`active` 清空失效原因，`expired`/`error` 落原因；适配器没给出账号标签时保留连接上的原值。它由 Worker 的 `connection-probe` Job 驱动（`IngestionWorker` 的认领清单显式列出该 kind，且只在接线了该服务时才认领）。
+
 `validate` 接收 Source 对象本身，绝不是 `{ source }` 包装对象；只有 `fetchItems` 使用对象参数。`validate` 不返回连接器结果，验证失败通过抛出异常表示。
 
 采集项采用 [NormalizedIngestItem](../domain/0001-normalized-content.md)；来源及其他共享契约采用 [公共契约](../contracts/0001-public-contracts.md)。

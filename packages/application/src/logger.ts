@@ -6,6 +6,8 @@ export interface LoggerContext {
     jobId?: string;
     sourceId?: string;
     connectorId?: string;
+    /** 连接级操作的归属（连接登录探测，Proposal connection-login-lifecycle-v1 决定 2）。 */
+    connectionId?: string;
 }
 
 export interface LoggerPort {

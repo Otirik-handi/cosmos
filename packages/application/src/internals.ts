@@ -1,7 +1,7 @@
 /** 包内共享 helper:文件读取、失败归类与重试延时;不经入口导出。 */
 
 import {
-    sourceConfigProbeJobPayloadSchema, type SourceConfigProbeCommand,
+    connectionProbeJobPayloadSchema, sourceConfigProbeJobPayloadSchema, type SourceConfigProbeCommand,
 } from "@cosmos/contracts";
 
 import {
@@ -30,6 +30,14 @@ export function readConfigProbeCommand(payload: unknown): SourceConfigProbeComma
         throw new Error("Source config probe job is missing a valid configProbe command.");
     }
     return parsed.data.configProbe;
+}
+
+export function readConnectionProbeConnectionId(payload: unknown): string {
+    const parsed = connectionProbeJobPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+        throw new Error("Connection probe job is missing a valid connectionId.");
+    }
+    return parsed.data.connectionId;
 }
 
 export function readOptionalSourceId(payload: unknown): string | null {

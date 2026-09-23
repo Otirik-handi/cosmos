@@ -21,6 +21,8 @@ GET       /connections/:connectionId                   connection
 POST      /connections                                 createConnection
 PATCH     /connections/:connectionId                   updateConnection
 POST      /connections/:connectionId/removals          deleteConnection
+POST      /connections/:connectionId/probes            createConnectionProbe
+GET       /connection-probes/:jobId                    connectionProbe
 GET       /collection-plans                            listCollectionPlans
 GET       /collection-plans/:planId                    collectionPlan
 PATCH     /collection-plans/:planId                    updateCollectionPlan

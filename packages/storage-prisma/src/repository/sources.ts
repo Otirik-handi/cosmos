@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
-import { collectionPlanWebhookEntryPath, type CollectionPlanSnapshot, type CollectionPlanWebhookEntry, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
+import { collectionPlanWebhookEntryPath, type CollectionPlanSnapshot, type CollectionPlanWebhookEntry, type CreateSourceCommand, type ConnectionInstance, type ConnectionStatus, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
 import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError, type CollectionPlanWebhookEntryTarget } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parsePlanRevisionId, parseSourceRevisionId } from "../storage-root.js";
@@ -338,6 +338,37 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
                 ...(input.configJson !== undefined ? { configJson: input.configJson } : {}),
                 ...(input.secretRef !== undefined ? { secretRef: input.secretRef } : {}),
                 ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
+            },
+        });
+        return this.toConnectionSnapshot(updated);
+    }
+
+    /**
+     * 记录一次登录探测的结果（Proposal connection-login-lifecycle-v1 决定 2）。这是**系统观测**
+     * 而不是用户编辑，所以状态、账号、失效原因与检查时间一次写入；`lastCheckedAt` 只在探测
+     * 跑过之后才更新，公开的更新命令碰不到它。
+     */
+    async recordConnectionProbe(
+        connectionId: string,
+        result: {
+            status: ConnectionStatus;
+            account: string | null;
+            lastError: string | null;
+            checkedAt: string;
+        },
+    ): Promise<ConnectionInstance> {
+        const current = await this.prisma.connectionInstance.findUnique({
+            where: { id: connectionId },
+            select: { id: true },
+        });
+        if (!current) throw new ConnectionNotFoundError(connectionId);
+        const updated = await this.prisma.connectionInstance.update({
+            where: { id: connectionId },
+            data: {
+                status: result.status,
+                account: result.account,
+                lastError: result.lastError,
+                lastCheckedAt: new Date(result.checkedAt),
             },
         });
         return this.toConnectionSnapshot(updated);

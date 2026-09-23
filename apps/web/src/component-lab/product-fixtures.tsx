@@ -64,6 +64,7 @@ const labConnections: readonly ConnectionInstance[] = [{
     status: "active",
     secretRef: null,
     lastError: null,
+    lastCheckedAt: null,
     createdAt: fixtureTimestamp,
     updatedAt: fixtureTimestamp,
 }];
@@ -143,7 +144,7 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
             additionalProperties: false,
         },
     },
-    auth: {kind: "none", label: null, secretRefRequired: false},
+    auth: {kind: "none", label: null, secretRefRequired: false, probeSupported: false},
     operations: [{
         operationId: "fetch",
         inputSchema: {id: "source.rss.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.input@1"}},
@@ -185,7 +186,7 @@ const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
             additionalProperties: false,
         },
     },
-    auth: {kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false},
+    auth: {kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false, probeSupported: true},
     operations: [{
         operationId: "fetch",
         inputSchema: {id: "source.bilibili.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.input@1"}},
@@ -423,6 +424,7 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         status: "active",
         secretRef: "secret:connection-bilibili",
         lastError: null,
+        lastCheckedAt: "2026-09-10T08:05:00.000Z",
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -436,6 +438,7 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         status: "error",
         secretRef: null,
         lastError: "登录态已过期",
+        lastCheckedAt: null,
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -454,12 +457,63 @@ const connectionLabClient = {
         ...(input.status === undefined ? {} : { status: input.status }),
         ...(input.lastError === undefined ? {} : { lastError: input.lastError }),
     }),
+    // 登录探测按声明出现（Proposal connection-login-lifecycle-v1 决定 2）：夹具只声明
+    // bilibili 支持探测，探测本身返回一条「已登录」的固定结论。
+    listSourceDefinitions: async () => [
+        {
+            id: "bilibili",
+            version: 1,
+            ref: "source.bilibili@1",
+            provider: "cosmos",
+            connectorId: "bilibili",
+            displayName: "Bilibili",
+            description: null,
+            manifestHash: { algorithm: "builtin", value: "builtin:source.bilibili@1" },
+            status: "enabled",
+            operationIds: ["fetch"],
+            capabilities: ["source:read"],
+            configurationSchema: { id: "c", version: 1, hash: { algorithm: "builtin", value: "c" } },
+            auth: { kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false, probeSupported: true },
+            operations: [],
+        },
+    ],
+    createConnectionProbe: async () => connectionProbeJob("succeeded"),
+    getConnectionProbe: async () => connectionProbeJob("succeeded"),
 } as unknown as HttpCosmosClient;
+
+/** 连接探测 Job 的夹具：终态 + 一条「已登录」结论。 */
+function connectionProbeJob(status: "queued" | "succeeded") {
+    return {
+        id: "job-connection-probe",
+        kind: "connection-probe" as const,
+        sourceId: null,
+        runId: null,
+        status,
+        attempts: 1,
+        maxAttempts: 3,
+        errorCode: null,
+        error: null,
+        createdAt: fixtureTimestamp,
+        updatedAt: fixtureTimestamp,
+        result: status === "succeeded"
+            ? {
+                connectionId: "connection-bilibili",
+                outcome: "active" as const,
+                account: "example",
+                reason: null,
+                checkedAt: fixtureTimestamp,
+            }
+            : null,
+    };
+}
 
 export function renderConnectionPanelLab(props: LabProps) {
     const state = optionProp(props, "state", "populated", ["populated", "empty"] as const);
     const client = state === "empty"
-        ? ({ listConnections: async () => [] } as unknown as HttpCosmosClient)
+        ? ({
+            listConnections: async () => [],
+            listSourceDefinitions: async () => [],
+        } as unknown as HttpCosmosClient)
         : connectionLabClient;
     return <ConnectionPanel client={client} />;
 }

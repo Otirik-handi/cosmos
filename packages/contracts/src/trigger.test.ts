@@ -85,7 +85,7 @@ describe("Trigger/SDK contracts (ADR-0018)", () => {
             operationIds: ["fetch"],
             capabilities: ["source:read", "cursor"],
             configurationSchema: { id: "c@1", version: 1, hash: { algorithm: "builtin", value: "c@1" } },
-            auth: { kind: "none", label: null, secretRefRequired: false },
+            auth: { kind: "none", label: null, secretRefRequired: false, probeSupported: false },
             operations: [{
                 operationId: "fetch",
                 inputSchema: { id: "i@1", version: 1, hash: { algorithm: "builtin", value: "i@1" } },

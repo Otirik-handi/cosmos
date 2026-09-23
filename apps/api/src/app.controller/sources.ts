@@ -363,6 +363,61 @@ export class AppControllerSources extends AppControllerBase {
         }
     }
 
+    /**
+     * 发起一次连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）。探测走 Worker：
+     * API 不访问外部平台，而且 OpenCLI 调用有分钟级超时，不能同步阻塞请求。能不能探测由
+     * manifest 声明决定，不硬编码 connectorId。
+     */
+    @Post("connections/:connectionId/probes")
+    @HttpCode(202)
+    @Bind(Param("connectionId"), Headers("idempotency-key"))
+    async createConnectionProbe(connectionId: string, idempotencyKey?: string) {
+        try {
+            const connection = await this.repository.getConnection(connectionId);
+            if (!connection) {
+                throw new NotFoundException({
+                    code: "not_found",
+                    message: `Connection not found: ${connectionId}`,
+                    retryable: false,
+                });
+            }
+            if (!this.supportsAuthProbe(connection.connectorId)) {
+                throw new ConflictException({
+                    code: "conflict",
+                    message: `Connector does not support login probing: ${connection.connectorId}`,
+                    retryable: false,
+                });
+            }
+            const providedKey = idempotencyKey === undefined ? undefined : requireIdempotencyKey(idempotencyKey);
+            const job = await this.repository.createConnectionProbeJob({
+                connectionId,
+                idempotencyKey: providedKey ?? `connection-probe:${randomUUID()}`,
+            });
+            this.logger?.info("job.queued", {
+                jobId: job.id,
+                kind: job.kind,
+                status: job.status,
+            });
+            return job;
+        } catch (error) {
+            connectionError(error);
+        }
+    }
+
+    @Get("connection-probes/:jobId")
+    @Bind(Param("jobId"))
+    async connectionProbe(jobId: string) {
+        const result = await this.repository.getJob(jobId);
+        if (!result || result.kind !== "connection-probe") {
+            throw new NotFoundException({
+                code: "not_found",
+                message: `Connection probe job not found: ${jobId}`,
+                retryable: false,
+            });
+        }
+        return result;
+    }
+
     // ---- Collection plans (ADR-0023): the user-visible collection unit. ----
 
     @Get("collection-plans")

@@ -26,6 +26,8 @@ export interface SourceAuthManifest {
     kind: "none" | "oauth" | "cookie" | "secret_ref" | "external";
     label: string | null;
     secretRefRequired: boolean;
+    /** 该 Adapter 是否支持连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）。 */
+    probeSupported: boolean;
 }
 
 export interface SourceDefinitionManifest {
@@ -205,8 +207,8 @@ const sourceOperation = (
     stateStoreNamespace,
 });
 
-const noAuth: SourceAuthManifest = { kind: "none", label: null, secretRefRequired: false };
-const externalAuth: SourceAuthManifest = { kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false };
+const noAuth: SourceAuthManifest = { kind: "none", label: null, secretRefRequired: false, probeSupported: false };
+const externalAuth: SourceAuthManifest = { kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false, probeSupported: true };
 
 export function createBuiltinManifestCatalog(): StaticCatalog {
     const sourceDefinitions: readonly SourceDefinitionManifest[] = [

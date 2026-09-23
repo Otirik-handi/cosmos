@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 
 import {
     ConnectorProbeService,
+    ConnectionProbeService,
     createBuiltinManifestCatalog,
     createMediaAcquirer,
     IngestionService,
@@ -145,6 +146,14 @@ async function bootstrap(): Promise<void> {
                     };
             },
         );
+        // 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：按连接解析连接器，
+        // 探测走 Worker——API 不访问外部平台。
+        const connectionProbe = new ConnectionProbeService(
+            repository,
+            (connectorId) => connectors.resolveByConnectorId(connectorId),
+            undefined,
+            logger,
+        );
         const workflowHost = config.workflowHostEnabled
             ? createWorkflowHost({
                 prisma: repository.prisma,
@@ -201,6 +210,7 @@ async function bootstrap(): Promise<void> {
             leaseMs: config.leaseMs,
             probe,
             configProbe,
+            connectionProbe,
             schedule: workflowHost === null,
             logger,
         });

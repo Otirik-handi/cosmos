@@ -18,6 +18,9 @@ import type {
 import {
     ConnectorProbeService, SourceConfigProbeService,
 } from "./connector-probe.js";
+import type {
+    ConnectionProbeService,
+} from "./connection-probe.js";
 import {
     RunFinalizationError,
 } from "./errors.js";
@@ -313,6 +316,8 @@ export interface IngestionWorkerOptions {
     now?: () => Date;
     probe?: ConnectorProbeService;
     configProbe?: SourceConfigProbeService;
+    /** 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）；不接线时该 Job 走失败终态。 */
+    connectionProbe?: ConnectionProbeService;
     /** Disable legacy schedule enqueue while Workflow envelopes own scheduling. */
     schedule?: boolean;
     logger?: LoggerPort;

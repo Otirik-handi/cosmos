@@ -170,6 +170,8 @@ Registry 按业务 `Source.kind` resolve connector，不根据 capability、可�
 
 `mode=feed` 需要登录态，因此要求当轮快照带一条**含合法 profile 的连接**；没有连接、连接里没有 profile、或 profile 形状非法时，`validate` 与 `fetchItems` 都以不可重试的 `invalid_configuration` 失败。`mode=hot` 匿名可用，没有连接也照常抓取。
 
+连接登录探测（ADR-0027 决定 2）跑一次登录门控命令 `bilibili me -f json`，**不跑 doctor**——runner 已经把「浏览器桥不可用」与「需要登录」分成不同错误，不需要多一次子进程调用。映射固定：退出码 `0` 时按 `name`（其次 `uid`）取账号标签并给 `active`；`authentication_required`（退出码 `77`）给 `expired`；`dependency_unavailable`（含退出码 `69`）与 `timeout` 给 `error`；连接里没有 profile 时直接给 `error`，不跑命令。同一次探测只用一个 profile。
+
 若当轮连接提供 profile，OpenCLI 子进程环境包含：
 
 ```text

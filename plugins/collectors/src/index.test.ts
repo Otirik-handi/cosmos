@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createLogger } from "@cosmos/logging";
+import { ConnectorExecutionError } from "@cosmos/application";
 import type { SourceExecutionSnapshot } from "@cosmos/contracts";
 
 import {
@@ -373,5 +374,69 @@ describe("built-in collectors", () => {
             "aihot",
         ]);
         expect(registry.descriptors().map((item) => item.id)).not.toContain("opencli");
+    });
+
+    /**
+     * 连接登录探测（Proposal connection-login-lifecycle-v1 决定 2）：跑一次登录门控命令，
+     * 把退出状态翻译成宿主的三种 outcome。它按**连接**调用，不需要来源。
+     */
+    it("probes the connection login state through the login-gated command", async () => {
+        const seenArgs: string[][] = [];
+        const seenProfiles: unknown[] = [];
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async (args, options) => {
+                    seenArgs.push([...args]);
+                    seenProfiles.push(options?.env?.OPENCLI_PROFILE);
+                    return {
+                        stdout: JSON.stringify({ name: "我爱吃番茄酱", uid: 1909976659 }),
+                        stderr: "",
+                        exitCode: 0,
+                    };
+                },
+            },
+        });
+
+        await expect(connector.probeAuthorization?.({
+            connection: bilibiliConnection("chrome-main"),
+        })).resolves.toEqual({ outcome: "active", account: "我爱吃番茄酱", reason: null });
+        expect(seenArgs).toEqual([["bilibili", "me", "-f", "json"]]);
+        expect(seenProfiles).toEqual(["chrome-main"]);
+    });
+
+    it("maps a not-logged-in probe to expired, a broken bridge to error, and reaches for no profile", async () => {
+        const connectorThrowing = (error: ConnectorExecutionError) => createBilibiliConnector({
+            runner: {
+                run: async () => {
+                    throw error;
+                },
+            },
+        });
+
+        await expect(connectorThrowing(new ConnectorExecutionError(
+            "authentication_required",
+            "OpenCLI requires a logged-in browser profile.",
+            false,
+        )).probeAuthorization?.({ connection: bilibiliConnection("chrome-main") }))
+            .resolves.toMatchObject({ outcome: "expired" });
+
+        await expect(connectorThrowing(new ConnectorExecutionError(
+            "dependency_unavailable",
+            "OpenCLI Browser Bridge is unavailable.",
+            true,
+        )).probeAuthorization?.({ connection: bilibiliConnection("chrome-main") }))
+            .resolves.toMatchObject({ outcome: "error" });
+
+        // 连接没配 profile：探测没有可用的登录态可查，直接给出结论而不是去跑命令。
+        const noProfile = createBilibiliConnector({
+            runner: {
+                run: async () => {
+                    throw new Error("runner must not be called");
+                },
+            },
+        });
+        await expect(noProfile.probeAuthorization?.({
+            connection: { id: "connection-bilibili", connectorId: "bilibili", configJson: null },
+        })).resolves.toMatchObject({ outcome: "error" });
     });
 });

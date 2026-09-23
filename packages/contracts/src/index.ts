@@ -44,7 +44,9 @@ export {
 } from "./collection-plan.js";
 
 export {
-    assetSnapshotSchema, assetStatusSchema, connectorDescriptorSchema, ingestResultSchema,
+    assetSnapshotSchema, assetStatusSchema, connectionProbeJobPayloadSchema,
+    connectionProbeJobSnapshotSchema, connectionProbeOutcomeSchema, connectionProbeResultSchema,
+    connectorDescriptorSchema, ingestResultSchema,
     jobKindSchema, jobListSchema, jobSnapshotSchema, jobStatusSchema, jsonSchemaRefSchema, manifestHashSchema,
     mediaCleanupCommandSchema, mediaCleanupEntrySchema, mediaCleanupReportSchema,
     mediaCleanupRunSnapshotSchema, publicAssetSnapshotSchema, sourceAuthSchema,
@@ -52,7 +54,9 @@ export {
     sourceConfigProbeJobPayloadSchema, sourceConfigProbeJobSnapshotSchema,
     sourceConfigProbeResultSchema, sourceDefinitionManifestSchema, sourceDefinitionPageSchema,
     sourceDefinitionStatusSchema, sourceOperationManifestSchema, stepStatusSchema,
-    type AssetSnapshot, type AssetStatus, type ConnectorDescriptor, type IngestResult,
+    type AssetSnapshot, type AssetStatus, type ConnectionProbeJobPayload,
+    type ConnectionProbeJobSnapshot, type ConnectionProbeOutcome, type ConnectionProbeResult,
+    type ConnectorDescriptor, type IngestResult,
     type JobKind, type JobSnapshot, type JobStatus, type JsonSchemaRef, type ManifestHash,
     type MediaCleanupCommand, type MediaCleanupEntry, type MediaCleanupReport,
     type MediaCleanupRunSnapshot, type PublicAssetSnapshot, type SourceAuth,

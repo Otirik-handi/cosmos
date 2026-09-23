@@ -434,6 +434,11 @@ export const connectionInstanceSchema = z.object({
     status: connectionStatusSchema,
     secretRef: z.string().nullable(),
     lastError: z.string().nullable(),
+    /**
+     * 最近一次登录探测的时间（Proposal connection-login-lifecycle-v1 决定 2）；从未探测为 null。
+     * 它由探测回写，不走公开的更新命令。
+     */
+    lastCheckedAt: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
 }).strict();

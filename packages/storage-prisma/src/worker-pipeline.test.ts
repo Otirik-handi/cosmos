@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
-import { ConnectorExecutionError, ConnectorProbeService, createBuiltinManifestCatalog, ConnectorRegistry, IngestionService, IngestionWorker, SourceConfigProbeService, type IngestConnector } from "@cosmos/application";
+import { ConnectorExecutionError, ConnectorProbeService, ConnectionProbeService, createBuiltinManifestCatalog, ConnectorRegistry, IngestionService, IngestionWorker, SourceConfigProbeService, type IngestConnector } from "@cosmos/application";
 import { PrismaCosmosRepository } from "./index.js";
 import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
 
@@ -223,6 +223,77 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             });
             expect((await repository.entries({ limit: 20 })).items).toHaveLength(0);
             expect((await repository.listSources()).filter((source) => source.id === "config-probe")).toHaveLength(0);
+        } finally {
+            await repository.close();
+        }
+    });
+
+    /**
+     * 连接登录探测的 Worker 派发（Proposal connection-login-lifecycle-v1 决定 2）：作业被认领、
+     * 跑完、结论写回连接。认领清单是显式的，所以这条用例同时守住「新 kind 进了 acceptedKinds」。
+     */
+    it("dispatches a connection probe job and writes the conclusion back", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-connection-probe-test-"));
+        temporaryRoots.push(root);
+        prepareDatabase(root);
+
+        const repository = new PrismaCosmosRepository({ dataRoot: root });
+        await repository.initialize();
+
+        try {
+            const connection = await repository.createConnection({
+                name: "主账号",
+                connectorId: "bilibili",
+                configJson: '{"profile":"chrome-main"}',
+            });
+            const job = await repository.createConnectionProbeJob({
+                connectionId: connection.id,
+                idempotencyKey: "connection-probe-1",
+            });
+            expect(job.kind).toBe("connection-probe");
+            expect(job.sourceId).toBeNull();
+
+            const connector: IngestConnector = {
+                id: "bilibili",
+                description: "Bilibili",
+                configVersion: "v1",
+                capabilities: ["bilibili"],
+                validate: () => undefined,
+                async fetchItems() {
+                    return { items: [], nextCursor: null };
+                },
+                async probeAuthorization() {
+                    return { outcome: "expired", reason: "需要重新登录。" };
+                },
+            };
+            const connectionProbe = new ConnectionProbeService(
+                repository,
+                () => connector,
+                () => "2026-09-23T09:00:00.000Z",
+            );
+            const worker = new IngestionWorker(
+                repository,
+                new IngestionService(repository, () => connector),
+                {
+                    owner: "connection-probe-worker",
+                    leaseMs: 60_000,
+                    connectionProbe,
+                },
+            );
+
+            const result = await worker.pollOnce();
+            expect(result?.status).toBe("succeeded");
+            expect((await repository.getJob(job.id))?.result).toMatchObject({
+                connectionId: connection.id,
+                outcome: "expired",
+                reason: "需要重新登录。",
+            });
+            // 结论写回连接：这就是「登录状态有自动写入方」的证据。
+            await expect(repository.getConnection(connection.id)).resolves.toMatchObject({
+                status: "expired",
+                lastError: "需要重新登录。",
+                lastCheckedAt: "2026-09-23T09:00:00.000Z",
+            });
         } finally {
             await repository.close();
         }

@@ -10,7 +10,8 @@ import type {
     ClaimedJob, CompleteJobInput, IngestionWorkerOptions, WorkerJobResult,
 } from "./ingestion-service.js";
 import {
-    normalizeFailure, readConfigProbeCommand, readOptionalSourceId, readSourceId,
+    normalizeFailure, readConfigProbeCommand, readConnectionProbeConnectionId,
+    readOptionalSourceId, readSourceId,
     retryDelayMs,
 } from "./internals.js";
 import {
@@ -43,7 +44,14 @@ export class IngestionWorker {
         const job = await this.repository.claimNextJob({
             owner: this.options.owner,
             leaseMs: this.options.leaseMs,
-            acceptedKinds: ["source-ingest", "source-probe", "source-config-probe"],
+            // 认领清单是显式的：只列这个 Worker 真的能跑的作业种类。连接探测在没有接线
+            // 服务的进程里不认领（否则它会领到一个只能判失败的作业）。
+            acceptedKinds: [
+                "source-ingest",
+                "source-probe",
+                "source-config-probe",
+                ...(this.options.connectionProbe ? ["connection-probe" as const] : []),
+            ],
         });
         if (!job) {
             return null;
@@ -130,6 +138,32 @@ export class IngestionWorker {
                     const result = await logger.withContext(
                         { jobId: job.id },
                         () => this.options.configProbe!.run(command),
+                    );
+                    const completed = await this.completeClaimedJob(job, logger, {
+                        status: "succeeded",
+                        result,
+                    });
+                    if (completed) {
+                        logger.info("job.completed", {
+                            kind: job.kind,
+                            status: "succeeded",
+                            attempts: job.attempts,
+                        });
+                    }
+                    return completed
+                        ? {
+                            jobId: job.id,
+                            runId: null,
+                            status: "succeeded",
+                            attempts: job.attempts,
+                        }
+                        : null;
+                }
+                if (job.kind === "connection-probe" && !job.runId && this.options.connectionProbe) {
+                    const connectionId = readConnectionProbeConnectionId(job.payload);
+                    const result = await logger.withContext(
+                        { jobId: job.id },
+                        () => this.options.connectionProbe!.run(connectionId),
                     );
                     const completed = await this.completeClaimedJob(job, logger, {
                         status: "succeeded",

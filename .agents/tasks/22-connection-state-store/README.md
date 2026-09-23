@@ -141,24 +141,25 @@ Non-goals（见 Proposal / ADR-0017）：
 - 墓碑（`deletedAt` 非空）来源的配置**不改写**：它是历史记录，且已删除的目标不会再抓取；只有 live 来源参与建连接、补绑定与移除 profile。
 - 只读回调而非仓储：`SourceConfigProbeService` 仍旧拿不到 `CosmosRepository`，「未保存配置的探测结构上无法持久化」这条性质不变。
 
+切片 4b 追加：
+
+- **探测是连接级能力，不是 Source Operation**（ADR-0027 决定 2）：ingest 管线对 operation 一视同仁（抓到的 items 全部入库），一个「不返回内容」的操作要么造垃圾条目、要么得新造「operation 种类」概念。探测不产生 Run、不产生条目。
+- **能不能探测由声明决定**：`auth.probeSupported` 同时驱动 API 的 409 判断与 Web 的按钮显示，宿主不硬编码 connectorId。副作用是 Web 上「没声明就不显示按钮」，避免给用户一个必然失败的动作。
+- **`lastCheckedAt` 到 4b 才引入**：Proposal 的决定 1 把它列在连接字段里，但那时没有任何写入方——先造一个没人写的字段正是本片一直反对的模式，所以 4a 只落 `configJson`，检查时间随探测一起落地。
+- **`recordConnectionProbe` 是独立仓储方法**，不复用 `updateConnection`：写回的是系统观测而不是用户编辑，`lastCheckedAt` 也刻意不从公开命令写；四个字段一次写入。
+- **适配器把预期失败说成 outcome**（`expired`／`error`），只有真正的意外才抛异常；`ConnectionProbeService` 仍兜住 `ConnectorExecutionError` 作为安全网（适配器漏翻的错误也不会让 Job 白跑）。
+- **认领清单显式加 kind，且只在接线该服务时才认领**：否则 Worker 会领到一个自己只能判失败的作业。
+- **面板的轮询上限必须大于连接器的子进程超时**（150s > 120s）：旧上限 60s 会让一次慢但会成功的探测永远显示成超时（本机实测一次探测 52s）。
+
 ## Implementation Walkthrough
 
 > 切片 1 与切片 2 的实施步骤已归档到 [`readme/slices-2026-09-10-23.md`](readme/slices-2026-09-10-23.md)（历史，只搬位置，不改内容）。
 
 切片 3（2026-09-23，连接可见性）的实施步骤已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)（历史，只搬位置）。
 
-切片 4a（2026-09-23，连接承载 profile）：
+切片 4a（2026-09-23，连接承载 profile）的实施步骤（10 项，含权威文档同步）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)（历史，只搬位置）。
 
-1. **contracts**：`connectionInstanceSchema` 增 `configJson`（+ 创建/更新命令各增可选字段）；新增 `sourceConnectionProjectionSchema` 并挂到 `sourceExecutionSnapshotSchema.connection`；`bilibiliSourceConfigSchema` 去掉 `profile` 与 feed 条件必填；`sourceConfigProbeCommandSchema` 增可选 `connectionId`；profile 的格式规则提为 `openCliProfileSchema` 并从包入口导出（`entry-surface.txt` 显式重生成，+1 值 +1 类型）。
-2. **Prisma + 迁移** `20260923180000_connection_adapter_config`：`ConnectionInstance` 加 `configJson` 列；按 profile 建连接（确定性 id `connection:bilibili:<profile>` + `INSERT OR IGNORE`）、计划只在 `connectionId` 为空时补绑定、从 live 来源配置 `json_remove` 掉 `profile`。
-3. **storage**：`createConnection`/`updateConnection` 写 `configJson`；`toConnectionSnapshot` 带出它；`toSourceSnapshot` 的计划查询 `include: { connection: true }` 并填冻结点。
-4. **collectors**：profile 从连接投影读（与本文件同期搬走的合同规则共用 `openCliProfileSchema`），`feed` 需要「带 profile 的连接」、`hot` 仍匿名可用；新增断言证明 profile 到达版本检查、doctor 与业务命令三条子进程调用。
-5. **application**：`SourceConfigProbeService` 增只读 `resolveConnection` 回调（服务仍拿不到仓储），未保存配置的探测把连接投影交给连接器；给了连接却解析不到按 `invalid_configuration` 拒绝。
-6. **API**：`POST /source-config-probes` 对 `connectionId` 做存在性检查（与 `createSource` 同例 404）；`toPublicSource` 的 Bilibili 白名单去掉 `profile`。
-7. **Worker**：`configProbe` 注入读连接的解析器。
-8. **Web**：连接面板增「适配器配置」输入（本地 JSON 校验、提交前规范化、非法则拦下且不清空表单）与每行的「适配器配置」展示；来源表单发探测请求时带上所选连接。来源表单的 profile 输入框随 manifest 消失（`catalog.ts` 的 `configurationSchema` 与组件实验室夹具同步）。
-9. **夹具与脚本**：组件实验室连接夹具、transport 连接夹具、`apps/api` 的建目标用例（按新合同重写）、collectors 夹具、浏览器 E2E（连接表单填 profile + 回显断言）、`scripts/e2e/real-bilibili-plans.ts`（profile 进连接的 `configJson`）、`real-source.ts` 的 `bilibili-hot` 配置。
-10. **权威文档同步**：`docs/spec/contracts/0001`（连接 DTO 的 `configJson`、执行快照的 `connection` 投影、探测命令的 `connectionId`、Bilibili 配置去掉 profile）、`application/0001-connector-runtime`（冻结的连接投影与探测的只读 `resolveConnection`）、`application/0004-manifest-catalog`（Bilibili 配置属性表）、`connectors/0002-managed-collectors`（profile 归连接的输入表、feed 的连接要求与重建验收 3/7）、`interfaces/0002-product-api-http`（`configJson` 与探测的 `connectionId`／404）、`interfaces/0005-web-client`（表单不再收适配器配置、探测带连接、连接面板的适配器配置输入与展示）、`storage/0001-prisma-repository`（补上缺失的 `ConnectionInstance` 模型行并记 `configJson`）、`docs/api/` 的 Draft 两处现状注记、架构 §4.2、新增 ADR [`0027`](../../../docs/adr/0027-connection-login-lifecycle-v1.md)（含 ADR-0017 的「部分取代」与 ADR-0018 Revisit Gate 的命中标注）与勘误台账的 §12 口径注记。
+切片 4b（2026-09-23，登录探测）的实施步骤（10 项，含权威文档同步）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)（历史，只搬位置）。
 
 ## Verification / Gate
 
@@ -166,16 +167,9 @@ Non-goals（见 Proposal / ADR-0017）：
 
 切片 3 验证（2026-09-23，实际运行）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)。
 
-切片 4a 验证（2026-09-23，实际运行）：
+切片 4a 验证（2026-09-23，实际运行）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)。
 
-- `bun run build:packages` → `bun run typecheck` 全仓 **0 error**；`bun run lint:web` **0 error**（79 条既有 warning）。
-- 全量单元测试 `bun run test`：**123 文件 / 704 用例全部通过**（切片 3 基线 122 文件 / 698 用例；本片新增 1 个测试文件与 6 个用例——contracts `connection.test.ts` +1、`source.test.ts` +2、application `connector-probe.test.ts` +2、storage `connection-adapter-config-backfill.test.ts` +1）。
-- 迁移回填用例按真实迁移顺序两段式部署（`20260923120000_connector_state_namespace_owner` → 全部），断言：同一 profile 的两个来源收敛到同一条连接、另一个 profile 单独一条、匿名来源既不建连接也不绑定、来源配置里的 profile 被移除、墓碑来源的配置与绑定原样、RSS 计划不受影响。
-- 浏览器产品 E2E：`bun run build` 后 `bunx playwright test --config playwright.config.ts e2e/browser/collection-plan-connectors.spec.ts` → **2 passed**（连接表单填适配器配置 → 行上按 `profile: chrome-main` 回显 → 同一连接下建出 hot/feed 两个计划）。
-- 组件实验室 E2E：`bunx playwright test --config playwright.component-lab.config.ts e2e/component-lab/connection-panel.spec.ts` → **3 passed**（新增一例：非法 JSON 的适配器配置在本地被拦下且表单不清空）。
-- `bun run docs:check`：754 文件 0 失败；`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` PASS；`git diff --check` 干净。
-- **环境事实（本片踩到并记录）**：新建 worktree 里没有 `node_modules/@cosmos/*`，包名导入会沿目录回溯到**主工作区**的 workspace 包，于是 worktree 里的类型检查与跨包测试实际测的是主工作区的代码（假绿灯、假红灯）。正确顺序是 worktree 内 `bun install --frozen-lockfile` → `bun run db:generate`（install 会覆盖刚生成的 Prisma 客户端）→ `bun run build:packages` → 才跑 typecheck/测试。锁文件未被改动。
-- 未运行：`test:real:bilibili`／`test:real:rss` 真实来源验收（需要本机 OpenCLI + Browser Bridge，本片改了 feed 的登录态来源，建议合并前在本机跑一次）、Windows smoke、Docker、发布部署；Node 进程 E2E 未新增配置探测用例（该路径由 `connector-probe.test.ts` 的行为测试覆盖）。
+切片 4b 验证（2026-09-23，实际运行）已归档到 [`readme/slices-2026-09-23.md`](readme/slices-2026-09-23.md)。
 
 ## Follow-ups
 
@@ -190,6 +184,13 @@ Non-goals（见 Proposal / ADR-0017）：
 - **「连接变更后作废探测结果」没有实现**：既有代码里 `watchedConfig`／`watchedScheduleInterval` 只声明未使用（属既有 lint warning），`probeConfigKeyRef` 实际只是「有没有在跑的探测」标志；连接现在也影响探测结果，应与配置一并纳入作废条件。
 - 连接面板**只在建连接时**能写 `configJson`（命令已支持 `updateConnection.configJson`，面板没有编辑入口）；填错 profile 的用户今天只能删了重建。编辑入口与切片 4b 的登录探测一起定——那时系统会读它，改错要能改。
 - `configJson` 只要求「合法 JSON」，profile 的形状由连接器读时裁决；接入更多 Adapter 时需要一份 per-connector 的连接配置 schema（与 `sourceConfigurationSchemas` 同构）。
+
+切片 4b 追加 Follow-ups：
+
+- 连接面板**仍不能在建连接之后**改 `configJson`：探测如果报出「需要重新登录」或 profile 写错了，用户今天只能删了重建。这是 4b 之后最疼的缺口，编辑入口应当紧随其后（命令层已经支持）。
+- 探测结论不进 DomainEvent／审计：今天只写 `job.queued.v1`。「谁在什么时候探测了哪条登录态」将来要做审计时需要新决定（含是否记录探测来源）。
+- 探测没有速率限制：连点会排多个 Job（幂等键由 UI 每次新生成），需要时按 ADR 决定限流与合并策略。
+- 真实登录态验收（`test:real:bilibili` 扩展成「探测 + feed 抓取」一条链）仍未进自动化：本机有 OpenCLI 环境时应补。
 
 切片 3 追加 Follow-ups：
 

@@ -34,6 +34,10 @@ type	CollectionPlanSnapshot
 type	CollectionPlanWebhookEntry
 type	CollectionSummary
 type	ConnectionInstance
+type	ConnectionProbeJobPayload
+type	ConnectionProbeJobSnapshot
+type	ConnectionProbeOutcome
+type	ConnectionProbeResult
 type	ConnectionStatus
 type	ConnectorDescriptor
 type	ConnectorStateExport
@@ -277,6 +281,10 @@ value	collectionPlanWebhookEntryPath
 value	collectionPlanWebhookEntrySchema
 value	collectionSummarySchema
 value	connectionInstanceSchema
+value	connectionProbeJobPayloadSchema
+value	connectionProbeJobSnapshotSchema
+value	connectionProbeOutcomeSchema
+value	connectionProbeResultSchema
 value	connectionStatusSchema
 value	connectorDescriptorSchema
 value	connectorStateExportQuerySchema
