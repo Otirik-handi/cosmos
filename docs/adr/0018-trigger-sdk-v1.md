@@ -4,6 +4,8 @@
 >
 > 日期：2026-09-10
 >
+> 部分取代：决定 1 的「一个来源当前最多一个 TriggerBinding」由 ADR [`0025`](0025-multi-trigger-per-plan.md) 取代（2026-09-22，一个计划可持有多个触发器）；其余决定不变。
+>
 > 关联：[`trigger-sdk-v1 Proposal`](../proposals/trigger-sdk-v1.md)、[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md) §4.1/§4.4、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) AUT-004/EXT-006/007、ADR [`0001`](0001-durable-workflow-runtime.md)、ADR [`0017`](0017-connection-secret-state-v1.md)
 
 ## Context
@@ -14,7 +16,7 @@ PRD 把 Trigger/SDK 拆成两块：AUT-004（Trigger 由 Webhook/内部事件/�
 
 ### 1. `TriggerBinding` 实体 + 从 config 迁移 `scheduleIntervalMs`
 
-新增 `TriggerBinding`（id、sourceId `@unique`、kind `schedule|manual`、configJson、enabled、revision）。一个来源当前最多一个 TriggerBinding。migration 把既有来源的 `scheduleIntervalMs` 从 configJson 迁出（SQLite `json_extract`/`json_remove` + 确定性 id `trigger:<sourceId>`）到 schedule TriggerBinding。`SourceInstance.config` 不再承载 `scheduleIntervalMs`（`scheduleConfigShape` 清空）；调度循环改读 `listScheduleTriggers()`（join 来源 enabled + schedule trigger）。`createSource`/`updateSource` 用顶层 `scheduleIntervalMs` 建/改/删 TriggerBinding。
+新增 `TriggerBinding`（id、sourceId `@unique`、kind `schedule|manual`、configJson、enabled、revision）。一个来源当前最多一个 TriggerBinding（该单绑定口径已由 ADR [`0025`](0025-multi-trigger-per-plan.md) 取代）。migration 把既有来源的 `scheduleIntervalMs` 从 configJson 迁出（SQLite `json_extract`/`json_remove` + 确定性 id `trigger:<sourceId>`）到 schedule TriggerBinding。`SourceInstance.config` 不再承载 `scheduleIntervalMs`（`scheduleConfigShape` 清空）；调度循环改读 `listScheduleTriggers()`（join 来源 enabled + schedule trigger）。`createSource`/`updateSource` 用顶层 `scheduleIntervalMs` 建/改/删 TriggerBinding。
 
 ### 2. `SourceDefinitionManifest` 扩展 per-operation 声明（EXT-006/007）
 

@@ -147,6 +147,13 @@ the current code has not removed it or replaced it with a permanent redirect.
 | `POST /connections` | body `CreateConnectionCommand` | HTTP 201 返回 `ConnectionInstance`（status 缺省 `active`）；非法 body 400 `validation_failed`。 |
 | `PATCH /connections/:connectionId` | body `UpdateConnectionCommand`（全可选） | HTTP 200 返回更新后的 `ConnectionInstance`；不存在 404。 |
 | `POST /connections/:connectionId/removals` | path `connectionId` | HTTP 200 返回 ack；同事务把引用该连接的 Source `connectionId` 置空，不删除来源。 |
+| `GET /collection-plans` | 无 | HTTP 200 返回 `CollectionPlanSnapshot[]`（按 createdAt 升序；墓碑来源的计划不出现）。 |
+| `GET /collection-plans/:planId` | path `planId` | HTTP 200 返回 `CollectionPlanSnapshot`；不存在或来源已删除 404。 |
+| `PATCH /collection-plans/:planId` | body `UpdateCollectionPlanCommand`：必填 `baseRevisionId`，可选 `name`/`connectionId`/`scheduleIntervalMs`/`mediaPolicy`/`enabled` | HTTP 200 返回更新后投影；不存在 404；revision 过期 409；`enabled: true` 前先按 canonical schema 校验已保存的目标配置，不合法 400。`scheduleIntervalMs` 只增/改/删 schedule 触发器，不触碰 webhook 入口（ADR-0025）。 |
+| `POST /collection-plans/:planId/webhook-entry` | path `planId` | HTTP 201 返回 `{ planId, entryPath, credential }`（ADR-0024）：入口标识与凭证一起生成或轮换，**明文凭证只在这个响应里出现一次**，旧凭证立即失效；不存在 404。不要求计划已启用——计划停用时由 inbound 端点拒绝请求。 |
+| `DELETE /collection-plans/:planId/webhook-entry` | path `planId` | HTTP 200 返回撤销后的 `CollectionPlanSnapshot`（`webhook` 回到 `null`）：删除入口标识与凭证字节，幂等；不存在 404。 |
+
+Webhook 入口的 `entryPath` 会出现在 URL 与日志里，所以它不是凭证；凭证本体只在生成/轮换响应里出现一次，读投影只回答 `credentialConfigured`（ADR-0024）。
 
 Connection 的 `secretRef` 只以不透明字符串回显；凭证本体只在 SecretStore 内、经能力受限租约读写，不进入任何 HTTP DTO、DomainEvent、Job payload 或日志（ADR-0017）。
 

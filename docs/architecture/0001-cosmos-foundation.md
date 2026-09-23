@@ -129,6 +129,7 @@
 84. 旧数据迁移先按已登记的 kind→sourceDefinitionRef/operationId 显式映射预检；未知 kind、非唯一映射或 manifest 不可用时阻断迁移并报告，不静默生成 ref。
 85. `CollectionPlan` v1 落地为真实对象：用户可见的独立采集计划持有连接引用、触发器、媒体预算、计划级 checkpoint 与状态命名空间，v1 与采集目标一对一；目标继续承载内容身份（Entry/Observation 归属不变）。重叠策略 v1 只实现与现状等价的一种，本节第 73 条预留的 `queue`/`replace`/`allow`/`merge` 随后续切片；迁移按 expand／backfill／read switch／contract 四步，contract 单独部署与授权（Proposal [`collection-plan-v1`](../proposals/collection-plan-v1.md)、ADR [`0023`](../adr/0023-collection-plan-v1.md)）。
 86. AUT-004 的剩余触发形态 v1 落地为 `webhook` 一种：Phase 2 只交付 Webhook——入口以 `TriggerBinding` 为定位对象（`planId` 优先、否则按来源）、持有不可猜的不透明标识、凭证走 SecretStore 并沿用明文-at-rest 的既有边界、请求必须有幂等与限流与体积上限与脱敏、触发的原因/输入/时间/定义版本四项证据落 Run 既有位置；`event`／`condition`／`dependency` 记 Phase 3，`poll` 不单列类型（轮询由 `schedule` + 持久 checkpoint 表达）。§4.1 预留的七种 Trigger 类型不因此改写（Proposal [`trigger-forms-v1`](../proposals/trigger-forms-v1.md)、ADR [`0024`](../adr/0024-trigger-forms-v1.md)）。
+87. 一个采集计划可以持有多个 `TriggerBinding`：唯一约束为「每来源／计划、每种类型一行」（`(sourceId, kind)`／`(planId, kind)`），schedule 行与 webhook 行可共存，各自持有 `enabled` 与 `revision`；调度只读 schedule 行，计划的调度写入口只动 schedule 行；计划读投影不暴露触发器 id（ADR [`0025`](../adr/0025-multi-trigger-per-plan.md)，取代 ADR-0018 决定 1 的单绑定口径）。
 
 ## 21. 架构不变量
 后续实现和重构必须持续验证：

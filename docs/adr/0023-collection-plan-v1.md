@@ -97,6 +97,6 @@ v1 的完成定义 = expand + backfill + read switch + 产品面 + 验收。回�
 
 - 需要「同一采集目标多个计划」或补齐 `queue`／`replace`／`allow`／`merge` 重叠策略；
 - 用户自定义 Workflow 绑定（Phase 3）需要计划承载版本选择；
-- AUT-004 的事件类触发开始接入计划（触发形态从 schedule／manual 扩展）；
+- AUT-004 的事件类触发开始接入计划（触发形态从 schedule／manual 扩展）——**已于 2026-09-22 触发并处理**：webhook 形态按 ADR [`0024`](0024-trigger-forms-v1.md) 落地，「一个计划可持有多个触发器」的模型由 ADR [`0025`](0025-multi-trigger-per-plan.md) 冻结；
 - 多用户或多租户出现，连接共享与计划权限需要新边界；
 - 迁移第 4 步（contract）准备执行，需要重新确认无消费者依赖来源上的旧字段。
