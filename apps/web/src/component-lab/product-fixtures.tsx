@@ -307,7 +307,6 @@ export function renderCollectionPlanListLab(props: LabProps) {
             sourceId: "source-fixture",
             sourceRevisionId: "source-fixture:1",
             connectionId: grouped ? "connection-fixture" : null,
-            triggerBindingId: null,
             mediaPolicy: state === "media-policy"
                 ? { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 }
                 : null,
@@ -315,6 +314,7 @@ export function renderCollectionPlanListLab(props: LabProps) {
             enabled: state !== "disabled" && booleanProp(props, "enabled", true),
             revisionId: "plan:source-fixture:1",
             scheduleIntervalMs: state === "untimed" ? null : 1_800_000,
+            webhook: null,
             lastRunAt: null,
             lastError: state === "disabled" ? "Fixture plan disabled" : null,
             createdAt: fixtureTimestamp,

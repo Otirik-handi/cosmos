@@ -22,13 +22,25 @@ export const collectionPlanSnapshotSchema = z.object({
      */
     sourceRevisionId: sourceRevisionIdSchema,
     connectionId: z.string().nullable(),
-    triggerBindingId: z.string().nullable(),
+    /**
+     * 触发器 id 不进读投影（ADR-0025）：一个计划可以持有多种触发器（schedule、webhook），
+     * 「那个绑定的 id」没有唯一含义。产品面用 `scheduleIntervalMs` 与 webhook 入口表达触发
+     * 现状，触发器的 id 只在仓储内部使用。
+     */
     mediaPolicy: sourceMediaPolicySchema.nullable(),
     overlapPolicy: collectionPlanOverlapPolicySchema,
     enabled: z.boolean(),
     revisionId: sourceRevisionIdSchema,
     /** 计划的调度间隔；没有调度绑定时为 null（只手动触发）。 */
     scheduleIntervalMs: z.number().int().nullable(),
+    /**
+     * Webhook 入口（ADR-0024）：没有入口时为 null。`credentialConfigured` 只表示
+     * SecretStore 里是否已有凭证——明文只在生成/轮换的响应里出现一次，读投影永不回显。
+     */
+    webhook: z.object({
+        entryPath: z.string(),
+        credentialConfigured: z.boolean(),
+    }).strict().nullable(),
     /**
      * 最近一次运行与错误，取**归计划**的 Run／WorkflowRun（ADR-0023 决策 2 已把运行归属
      * 计划）。产品面按计划呈现状态，所以这是计划自己的事实，不再从来源行借用。
@@ -63,3 +75,22 @@ export const updateCollectionPlanCommandSchema = z.object({
     enabled: z.boolean().optional(),
 }).strict();
 export type UpdateCollectionPlanCommand = z.infer<typeof updateCollectionPlanCommandSchema>;
+
+/**
+ * Webhook 入口的生成/轮换结果（ADR-0024）。凭证明文只在这个响应里出现一次：
+ * 之后读投影只回答「已配置」，轮换会立即作废旧凭证。
+ */
+export const collectionPlanWebhookEntrySchema = z.object({
+    planId: z.string(),
+    entryPath: z.string(),
+    credential: z.string().trim().min(1),
+}).strict();
+export type CollectionPlanWebhookEntry = z.infer<typeof collectionPlanWebhookEntrySchema>;
+
+/**
+ * 入口路径的唯一构造点：计划读投影与 inbound 路由必须用同一个形状，否则产品面给出的
+ * 地址会指向一个不存在的入口。
+ */
+export function collectionPlanWebhookEntryPath(token: string): string {
+    return `/hooks/collection-plans/${token}`;
+}

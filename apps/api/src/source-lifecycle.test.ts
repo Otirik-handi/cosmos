@@ -76,12 +76,12 @@ describe("AppController Source mutations", () => {
             name: "RSS",
             sourceId: "source-1",
             connectionId: null,
-            triggerBindingId: null,
             mediaPolicy: null,
             overlapPolicy: "forbid" as const,
             enabled: false,
             revisionId: "plan:source-1:1",
             scheduleIntervalMs: null,
+            webhook: null,
             createdAt: "2026-08-24T00:00:00.000Z",
             updatedAt: "2026-08-24T00:00:00.000Z",
         };

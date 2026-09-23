@@ -35,8 +35,10 @@ export {
 
 export {
     collectionPlanOverlapPolicySchema, collectionPlanSnapshotSchema,
+    collectionPlanWebhookEntryPath, collectionPlanWebhookEntrySchema,
     createCollectionPlanCommandSchema, updateCollectionPlanCommandSchema,
     type CollectionPlanOverlapPolicy, type CollectionPlanSnapshot,
+    type CollectionPlanWebhookEntry,
     type CreateCollectionPlanCommand, type UpdateCollectionPlanCommand,
 } from "./collection-plan.js";
 

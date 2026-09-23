@@ -502,13 +502,15 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         // 来源侧的同名列在读取切换后不再被读，也不再被写。
         const plan = await db.collectionPlan.findUnique({
             where: { sourceId: source.id },
-            include: { triggerBinding: true },
+            include: { triggerBindings: true },
         });
         if (!plan) {
             throw new Error(`Source has no collection plan: ${source.id}`);
         }
-        const triggerConfig = plan.triggerBinding
-            ? JSON.parse(plan.triggerBinding.configJson) as { intervalMs?: number }
+        // 计划可以持有多种触发器（ADR-0025）：来源投影里的调度间隔只由 schedule 行派生。
+        const scheduleBinding = plan.triggerBindings.find((binding) => binding.kind === "schedule") ?? null;
+        const triggerConfig = scheduleBinding
+            ? JSON.parse(scheduleBinding.configJson) as { intervalMs?: number }
             : null;
         return {
             id: source.id,

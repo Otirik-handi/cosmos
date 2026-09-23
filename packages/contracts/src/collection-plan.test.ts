@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
     collectionPlanOverlapPolicySchema,
     collectionPlanSnapshotSchema,
+    collectionPlanWebhookEntryPath,
+    collectionPlanWebhookEntrySchema,
     createCollectionPlanCommandSchema,
     updateCollectionPlanCommandSchema,
 } from "./index.js";
@@ -13,12 +15,12 @@ const snapshot = {
     sourceId: "source-1",
     sourceRevisionId: "source-1:2",
     connectionId: "connection-1",
-    triggerBindingId: "trigger-1",
     mediaPolicy: null,
     overlapPolicy: "forbid",
     enabled: true,
     revisionId: "plan-1:3",
     scheduleIntervalMs: 1_800_000,
+    webhook: null,
     lastRunAt: "2026-09-20T00:00:00.000Z",
     lastError: null,
     createdAt: "2026-09-20T00:00:00.000Z",
@@ -64,5 +66,34 @@ describe("CollectionPlan v1 合同 (ADR-0023)", () => {
 
         expect(updateCollectionPlanCommandSchema.safeParse({ name: "改名" }).success).toBe(false);
         expect(updateCollectionPlanCommandSchema.safeParse({ baseRevisionId: "1", sourceId: "other" }).success).toBe(false);
+    });
+
+    it("webhook 入口：读投影只回答「已配置」，明文只在生成结果里（ADR-0024）", () => {
+        const entryPath = collectionPlanWebhookEntryPath("tok_abc");
+        expect(entryPath).toBe("/hooks/collection-plans/tok_abc");
+
+        const withEntry = {
+            ...snapshot,
+            webhook: { entryPath, credentialConfigured: true },
+        };
+        expect(collectionPlanSnapshotSchema.parse(withEntry).webhook).toEqual({
+            entryPath,
+            credentialConfigured: true,
+        });
+        // 没有入口时是 null，而不是空对象。
+        expect(collectionPlanSnapshotSchema.parse({ ...snapshot, webhook: null }).webhook).toBeNull();
+        // 读投影是 strict 的：明文凭证字段不能被顺带接受。
+        expect(collectionPlanSnapshotSchema.safeParse({
+            ...withEntry,
+            webhook: { entryPath, credentialConfigured: true, credential: "plaintext" },
+        }).success).toBe(false);
+
+        const entry = collectionPlanWebhookEntrySchema.parse({
+            planId: "plan-1",
+            entryPath,
+            credential: "plaintext-once",
+        });
+        expect(entry.credential).toBe("plaintext-once");
+        expect(collectionPlanWebhookEntrySchema.safeParse({ planId: "plan-1", entryPath }).success).toBe(false);
     });
 });

@@ -1,6 +1,7 @@
 import {
     ConflictException,
     Bind,
+    Delete,
     Get,
     HttpCode,
     NotFoundException,
@@ -378,6 +379,32 @@ export class AppControllerSources extends AppControllerBase {
                 });
             }
             return await this.repository.updateCollectionPlan(planId, input);
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    /**
+     * Webhook 入口的生成/轮换（ADR-0024）：入口标识与凭证一起换新，明文凭证只在这个
+     * 响应里出现一次。生成不要求计划已启用——配置入口与启用采集是两件事；计划停用时
+     * 由 inbound 端点拒绝请求。
+     */
+    @Post("collection-plans/:planId/webhook-entry")
+    @Bind(Param("planId"))
+    async rotateCollectionPlanWebhookEntry(planId: string) {
+        try {
+            return await this.repository.rotateCollectionPlanWebhookEntry(planId);
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    /** 撤销入口（幂等）：删除入口标识与凭证字节，需要重新生成才能再用。 */
+    @Delete("collection-plans/:planId/webhook-entry")
+    @Bind(Param("planId"))
+    async revokeCollectionPlanWebhookEntry(planId: string) {
+        try {
+            return await this.repository.revokeCollectionPlanWebhookEntry(planId);
         } catch (error) {
             sourceCommandError(error);
         }

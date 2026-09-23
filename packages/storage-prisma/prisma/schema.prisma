@@ -29,28 +29,38 @@ model SourceInstance {
     checkpoint          Checkpoint?
     entries             Entry[]
     connection          ConnectionInstance?     @relation(fields: [connectionId], references: [id], onDelete: SetNull)
-    triggerBinding      TriggerBinding?         @relation("TriggerBindingSource")
+    triggerBindings     TriggerBinding[]        @relation("TriggerBindingSource")
     plan                CollectionPlan?
 
     @@index([connectionId])
 }
 
 // First-class trigger (ADR-0018): when a source is started, expressed as a
-// schedule/manual binding. One current binding per source in v1. ADR-0023 moves
-// the binding's owner to the CollectionPlan; planId stays nullable until the
-// backfill and the read switch land, so the source-keyed scheduler keeps working.
+// schedule/manual binding. ADR-0023 moves the binding's owner to the
+// CollectionPlan; planId stays nullable until the backfill and the read switch
+// land, so the source-keyed scheduler keeps working. ADR-0025 replaces the
+// single-binding rule: a plan may hold one binding per kind (schedule plus
+// webhook), so uniqueness is scoped by kind instead of by owner.
 model TriggerBinding {
-    id         String          @id @default(cuid())
-    sourceId   String          @unique
-    planId     String?         @unique
-    kind       String          @default("schedule")
-    configJson String
-    enabled    Boolean         @default(true)
-    revision   Int             @default(1)
-    createdAt  DateTime        @default(now())
-    updatedAt  DateTime        @updatedAt
-    source     SourceInstance  @relation("TriggerBindingSource", fields: [sourceId], references: [id], onDelete: Cascade)
-    plan       CollectionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+    id           String          @id @default(cuid())
+    sourceId     String
+    planId       String?
+    kind         String          @default("schedule")
+    configJson   String
+    enabled      Boolean         @default(true)
+    revision     Int             @default(1)
+    // Webhook 入口（ADR-0024）：只有 kind = webhook 的行使用这两列。webhookToken 是入口
+    // 路径里的不可猜标识（会出现在 URL 与日志里，所以它不是凭证）；凭证字节在
+    // SecretStore 里，这里只留不透明引用。
+    webhookToken String?         @unique
+    secretRef    String?
+    createdAt    DateTime        @default(now())
+    updatedAt    DateTime        @updatedAt
+    source       SourceInstance  @relation("TriggerBindingSource", fields: [sourceId], references: [id], onDelete: Cascade)
+    plan         CollectionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+    @@unique([sourceId, kind])
+    @@unique([planId, kind])
 }
 
 // 采集计划（ADR-0023）：用户可见的独立采集计划，v1 与采集目标一对一，持有连接、
@@ -70,7 +80,7 @@ model CollectionPlan {
     updatedAt       DateTime            @updatedAt
     source          SourceInstance      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
     connection      ConnectionInstance? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
-    triggerBinding  TriggerBinding?
+    triggerBindings TriggerBinding[]
     checkpoint      Checkpoint?
     runs            Run[]
     workflowRuns    WorkflowRun[]

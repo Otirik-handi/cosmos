@@ -1,6 +1,7 @@
 import { join } from "node:path";
+import { randomBytes, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
-import { type CollectionPlanSnapshot, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
+import { collectionPlanWebhookEntryPath, type CollectionPlanSnapshot, type CollectionPlanWebhookEntry, type CreateSourceCommand, type ConnectionInstance, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
 import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parsePlanRevisionId, parseSourceRevisionId } from "../storage-root.js";
@@ -79,13 +80,13 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
      */
     protected async toCollectionPlanSnapshot(plan: CollectionPlanRow): Promise<CollectionPlanSnapshot> {
         const latest = await this.latestRunDiagnostics(this.prisma, { planId: plan.id });
-        return toCollectionPlanSnapshot(plan, plan.triggerBinding, plan.source.revision, latest);
+        return toCollectionPlanSnapshot(plan, plan.triggerBindings, plan.source.revision, latest);
     }
 
     async listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]> {
         const plans = await this.prisma.collectionPlan.findMany({
             where: { source: { deletedAt: null } },
-            include: { triggerBinding: true, source: { select: { revision: true } } },
+            include: { triggerBindings: true, source: { select: { revision: true } } },
             orderBy: { createdAt: "asc" },
         });
         return Promise.all(plans.map((plan) => this.toCollectionPlanSnapshot(plan)));
@@ -94,7 +95,7 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     async getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot | null> {
         const plan = await this.prisma.collectionPlan.findFirst({
             where: { id: planId, source: { deletedAt: null } },
-            include: { triggerBinding: true, source: { select: { revision: true } } },
+            include: { triggerBindings: true, source: { select: { revision: true } } },
         });
         return plan ? this.toCollectionPlanSnapshot(plan) : null;
     }
@@ -155,10 +156,12 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
             if (updated.count !== 1) throw new CollectionPlanRevisionConflictError(planId);
             if (input.scheduleIntervalMs !== undefined) {
                 if (input.scheduleIntervalMs === null) {
-                    await tx.triggerBinding.deleteMany({ where: { planId } });
+                    // 只删调度那一行：webhook 等其它触发方式是独立的行（ADR-0025），
+                    // 删掉它们等于静默关掉用户配好的另一种触发方式。
+                    await tx.triggerBinding.deleteMany({ where: { planId, kind: "schedule" } });
                 } else {
                     await tx.triggerBinding.upsert({
-                        where: { sourceId: current.sourceId },
+                        where: { planId_kind: { planId, kind: "schedule" } },
                         create: {
                             sourceId: current.sourceId,
                             planId,
@@ -179,6 +182,87 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         const updatedPlan = await this.getCollectionPlan(planId);
         if (!updatedPlan) throw new CollectionPlanNotFoundError(planId);
         return updatedPlan;
+    }
+
+    /**
+     * Webhook 入口的生成/轮换（ADR-0024）。凭证字节先写到**新的**引用，再换行上的引用，
+     * 最后删旧引用：任何一步失败，旧凭证要么仍然有效，要么已经被替换成同一份新值，
+     * 不会留下「行上的引用指向一份已经被覆盖掉的凭证」这种静默失效。
+     */
+    async rotateCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanWebhookEntry> {
+        const plan = await this.prisma.collectionPlan.findFirst({
+            where: { id: planId, source: { deletedAt: null } },
+            include: { triggerBindings: true },
+        });
+        if (!plan) throw new CollectionPlanNotFoundError(planId);
+        const existing = plan.triggerBindings.find((binding) => binding.kind === "webhook") ?? null;
+
+        // 入口标识会出现在 URL 与日志里，所以它不是凭证；凭证是另一份更强的随机值。
+        const token = randomBytes(24).toString("base64url");
+        const credential = randomBytes(32).toString("base64url");
+        const secretRef = `secret:webhook-${randomUUID()}`;
+        await this.secrets.put(secretRef, credential);
+        try {
+            if (existing) {
+                await this.prisma.triggerBinding.update({
+                    where: { id: existing.id },
+                    data: { webhookToken: token, secretRef, revision: { increment: 1 } },
+                });
+            } else {
+                await this.prisma.triggerBinding.create({
+                    data: {
+                        sourceId: plan.sourceId,
+                        planId: plan.id,
+                        kind: "webhook",
+                        configJson: JSON.stringify({}),
+                        enabled: true,
+                        revision: 1,
+                        webhookToken: token,
+                        secretRef,
+                    },
+                });
+            }
+        } catch (error) {
+            // 行没换成，新引用就没人引用：删掉它，旧凭证保持原样可用。
+            await this.secrets.delete(secretRef).catch(() => false);
+            throw error;
+        }
+        if (existing?.secretRef && existing.secretRef !== secretRef) {
+            // 旧凭证字节已无人引用；删除失败只留一个不可达的文件，不影响入口行为。
+            const deleted = await this.secrets.delete(existing.secretRef).catch(() => false);
+            if (!deleted) {
+                this.logger?.warn("collection_plan.webhook.secret_orphaned", {
+                    planId: plan.id,
+                    secretRef: existing.secretRef,
+                });
+            }
+        }
+        return { planId: plan.id, entryPath: collectionPlanWebhookEntryPath(token), credential };
+    }
+
+    /** 撤销入口（幂等）：先删行让入口立刻不可解析，再删凭证字节。 */
+    async revokeCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanSnapshot> {
+        const plan = await this.prisma.collectionPlan.findFirst({
+            where: { id: planId, source: { deletedAt: null } },
+            include: { triggerBindings: true },
+        });
+        if (!plan) throw new CollectionPlanNotFoundError(planId);
+        const existing = plan.triggerBindings.find((binding) => binding.kind === "webhook") ?? null;
+        if (existing) {
+            await this.prisma.triggerBinding.delete({ where: { id: existing.id } });
+            if (existing.secretRef) {
+                const deleted = await this.secrets.delete(existing.secretRef).catch(() => false);
+                if (!deleted) {
+                    this.logger?.warn("collection_plan.webhook.secret_orphaned", {
+                        planId: plan.id,
+                        secretRef: existing.secretRef,
+                    });
+                }
+            }
+        }
+        const snapshot = await this.getCollectionPlan(planId);
+        if (!snapshot) throw new CollectionPlanNotFoundError(planId);
+        return snapshot;
     }
 
     async createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance> {
@@ -325,14 +409,16 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
         const plans = await this.prisma.collectionPlan.findMany({
             where: { enabled: true, source: { deletedAt: null } },
             include: {
-                triggerBinding: true,
+                triggerBindings: true,
                 source: { select: { id: true } },
             },
         });
         const result: { planId: string; sourceId: string; intervalMs: number; lastRunAt: string | null }[] = [];
         for (const plan of plans) {
-            const binding = plan.triggerBinding;
-            if (!binding || binding.kind !== "schedule" || !binding.enabled) continue;
+            // 计划可以持有多种触发器（ADR-0025）：调度只认 schedule 那一行，
+            // webhook 等其它触发方式不参与轮询。
+            const binding = plan.triggerBindings.find((row) => row.kind === "schedule");
+            if (!binding || !binding.enabled) continue;
             const config = JSON.parse(binding.configJson) as { intervalMs?: number };
             if (typeof config.intervalMs !== "number") continue;
             const latest = await this.prisma.workflowRun.findFirst({
@@ -437,27 +523,37 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
 
 }
 
-/** `listCollectionPlans`／`getCollectionPlan` 的行形状：绑定、目标 revision 一起取。 */
+/** `listCollectionPlans`／`getCollectionPlan` 的行形状：触发器行、目标 revision 一起取。 */
 type CollectionPlanRow = Prisma.CollectionPlanGetPayload<{
-    include: { triggerBinding: true; source: { select: { revision: true } } };
+    include: { triggerBindings: true; source: { select: { revision: true } } };
 }>;
 
 function toCollectionPlanSnapshot(
     plan: Prisma.CollectionPlanGetPayload<{}>,
-    binding: Prisma.TriggerBindingGetPayload<{}> | null,
+    bindings: readonly Prisma.TriggerBindingGetPayload<{}>[],
     sourceRevision: number,
     latest: { at: Date; error: string | null } | null,
 ): CollectionPlanSnapshot {
-    const interval = binding === null
+    // 一个计划可以持有多种触发器（ADR-0025）：调度间隔只由 schedule 行派生，
+    // 其它类型的行不参与这个字段。
+    const scheduleBinding = bindings.find((binding) => binding.kind === "schedule") ?? null;
+    const interval = scheduleBinding === null
         ? undefined
-        : (JSON.parse(binding.configJson) as { intervalMs?: unknown }).intervalMs;
+        : (JSON.parse(scheduleBinding.configJson) as { intervalMs?: unknown }).intervalMs;
+    // 入口地址由不可猜的标识拼出；凭证明文不在这条读路径上，只回答「配没配」。
+    const webhookBinding = bindings.find((binding) => binding.kind === "webhook") ?? null;
+    const webhook = webhookBinding === null || webhookBinding.webhookToken === null
+        ? null
+        : {
+            entryPath: collectionPlanWebhookEntryPath(webhookBinding.webhookToken),
+            credentialConfigured: webhookBinding.secretRef !== null,
+        };
     return {
         id: plan.id,
         name: plan.name,
         sourceId: plan.sourceId,
         sourceRevisionId: `${plan.sourceId}:${sourceRevision}`,
         connectionId: plan.connectionId,
-        triggerBindingId: binding?.id ?? null,
         mediaPolicy: plan.mediaPolicyJson === null
             ? null
             : JSON.parse(plan.mediaPolicyJson) as SourceMediaPolicy,
@@ -467,6 +563,7 @@ function toCollectionPlanSnapshot(
         // 只回数字会让客户端拿到一个自己送不回来的 revisionId。
         revisionId: `${plan.id}:${plan.revision}`,
         scheduleIntervalMs: typeof interval === "number" ? interval : null,
+        webhook,
         lastRunAt: latest?.at.toISOString() ?? null,
         lastError: latest?.error ?? null,
         createdAt: plan.createdAt.toISOString(),

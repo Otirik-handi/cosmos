@@ -3,6 +3,7 @@
 import type {
     CreateSourceCommand, ConnectionInstance, CreateConnectionCommand,
     CollectionPlanSnapshot,
+    CollectionPlanWebhookEntry,
     UpdateConnectionCommand, StorageStats, BackupSnapshot, FeedPage,
     EntryDetail, EntryPage, JobSnapshot, RevisionDetail,
     IngestTriggerKind, RunSnapshot, SearchPage, SearchQuery,
@@ -76,6 +77,13 @@ export interface CosmosRepository {
     /** 计划读投影（ADR-0023）：产品面的对象是计划，按计划读取连接、频率与媒体预算。 */
     listCollectionPlans(): Promise<readonly CollectionPlanSnapshot[]>;
     getCollectionPlan(planId: string): Promise<CollectionPlanSnapshot | null>;
+    /**
+     * 生成或轮换 Webhook 入口（ADR-0024）：入口标识与凭证一起换新，旧凭证立即失效。
+     * 明文凭证只在返回值里出现一次，读投影只回答「已配置」。
+     */
+    rotateCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanWebhookEntry>;
+    /** 撤销 Webhook 入口：删除入口标识与凭证字节，需要重新生成才能再用（幂等）。 */
+    revokeCollectionPlanWebhookEntry(planId: string): Promise<CollectionPlanSnapshot>;
     /** Enabled schedule trigger bindings (ADR-0018) for the scheduler loop. */
     listScheduleTriggers(): Promise<readonly {
         planId: string;
