@@ -4,7 +4,8 @@
  */
 
 export {
-    aiHotSourceConfigSchema, assetErrorCodeSchema, assetErrorCodes, bilibiliSourceConfigSchema,
+    aiHotSourceConfigSchema, assetErrorCodeSchema, assetErrorCodes, bilibiliSearchSourceConfigSchema,
+    bilibiliSourceConfigSchema,
     connectionInstanceSchema, connectionStatusSchema, contentKindSchema, contentMetricsSchema,
     createConnectionCommandSchema, createSourceCommandSchema, deleteSourceCommandSchema,
     discoveryChannelSchema,

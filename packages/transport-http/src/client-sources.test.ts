@@ -179,6 +179,7 @@ describe("HttpCosmosClient 来源与运行", () => {
                             operationId: "fetch",
                             inputSchema: { id: "source.rss.fetch.input@1", version: 1, hash: { algorithm: "builtin", value: "i" } },
                             outputSchema: { id: "source.rss.fetch.output@1", version: 1, hash: { algorithm: "builtin", value: "o" } },
+                            configurationSchema: null,
                             externalKey: "url",
                             discoveryContext: "",
                             media: "download",

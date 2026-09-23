@@ -95,9 +95,9 @@ Non-goals（见 Proposal / ADR-0017）：
 - 受影响合同（切片 3）：只有 Web（`ConnectionPanel`）与组件实验室夹具；contracts／application／storage／API／transport **零改动**。
 - 验证层级：focused（web typecheck + lint）→ 组件实验室 E2E → 浏览器产品 E2E → 全量门禁。
 
-切片 4（2026-09-23，连接登录生命周期）按 Proposal [`connection-login-lifecycle-v1`](../../../docs/proposals/connection-login-lifecycle-v1.md)（accepted）的「切片 1」再拆两半：**4a 连接承载 profile**、**4b 登录探测**。EXT-006 由本 Task 的 4a/4b 与 Task 23 的切片 2（per-operation 配置 schema + Bilibili `search`）共同闭合。
+切片 4（2026-09-23，连接登录生命周期）按 Proposal [`connection-login-lifecycle-v1`](../../../docs/proposals/connection-login-lifecycle-v1.md)（accepted）的「切片 1」再拆两半：**4a 连接承载 profile**、**4b 登录探测**。EXT-006 由本 Task 的 4a/4b 与 Task [`23`](../23-trigger-sdk/README.md) 的切片 8（per-operation 配置 schema + Bilibili `search`，即该 Proposal 的「切片 2」）共同闭合。
 
-- 生命周期阶段（切片 4a）：**代码、验证与权威文档同步完成**（2026-09-23；worktree `.worktree/ext-006-login-lifecycle`、分支 `feat/t22-ext-006-login-lifecycle`，基线 `61ac764`）。剩余动作是**合并**（需维护者授权）与合并后的 `PROJECT-STATUS.md` 更新（沿用仓库惯例：进行中的状态记在 Task，合并后写状态快照）。
+- 生命周期阶段（切片 4a／4b）：**代码、验证与权威文档同步完成并提交**（2026-09-23；worktree `.worktree/ext-006-login-lifecycle`、分支 `feat/t22-ext-006-login-lifecycle`，基线 `61ac764`；切片 4a `bd9a9c0`、切片 4b `94c6dec`）。剩余动作是**合并**（需维护者授权）与合并后的 `PROJECT-STATUS.md` 更新（沿用仓库惯例：进行中的状态记在 Task，合并后写状态快照）。
 - 连贯目标（切片 4a）：让「连接」在运行时真实存在——`ConnectionInstance` 新增非秘密适配器配置字段，OpenCLI profile 从 `Source.config.profile` 迁到连接，执行快照带连接投影，连接器从连接读 profile。
 - 可观察验收（切片 4a，≤3 条）：
   1. 迁移后来源配置不再有 `profile`；同一 profile 的多个来源合并到同一条连接，且这些计划的 `connectionId` 指向它；迁移可重复执行且结果相同；
@@ -197,6 +197,10 @@ Non-goals（见 Proposal / ADR-0017）：
 - `scopeJson` 仍只能在**建连接时**写入（`updateConnectionCommandSchema` 不含该字段）；编辑入口随真实认证 Adapter 一起定——那时它由系统写，用户手填的语义要重新裁定。
 - 授权范围的形状没有校验（只要求合法 JSON）；真实 Adapter 接入时需要一份 scope schema 才能校验与展示。
 - 连接面板仍没有编辑名称/账号的入口（既有边界，未在本片扩大范围）。
+
+切片 8 验证暴露的既有问题（2026-09-23，非本片引入，**已在本分支修复**）：
+
+- **侧栏溢出盖住计划列表**：1280×720 下左侧固定轨道（`lg` 300px／`xl` 330px）里的连接面板内容不收缩——`min-content` 实测 398px，授权范围写长 JSON 时 1015px——因此画到右侧计划列表上，浏览器全套件里表现为点击计划行的 Webhook 按钮被拦截。修法是把 `min-w-0` 铺到那条 flex/grid 链上（面板根、列表、条目、`dl` 行）；修后 `aside.scrollWidth` 在两个断点都等于列宽（330／300），连接名仍截断、三个按钮仍在列内、长授权范围在栏内换行。浏览器全套件从「累积数据下 1–2 例失败」变为 **33 passed**（耗时 5.4m → 2.3m）。证据：修复前的截图与 error-context 在 `.agent/tmp/browser-flake-2026-09-23/`，修复后的量测与截图在 `.agent/tmp/measure-sidebar.mjs`／`.agent/tmp/sidebar-after-1280.png`（诊断脚本与证据均不入库）。
 
 切片 2 追加 Follow-ups：
 

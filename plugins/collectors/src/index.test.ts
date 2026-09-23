@@ -14,6 +14,8 @@ import {
 function source(input: {
     kind: "bilibili" | "aihot";
     config: Record<string, unknown>;
+    /** 同一 manifest 下的第二个 operation（EXT-006）；默认 `fetch`。 */
+    operationId?: string;
     /** 连接投影（Proposal connection-login-lifecycle-v1）：profile 现在住在这里。 */
     connection?: SourceExecutionSnapshot["connection"];
 }): SourceExecutionSnapshot {
@@ -23,7 +25,7 @@ function source(input: {
         sourceDefinitionRef: input.kind === "bilibili"
             ? "source.bilibili@1"
             : "source.aihot@1",
-        operationId: "fetch",
+        operationId: input.operationId ?? "fetch",
         connectorId: input.kind,
         kind: input.kind,
         config: input.config,
@@ -198,6 +200,90 @@ describe("built-in collectors", () => {
                 },
             },
         });
+    });
+
+    /**
+     * 第二个 operation 的真实消费者（EXT-006）：`search` 用自己的配置（query）跑
+     * `bilibili search`，匿名可用所以不带 profile，发现上下文是 search。
+     */
+    it("runs the search operation from its own config and marks the search channel", async () => {
+        const seenArgs: string[][] = [];
+        const seenProfiles: unknown[] = [];
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async (args, options) => {
+                    seenArgs.push([...args]);
+                    seenProfiles.push(options?.env?.OPENCLI_PROFILE);
+                    return {
+                        stdout: args[0] === "--version"
+                            ? "1.8.6"
+                            : args[0] === "doctor"
+                                ? "[OK] Extension: connected\n[OK] Connectivity: passed"
+                                : JSON.stringify([{
+                                    bvid: "BV1SEARCH",
+                                    title: "搜索结果",
+                                    author: "Search author",
+                                    url: "https://www.bilibili.com/video/BV1SEARCH",
+                                }]),
+                        stderr: "",
+                        exitCode: 0,
+                    };
+                },
+            },
+        });
+
+        const result = await connector.fetchItems({
+            source: source({
+                kind: "bilibili",
+                operationId: "search",
+                config: { query: "cosmos", limit: 3 },
+            }),
+            cursor: null,
+        });
+
+        expect(seenArgs[2]).toEqual(["bilibili", "search", "cosmos", "--limit", "3", "-f", "json"]);
+        // 搜索匿名可用：没有连接时三条子进程调用都不带 profile。
+        expect(seenProfiles).toEqual([undefined, undefined, undefined]);
+        expect(result.items[0]).toMatchObject({
+            externalId: "BV1SEARCH",
+            kind: "video",
+            discoveryChannel: "search",
+            sourceLocator: {
+                provider: "bilibili",
+                mode: "search",
+                rank: 1,
+                externalId: "BV1SEARCH",
+            },
+        });
+    });
+
+    it("rejects search sources without a query or with fetch-only fields", () => {
+        const connector = createBilibiliConnector({
+            runner: {
+                run: async () => ({
+                    stdout: "[]",
+                    stderr: "",
+                    exitCode: 0,
+                }),
+            },
+        });
+
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            operationId: "search",
+            config: { limit: 3 },
+        }))).toThrow();
+        // `mode` 是 fetch 的字段：带上必须是配置错误，而不是被静默忽略后去搜别的东西。
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            operationId: "search",
+            config: { query: "cosmos", mode: "hot" },
+        }))).toThrow();
+        expect(() => connector.validate(source({
+            kind: "bilibili",
+            operationId: "search",
+            config: { query: "cosmos" },
+        }))).not.toThrow();
     });
 
     it("keeps the logged-in Bilibili feed bound to a named profile on the connection", () => {

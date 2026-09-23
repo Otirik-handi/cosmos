@@ -149,6 +149,7 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
         operationId: "fetch",
         inputSchema: {id: "source.rss.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.input@1"}},
         outputSchema: {id: "source.rss.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.rss.fetch.output@1"}},
+        configurationSchema: null,
         externalKey: "url",
         discoveryContext: "",
         media: "download",
@@ -158,7 +159,8 @@ const labSourceDefinitionManifest: SourceDefinitionManifest = {
 
 /**
  * 合成 Bilibili 定义：`mode` 只有 `enum` 没有 `type`，是表单必须处理的那种属性；
- * 认证是 external（OpenCLI 登录态），用来覆盖「认证提示」分支。
+ * 认证是 external（OpenCLI 登录态），用来覆盖「认证提示」分支。第二个 operation
+ * 自带配置 schema（EXT-006），用来覆盖「操作选择器 + 按操作渲染字段」分支。
  */
 const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
     id: "bilibili",
@@ -170,7 +172,7 @@ const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
     description: "Read Bilibili data through a trusted OpenCLI profile.",
     manifestHash: {algorithm: "builtin", value: "builtin:source.bilibili@1"},
     status: "enabled",
-    operationIds: ["fetch"],
+    operationIds: ["fetch", "search"],
     capabilities: ["source:read", "cursor", "external:opencli"],
     configurationSchema: {
         id: "source.bilibili.config@1",
@@ -187,15 +189,41 @@ const labBilibiliDefinitionManifest: SourceDefinitionManifest = {
         },
     },
     auth: {kind: "external", label: "OpenCLI 浏览器登录态", secretRefRequired: false, probeSupported: true},
-    operations: [{
-        operationId: "fetch",
-        inputSchema: {id: "source.bilibili.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.input@1"}},
-        outputSchema: {id: "source.bilibili.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.output@1"}},
-        externalKey: "url",
-        discoveryContext: "",
-        media: "metadata_only",
-        stateStoreNamespace: "{id}",
-    }],
+    operations: [
+        {
+            operationId: "fetch",
+            inputSchema: {id: "source.bilibili.fetch.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.input@1"}},
+            outputSchema: {id: "source.bilibili.fetch.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.fetch.output@1"}},
+            configurationSchema: null,
+            externalKey: "url",
+            discoveryContext: "",
+            media: "metadata_only",
+            stateStoreNamespace: "{id}",
+        },
+        {
+            operationId: "search",
+            inputSchema: {id: "source.bilibili.search.input@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.search.input@1"}},
+            outputSchema: {id: "source.bilibili.search.output@1", version: 1, hash: {algorithm: "builtin", value: "source.bilibili.search.output@1"}},
+            configurationSchema: {
+                id: "source.bilibili.search.config@1",
+                version: 1,
+                hash: {algorithm: "builtin", value: "source.bilibili.search.config@1"},
+                schema: {
+                    type: "object",
+                    properties: {
+                        query: {type: "string"},
+                        limit: {type: "integer", minimum: 1, maximum: 100},
+                    },
+                    required: ["query"],
+                    additionalProperties: false,
+                },
+            },
+            externalKey: "url",
+            discoveryContext: "search",
+            media: "metadata_only",
+            stateStoreNamespace: null,
+        },
+    ],
 };
 
 const labProbeResult: SourceConfigProbeResult = {
@@ -216,7 +244,9 @@ export function renderSourceFormLab(props: LabProps) {
 function SourceFormLabFixture({props}: {props: LabProps}) {
     const name = textProp(props, "name", "Cosmos RSS");
     const feedUrl = textProp(props, "feedUrl", "https://example.com/feed.xml");
+    const manifests = [labSourceDefinitionManifest, labBilibiliDefinitionManifest];
     const [definitionRef, setDefinitionRef] = useState(labSourceDefinitionManifest.ref);
+    const [operationId, setOperationId] = useState(labSourceDefinitionManifest.operationIds[0] ?? "fetch");
     const definitionState = optionProp<SourceDefinitionState["status"]>(
         props,
         "definitionState",
@@ -243,8 +273,21 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
         defaultValues: values,
         values,
     });
+    // 与产品 hook 同口径（EXT-006）：换定义/换操作都丢掉旧配置字段。
+    const resetConfig = (): void => {
+        form.setValue("config", {});
+    };
+    const selectDefinition = (ref: string): void => {
+        setDefinitionRef(ref);
+        setOperationId(manifests.find((item) => item.ref === ref)?.operationIds[0] ?? "fetch");
+        resetConfig();
+    };
+    const selectOperation = (next: string): void => {
+        setOperationId(next);
+        resetConfig();
+    };
     const resolvedDefinitionState: SourceDefinitionState = definitionState === "ready"
-        ? {status: "ready", manifests: [labSourceDefinitionManifest, labBilibiliDefinitionManifest]}
+        ? {status: "ready", manifests}
         : definitionState === "error"
         ? {status: "error", message: "无法连接服务（HTTP 503）。"}
         : {status: "loading"};
@@ -258,7 +301,9 @@ function SourceFormLabFixture({props}: {props: LabProps}) {
             form={form}
             definitionState={resolvedDefinitionState}
             selectedDefinitionRef={definitionRef}
-            onSelectDefinition={setDefinitionRef}
+            onSelectDefinition={selectDefinition}
+            selectedOperationId={operationId}
+            onSelectOperation={selectOperation}
             onSubmit={(event) => event.preventDefault()}
             onTest={() => undefined}
             probeState={resolvedProbeState}

@@ -10,6 +10,7 @@ import {
 } from "@cosmos/application";
 import {
     aiHotSourceConfigSchema,
+    bilibiliSearchSourceConfigSchema,
     bilibiliSourceConfigSchema,
     openCliProfileSchema,
     type SourceConnectionProjection,
@@ -218,21 +219,20 @@ export function createBilibiliConnector(
         configVersion: "v1",
         capabilities: ["bilibili", "opencli", "browser-bridge"],
         validate(source) {
-            resolveBilibiliProfile(source, parseBilibiliConfig(source));
+            if (isBilibiliSearchOperation(source)) {
+                parseBilibiliSearchConfig(source);
+                return;
+            }
+            resolveBilibiliProfile(source, parseBilibiliFetchConfig(source));
         },
         async fetchItems({ source, signal }) {
-            const config = parseBilibiliConfig(source);
-            const profile = resolveBilibiliProfile(source, config);
-            const args = [
-                "bilibili",
-                config.mode,
-                "--limit",
-                String(config.limit),
-                "-f",
-                "json",
-            ];
+            // 一个 manifest 下的多个 operation 由连接器按 `operationId` 分派（EXT-006）：
+            // 宿主不解释 operation 的含义，只把它原样带进执行快照。
+            const plan = isBilibiliSearchOperation(source)
+                ? planBilibiliSearchExecution(source)
+                : planBilibiliFetchExecution(source);
             const env = {
-                OPENCLI_PROFILE: profile ?? undefined,
+                OPENCLI_PROFILE: plan.profile ?? undefined,
             };
             if (checkVersion && !versionChecked) {
                 const version = await runner.run(["--version"], { env });
@@ -243,7 +243,7 @@ export function createBilibiliConnector(
                 const doctor = await runner.run(["doctor"], { env });
                 assertOpenCliDoctor(doctor.stdout);
             }
-            const result = await runner.run(args, {
+            const result = await runner.run(plan.args, {
                 env,
                 signal,
             });
@@ -251,7 +251,7 @@ export function createBilibiliConnector(
                 return { items: [], nextCursor: null };
             }
             return {
-                items: normalizeBilibiliOutput(result.stdout, config.mode),
+                items: normalizeBilibiliOutput(result.stdout, plan.shape),
                 nextCursor: null,
             };
         },
@@ -477,7 +477,14 @@ export function createBuiltInConnectorRegistry(options: {
     ]);
 }
 
-function parseBilibiliConfig(source: SourceExecutionSnapshot) {
+/** 多 operation 的分派点（EXT-006）：连接器按 `source.operationId` 选配置 schema 与命令。 */
+const bilibiliSearchOperationId = "search";
+
+function isBilibiliSearchOperation(source: SourceExecutionSnapshot): boolean {
+    return source.operationId === bilibiliSearchOperationId;
+}
+
+function parseBilibiliFetchConfig(source: SourceExecutionSnapshot) {
     try {
         return bilibiliSourceConfigSchema.parse(source.config);
     } catch (error) {
@@ -488,6 +495,54 @@ function parseBilibiliConfig(source: SourceExecutionSnapshot) {
             { cause: error },
         );
     }
+}
+
+function parseBilibiliSearchConfig(source: SourceExecutionSnapshot) {
+    try {
+        return bilibiliSearchSourceConfigSchema.parse(source.config);
+    } catch (error) {
+        throw new ConnectorExecutionError(
+            "invalid_configuration",
+            "Bilibili search configuration is invalid.",
+            false,
+            { cause: error },
+        );
+    }
+}
+
+/** 一次 Bilibili 抓取的完整决定：命令参数、要带的 profile、结果怎么归类。 */
+type BilibiliExecutionPlan = {
+    args: string[];
+    profile: string | null;
+    shape: {
+        kind: "listing" | "video";
+        discoveryChannel: "recommendation" | "account" | "search";
+        locatorMode: string;
+    };
+};
+
+/** 搜索匿名可用（不读连接 profile），结果的发现上下文是 search（ING-004）。 */
+function planBilibiliSearchExecution(source: SourceExecutionSnapshot): BilibiliExecutionPlan {
+    const config = parseBilibiliSearchConfig(source);
+    return {
+        args: ["bilibili", "search", config.query, "--limit", String(config.limit), "-f", "json"],
+        profile: null,
+        shape: { kind: "video", discoveryChannel: "search", locatorMode: "search" },
+    };
+}
+
+/** `fetch`：hot 是平台推荐流、feed 是关注的动态（ING-004），`feed` 必须有连接里的 profile。 */
+function planBilibiliFetchExecution(source: SourceExecutionSnapshot): BilibiliExecutionPlan {
+    const config = parseBilibiliFetchConfig(source);
+    return {
+        args: ["bilibili", config.mode, "--limit", String(config.limit), "-f", "json"],
+        profile: resolveBilibiliProfile(source, config),
+        shape: {
+            kind: config.mode === "hot" ? "listing" : "video",
+            discoveryChannel: config.mode === "hot" ? "recommendation" : "account",
+            locatorMode: config.mode,
+        },
+    };
 }
 
 /**
@@ -568,7 +623,7 @@ function parseAiHotConfig(source: SourceExecutionSnapshot) {
 }
 function normalizeBilibiliOutput(
     output: string,
-    mode: "hot" | "feed",
+    shape: BilibiliExecutionPlan["shape"],
 ): readonly NormalizedIngestItem[] {
     const rows = extractRows(parseJsonDocument(output));
     return rows.map((row, index) => {
@@ -624,7 +679,7 @@ function normalizeBilibiliOutput(
             summary: description || null,
             contentText: description || title,
             webUrl,
-            kind: mode === "hot" ? "listing" : "video",
+            kind: shape.kind,
             publisher: normalizePublisher({
                 platformId: firstText(
                     row.mid,
@@ -649,12 +704,13 @@ function normalizeBilibiliOutput(
             updatedAt: null,
             sourceLocator: {
                 provider: "bilibili",
-                mode,
+                mode: shape.locatorMode,
                 rank: index + 1,
                 externalId,
             },
-            // hot 是平台推荐流、feed 是关注的动态（ING-004）：同一个 manifest 下两种发现方式。
-            discoveryChannel: mode === "hot" ? "recommendation" : "account",
+            // hot 是平台推荐流、feed 是关注的动态、search 是显式查询（ING-004）：同一个 manifest
+            // 下的不同发现方式由 operation 声明，而不是靠一个 mode 字段兼顾所有情况。
+            discoveryChannel: shape.discoveryChannel,
             rawPayload: JSON.stringify(row),
             rawPayloadMimeType: "application/json",
             assets: asset ? [asset] : [],

@@ -16,6 +16,8 @@ export interface SourceOperationManifest {
     operationId: string;
     inputSchema: JsonSchemaRef;
     outputSchema: JsonSchemaRef;
+    /** null = 沿用定义级的 `configurationSchema`（EXT-006）。 */
+    configurationSchema: JsonSchemaRef | null;
     externalKey: string;
     discoveryContext: string;
     media: "none" | "download" | "metadata_only";
@@ -201,6 +203,8 @@ const sourceOperation = (
     operationId: "fetch",
     inputSchema: builtinSchema(`${ref}.fetch.input@1`, { type: "object" }),
     outputSchema: builtinSchema(`${ref}.fetch.output@1`, { type: "object" }),
+    /** null = 沿用定义级的 configurationSchema（EXT-006；只有多 operation 的来源才需要覆盖）。 */
+    configurationSchema: null,
     externalKey,
     discoveryContext: "",
     media,
@@ -265,7 +269,7 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             description: "Read Bilibili data through a trusted OpenCLI profile.",
             manifestHash: builtinHash("builtin:source.bilibili@1"),
             status: "enabled",
-            operationIds: ["fetch"],
+            operationIds: ["fetch", "search"],
             capabilities: ["source:read", "cursor", "external:opencli"],
             configurationSchema: builtinSchema("source.bilibili.config@1", {
                 type: "object",
@@ -274,7 +278,31 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
                 additionalProperties: false,
             }),
             auth: externalAuth,
-            operations: [sourceOperation("source.bilibili", "url", "metadata_only")],
+            operations: [
+                sourceOperation("source.bilibili", "url", "metadata_only"),
+                // 第二个 operation（EXT-006 的「多 operation 有真实消费者」）：搜索要查询词，
+                // 所以它自带一份配置 schema（fetch 的 mode/limit 对它没有意义）。搜索匿名可用，
+                // 因此 stateStoreNamespace 为 null（它没有游标/状态要保存）。
+                {
+                    operationId: "search",
+                    inputSchema: builtinSchema("source.bilibili.search.input@1", {
+                        type: "object",
+                        properties: { query: { type: "string" }, limit: { type: "integer" } },
+                        required: ["query"],
+                    }),
+                    outputSchema: builtinSchema("source.bilibili.search.output@1", { type: "object" }),
+                    configurationSchema: builtinSchema("source.bilibili.search.config@1", {
+                        type: "object",
+                        properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 } },
+                        required: ["query"],
+                        additionalProperties: false,
+                    }),
+                    externalKey: "url",
+                    discoveryContext: "search",
+                    media: "metadata_only",
+                    stateStoreNamespace: null,
+                },
+            ],
         },
         {
             id: "aihot",

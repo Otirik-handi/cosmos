@@ -84,6 +84,47 @@ async function createBilibiliPlan(
     await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 }
 
+/**
+ * 多 operation 的真实消费者（EXT-006／Proposal connection-login-lifecycle-v1 决定 3）：
+ * 同一个 Bilibili 定义的第二个操作在 Web 上可选，字段按所选操作声明渲染，保存时提交的是
+ * 所选 `operationId`——服务端按 `(ref, operationId)` 校验，所以查询词缺了会被本地与服务端
+ * 分别拦一次。搜索匿名可用，因此这个计划**不绑连接**也能建出来。
+ */
+test("builds a Bilibili search plan from the operation declared by the manifest", async ({ page }) => {
+    test.setTimeout(120_000);
+    const suffix = randomUUID().slice(0, 8);
+    const searchName = `搜索-${suffix}`;
+
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "新建计划" }).click();
+    await page.locator("#source-definition").selectOption("source.bilibili@1");
+
+    // 两个操作：默认第一个（fetch）沿用定义级 schema，渲染定义级的 mode/limit。
+    await expect(page.locator("#source-operation")).toHaveValue("fetch");
+    await expect(page.locator("#source-config-mode")).toBeVisible();
+
+    // 换成 search：它自带配置 schema，查询词出现、fetch 的 mode 消失且旧值不残留。
+    await page.locator("#source-operation").selectOption("search");
+    await expect(page.locator("#source-config-query")).toBeVisible();
+    await expect(page.locator("#source-config-mode")).toHaveCount(0);
+    await page.getByLabel("名称", { exact: true }).fill(searchName);
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("请填写查询词。")).toBeVisible();
+
+    await page.locator("#source-config-query").fill("cosmos");
+    await page.getByRole("button", { name: "保存计划" }).click();
+    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
+
+    // 服务端是唯一真相：刷新后计划还在（配置按 search schema 落库）。搜索不绑连接，
+    // 所以它在计划列表的「未绑定」分组里——按名称在列表行内定位，不用整页文本匹配
+    // （来源筛选下拉里也有同名 option）。
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    const planSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
+    await expect(planSection.locator("li").filter({ hasText: searchName })).toBeVisible();
+});
+
 test("rejects a plan whose declared enum field is left at the empty option", async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto("/");

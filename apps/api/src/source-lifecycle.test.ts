@@ -74,6 +74,40 @@ describe("AppController Source mutations", () => {
         expect(repository.createSource).toHaveBeenCalled();
     });
 
+    /**
+     * 多 operation 的真实消费者（EXT-006）：同一个定义的第二个 operation 有自己的配置
+     * schema，建目标时必须按 `operationId` 取它，不能一律用定义级那份。
+     */
+    it("validates the config of the selected operation, not the definition default", async () => {
+        const repository = {
+            createSource: vi.fn(),
+        };
+        const controller = new AppController(
+            repository as never,
+            new SourceProbeService(createBuiltinManifestCatalog()) as never,
+        );
+
+        const accepted = await controller.createSource({
+            name: "Bilibili search",
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "search",
+            config: { query: "cosmos" },
+        }).catch((value) => value);
+
+        expect(accepted).not.toBeInstanceOf(BadRequestException);
+
+        // `fetch` 的 mode/limit 不是 `search` 的字段：按定义级 schema 校验就会误放行。
+        const rejected = await controller.createSource({
+            name: "Bilibili search",
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "search",
+            config: { mode: "hot" },
+        }).catch((value) => value);
+
+        expect(rejected).toBeInstanceOf(BadRequestException);
+        expect(repository.createSource).toHaveBeenCalledTimes(1);
+    });
+
     it("validates the saved target config before enabling the plan", async () => {
         const plan = {
             id: "plan:source-1",

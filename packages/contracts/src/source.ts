@@ -71,6 +71,12 @@ export const sourceOperationManifestSchema = z.object({
     operationId: sourceOperationIdSchema,
     inputSchema: jsonSchemaRefSchema,
     outputSchema: jsonSchemaRefSchema,
+    /**
+     * 这个 operation 的**用户可填配置** schema（EXT-006 的「按 operation 声明配置 schema」）。
+     * null = 沿用定义级的 `SourceDefinitionManifest.configurationSchema`：Web 按它渲染字段，
+     * canonical 校验按 `(ref, operationId)` 检索（Proposal connection-login-lifecycle-v1 决定 3）。
+     */
+    configurationSchema: jsonSchemaRefSchema.nullable(),
     /** Stable external key the operation uses for dedup across runs (EXT-007). */
     externalKey: z.string().trim().min(1),
     /** Discovery context the operation reads; empty string means none. */

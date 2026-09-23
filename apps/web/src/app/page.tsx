@@ -266,7 +266,9 @@ export default function Home() {
         plans,
         probeConfigKeyRef,
         selectDefinition,
+        selectOperation,
         selectedDefinitionRef,
+        selectedOperationId,
         setProbeState,
         onCreateSource,
         onTestSourceConfig,
@@ -677,6 +679,8 @@ export default function Home() {
                             definitionState={definitionState}
                             selectedDefinitionRef={selectedDefinitionRef}
                             onSelectDefinition={selectDefinition}
+                            selectedOperationId={selectedOperationId}
+                            onSelectOperation={selectOperation}
                             onSubmit={onCreateSource}
                             onTest={() => void onTestSourceConfig()}
                             probeState={probeState}

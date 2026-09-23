@@ -128,26 +128,28 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 页面提供以下用户流程：
 
 1. **配置计划（schema 驱动）**：打开“新建计划”卡片时读取 `GET /api/v1/source-definitions`，
-   保留全部 `enabled` 定义供**来源定义选择器**切换（默认 `source.rss@1`），按所选定义
-   的 configurationSchema 渲染字段：`enum` → 选择框、`integer`/`number` → 数字、
-   `string` → 文本，三种以外不渲染也不猜类型——Bilibili 的 `mode` 只有 `enum` 没有
-   `type`，按类型白名单过滤会把它整条丢掉。必填枚举同样保留一个空选项，避免静默取
-   第一个值。另有 `scheduleIntervalMinutes`（分钟输入，默认 30，清空表示不自动抓取；
-   保存时换算为 canonical `scheduleIntervalMs`）与连接选择。定义声明了认证
-   （`auth.kind !== "none"`）时展示提示与 label（Bilibili 为“OpenCLI 浏览器登录态”），
-   表单不收集凭证，也**不收集适配器配置**——登录态（OpenCLI profile）是连接的非秘密
-   配置，在连接面板里填（Proposal connection-login-lifecycle-v1；凭证的载体同样是连接，
-   ADR-0017）。切换定义会整组重置配置字段。
+   保留全部 `enabled` 定义供**来源定义选择器**切换（默认 `source.rss@1`）。定义声明了多个
+   操作（`operationIds` 多于一个）时再出**操作选择器**（默认第一个；Bilibili 显示
+   `抓取`／`搜索`），字段按**所选操作**的 `configurationSchema.schema` 渲染，它为 `null`
+   时回退定义级那份：`enum` → 选择框、`integer`/`number` → 数字、`string` → 文本，三种
+   以外不渲染也不猜类型——Bilibili 的 `mode` 只有 `enum` 没有 `type`，按类型白名单过滤
+   会把它整条丢掉。必填枚举同样保留一个空选项，避免静默取第一个值。另有
+   `scheduleIntervalMinutes`（分钟输入，默认 30，清空表示不自动抓取；保存时换算为
+   canonical `scheduleIntervalMs`）与连接选择。定义声明了认证（`auth.kind !== "none"`）时
+   展示提示与 label（Bilibili 为“OpenCLI 浏览器登录态”），表单不收集凭证，也**不收集
+   适配器配置**——登录态（OpenCLI profile）是连接的非秘密配置，在连接面板里填（Proposal
+   connection-login-lifecycle-v1；凭证的载体同样是连接，ADR-0017）。切换定义或切换操作
+   都会整组重置配置字段：search 的查询词对 fetch 没有意义。
    表单通过 React Hook Form + Zod 校验。
 2. **测试未保存配置**：点击“测试配置”先触发表单校验，通过后 `POST
-   /api/v1/source-config-probes`（携带所选定义的 `sourceDefinitionRef`、其首个
+   /api/v1/source-config-probes`（携带所选定义的 `sourceDefinitionRef`、**所选**的
    `operationId` 与表单里选中的 `connectionId`——未保存配置没有来源与计划，需要登录态的
    操作只能靠它拿连接；不携带幂等键，服务端生成缺省键），随后每 1.5s 轮询
    `GET /api/v1/source-config-probes/:jobId`，30s 未达终态显示超时提示；`succeeded`
    展示抓取条数、耗时、样例标题与“还有更多内容”提示，`failed_terminal`/`cancelled`
    显示错误文本。全程不创建 Source、不写事实数据；表单字段变化会使结果立即作废。
 3. **保存停用计划**：先按所选定义的字段规则做客户端校验（必填、整数、范围、枚举取值），
-   通过后提交 `POST /api/v1/sources`（默认停用，含 `sourceDefinitionRef`、首个
+   通过后提交 `POST /api/v1/sources`（默认停用，含 `sourceDefinitionRef`、**所选**
    `operationId`、按字段类型转换后的 `config`、`scheduleIntervalMs` 与可选
    `connectionId`）；成功显示 notice、关闭并 reset 表单，然后 refresh。不再自动启用。
    客户端不复制服务端的条件规则（JSON Schema 表达不了 Bilibili 的「mode=feed 才需要
@@ -313,12 +315,13 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 ### Form input
 
-- Source form：`name` trim 后 1–200 字符（默认 `Cosmos RSS`）；配置字段集合来自**当前选中
-  的来源定义** manifest 的 descriptive schema（`enum` → 选择框、`integer`/`number` →
-  数字、`string` → 文本），未知类型字段不渲染；切换定义会清空整组配置字段；
+- Source form：`name` trim 后 1–200 字符（默认 `Cosmos RSS`）；配置字段集合来自**当前选中的
+  来源定义 + 当前选中的操作** manifest 的 descriptive schema（所选操作的
+  `configurationSchema.schema`，为 `null` 时回退定义级；`enum` → 选择框、`integer`/`number` →
+  数字、`string` → 文本），未知类型字段不渲染；切换定义或操作都会清空整组配置字段；
   `scheduleIntervalMinutes` 为可选整数分钟（默认 `30`，1–44640，清空即关闭定时）；
   `connectionId` 为空串表示不绑定连接。保存发送
-  `{name, sourceDefinitionRef: <所选 ref>, operationId: <首个 operationId>, config: <按字段类型转换>, scheduleIntervalMs?, connectionId?}`
+  `{name, sourceDefinitionRef: <所选 ref>, operationId: <所选 operationId>, config: <按字段类型转换>, scheduleIntervalMs?, connectionId?}`
   且不含 enabled；创建后保持停用。客户端校验只覆盖能从 JSON Schema 读出的规则
   （必填、整数、最小/最大、枚举取值），条件规则由服务端裁决。测试配置发送
   `{sourceDefinitionRef, operationId, config}` 到 probe 端点，轮询间隔 1.5s、上限 30s。

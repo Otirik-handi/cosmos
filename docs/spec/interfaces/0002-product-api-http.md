@@ -86,7 +86,12 @@ Source 和手动 Run 是 HTTP 201；Source probe 是显式 HTTP 202。SSE 是长
 
 - `SourceDefinitionManifest`：`id`、正整数 `version`、`ref`、`provider`、`displayName`、可空
   `description`、`manifestHash: { algorithm, value }`、`status`、`operationIds[]`、
-  `capabilities[]` 和 `configurationSchema: { id, version, hash: { algorithm, value }, schema? }`。
+  `capabilities[]`、`configurationSchema: { id, version, hash: { algorithm, value }, schema? }`
+  和 `operations[]`（每项：`operationId`、`inputSchema`/`outputSchema`、可空
+  `configurationSchema`——这个 operation 的用户可填配置，`null` 表示沿用定义级那份，
+  `externalKey`、`discoveryContext`、`media`、可空 `stateStoreNamespace`）与 `auth`
+  （认证方式 + `secretRefRequired` + `probeSupported`）。Bilibili 是当前唯一声明两个
+  operation 的定义（`fetch` 沿用定义级 schema，`search` 自带 `query`/`limit`）。
 - `WorkflowDefinitionManifest`：`id`、`version`、`ref`、`kind`、`provider`、`manifestHash`、
   `status`、`requiredActionRefs[]`、`requiredBackendCapabilities`（字符串到 boolean 的对象）、
   `inputSchema` 和 `outputSchema`（均为上述 JsonSchemaRef）。

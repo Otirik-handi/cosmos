@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     aiHotSourceConfigSchema,
+    bilibiliSearchSourceConfigSchema,
     bilibiliSourceConfigSchema,
     getSourceConfigurationSchema,
     publisherSchema,
@@ -67,10 +68,25 @@ describe("source and job contracts", () => {
         })).toThrow();
     });
 
-    it("resolves canonical configuration schemas by source definition ref", () => {
+    it("resolves canonical configuration schemas by source definition ref and operation", () => {
         expect(getSourceConfigurationSchema("source.rss@1")).toBe(rssSourceConfigSchema);
         expect(getSourceConfigurationSchema("source.bilibili@1")).toBe(bilibiliSourceConfigSchema);
         expect(getSourceConfigurationSchema("source.unknown@1")).toBeNull();
+        // EXT-006：登记的 operation 用自己的 schema，没登记的 operation 回退定义级那份。
+        expect(getSourceConfigurationSchema("source.bilibili@1", "search")).toBe(bilibiliSearchSourceConfigSchema);
+        expect(getSourceConfigurationSchema("source.bilibili@1", "fetch")).toBe(bilibiliSourceConfigSchema);
+        expect(getSourceConfigurationSchema("source.rss@1", "fetch")).toBe(rssSourceConfigSchema);
+    });
+
+    it("requires a query for the Bilibili search operation and rejects fetch fields", () => {
+        expect(bilibiliSearchSourceConfigSchema.parse({ query: "  cosmos  ", limit: 5 })).toEqual({
+            schemaVersion: 1,
+            query: "cosmos",
+            limit: 5,
+        });
+        expect(() => bilibiliSearchSourceConfigSchema.parse({ limit: 5 })).toThrow();
+        expect(() => bilibiliSearchSourceConfigSchema.parse({ query: "" })).toThrow();
+        expect(() => bilibiliSearchSourceConfigSchema.parse({ query: "cosmos", mode: "hot" })).toThrow();
     });
 
     it("keeps the media budget out of the source config", () => {
@@ -405,6 +421,7 @@ describe("source definition catalog contracts", () => {
             operationId: "fetch",
             inputSchema: { id: "source.rss.fetch.input@1", version: 1, hash: { algorithm: "builtin", value: "i" } },
             outputSchema: { id: "source.rss.fetch.output@1", version: 1, hash: { algorithm: "builtin", value: "o" } },
+            configurationSchema: null,
             externalKey: "url",
             discoveryContext: "",
             media: "download",
@@ -420,6 +437,35 @@ describe("source definition catalog contracts", () => {
             status: "enabled",
         });
         expect(manifest.configurationSchema.schema).toMatchObject({ type: "object" });
+    });
+
+    /**
+     * EXT-006：operation 可以覆盖配置 schema（null = 沿用定义级），也可以声明自己没有
+     * 状态要保存。两者都是 Web「按声明渲染」和宿主解析状态命名空间的输入。
+     */
+    it("carries a per-operation configuration schema that may fall back to the definition", () => {
+        const manifest = sourceDefinitionManifestSchema.parse({
+            ...rssManifest,
+            operationIds: ["fetch", "search"],
+            operations: [
+                rssManifest.operations[0],
+                {
+                    ...rssManifest.operations[0],
+                    operationId: "search",
+                    configurationSchema: {
+                        id: "source.rss.search.config@1",
+                        version: 1,
+                        hash: { algorithm: "builtin", value: "source.rss.search.config@1" },
+                    },
+                    discoveryContext: "search",
+                    stateStoreNamespace: null,
+                },
+            ],
+        });
+
+        expect(manifest.operations[0]?.configurationSchema).toBeNull();
+        expect(manifest.operations[1]?.configurationSchema?.id).toBe("source.rss.search.config@1");
+        expect(manifest.operations[1]?.stateStoreNamespace).toBeNull();
     });
 
     it("rejects manifests with an unversioned ref or unknown fields", () => {

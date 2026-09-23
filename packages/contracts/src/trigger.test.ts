@@ -90,6 +90,7 @@ describe("Trigger/SDK contracts (ADR-0018)", () => {
                 operationId: "fetch",
                 inputSchema: { id: "i@1", version: 1, hash: { algorithm: "builtin", value: "i@1" } },
                 outputSchema: { id: "o@1", version: 1, hash: { algorithm: "builtin", value: "o@1" } },
+                configurationSchema: null,
                 externalKey: "url",
                 discoveryContext: "",
                 media: "download",

@@ -71,6 +71,9 @@ type SourceFormProps = {
     /** 当前选中的来源定义 ref；未选中或目录里没有时表单不渲染字段。 */
     selectedDefinitionRef: string;
     onSelectDefinition: (ref: string) => void;
+    /** 当前选中的操作 id；决定渲染哪一组配置字段（`operationIds` 只有一个时不显示选择器）。 */
+    selectedOperationId: string;
+    onSelectOperation: (operationId: string) => void;
     onSubmit: FormEventHandler<HTMLFormElement>;
     onTest: () => void;
     probeState: ProbeState;
@@ -92,9 +95,19 @@ export type ManifestField = {
  * 从来源定义的描述性 JSON Schema 读出表单字段：`enum` → 选择框、`integer`/`number` →
  * 数字、`string` → 文本。三种以外不渲染，也不猜类型——Bilibili 的 `mode` 只有 `enum`
  * 没有 `type`，按类型白名单过滤会把它整条丢掉，必填的采集模式就再也选不出来。
+ *
+ * 传了 `operationId` 就用该操作的 `configurationSchema`；它为 `null` 表示沿用定义级声明，
+ * 定义级也为 `null` 时不渲染任何字段（EXT-006：同一个定义的 search 与 fetch 配置不同）。
  */
-export function readManifestFields(manifest: SourceDefinitionManifest): ManifestField[] {
-    const schema = manifest.configurationSchema.schema;
+export function readManifestFields(
+    manifest: SourceDefinitionManifest,
+    operationId?: string,
+): ManifestField[] {
+    const operationSchema = operationId === undefined
+        ? null
+        : manifest.operations.find((item) => item.operationId === operationId)
+            ?.configurationSchema?.schema ?? null;
+    const schema = operationSchema ?? manifest.configurationSchema.schema;
     const properties = schema?.properties;
     if (!properties || typeof properties !== "object") {
         return [];
@@ -210,6 +223,10 @@ const fieldPresentation: Record<string, {
         label: "采集模式",
         optionLabels: {hot: "热门", feed: "动态"},
     },
+    query: {
+        label: "查询词",
+        placeholder: "例如：宇宙",
+    },
     limit: {
         label: "每次条数",
         type: "number",
@@ -217,11 +234,19 @@ const fieldPresentation: Record<string, {
     },
 };
 
+/** 操作的显示名；未登记的操作直接显示 id（纯展示文案，不进合同）。 */
+const operationPresentation: Record<string, string> = {
+    fetch: "抓取",
+    search: "搜索",
+};
+
 export function SourceForm({
     form,
     definitionState,
     selectedDefinitionRef,
     onSelectDefinition,
+    selectedOperationId,
+    onSelectOperation,
     onSubmit,
     onTest,
     probeState,
@@ -230,7 +255,8 @@ export function SourceForm({
 }: SourceFormProps) {
     const manifests = definitionState.status === "ready" ? definitionState.manifests : [];
     const manifest = manifests.find((item) => item.ref === selectedDefinitionRef) ?? null;
-    const fields = manifest ? readManifestFields(manifest) : [];
+    const operationIds = manifest?.operationIds ?? [];
+    const fields = manifest ? readManifestFields(manifest, selectedOperationId) : [];
 
     return (
         <Card>
@@ -286,6 +312,26 @@ export function SourceForm({
                                     {manifest?.description ?? "目录里没有可用的来源定义。"}
                                 </FieldDescription>
                             </Field>
+                            {operationIds.length > 1 && (
+                                <Field>
+                                    <FieldLabel htmlFor="source-operation">操作</FieldLabel>
+                                    <select
+                                        id="source-operation"
+                                        className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                                        value={selectedOperationId}
+                                        onChange={(event) => onSelectOperation(event.target.value)}
+                                    >
+                                        {operationIds.map((operationId) => (
+                                            <option key={operationId} value={operationId}>
+                                                {operationPresentation[operationId] ?? operationId}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <FieldDescription>
+                                        同一个来源定义可以有多个操作，配置字段按操作声明展示。
+                                    </FieldDescription>
+                                </Field>
+                            )}
                             <Field data-invalid={Boolean(form.formState.errors.name)}>
                                 <FieldLabel htmlFor="source-name">名称</FieldLabel>
                                 <Input

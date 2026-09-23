@@ -265,6 +265,19 @@ export const bilibiliSourceConfigSchema = z.object({
 }).strict();
 export type BilibiliSourceConfig = z.infer<typeof bilibiliSourceConfigSchema>;
 
+/**
+ * Bilibili 第二个 operation（`search`）的用户配置：搜索要一个查询词，`fetch` 的 mode/limit
+ * 对它没有意义——这正是「按 operation 声明配置 schema」要解决的事（EXT-006）。搜索匿名
+ * 可用，所以它**不要求连接**（对比 `fetch` 的 mode=feed）。
+ */
+export const bilibiliSearchSourceConfigSchema = z.object({
+    schemaVersion: z.coerce.number().int().positive().default(1),
+    query: z.string().trim().min(1).max(200),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    ...scheduleConfigShape,
+}).strict();
+export type BilibiliSearchSourceConfig = z.infer<typeof bilibiliSearchSourceConfigSchema>;
+
 export const aiHotSourceConfigSchema = z.object({
     schemaVersion: z.coerce.number().int().positive().default(1),
     ...scheduleConfigShape,
@@ -284,9 +297,28 @@ export const sourceConfigurationSchemas = {
     "source.aihot@1": aiHotSourceConfigSchema,
 } as const;
 
+/**
+ * 按 operation 覆盖定义级配置 schema（EXT-006）。一个 Adapter 的第二个 operation 往往要
+ * 用户填完全不同的东西（Bilibili 的 `search` 要查询词），所以「用户可填配置」不能只有一份；
+ * 未登记的 operation 回退定义级那份（`bilibili.fetch` 就是这种：它沿用 mode/limit）。
+ */
+export const sourceOperationConfigurationSchemas: Record<
+    string,
+    Record<string, z.ZodTypeAny>
+> = {
+    "source.bilibili@1": { search: bilibiliSearchSourceConfigSchema },
+};
+
 export function getSourceConfigurationSchema(
     sourceDefinitionRef: string,
+    operationId?: string,
 ): z.ZodTypeAny | null {
+    if (operationId !== undefined) {
+        const override = sourceOperationConfigurationSchemas[sourceDefinitionRef]?.[operationId];
+        if (override) {
+            return override;
+        }
+    }
     return sourceConfigurationSchemas[sourceDefinitionRef as keyof typeof sourceConfigurationSchemas] ?? null;
 }
 

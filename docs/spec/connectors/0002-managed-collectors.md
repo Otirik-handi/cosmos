@@ -80,14 +80,15 @@ browser-bridge
 
 每次 fetch 的执行顺序固定为：
 
-1. 解析并验证当前 `Source` 的 connector config。
-2. 当 `checkVersion=true` 且当前 connector 实例尚未完成版本检查时，执行 `--version`。
-3. 当 `preflight=true` 时，使用同一 profile 环境执行 `doctor`。
-4. 严格以 `bilibili <mode> --limit <limit> -f json` 执行业务命令。
-5. 解释退出状态。
-6. 解析 JSON，逐项标准化，并返回 `nextCursor: null`。
+1. 按执行快照的 `operationId` 分派（ADR-0027 决定 3）：`search` 走搜索配置与搜索命令，其余值走 `mode` 配置与对应命令。宿主不解释 operation 的含义，只把它原样放进快照。
+2. 解析并验证当前 `Source` 的 connector config（按上一步选中的那份 schema）。
+3. 当 `checkVersion=true` 且当前 connector 实例尚未完成版本检查时，执行 `--version`。
+4. 当 `preflight=true` 时，使用同一 profile 环境执行 `doctor`。
+5. 执行业务命令：`fetch` 严格以 `bilibili <mode> --limit <limit> -f json`；`search` 严格以 `bilibili search <query> --limit <limit> -f json`。
+6. 解释退出状态。
+7. 解析 JSON，逐项标准化，并返回 `nextCursor: null`。
 
-业务命令参数不增加 cursor、endpoint、认证参数或其他隐式选项。调用方提供的 `AbortSignal` 会传递给 OpenCLI runner。
+业务命令参数不增加 cursor、endpoint、认证参数或其他隐式选项；搜索的查询词只作为一个位置参数传入，不做 shell 插值。调用方提供的 `AbortSignal` 会传递给 OpenCLI runner。
 
 默认 runner 按以下优先级选择可执行入口：
 
@@ -180,6 +181,19 @@ OPENCLI_PROFILE=<profile>
 
 版本检查、doctor 和业务命令使用同一 profile 环境。
 
+### Bilibili search config
+
+`operationId = "search"` 用自己那份配置（EXT-006；权威 schema 是 `bilibiliSearchSourceConfigSchema`）：
+
+| 字段 | 约束 | 默认值 |
+| --- | --- | --- |
+| `schemaVersion` | 正整数 | `1` |
+| `query` | trim 后 `1..200` 字符 | 无 |
+| `limit` | `1..100` 的整数 | `20` |
+| `scheduleIntervalMs` | 共享的可选调度值 | 无 |
+
+`mode` 不是搜索的字段：带上它（或任何未声明字段）都按不可重试的 `invalid_configuration` 拒绝，而不是被静默忽略。搜索匿名可用——**不读连接、不要求 profile**，因此 `validate` 在没有连接时也通过，`OPENCLI_PROFILE` 为 `undefined`。
+
 ### AI HOT config
 
 AI HOT config 只接受：
@@ -208,14 +222,14 @@ AI HOT 不允许通过 config 指定 endpoint、header 或认证信息。固定 
 | summary | `description`、`desc`、`summary` |
 | content URL | `url`、`link`、`web_url`；否则由 BV ID 推导 `https://www.bilibili.com/video/BV...` |
 | published time | `published_at`、`publishedAt`、`pubdate`、`time`，按 `Asia/Shanghai` 解释 |
-| kind | `hot` 模式为 `listing`；`feed` 模式为 `video` |
-| discoveryChannel | `hot` 模式为 `recommendation`；`feed` 模式为 `account`（ING-004：同一个 manifest 下的两种发现方式由连接器按 mode 声明） |
+| kind | `search` operation 为 `video`；`fetch` 的 `hot` 模式为 `listing`、`feed` 模式为 `video` |
+| discoveryChannel | `search` operation 为 `search`；`fetch` 的 `hot` 模式为 `recommendation`、`feed` 模式为 `account`（ING-004：同一个 manifest 下的多种发现方式由 operation/mode 声明） |
 | raw payload | `JSON.stringify(row)` |
 | raw MIME | `application/json` |
 
 publisher 名称按 `author`、`author_name`、`author.name`、`owner.name` 选择；platform ID 按 `mid`、`uid`、`author_id`、`owner.mid`、`owner.uid` 选择；profile URL 按 `author_url`、`owner.url` 选择；publisher kind 为 `user`。没有名称时 publisher 为 `null`。
 
-source locator 包含 provider `bilibili`、mode、从 `1` 开始的 rank 和 externalId。
+source locator 包含 provider `bilibili`、mode（`fetch` 为 `hot`/`feed`，`search` 记为 `search`）、从 `1` 开始的 rank 和 externalId。
 
 图片按 `cover`、`pic`、`thumbnail`、`cover_url` 选择，生成 `metadata_only` 的 cover asset。
 
@@ -286,6 +300,22 @@ AI HOT connector 不保存页游标。它只返回 `nextCursor`，由上层 Conn
 ```
 
 任一步骤失败即终止本次 fetch，不返回部分结果。通过版本检查后，同一 connector 实例的后续 fetch 跳过 `--version`；启用 preflight 时，doctor 仍在每次业务执行前运行。
+
+### Bilibili search
+
+```text
+接收 fetch（operationId=search）
+  -> 验证 search config
+  -> [需要时] 未检查版本 -> --version -> 已检查版本
+  -> [启用时] doctor preflight
+  -> 执行 bilibili search query --limit limit -f json
+  -> 解释退出状态
+  -> 解析负载
+  -> 标准化 items（video / search / mode=search）
+  -> 返回 items 与 null cursor
+```
+
+分派只发生在入口：一旦选定搜索路径，就不读连接、不带 profile，后续步骤与 `fetch` 共用同一套版本检查、preflight、退出码和解析逻辑。
 
 ### AI HOT fetch
 
@@ -395,14 +425,16 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 8. OpenCLI 退出码 `66` 必须产生零 items 和 `nextCursor=null`；退出码 `69`、`77`、超时状态及普通执行失败必须分别符合错误映射表。
 9. Bilibili 直接 JSON、带前后噪声的首个闭合 JSON 候选、顶层数组、`items/data/results` 数组和单对象必须按规定解析；数组中出现非对象元素必须整体返回不可重试的 `malformed_payload`。
 10. 给定覆盖全部字段优先级的 Bilibili fixture 行，标准化结果必须可逐字段断言 external ID、title fallback、URL fallback、`Asia/Shanghai` 时间、publisher、source locator、cover asset、metrics、raw payload、MIME 和固定 null cursor。
-11. AI HOT 在 cursor 为 falsy 时请求 URL 不得包含 `cursor`；cursor 为 truthy 时必须只将其作为 query 参数加入固定 URL，并传递 signal。
-12. AI HOT 对 `429`、5xx 和其他非 2xx 的错误码及 retryable 值必须符合错误映射表。
-13. AI HOT 对非法 JSON、缺失 `items`、非对象 item、缺少 `id` 或缺少 `title` 必须整体返回不可重试的 `malformed_payload`。
-14. 给定合法 AI HOT fixture 响应，必须可逐字段断言 content fallback、URL fallback、UTC 时间、publisher、source locator、image asset、metrics、raw payload 和 MIME。
-15. AI HOT 对 `page.nextCursor` 必须按实现的文本读取规则返回：非空字符串原样返回，数字或布尔值返回其文本形式，空字符串、缺失值或对象/数组等其他类型返回 `null`。
-16. 以 stub runner 和 stub fetch 完成上述验收时，只证明解析、映射和编排行为；不得将 fixture 成功表述为真实 Bilibili、OpenCLI、Browser Bridge 或 AI HOT 可用性验收。
-17. 在重建实现中检查子进程调用选项时，必须确认 timeout 和 signal 已传入，同时确认 `maxBufferBytes` 没有被错误宣称为当前实现中已生效的 `execFile` 限制。
-18. 对日志采集结果进行断言时，日志可包含状态、字节数、数量、耗时和错误码，但不得包含 fixture payload 正文。
+11. `operationId=search` 时业务参数必须严格等于 `bilibili search <query> --limit <limit> -f json`，三条子进程调用（`--version`、`doctor`、业务命令）都不带 `OPENCLI_PROFILE`；标准化结果的 `kind` 为 `video`、`discoveryChannel` 为 `search`、source locator 的 mode 为 `search`。
+12. `operationId=search` 且 config 缺 `query` 或带 `mode` 时，`validate` 必须得到不可重试的 `invalid_configuration`；只带 `query`（可选 `limit`）时通过，没有连接也通过。
+13. AI HOT 在 cursor 为 falsy 时请求 URL 不得包含 `cursor`；cursor 为 truthy 时必须只将其作为 query 参数加入固定 URL，并传递 signal。
+14. AI HOT 对 `429`、5xx 和其他非 2xx 的错误码及 retryable 值必须符合错误映射表。
+15. AI HOT 对非法 JSON、缺失 `items`、非对象 item、缺少 `id` 或缺少 `title` 必须整体返回不可重试的 `malformed_payload`。
+16. 给定合法 AI HOT fixture 响应，必须可逐字段断言 content fallback、URL fallback、UTC 时间、publisher、source locator、image asset、metrics、raw payload 和 MIME。
+17. AI HOT 对 `page.nextCursor` 必须按实现的文本读取规则返回：非空字符串原样返回，数字或布尔值返回其文本形式，空字符串、缺失值或对象/数组等其他类型返回 `null`。
+18. 以 stub runner 和 stub fetch 完成上述验收时，只证明解析、映射和编排行为；不得将 fixture 成功表述为真实 Bilibili、OpenCLI、Browser Bridge 或 AI HOT 可用性验收。
+19. 在重建实现中检查子进程调用选项时，必须确认 timeout 和 signal 已传入，同时确认 `maxBufferBytes` 没有被错误宣称为当前实现中已生效的 `execFile` 限制。
+20. 对日志采集结果进行断言时，日志可包含状态、字节数、数量、耗时和错误码，但不得包含 fixture payload 正文。
 
 ## 实现与测试锚点
 
@@ -411,12 +443,13 @@ Browser Bridge 是 Bilibili 运行依赖，不是独立 connector。AI HOT 不�
 - `plugins/collectors/src/index.ts`
   - 常量锚点：`bilibiliConnectorId`、`aiHotConnectorId`、`openCliExecutableEnv`、`aiHotItemsUrl`、`supportedOpenCliMajor`。
   - OpenCLI runner 锚点：executable 解析、Node 包入口回退、`.cmd/.bat` shell、timeout/signal 传递及执行错误归类。
-  - Bilibili 锚点：config schema、单实例版本检查、doctor preflight、严格参数构造、退出码映射、JSON 候选提取和逐行标准化。
+  - Bilibili 锚点：config schema、单实例版本检查、doctor preflight、严格参数构造、退出码映射、JSON 候选提取和逐行标准化；operation 分派锚点：`isBilibiliSearchOperation`、`planBilibiliSearchExecution`、`planBilibiliFetchExecution`。
   - AI HOT 锚点：固定 URL、cursor query、HTTP 状态映射、响应结构验证、标准化和 `page.nextCursor`。
   - Registry 锚点：`createBuiltInConnectorRegistry` 的注册顺序、descriptor 暴露和 `Source.kind` resolve。
 - `plugins/collectors/src/index.test.ts`
   - Bilibili hot 场景断言 `--version`、`doctor`、业务参数、标题/作者/URL/kind/cover/time 和 null cursor。
   - Bilibili feed 场景断言 owner publisher ID、views/likes/collects metrics，以及 feed 必须带 profile 的 validate 边界。
+  - Bilibili search 场景断言 `bilibili search <query>` 参数、三条调用都不带 profile、`search` 发现上下文，以及缺 `query`／带 `mode` 的 validate 边界。
   - doctor 输出 Browser Bridge 未连接时断言 `dependency_unavailable` 且可重试。
   - AI HOT 断言固定 endpoint、输入 cursor query、合法 item 标准化、返回 next cursor，以及非法 JSON 的 `malformed_payload` 和脱敏 transport 日志。
   - builtin descriptor 顺序、四项且仅四项注册，以及 `opencli` 不受支持的场景。
