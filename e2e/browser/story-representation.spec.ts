@@ -94,6 +94,8 @@ test("represents a Story with an event time and ordered key facts, and re-submit
         };
         return body.story;
     }, id);
+    // 未人工编辑过的 Story 由 ingest 投影写出，所以还没有保护标记（ADR-0028）。
+    await expect(dialog.locator('[data-story-human-protected="true"]')).toHaveCount(0);
     await submit();
 
     // 详情：标题下的事件时间按本地分钟显示，关键事实按保存顺序列出并带出处。
@@ -106,6 +108,10 @@ test("represents a Story with an event time and ordered key facts, and re-submit
     await expect(factsBlock.locator("li").nth(0)).toContainText("出处：");
     await expect(factsBlock.locator("li").nth(1)).toContainText("第一条事实");
     await expect(factsBlock.locator("li").nth(1)).not.toContainText("出处：");
+    // 保存后当前 Revision 归人工，面板说明自动更新已暂停（ADR-0028）。
+    const protectedNotice = dialog.locator('[data-story-human-protected="true"]');
+    await expect(protectedNotice).toBeVisible();
+    await expect(protectedNotice).toContainText("自动更新已暂停");
 
     const saved = await readRepresentation(storyId!);
     expect(saved.timeRange?.start.exact).not.toBeNull();

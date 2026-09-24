@@ -257,15 +257,9 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                 contentKind: input.item.kind,
             });
             const storyId = existingEntry?.storyId ?? storyProjection.id;
-            await tx.story.upsert({
+            const storyWithCurrent = await tx.story.findUnique({
                 where: { id: storyId },
-                create: {
-                    id: storyId,
-                    kind: storyProjection.kind,
-                },
-                update: {
-                    kind: storyProjection.kind,
-                },
+                include: { currentRevision: true },
             });
             const storyFingerprint = fingerprintStoryRevision({
                 title: input.item.title,
@@ -273,34 +267,67 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                 kind: storyProjection.kind,
                 subtype: storyProjection.subtype,
             });
-            const storyWithCurrent = await tx.story.findUnique({
-                where: { id: storyId },
-                include: { currentRevision: true },
-            });
-            const storyCurrentFingerprint = storyWithCurrent?.currentRevision?.fingerprint ?? null;
-            if (storyCurrentFingerprint !== storyFingerprint) {
-                const latestStoryRevision = await tx.storyRevision.findFirst({
-                    where: { storyId },
-                    orderBy: { revision: "desc" },
-                    select: { revision: true },
-                });
-                const storyRevision = await tx.storyRevision.create({
-                    data: {
-                        story: {
-                            connect: { id: storyId },
+            // This projection is a deterministic writer, not a derived analysis:
+            // when the current Revision is human-written it must neither replace
+            // it nor be silently dropped, so the would-be write is recorded as a
+            // skip event instead (ADR-0028). `kind` is a human-editable display
+            // field, so it is frozen with the rest of the representation.
+            const humanProtected = storyWithCurrent?.currentRevision?.producer === "human";
+            const wouldWrite = (storyWithCurrent?.currentRevision?.fingerprint ?? null)
+                    !== storyFingerprint
+                || storyWithCurrent?.kind !== storyProjection.kind;
+            if (humanProtected) {
+                if (wouldWrite) {
+                    await appendDomainEvent(tx, {
+                        type: "story.representation_projection_skipped.v1",
+                        aggregateType: "Story",
+                        aggregateId: storyId,
+                        runId: input.runId,
+                        workflowRunId: input.workflowRunId ?? null,
+                        payload: {
+                            storyId,
+                            entryId: entry.id,
+                            currentRevisionId: storyWithCurrent?.currentRevision?.id ?? null,
+                            reason: "human_protected",
                         },
-                        revision: (latestStoryRevision?.revision ?? 0) + 1,
-                        fingerprint: storyFingerprint,
-                        title: input.item.title,
-                        summary: input.item.summary,
-                    },
-                });
-                await tx.story.update({
+                    });
+                }
+            } else {
+                await tx.story.upsert({
                     where: { id: storyId },
-                    data: {
-                        currentRevisionId: storyRevision.id,
+                    create: {
+                        id: storyId,
+                        kind: storyProjection.kind,
+                    },
+                    update: {
+                        kind: storyProjection.kind,
                     },
                 });
+                if (wouldWrite) {
+                    const latestStoryRevision = await tx.storyRevision.findFirst({
+                        where: { storyId },
+                        orderBy: { revision: "desc" },
+                        select: { revision: true },
+                    });
+                    const storyRevision = await tx.storyRevision.create({
+                        data: {
+                            story: {
+                                connect: { id: storyId },
+                            },
+                            revision: (latestStoryRevision?.revision ?? 0) + 1,
+                            fingerprint: storyFingerprint,
+                            producer: "system",
+                            title: input.item.title,
+                            summary: input.item.summary,
+                        },
+                    });
+                    await tx.story.update({
+                        where: { id: storyId },
+                        data: {
+                            currentRevisionId: storyRevision.id,
+                        },
+                    });
+                }
             }
 
             await tx.entry.update({

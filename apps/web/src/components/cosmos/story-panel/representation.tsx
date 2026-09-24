@@ -28,6 +28,26 @@ type KeyFactsProps = {
     story: StoryDetail;
 };
 
+/**
+ * The ingest projection freezes a Story whose current Revision is human-written
+ * (ADR-0028). Without saying so the Story just looks stale, so the freeze is
+ * stated where the representation is read.
+ */
+export function StoryHumanProtectedNotice({ story }: { story: StoryDetail }) {
+    if (story.story.producer !== "human") {
+        return null;
+    }
+    return (
+        <p
+            data-story-human-protected="true"
+            className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+        >
+            <Badge variant="outline">人工已修改</Badge>
+            <span>自动更新已暂停，来源的新版本不会覆盖这里的内容。</span>
+        </p>
+    );
+}
+
 /** 关键事实按保存顺序列出，每条显示出处；出处指向的信息条目已不存在时如实标出。 */
 export function StoryKeyFactsBlock({ entryOptions, story }: KeyFactsProps) {
     const keyFacts = story.story.keyFacts ?? [];

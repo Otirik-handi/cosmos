@@ -72,4 +72,21 @@ test.describe("component lab story panel representation", () => {
 
         expect(consoleErrors).toEqual([]);
     });
+
+    /**
+     * 人工真相保护（ADR-0028）：当前 Revision 归人工时面板说明自动更新已暂停，
+     * 未受保护的场景不出现这条标记。
+     */
+    test("shows the human-protection notice only for the human-protected scene", async ({page}) => {
+        await page.goto("/dev/components?component=story-panel&scene=human-protected");
+        const preview = page.locator(PREVIEW_ROOT);
+        await expect(preview).toBeVisible();
+        const notice = preview.locator('[data-story-human-protected="true"]');
+        await expect(notice).toBeVisible();
+        await expect(notice).toContainText("自动更新已暂停");
+
+        await page.goto("/dev/components?component=story-panel&scene=representation");
+        await expect(page.locator(PREVIEW_ROOT)).toBeVisible();
+        await expect(page.locator('[data-story-human-protected="true"]')).toHaveCount(0);
+    });
 });

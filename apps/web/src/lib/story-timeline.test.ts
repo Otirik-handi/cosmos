@@ -29,6 +29,7 @@ function story(entries: EntryDetail[]): StoryDetail {
             revisionId: "sr:1",
             title: "同一事件",
             summary: null,
+            producer: "system",
             status: "active",
             replacedBy: [],
         },

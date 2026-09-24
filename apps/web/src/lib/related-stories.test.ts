@@ -12,6 +12,7 @@ const baseStory: StoryDetail = {
         revisionId: "sr:1",
         title: "Jeff Dean 离开 Google",
         summary: null,
+        producer: "system",
         status: "active",
         replacedBy: [],
     },

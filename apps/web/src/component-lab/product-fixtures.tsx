@@ -747,7 +747,7 @@ export function renderStoryPanelLab(props: LabProps) {
         props,
         "state",
         "revision",
-        ["revision", "empty", "split", "splittable", "legacy-subtype", "representation", "entry-relations"] as const,
+        ["revision", "empty", "split", "splittable", "legacy-subtype", "representation", "entry-relations", "human-protected"] as const,
     );
     const title = textProp(props, "title", "Cosmos fixture story");
     const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
@@ -860,6 +860,9 @@ export function renderStoryPanelLab(props: LabProps) {
                     { text: "出处指向一条已经删除的信息条目", entryId: "entry-deleted-fixture" },
                 ]
                 : [],
+            // 「人工已修改」是自动写入方停止更新的判据（ADR-0028），只有这条
+            // 场景把它打开，其余场景保持 ingest 投影写出的默认值。
+            producer: state === "human-protected" ? "human" : "system",
             status: state === "split" ? "split" : "active",
             replacedBy: state === "split"
                 ? [

@@ -73,6 +73,7 @@ describe("HttpCosmosClient entity 与证据", () => {
                         revisionId: "rev-b-1",
                         title: "Event",
                         summary: null,
+                        producer: "system",
                         status: "active",
                         replacedBy: [],
                     },
