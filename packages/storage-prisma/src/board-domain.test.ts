@@ -12,6 +12,7 @@ import {
     SpotlightPlacementNotFoundError,
     StoryNotFoundError,
 } from "@cosmos/application";
+import { type BoardDetail } from "@cosmos/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
@@ -214,6 +215,57 @@ describe("board domain commands", () => {    it("seeds the default board idempot
         }
     });
 
+    it("reorders blocks inside one section by the post-removal index and persists it", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const { boardId, blockIds, orderOf } = await seedFourBlockSection(repository);
+            const [, blockB] = blockIds;
+
+            // 同分区内把 B（当前第 1 格）移到 position=2。`position` 的口径是
+            // 「先移除被拖区块、再在剩余区块之间插入」，等价于 arrayMove 的 `to`
+            // ——客户端 `resolveDropTarget` 把「B 拖到 C 上」翻成 C 的下标 2，预览
+            // 就是 [A,C,B,D]。若按「全量下标」理解（position 计入被拖区块自己的
+            // 槽位），B 会多落一格，得到用户报告过的 [A,C,D,B]。
+            const moved = await repository.moveBlock({ blockId: blockB, position: 2 });
+            expect(orderOf(moved)).toEqual(["A", "C", "B", "D"]);
+            expect(moved.sections[0]!.blocks.map((block) => block.position))
+                .toEqual([0, 1, 2, 3]);
+
+            // 移动路径的重新读取：现有 fresh-read 断言只出现在删除路径上。
+            const reloaded = await repository.getBoard(boardId);
+            expect(orderOf(reloaded!)).toEqual(["A", "C", "B", "D"]);
+            expect(reloaded!.sections[0]!.blocks.map((block) => block.position))
+                .toEqual([0, 1, 2, 3]);
+        } finally {
+            await repository.close();
+            await prisma.$disconnect();
+        }
+    });
+
+    it("moves the first block of a section into the second slot", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const { boardId, sectionId, blockIds, orderOf } = await seedFourBlockSection(repository);
+            const [blockA] = blockIds;
+
+            // 浏览器验收里「把第一个区块拖到第二个槽位」那条断言（position=1）的
+            // 下层版本：显式传同一个 sectionId 也必须留在原分区。全量下标口径会得到
+            // [B,C,A,D]（A 多跳过一格），正是该 spec 注释记载的旧口径结果。
+            const moved = await repository.moveBlock({
+                blockId: blockA,
+                sectionId,
+                position: 1,
+            });
+            expect(orderOf(moved)).toEqual(["B", "A", "C", "D"]);
+
+            const reloaded = await repository.getBoard(boardId);
+            expect(orderOf(reloaded!)).toEqual(["B", "A", "C", "D"]);
+        } finally {
+            await repository.close();
+            await prisma.$disconnect();
+        }
+    });
+
     it("duplicates a block with the same config and deletes blocks without touching content", async () => {
         const { repository, prisma } = await setup();
         try {
@@ -399,6 +451,47 @@ async function seedStory(prisma: PrismaClient, id: string, title: string): Promi
         where: { id },
         data: { currentRevisionId: `rev-${id}-1` },
     });
+}
+
+/**
+ * 一个分区里按 A/B/C/D 顺序放四个区块，并返回把区块 id 折回字母的顺序读取器。
+ * 同分区重排的 `position` 口径要靠「谁落在第几格」才看得出来，直接断言 id 读不出来。
+ */
+async function seedFourBlockSection(repository: PrismaCosmosRepository): Promise<{
+    boardId: string;
+    sectionId: string;
+    blockIds: readonly [string, string, string, string];
+    orderOf: (detail: BoardDetail) => string[];
+}> {
+    const board = await repository.createBoard({ name: "看板" });
+    const created = await repository.createSection({
+        boardId: board.id,
+        title: "信息流",
+    });
+    const sectionId = created.sections[0]!.id;
+    const ids: string[] = [];
+    for (let index = 0; index < 4; index += 1) {
+        const withBlock = await repository.createBlock({
+            sectionId,
+            type: "collection",
+            config: {},
+        });
+        ids.push(withBlock.sections[0]!.blocks[index]!.id);
+    }
+    const [blockA, blockB, blockC, blockD] = ids as [string, string, string, string];
+    const letters = new Map([
+        [blockA, "A"],
+        [blockB, "B"],
+        [blockC, "C"],
+        [blockD, "D"],
+    ]);
+    return {
+        boardId: board.id,
+        sectionId,
+        blockIds: [blockA, blockB, blockC, blockD],
+        orderOf: (detail) =>
+            detail.sections[0]!.blocks.map((block) => letters.get(block.id) ?? block.id),
+    };
 }
 
 async function seedTopic(prisma: PrismaClient, id: string, title: string): Promise<void> {

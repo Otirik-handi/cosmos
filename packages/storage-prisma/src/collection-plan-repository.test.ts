@@ -139,6 +139,44 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
         }
     });
 
+    it("读投影一次返回同一连接下的两个计划", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
+            const feed = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            const hot = await repository.createSource({
+                name: "推荐流",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            await repository.updateCollectionPlan(feed.planId, {
+                baseRevisionId: feed.planRevisionId,
+                connectionId: connection.id,
+            });
+            await repository.updateCollectionPlan(hot.planId, {
+                baseRevisionId: hot.planRevisionId,
+                connectionId: connection.id,
+            });
+
+            // 产品面按连接分组呈现：一次读投影就要给出该连接下的两行，而不是只给一条。
+            const plans = await repository.listCollectionPlans();
+            const expectedIds = [`plan:${feed.id}`, `plan:${hot.id}`].sort();
+            expect(plans).toHaveLength(2);
+            expect(plans.map((plan) => plan.id).sort()).toEqual(expectedIds);
+            expect(plans.map((plan) => plan.connectionId)).toEqual([connection.id, connection.id]);
+            expect(plans.filter((plan) => plan.connectionId === connection.id).map((plan) => plan.id).sort())
+                .toEqual(expectedIds);
+        } finally {
+            await repository.close();
+        }
+    });
+
     it("读投影按计划返回连接、频率与媒体预算，并跟随来源编辑", async () => {
         const repository = await createRepository();
         try {
@@ -267,6 +305,44 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
         }
     });
 
+    it("maxFileBytes 经计划端点写入后原样读回，来源配置里不留第二份", async () => {
+        const repository = await createRepository();
+        try {
+            const source = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.rss@1",
+                operationId: "fetch",
+                config: { feedUrl: "https://example.test/feed.xml" },
+            });
+            const policy = { images: "metadata_only", maxFileBytes: 2 * 1024 * 1024 } as const;
+
+            const updated = await repository.updateCollectionPlan(source.planId, {
+                baseRevisionId: source.planRevisionId,
+                mediaPolicy: policy,
+            });
+            expect(updated.mediaPolicy).toEqual(policy);
+
+            // 持久化证据：读回的是落库那一列，而不是写命令的入参。
+            const planRow = await repository.prisma.collectionPlan.findUniqueOrThrow({
+                where: { id: source.planId },
+            });
+            expect(JSON.parse(planRow.mediaPolicyJson ?? "null")).toEqual(policy);
+
+            await expect(repository.getCollectionPlan(source.planId))
+                .resolves.toMatchObject({ mediaPolicy: policy });
+            await expect(repository.getSource(source.id))
+                .resolves.toMatchObject({ mediaPolicy: policy });
+            // 两个读投影都逐字段相等：不只是「有策略」，而是预算值一起原样回来。
+            expect((await repository.getCollectionPlan(source.planId))?.mediaPolicy).toEqual(policy);
+            expect((await repository.getSource(source.id))?.mediaPolicy).toEqual(policy);
+            // 来源配置里仍然没有第二份 media。
+            const raw = await repository.prisma.sourceInstance.findUniqueOrThrow({ where: { id: source.id } });
+            expect(JSON.parse(raw.configJson)).toEqual({ feedUrl: "https://example.test/feed.xml" });
+        } finally {
+            await repository.close();
+        }
+    });
+
     it("一个计划可以同时持有 schedule 与 webhook 触发器，删调度不动 webhook", async () => {
         const repository = await createRepository();
         try {
@@ -310,6 +386,69 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 data: { enabled: true },
             });
             await expect(repository.listScheduleTriggers()).resolves.toEqual([]);
+        } finally {
+            await repository.close();
+        }
+    });
+
+    it("失败只落在失败的那个计划上：健康计划跑成功后无错误也不停留在「尚未运行」", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
+            const bad = await repository.createSource({
+                name: "动态",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            const healthy = await repository.createSource({
+                name: "推荐流",
+                sourceDefinitionRef: "source.fixture-rss@1",
+                operationId: "fetch",
+                config: {},
+            });
+            await repository.updateCollectionPlan(bad.planId, {
+                baseRevisionId: bad.planRevisionId,
+                connectionId: connection.id,
+                enabled: true,
+            });
+            await repository.updateCollectionPlan(healthy.planId, {
+                baseRevisionId: healthy.planRevisionId,
+                connectionId: connection.id,
+                enabled: true,
+            });
+
+            // 先确认基线：两个计划都还没跑过，读投影都是 null。没有这一步，「非空」可能
+            // 来自别的行，而不是下面那一次失败的 Run。
+            const before = await repository.listCollectionPlans();
+            expect(before.map((plan) => [plan.lastError, plan.lastRunAt])).toEqual([[null, null], [null, null]]);
+
+            const run = await repository.createQueuedRun({ sourceId: bad.id, triggerKind: "manual" });
+            await repository.completeRun({ runId: run.id, status: "failed", error: "feed 拉取失败" });
+
+            // 浏览器用例断「失败只落在失败的那一个计划上」（collection-plan-multi.spec.ts:13）：
+            // 数据侧等价物就是这条读投影——失败计划带诊断，健康计划既没有错误、也没被写成跑过。
+            const afterFailure = await repository.listCollectionPlans();
+            const failedPlan = afterFailure.find((plan) => plan.id === bad.planId);
+            const untouchedPlan = afterFailure.find((plan) => plan.id === healthy.planId);
+            expect(failedPlan?.lastError).toBe("feed 拉取失败");
+            expect(failedPlan?.lastRunAt).not.toBeNull();
+            expect(untouchedPlan?.lastError).toBeNull();
+            expect(untouchedPlan?.lastRunAt).toBeNull();
+
+            // 同一句契约的后半段是「成功计划不出现错误，也不停留在『尚未运行』」：健康计划
+            // 随后自己跑成功，它必须离开「尚未运行」；两个计划各自独立记账，后来那次成功
+            // 不能抹掉失败计划的诊断，也不能把错误带给健康计划。
+            const healthyRun = await repository.createQueuedRun({ sourceId: healthy.id, triggerKind: "manual" });
+            await repository.completeRun({ runId: healthyRun.id, status: "succeeded" });
+
+            const plans = await repository.listCollectionPlans();
+            const failed = plans.find((plan) => plan.id === bad.planId);
+            const healthyPlan = plans.find((plan) => plan.id === healthy.planId);
+            expect(healthyPlan?.lastError).toBeNull();
+            expect(healthyPlan?.lastRunAt).not.toBeNull();
+            expect(failed?.lastError).toBe("feed 拉取失败");
+            expect(failed?.lastRunAt).not.toBeNull();
         } finally {
             await repository.close();
         }

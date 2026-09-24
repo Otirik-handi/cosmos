@@ -14,6 +14,7 @@ import {
     StoryNotFoundError,
     TopicNotFoundError,
 } from "@cosmos/application";
+import { type SavedView, type SearchQuery } from "@cosmos/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
@@ -490,7 +491,63 @@ describe("user organization domain commands", () => {
             await prisma.$disconnect();
         }
     });
+
+    it("re-runs search from the conditions stored in a saved view", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const label = await repository.createLabel({ name: "关注" });
+            await repository.attachLabel({
+                labelId: label.id,
+                targetType: "story",
+                targetId: "story-a",
+            });
+            const unused = await repository.createLabel({ name: "没人打的标签" });
+
+            // 无条件下三条 seed Story 都命中，下面用视图条件跑出来的子集才有意义。
+            expect((await repository.search({ limit: 20 })).items).toHaveLength(3);
+
+            await repository.createSavedView({
+                name: "关注视图",
+                conditions: { text: null, labelIds: [label.id], topicIds: [] },
+            });
+            // 套用视图走的是「从库里读回来的视图」这条路，不是创建时的入参。
+            const [stored] = (await repository.listSavedViews()).items;
+            expect(stored!.labelIds).toEqual([label.id]);
+            const applied = await repository.search(searchQueryFromSavedView(stored!));
+            expect(applied.items.map((item) => item.storyId)).toEqual(["story-a"]);
+
+            // 同一套映射换成没人命中的条件必须为空，证明上一条断言不是空转。
+            await repository.createSavedView({
+                name: "空视图",
+                conditions: { text: null, labelIds: [unused.id], topicIds: [] },
+            });
+            const unmatched = (await repository.listSavedViews()).items
+                .find((view) => view.name === "空视图")!;
+            expect(searchQueryFromSavedView(unmatched).labelIds).toBe(unused.id);
+            expect((await repository.search(searchQueryFromSavedView(unmatched))).items)
+                .toHaveLength(0);
+        } finally {
+            await repository.close();
+            await prisma.$disconnect();
+        }
+    });
 });
+
+/**
+ * 与客户端 `use-feed-workspace.ts` 的 `applySavedView` 同一套映射：视图条件 → search 参数。
+ * 两端不一致时「套用视图」会得到与保存时不同的结果集，这条映射必须有下层断言钉住。
+ */
+function searchQueryFromSavedView(view: SavedView): SearchQuery {
+    return {
+        text: view.text ?? undefined,
+        sourceId: view.sourceId ?? undefined,
+        publishedAfter: view.publishedAfter ?? undefined,
+        publishedBefore: view.publishedBefore ?? undefined,
+        labelIds: view.labelIds.join(",") || undefined,
+        topicIds: view.topicIds.join(",") || undefined,
+        limit: 20,
+    };
+}
 
 async function setup(): Promise<{
     repository: PrismaCosmosRepository;

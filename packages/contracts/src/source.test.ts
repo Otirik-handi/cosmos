@@ -56,6 +56,17 @@ describe("source and job contracts", () => {
         })).toThrow();
     });
 
+    /**
+     * 浏览器用例 `collection-plan-connectors.spec.ts:128` 断的是「必填枚举留空 → 保存被拒」，
+     * 但上层只覆盖了非法取值（`mode:"search"`）与未知键，没覆盖「必填字段缺失」。缺了这条，
+     * 把 `mode` 放宽成可选（例如 `.default("hot")`）不会被任何断言拦住。
+     */
+    it("rejects a Bilibili fetch config that omits the required mode enum", () => {
+        expect(() => bilibiliSourceConfigSchema.parse({})).toThrow();
+        expect(() => bilibiliSourceConfigSchema.parse({ mode: "" })).toThrow();
+        expect(() => bilibiliSourceConfigSchema.parse({ limit: 5 })).toThrow();
+    });
+
     it("restricts RSS feedUrl to http(s) URLs", () => {
         expect(rssSourceConfigSchema.parse({
             feedUrl: "https://example.test/feed.xml",

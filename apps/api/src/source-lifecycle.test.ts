@@ -109,6 +109,55 @@ describe("AppController Source mutations", () => {
         expect(repository.createSource).toHaveBeenCalledTimes(1);
     });
 
+    /**
+     * 拒绝非法来源配置的唯一闸门在控制器边界：`repository.createSource` 自己不校验 config
+     * （`packages/storage-prisma/src/repository/sources.ts` 直接 `JSON.stringify` 写库），
+     * 「非法配置不落库」靠的是控制器**先校验再调仓储**这个顺序。所以这里不只看抛错，还要
+     * 回读列表确认没有新来源——否则「先写库再校验」的退化仍然全绿。
+     */
+    it("rejects a create command with a missing required enum and leaves no new Source behind", async () => {
+        // 写入桩把「落库」变成可观察的副作用：只有控制器真的调了仓储，回读才会看到第二条。
+        const stored: Record<string, unknown>[] = [{...source}];
+        const repository = {
+            createSource: vi.fn(async (command: Record<string, unknown>) => {
+                const created = {
+                    ...source,
+                    id: "source-2",
+                    name: command.name,
+                    sourceDefinitionRef: command.sourceDefinitionRef,
+                    operationId: command.operationId,
+                    connectorId: "bilibili",
+                    kind: "bilibili",
+                    config: command.config,
+                };
+                stored.push(created);
+                return created;
+            }),
+            listSources: vi.fn(async () => stored),
+        };
+        const controller = new AppController(
+            repository as never,
+            new SourceProbeService(createBuiltinManifestCatalog()) as never,
+        );
+
+        const error = await controller.createSource({
+            name: "Bilibili fetch without mode",
+            sourceDefinitionRef: "source.bilibili@1",
+            operationId: "fetch",
+            config: { limit: 5 },
+        }).catch((value) => value);
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toMatchObject({ code: "validation_failed" });
+        // 拒绝理由必须指向缺失的必填枚举本身，而不是「定义不可用」这类无关失败。
+        expect(error.getResponse()).toMatchObject({ message: expect.stringContaining("mode") });
+
+        // 回读证据：走真实的 `GET /sources` 路径，列表里仍然只有创建前那一条。
+        const listed = await controller.sources();
+        expect(listed.map((item) => item.id)).toEqual(["source-1"]);
+        expect(repository.createSource).not.toHaveBeenCalled();
+    });
+
     it("validates the saved target config before enabling the plan", async () => {
         const plan = {
             id: "plan:source-1",
