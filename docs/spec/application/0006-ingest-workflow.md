@@ -223,7 +223,8 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 
 - [workflow-ingest.ts](../../../packages/application/src/workflow-ingest.ts#L40-L480)：Definition、三个 Action definitions、handlers 与错误映射。
 - [application workflow-ingest.test.ts](../../../packages/application/src/workflow-ingest.test.ts#L53-L84)：fetch 错误分类。
-- [worker workflow-ingest.test.ts](../../../apps/worker/src/workflow-ingest.test.ts#L28-L467)：快照、两次运行、Blob、Entry revision、Story/feed/search/events 与 Activity attempts。
+- [worker workflow-ingest.parity.test.ts](../../../apps/worker/src/workflow-ingest.parity.test.ts)：快照、两次运行、Blob、Entry revision、Story/feed/search/events 与 Activity attempts。
+- [worker workflow-ingest.media.test.ts](../../../apps/worker/src/workflow-ingest.media.test.ts)：媒体不重复采集、冻结的媒体策略、降级媒体的下次运行重试。
 
 ## 非目标/边界
 

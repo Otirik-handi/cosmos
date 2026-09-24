@@ -269,7 +269,7 @@ definition: {
 ## 实现与测试锚点
 
 - 实现：[packages/application/src/workflow-control.ts](../../../packages/application/src/workflow-control.ts#L29-L120)
-- 行为测试：[apps/worker/src/workflow-ingest.test.ts](../../../apps/worker/src/workflow-ingest.test.ts#L193-L283)，覆盖 snapshot 捕获、幂等返回、source/trigger 冲突、source mutation 和 checkpoint parity；[packages/application/src/workflow-control.test.ts](../../../packages/application/src/workflow-control.test.ts) 覆盖触发证据落库、webhook 缺证据被拒和 manual 快照的兼容边界；[packages/contracts/src/trigger.test.ts](../../../packages/contracts/src/trigger.test.ts) 覆盖触发类型与证据 schema。
+- 行为测试：[apps/worker/src/workflow-ingest.parity.test.ts](../../../apps/worker/src/workflow-ingest.parity.test.ts)（it「keeps durable ingest parity across idempotency, snapshots, revisions and projections」），覆盖 snapshot 捕获、幂等返回、source/trigger 冲突、source mutation 和 checkpoint parity；[packages/application/src/workflow-control.test.ts](../../../packages/application/src/workflow-control.test.ts) 覆盖触发证据落库、webhook 缺证据被拒和 manual 快照的兼容边界；[packages/contracts/src/trigger.test.ts](../../../packages/contracts/src/trigger.test.ts) 覆盖触发类型与证据 schema。
 - API 组合与调用点：`apps/api/src/app.module.ts` 及其 API controller。
 - Worker schedule 调用点：`apps/worker/src/main.ts`。
 
