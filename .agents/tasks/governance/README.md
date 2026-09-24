@@ -21,6 +21,7 @@
 - [`G06-redline-code/`](G06-redline-code/):红线代码批次——`packages/contracts/src/index.ts`(桶+单体混合,走完整三步)与 `apps/web` 的 `page.tsx`、`story-panel.tsx` 两个 UI 单体(桶文件步骤不适用;验收 = 现有浏览器用例全绿 + 导出面不变)。**已完成收口**(2026-09-14,维护者授权收尾;经 `refactor/g06-redline-code` 以 `--no-ff` 合入 master `df76e96`,worktree 与分支已清理,已推送 origin):contracts 入口 **1455 → 168 行**(导出面 432 逐字节零 diff、madge 0 环)、`page.tsx` **1680 → 738 行**(6 个域 hook)、`story-panel.tsx` **1902 → 757 行**(15 个内部件);`code-baseline.json` 18 → **8 条**;合并后 master 重验 typecheck 0 / unit 81·515 / property 4 / e2e 4 / 浏览器 17 / lint 0 error / `docs:check` 600 文件 0 失败。维护者指令 3 文件同批,偏离「单 Task 一文件」SOP 已记入该 Task Decisions。
 - [`G07-transport-http/`](G07-transport-http/):代码治理第四对象——`packages/transport-http` 单体拆分(纯单体:0 处 `export *`、解析后 4 个导出,桶文件步骤跳过)。**已完成收口**(2026-09-14,维护者授权「直到 G07 完成」;经 `refactor/g07-transport-http` 以 `--no-ff` 合入 master `06065cd`,worktree 与分支已清理,已推送 origin):`index.ts` **1269 → 11 行**(门面,读取量 10,592 → 141 token,−98.7%)、`index.test.ts` 964 行 → 6 个域文件(17 用例守恒);按 G03 先例「继承链拆文件 + 门面」拆为 `types` + `client-base`(protected `request` 唯一管道)+ platform/sources/content/organization/board 5 个资源分册;**导出面 4 个逐字节零 diff**、madge 0 环、全仓 typecheck 0 / unit 87 文件·516 用例 / property 4 / e2e 4;`code-baseline.json` 8 → **6 条**;完整口径红线文件 **10 → 8**。
 - [`G08-size-gate-lines/`](G08-size-gate-lines/):代码治理的**机制修复**——把行数轨并入 `scripts/size-governance.py --check`(源码/测试 400/800 行、入口/桶文件 100/300 行;行数轨只对源码/测试生效),为存量建立行数基线(`code-baseline.json` 6 → **16 条**),并在 CI 的 docs job 增加代码类门禁步骤——原先 CI 只跑 `-c docs`,**代码类从未检查过**。**本批只拦红线**(维护者 2026-09-24 裁定),警戒线默认值仍是提案的 400/100 行,收紧时删掉 CI 命令里的四个行数参数即可。验证:7 个夹具用例实跑全部符合预期(含「900 行但字节/token 都远低于阈值、纯靠行数判出」),真实仓库报出 10 项新越界(其中 3 项在字节/token 口径下完全隐形)→ 写基线后 PASS,文档类门禁无回归。未新增自动化测试(仓库无 Python 测试基础设施),以夹具实跑为行为证据。
+- [`G09-domain-barrel/`](G09-domain-barrel/):P4-2 重启后的**第一个拆分对象**——`packages/domain/src/index.ts`(885 行纯单体、68 个导出)拆为 8 个分册 + 门面。**已完成实现与验证**(未 commit):入口 **885 → 12 行**、最大分册 `temporal.ts` **221 行**(九个文件全部 ≤400 行,落在提案健康区);**导出面 68 → 68 逐字节零 diff**(脚本比对 + 新增 `entry-contract.test.ts` 常驻护栏)、madge **0 环**、domain 测试 23/23、全仓 typecheck 0、全量 **128 文件/735 用例**、两份体积门禁 PASS、`docs:check` 783 文件 0 失败;新增 `packages/domain/MODULE.md`(提案硬性要求,该包此前没有);`code-baseline.json` **16 → 15 条**(domain 入口回健康区,治理目标「条目只减不增」第一次产生收敛)。
 
 ## 待治理候选(编号未分配,待维护者裁决)
 
@@ -32,7 +33,7 @@
 
 **门禁缺口（2026-09-24 已由 G08 修复）**：原先 `scripts/size-governance.py --check` 只判字节/token、**行数越界不拦**，而且 CI 只跑 `-c docs`（代码类根本不检查）——两个缺口叠起来让行数欠账对门禁完全不可见。G08 已把行数轨并入 `--check`（源码/测试与入口/桶文件各自阈值，行数轨只对源码/测试生效）、为存量建立行数基线，并在 CI 增加代码类门禁步骤；**本批只拦红线**（维护者 2026-09-24 裁定），警戒线默认值仍是提案的 400/100 行。详见 [`G08-size-gate-lines/README.md`](G08-size-gate-lines/README.md)。
 
-**完整口径下当前超红线文件（2026-09-24 G08 实测 10 个，全部为行数越界；行数降序）**：
+**完整口径下当前超红线文件（2026-09-24 G09 后实测 9 个，全部为行数越界；行数降序）**：
 
 | 文件 | 行 | 字节 |
 |---|---|---|
@@ -43,12 +44,11 @@
 | `apps/web/src/components/cosmos/board-view.tsx` | 972 | 35.9 KB |
 | `packages/application/src/media-acquisition.ts` | 918 | 28.8 KB |
 | `packages/storage-prisma/src/workflow-backend.ts` | 896 | 31.4 KB |
-| `packages/domain/src/index.ts` | 885 | 25.4 KB |
 | `apps/worker/src/workflow-ingest.test.ts` | 871 | 38.1 KB |
 | `apps/web/src/components/cosmos/story-panel.tsx` | 849 | 37.0 KB |
 
-（另有 2 个文件只因入口行数红线越界：`packages/logging/src/index.ts` 674 行、`plugins/rss/src/index.ts` 621 行。）
+（另有 2 个文件只因入口行数红线越界：`packages/logging/src/index.ts` 674 行、`plugins/rss/src/index.ts` 621 行。`packages/domain/src/index.ts` 已由 G09 治理，885 → 12 行。）
 
-**G 系列状态（2026-09-24 更新）**：G01–G07 已收口；G08 为**机制修复**（行数门禁），已完成。G 系列因 P4-2 重启，**不做非红线文件**。选型时仍应核对 `--json` 的 `lines` 字段——门禁现在会拦新增越界，但基线内文件的存量增长只报 warning。
+**G 系列状态（2026-09-24 更新）**：G01–G07 已收口；G08 为**机制修复**（行数门禁）已完成；G09 为重启后**第一个拆分对象**（`@cosmos/domain`）已实现与验证。G 系列因 P4-2 重启，**不做非红线文件**。选型时仍应核对 `--json` 的 `lines` 字段——门禁现在会拦新增越界，但基线内文件的存量增长只报 warning。
 
-治理队列：**G09 起**为逐文件拆分，维护者 2026-09-24 裁定的顺序是「先拆非 UI 文件」：batch 1 = `packages/domain/src/index.ts`（885）与 `packages/application/src/media-acquisition.ts`（918）；其余按行数降序，三个 Web 文件（`product-fixtures.tsx`、`board-view.tsx`、`story-panel.tsx`）**留到 UI 重做同批**——马上要重写的文件先拆等于白拆。
+治理队列：**G09 已完成**（`packages/domain/src/index.ts`，885 → 12 行）。**下一个 = G10：`packages/application/src/media-acquisition.ts`（918 行）**，即维护者 2026-09-24 裁定的 batch 1 第二个对象。其余按行数降序；三个 Web 文件（`product-fixtures.tsx`、`board-view.tsx`、`story-panel.tsx`）**留到 UI 重做同批**——马上要重写的文件先拆等于白拆。
