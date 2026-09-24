@@ -16,11 +16,9 @@ import {
     ActionExecutionError,
     ActionRegistry,
 } from "./action.js";
-import {
-    WorkflowActivityWorker,
-    WorkflowCompletionDispatcher,
-    WorkflowRunLane,
-} from "./workflow-host-runtime.js";
+import { WorkflowActivityWorker } from "./workflow-activity-worker.js";
+import { WorkflowCompletionDispatcher } from "./workflow-completion-dispatcher.js";
+import { WorkflowRunLane } from "./workflow-run-lane.js";
 import type {
     WorkflowActivityJobClaim,
     WorkflowCompletionClaim,
