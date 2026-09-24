@@ -396,6 +396,41 @@ describe("AppController story orchestration", () => {
             ],
         })).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    /**
+     * 400 的响应体错误码是客户端分支的依据：`StorySubtypeInvalidError` 自带
+     * `code: "validation"`，经 `sourceCommandError` 必须变成公开契约的
+     * `validation_failed`，而不是泄漏内部 code 或落进 500。
+     */
+    it("reports the validation_failed code for an unregistered subtype write", async () => {
+        const repository = {
+            updateStoryRevision: vi.fn().mockRejectedValue(
+                new StorySubtypeInvalidError("Unknown Story subtype: media.unknown"),
+            ),
+            splitStory: vi.fn().mockRejectedValue(
+                new StorySubtypeInvalidError("Unknown Story subtype: media.unknown"),
+            ),
+        };
+        const controller = createController(repository);
+
+        const revisionError = await controller.updateStoryRevision("story-a", {
+            baseRevisionId: "rev-a-1",
+            title: "Story A",
+            kind: "media",
+            subtype: "media.unknown",
+        }).catch((value) => value);
+        expect(revisionError).toBeInstanceOf(BadRequestException);
+        expect(revisionError.getResponse()).toMatchObject({ code: "validation_failed" });
+
+        const splitError = await controller.splitStory("story-a", {
+            successors: [
+                { title: "A", kind: "media", subtype: "media.unknown", entryIds: ["entry-a"] },
+                { title: "B", kind: "media", entryIds: ["entry-b"] },
+            ],
+        }).catch((value) => value);
+        expect(splitError).toBeInstanceOf(BadRequestException);
+        expect(splitError.getResponse()).toMatchObject({ code: "validation_failed" });
+    });
 });
 
 describe("AppController topic orchestration", () => {

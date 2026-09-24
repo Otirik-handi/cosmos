@@ -115,3 +115,13 @@ is not under 'rootDir' 'apps/worker/src'
 **流程教训（本勘误最重要的一条）**：本次拆分在 `apps/worker/src` 下**新增了一个非 `*.test.ts` 的文件**，而那是**构建可见**的目录——**验证清单里却没有「跑构建」这一项**。当时只覆盖了聚焦测试、typecheck、全量单测、体积门禁与 `docs:check`，**构建与 `test:e2e` 都漏了**（上一次跑 e2e 是 G14，在拆分之前）。**凡在 `apps/*/src` 或 `packages/*/src` 下新增非测试文件，验证必须包含 `bun run build`。**
 
 **顺带观察（既有问题，本次未修）**：`apps/api/tsconfig.json` 只排除 `dist`，因此 `apps/api/dist` 里有编译后的 `*.test.js`；各包（domain 2／application 13／storage-prisma 54／collectors 2）的 `dist` 里也有测试与 fixtures 产物。不影响构建通过，属**产物卫生**问题，需要时单开切片。
+
+**顺带观察二（本次实测到，未修）**：修好构建之前在**主工作区**跑那次失败的 `bun run build:worker`，除了报 40 条 `TS6059`，还**把 rootDir 之外的包源码编译产物写进了它们自己的源码目录**——留下 **82 个未跟踪文件**（`packages/domain/src/*.js`、`packages/application/src/*.js`、`packages/storage-prisma/src/prisma-cli.js` 及各自的 `.js.map`）。已核实：
+
+- 这些 `.js` 与 `packages/*/dist/` 里的同名产物**逐字节相同**（同一次编译的产物）；
+- 生成时刻是那次失败构建，而成功的 `bun run build` 之后 `dist/` 的时间戳更晚；
+- `.gitignore` **只忽略 `dist/`**，所以它们以未跟踪状态出现在 `git status` 里——**存在被误提交的风险，也可能让 `./x.js` 这类导入解析到陈旧的编译产物而不是 `.ts` 源码**。
+
+已把这 82 个文件删除，主工作区恢复干净。**未做**：没有做受控复现（需要在主工作区临时还原坏配置），所以「是那次 `build:worker` 写出来的」是**由时间戳、内容一致性与导入范围三重吻合推出的结论，不是直接观测**。
+
+**建议的根治方向（需单独切片）**：给会产出 `dist` 的构建配置加 **`"noEmitOnError": true`**（tsc 默认是 `false`，所以出错时照样产出半成品）；顺带把 `packages/*/src/**/*.js` 之类的源码目录产物纳入忽略或在构建前清理。这样「构建失败」就不会再留下看似正常的产物。

@@ -167,6 +167,58 @@ describe("连接器状态清单与导出 (ING-012 / ADR-0026)", () => {
     });
 });
 
+describe("连接器状态导出件契约 (ING-012 / ADR-0026)", () => {
+    it("真库导出件通过 schema 校验、不含 secretRef，且原样回导不覆盖任何东西", async () => {
+        const repository = await createRepository();
+        try {
+            const store = new PrismaConnectorStateStore(repository.prisma);
+            const connection = await repository.createConnection({
+                name: "主账号",
+                connectorId: "bilibili",
+                secretRef: "secret:conn-1",
+            });
+            const plan = await createPlan(repository, "推荐流");
+            await repository.updateCollectionPlan(plan.planId, {
+                baseRevisionId: plan.planRevisionId,
+                connectionId: connection.id,
+            });
+            await store.registerNamespace(plan.planId, { planId: plan.planId });
+            await store.putState(plan.planId, "http-cache", { etag: 'W/"1"' }, null);
+            await store.putState(plan.planId, "page", { cursor: "c-1" }, null);
+            // 连接上确实挂着 Secret 引用，下面的「不含 secretRef」才不是空断言。
+            await expect(repository.getConnection(connection.id))
+                .resolves.toMatchObject({ secretRef: "secret:conn-1" });
+
+            // 真库导出（不是测试自建 fixture）必须落在导出件契约内，schemaVersion 也随之固定。
+            const exported = await repository.exportConnectorState({ kind: "attributed" });
+            const parsed = connectorStateExportSchema.parse(exported);
+            expect(parsed.schemaVersion).toBe(1);
+            expect(parsed).toEqual(exported);
+
+            // 导出件以 JSON 文本离开 Cosmos：可以带连接身份，但不能带 Secret 引用。
+            const text = JSON.stringify(exported);
+            expect(text).toContain(connection.id);
+            expect(text).not.toContain("secretRef");
+            expect(text).not.toContain("secret:conn-1");
+
+            // 真往返：把刚导出的那份文件原样回导。默认只补缺失，本地已有同名键，
+            // 所以既不该新建也不该覆盖。
+            await expect(repository.importConnectorState({
+                mode: "skip-existing",
+                export: exported,
+            })).resolves.toEqual({
+                mode: "skip-existing",
+                namespaces: 1,
+                created: 0,
+                overwritten: 0,
+                skipped: 2,
+            });
+        } finally {
+            await repository.close();
+        }
+    });
+});
+
 describe("连接器状态导入 (ADR-0026)", () => {
     it("默认只补缺失；显式覆盖时把版本提到本地 +1，导入保持幂等", async () => {
         const repository = await createRepository();

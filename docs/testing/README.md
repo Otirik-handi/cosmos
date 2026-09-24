@@ -123,4 +123,4 @@ COSMOS_ALLOW_REAL_NETWORK=true COSMOS_OPENCLI_PATH=<path> bun run test:real:bili
 
 ## 证据边界
 
-测试通过只证明对应层的可观察合同：单元测试不替代进程 E2E，Node E2E 不替代浏览器验收，浏览器验收不替代 Docker 或真实来源。受控 RSS、SSE 消费和结构化日志是当前 Cosmos 的可复现测试边界；当前哪些层级已通过或未运行，以 [`PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 为准。本文不引入 Agent/LLM replay。**会「同一条用例既过又挂」的情况登记在 [`known-unstable-cases.md`](known-unstable-cases.md)**：报出某层绿灯前先看那里，已登记的不稳定用例不要用重跑结案。
+测试通过只证明对应层的可观察合同：单元测试不替代进程 E2E，Node E2E 不替代浏览器验收，浏览器验收不替代 Docker 或真实来源。受控 RSS、SSE 消费和结构化日志是当前 Cosmos 的可复现测试边界；当前哪些层级已通过或未运行，以 [`PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 为准。本文不引入 Agent/LLM replay。**会「同一条用例既过又挂」的情况登记在 [`known-unstable-cases.md`](known-unstable-cases.md)**：报出某层绿灯前先看那里，已登记的不稳定用例不要用重跑结案。浏览器验收 33 条用例按「断言到底在查什么」分成产品契约 / UI 机制 / 外观三桶，见 [`browser-acceptance-triage.md`](browser-acceptance-triage.md)——**重做 UI 之前先看它**，避免把产品契约断言连同界面形状一起丢掉。

@@ -169,6 +169,41 @@ describe("Webhook 入口 E2E (ADR-0024)", () => {
         expect(items.filter((item) => item.triggerKind === "webhook")).toHaveLength(1);
     });
 
+    it("计划停用时入口返回 409，重新启用后恢复 202", async () => {
+        const readPlan = async (): Promise<Record<string, unknown>> => {
+            const response = await requestJson(`${apiBaseUrl}/api/v1/collection-plans/${encodeURIComponent(planId)}`);
+            expect(response.status).toBe(200);
+            if (!isRecord(response.body)) throw new Error("Expected a plan snapshot.");
+            return response.body;
+        };
+        // 启停的写入口是计划端点，CAS 用计划的 revision（与 Web 客户端同一口径）。
+        const setPlanEnabled = async (enabled: boolean): Promise<void> => {
+            const plan = await readPlan();
+            const patched = await requestJson(`${apiBaseUrl}/api/v1/collection-plans/${encodeURIComponent(planId)}`, {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ enabled, baseRevisionId: readString(plan, "revisionId") }),
+            });
+            expect(patched.status).toBe(200);
+        };
+
+        // 停用只改变「能不能触发」：入口与凭证都还在（入口解析带 planEnabled）。
+        await setPlanEnabled(false);
+        const rejected = await callEntry({ eventId: "evt-disabled" });
+        expect(rejected.status).toBe(409);
+
+        // 被拒的那次不入队：webhook Run 仍是上面那一条。
+        const whileDisabled = await requestJson(`${apiBaseUrl}/api/v1/runs?sourceId=${encodeURIComponent(sourceId)}&limit=50`);
+        const disabledItems = readItems(whileDisabled.body);
+        expect(disabledItems.filter((item) => item.triggerKind === "webhook")).toHaveLength(1);
+
+        // 重新启用后同一条入口恢复可用，并真的入队。
+        await setPlanEnabled(true);
+        const accepted = await callEntry({ eventId: "evt-enabled" });
+        expect(accepted.status).toBe(202);
+        expect(accepted.body).toMatchObject({ triggerKind: "webhook", status: "queued" });
+    });
+
     it("撤销后入口立刻失效，凭证不出现在日志里", async () => {
         const revoked = await requestJson(`${apiBaseUrl}/api/v1/collection-plans/${encodeURIComponent(planId)}/webhook-entry`, {
             method: "DELETE",
