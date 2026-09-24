@@ -142,3 +142,29 @@
 | 本机单跑 `bunx vitest run apps/worker/src/workflow-ingest.test.ts` | **4 passed (19.66s)**，整文件比 CI 的单用例上限还长 |
 
 **当前判断**：该文件每个用例都跑真实 `prisma migrate deploy` 建隔离库，整文件本机要 19.66 秒；CI runner 更慢时单个用例越过 15 秒默认上限是环境速度问题，与内容改动无关（本次改动是纯文档）。与第 1 条注记的「Windows 下 SQLite 迁移超时/EBUSY 同一家族」相邻但不同：这里不是断言失败，也不是 Windows。**建议**：再出现时先确认是否只在慢 runner 上发生；若反复出现，考虑给该文件显式 `testTimeout`（属测试配置改动，需要单独切片）。
+
+**2026-09-24 更正与修复（G16 切片）**：上面「考虑给该文件显式 `testTimeout`」的措辞**方向错了**——该文件**本来就有**显式超时，问题恰恰是它把预算**压小了**。实测环境事实：`vitest.config.ts` 的全局 `testTimeout` 是 **60 秒**（配置里带注释说明「Prisma/SQLite 用例单条 3~5s，与 vitest 默认 5s 余量过窄」），而 `apps/worker/src/workflow-ingest.test.ts` 的四个用例各自覆盖成 `15_000`／`15_000`／`15_000`／`20_000`。本机实测四条分别为 **5712ms / 5213ms / 4426ms / 5402ms**（整文件 19.1~20.8 秒），即在 15 秒预算下本机只有约 2.6 倍余量，慢 runner 或并发争用下必然越过。**修复**：删掉这四处覆盖，回到全局 60 秒（不新增数字，避免再出现「文件内预算与全局设定互相矛盾」）。该文件已在同一批拆成 `workflow-ingest.parity.test.ts`（parity 用例）+ `workflow-ingest.media.test.ts`（三个媒体用例）+ `workflow-ingest.fixtures.ts`（共享装置），本条第 139/142 行的历史命令与路径按原样保留，不再回改。
+
+**2026-09-24 新证据（G15 拆分尝试）**：为拆 `workflow-ingest.test.ts`（871 行，红线）把它按 `it` 分成两个测试文件 + 一个装置模块后，全量套件**连续两次失败**，而同一时段 `master` 连续 6 次全量**全绿**：
+
+| 跑法 | 结果 |
+|---|---|
+| `master`（130 个测试文件） | **6/6 全绿**（本 session 内 G10–G14 各一轮 + G15 期间对照一轮） |
+| G15 分支 run #1（131 个测试文件） | **1 failed / 736 passed**：本条的 parity 用例 `Test timed out in 15000ms`，随后 `afterEach` 清理撞 `EBUSY`（超时被中断、库还开着，属**派生**症状） |
+| G15 分支 run #2（131 个测试文件） | **1 failed / 736 passed**：**另一个文件**（`story-human-protection.test.ts`）的清理 `EBUSY`，无超时——见下面第 8 条 |
+
+两次失败都**不是断言失败**，且失败点在两个不同文件之间漂移，符合本文件反复记录的那类负载敏感抖动。**但 G15 因此被回滚**（未合入）：多出第 131 个并发测试文件后，这两条已知抖动的触发率明显上升，不能合入一个让套件 2/2 变红的改动。本条的修复（去掉过小预算）只消掉 run #1 的形态；run #2 的 EBUSY 是独立机制。
+
+## 8. `afterEach` 清理临时根时的 `EBUSY`（Windows SQLite 文件锁）
+
+**状态（2026-09-24，一次观察，未归因）**：测试用例本身跑完并通过，失败发生在**清理阶段**——删除临时根时 `cosmos.sqlite` 仍被占用。
+
+| 跑法 | 结果 |
+|---|---|
+| G15 分支 run #2（131 个测试文件，改动只涉及 `workflow-ingest.test.ts`） | `packages/storage-prisma/src/story-human-protection.test.ts > keeps a human-edited Story when a merged member Entry is republished` 报 `Error: EBUSY: resource busy or locked, unlink 'C:\Users\Otirik\AppData\Local\Temp\cosmos-story-human-protection-merged-xwi8M6\cosmos.sqlite'`，**同一条用例无超时报错** |
+| 同分支 run #1 | 同一形态出现在 `workflow-ingest.parity.test.ts`，但那里是**超时被中断**之后的派生症状（该用例 15 秒预算被越过） |
+| `master` 对照（130 个测试文件，6 次） | 未复现 |
+
+**当前判断**：机制**未查清**。失败用例所在的文件与本次改动无关（G15 只动 `apps/worker/src/workflow-ingest.test.ts`），所以这不是被测代码的确定性缺陷。最可疑的方向是 **Prisma 查询引擎是独立子进程**：`repository.close()` 返回后，引擎进程未必已释放 SQLite 文件句柄，紧接着的 `rm -rf` 就会撞 `EBUSY`——**这是推断，未验证**。另一个可能是 Windows 上删除刚关闭的文件本身存在短暂延迟。仓库内**没有任何** `EBUSY` 重试或清理退避的先例（全仓搜索 `EBUSY`／`resource busy` 均无命中）。
+
+**建议的处理次序**：再出现时先确认三件事——①该用例是否也越过了自己的超时预算（区分「派生」与「独立」）；②`repository.close()` 与 `rm` 之间是否还有未等待的异步收尾；③把清理改成**有界重试**（几次短退避）是否消除该形态。在机制查清前不要给清理加「失败就忽略」的兜底——那会把真实的句柄泄漏一起藏起来。

@@ -278,7 +278,7 @@ Action retry policy 只能来自 `ActionRegistry.descriptors()` 中 descriptor �
   - 空 Action catalog 拒绝
   - 共享 backend、store、value store、registry 和 lane 实例测试
   - Action retry policy 组装测试
-- `apps/worker/src/workflow-ingest.test.ts`
+- `apps/worker/src/workflow-ingest.parity.test.ts` 与 `apps/worker/src/workflow-ingest.media.test.ts`（共享装置 `workflow-ingest.fixtures.ts`）
   - composition 使用场景
 
 ## 非目标/边界
