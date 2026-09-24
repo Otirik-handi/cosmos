@@ -41,6 +41,13 @@ WARN_KB = 30
 RED_KB = 50
 WARN_TOKENS = 9000
 FAIL_TOKENS = 15000
+# 行数轨（提案 §3 阈值表）。入口/桶文件 = 直接位于 `src/` 下的 index.*，与 --map 的入口口径一致：
+# 它只该做导出与模块地图，所以阈值远低于普通源码。
+WARN_LINES = 400
+FAIL_LINES = 800
+ENTRY_WARN_LINES = 100
+ENTRY_FAIL_LINES = 300
+ENTRY_PATH_RE = re.compile(r"(^|/)src/index\.[cm]?[tj]sx?$")
 TOKENS_PER_KB = 280
 
 # 类别 -> (中文标签, 扩展名集合)。扩展名不在任何集合内的文件一律跳过
@@ -191,12 +198,27 @@ def load_baseline(path: Path) -> dict:
     return data
 
 
-def over_thresholds(item: dict, warn_kb: int, fail_kb: int, warn_tokens: int, fail_tokens: int) -> str | None:
-    """返回触发的档位：red / warn / None。字节与 token 双轨，先到先触发。"""
-    tokens = item["tokens"]
-    if item["bytes"] > fail_kb * 1024 or tokens > fail_tokens:
+def is_entry_file(path: str) -> bool:
+    """入口/桶文件：直接位于 `src/` 下的 index.*，与 --map 的入口口径一致。"""
+    return ENTRY_PATH_RE.search(path) is not None
+
+
+def over_thresholds(item: dict, args: argparse.Namespace) -> str | None:
+    """返回触发的档位：red / warn / None。字节、token 与行数三轨，先到先触发。
+
+    行数轨只对源码/测试生效（提案的阈值表就是「源码/测试单文件」）：文档的长度治理由
+    文档阈值（KB/token）负责，拿 800 行去卡一份长文档是类别错配。
+    入口/桶文件走提案的独立行数阈值——它只该做导出与模块地图，混进实现就该被拦。
+    """
+    lines_apply = item.get("cat") in ("code", "tests")
+    entry = lines_apply and is_entry_file(item["path"])
+    warn_lines = args.entry_warn_lines if entry else args.warn_lines
+    fail_lines = args.entry_fail_lines if entry else args.fail_lines
+    over_fail_lines = lines_apply and item["lines"] > fail_lines
+    over_warn_lines = lines_apply and item["lines"] > warn_lines
+    if item["bytes"] > args.fail * 1024 or item["tokens"] > args.fail_tokens or over_fail_lines:
         return "red"
-    if item["bytes"] > warn_kb * 1024 or tokens > warn_tokens:
+    if item["bytes"] > args.warn * 1024 or item["tokens"] > args.warn_tokens or over_warn_lines:
         return "warn"
     return None
 
@@ -212,7 +234,7 @@ def run_gate(args: argparse.Namespace, files: list[dict], exemptions: list[dict]
     today = datetime.date.today()
 
     for item in files:
-        zone = over_thresholds(item, args.warn, args.fail, args.warn_tokens, args.fail_tokens)
+        zone = over_thresholds(item, args)
         if zone is None:
             continue
         exc = exempt_map.get(item["path"])
@@ -248,7 +270,14 @@ def run_gate(args: argparse.Namespace, files: list[dict], exemptions: list[dict]
         still = next((f for f in files if f["path"] == path), None)
         if still is None:
             infos.append(f"基线内文件已不存在(可移除): {path}")
-        elif still["bytes"] < WARN_KB * 1024 and still["tokens"] <= WARN_TOKENS:
+        elif (
+            still["bytes"] < args.warn * 1024
+            and still["tokens"] <= args.warn_tokens
+            and (
+                still.get("cat") not in ("code", "tests")
+                or still["lines"] <= (args.entry_warn_lines if is_entry_file(path) else args.warn_lines)
+            )
+        ):
             infos.append(f"基线内文件已回到健康区(可移除): {path}")
 
     for line in infos:
@@ -258,7 +287,11 @@ def run_gate(args: argparse.Namespace, files: list[dict], exemptions: list[dict]
     for line in failures:
         print(f"[fail] {line}")
     print()
-    print(f"门禁口径: 警戒 {args.warn} KB / {args.warn_tokens} token，红线 {args.fail} KB / {args.fail_tokens} token（双轨先到先触发）")
+    print(
+        f"门禁口径: 警戒 {args.warn} KB / {args.warn_tokens} token / {args.warn_lines} 行"
+        f"（入口 {args.entry_warn_lines} 行），红线 {args.fail} KB / {args.fail_tokens} token / {args.fail_lines} 行"
+        f"（入口 {args.entry_fail_lines} 行），三轨先到先触发"
+    )
     print(f"扫描 {len(files)} 个文件，基线 {len(base_files)} 条，豁免 {len(exempt_map)} 条")
     if failures:
         print(f"结果: FAIL（{len(failures)} 项违规）")
@@ -273,7 +306,7 @@ def write_baseline(args: argparse.Namespace, files: list[dict], exemptions: list
         item["path"]: item["bytes"]
         for item in files
         if item["path"] not in exempt_map
-        and over_thresholds(item, args.warn, args.fail, args.warn_tokens, args.fail_tokens) is not None
+        and over_thresholds(item, args) is not None
     }
     payload = {
         "version": 1,
@@ -281,7 +314,13 @@ def write_baseline(args: argparse.Namespace, files: list[dict], exemptions: list
         "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
         "files": dict(sorted(entries.items())),
     }
-    args.write_baseline.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # newline="\n" 是硬要求：Windows 上默认会把 \n 转成 CRLF，同一份基线在本地与 Linux CI
+    # 会产出不同字节，diff 永远不干净。
+    args.write_baseline.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     print(f"已写入基线 {args.write_baseline}（{len(entries)} 条）")
     return 0
 
@@ -296,7 +335,7 @@ def write_repo_map(args: argparse.Namespace, root: Path, files: list[dict], cats
         groups.setdefault(key, []).append(item)
 
     def zone_of(item: dict) -> str:
-        return over_thresholds(item, args.warn, args.fail, args.warn_tokens, args.fail_tokens) or "ok"
+        return over_thresholds(item, args) or "ok"
 
     packages = []
     for key in sorted(groups):
@@ -349,6 +388,10 @@ def main() -> int:
     parser.add_argument("--fail", type=int, default=RED_KB, help="红线（KB，默认 50）")
     parser.add_argument("--warn-tokens", type=int, default=WARN_TOKENS, help="警戒 token（默认 9000）")
     parser.add_argument("--fail-tokens", type=int, default=FAIL_TOKENS, help="红线 token（默认 15000）")
+    parser.add_argument("--warn-lines", type=int, default=WARN_LINES, help="源码/测试行数警戒线（默认 400）")
+    parser.add_argument("--fail-lines", type=int, default=FAIL_LINES, help="源码/测试行数红线（默认 800）")
+    parser.add_argument("--entry-warn-lines", type=int, default=ENTRY_WARN_LINES, help="入口/桶文件行数警戒线（默认 100）")
+    parser.add_argument("--entry-fail-lines", type=int, default=ENTRY_FAIL_LINES, help="入口/桶文件行数红线（默认 300）")
     parser.add_argument("--baseline", type=Path, default=None, help="基线文件（JSON）")
     parser.add_argument("--fail-on-new", action="store_true", help="新增文件进入警戒区即 fail（默认仅 warning）")
     parser.add_argument("--write-baseline", type=Path, default=None, help="把当前超标文件写入基线文件后退出")
