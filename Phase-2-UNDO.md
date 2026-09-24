@@ -32,9 +32,8 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 | P2 | P2-1 | §12 第 4 条「重分析不覆盖用户批注和人工关系修正」＋ LIB-003 同类验收 | **已闭合**（2026-09-24） | 唯一现存的自动写入路径（ingest 的 Entry→Story 投影）已受保护并有回归测试；「批注」与「人工关系修正」两类今天无自动写入方，属无威胁对象，其保护规则已进合同、考验随 Phase 3 写入方落地 |
 | P3 | P3-1 | 界面职责重划：Topic／Entity／用户组织独立面板 | 已 accepted 未落地 | 真人验收第一条结论未解决；PRD／架构／ADR 未同步 |
 | P3 | P3-2 | UI 文案专业化 | Proposal 仍 `reviewing` | 真人验收第三条结论未解决 |
-| P4 | P4-1 | Phase 2 浏览器用例仍有未归因的间歇失败 | 证据可靠性 | 验收绿灯要打折 |
-| P4 | P4-2 | 代码规模红线门禁欠账（8 个文件超 800 行） | 治理欠账 | 门禁口径不完整 |
-| P4 | P4-3 | 看板没有撤销 | 观察项、未形成决定 | 真人验收提出，尚无归属 |
+| P4 | P4-1 | Phase 2 浏览器用例仍有未归因的间歇失败 | 数据库线已证伪（Task 34）；前端线未归因 | 验收绿灯要打折 |
+| P4 | P4-2 | 代码规模红线门禁欠账 | **非 UI 侧已清零**（G08–G16） | 余 3 个 Web 文件按裁定留到 UI 重做同批 |
 
 ---
 
@@ -95,12 +94,9 @@ P1-1（ING-012）、P1-2（EXT-006）与 P1-3（AUT-009）的原始缺口描述�
 - **说明**：文档体积门禁本身是好的——本次按 CI 口径实跑 `python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new`，结果 **PASS（含 6 条基线内增长 warning）**。欠的是**代码行数**这一轨。
 - **建议下一步**：属治理任务（G 系列），不随 Phase 2 尾巴顺带做；重启时优先拆 Phase 2 新增的三个 Web 文件，它们同时是 P3-1 界面重做的改动对象。
 
-### P4-3 看板没有撤销
+### P4-3 看板没有撤销（2026-09-24 已裁定，移入文末「已裁定后置」）
 
-- **现状【代码核实】**：看板编辑只有「上移／下移／拖拽／移到／隐藏／复制／删除」，没有撤销入口；真人验收脚本 D 流程专门问过「改错一步能不能撤销（当前没有撤销）」，记录表里没有形成决定（只确认了拖拽排序必做，拖拽已于 2026-09-16 交付）。
-- **影响**：删除区块虽不删底层信息（已真人验证），但误操作只能手工重建区块配置。
-- **建议下一步**：属「说得清但不好用」，按准入规则需要先出 Proposal 或明确记入 Phase 3 之后的切片；**不建议**在没有决定的情况下直接实现。
-- **2026-09-24 进展**：Proposal [`docs/proposals/board-undo-v1.md`](docs/proposals/board-undo-v1.md)（状态 `draft`）已出，覆盖 P4-3 点名的三件事（范围／可逆性语义／与删除区块的关系），并列出 7 条待裁定项（Q1–Q7）。**待维护者裁定后转 `reviewing`**，之后才允许更新稳定文档与创建 Task。侦察中核实到两条会改变方案判断的事实：现行 DomainEvent 的 payload **不足以回放**（`board.block.deleted.v1` 只有 `{ blockId }`），以及仓库已有两条可逆性先例（ADR-0020「反向调用、不建账本」与 Topic 成员的 tombstone+restore）。
+已按准入规则先出 Proposal（[`board-undo-v1`](docs/proposals/board-undo-v1.md)），维护者随后裁定**当前不需要该功能，登记为额外需求**。原话与完整设计输入见 [`0001-original-requirements.md`](docs/requirements/0001-original-requirements.md) 2026-09-24 条目与 PRD §13 待决定事项 25；本条不再计入缺口。
 
 ---
 
@@ -121,6 +117,7 @@ P1-1（ING-012）、P1-2（EXT-006）与 P1-3（AUT-009）的原始缺口描述�
 | Entity merge／dedup | 未纳入 Phase 2 验收，仍开着 | PROJECT-STATUS「本次未纳入、仍开着的项」 |
 | Docker／Compose、发布部署、真实公网长时定时抓取、非 Windows smoke、长时故障恢复 | Phase 1 后置债，按 2026-09-07 划线保留 | PROJECT-STATUS「本次未纳入、仍开着的项」；其中 Docker／Compose 于 2026-09-23 **首次实跑并失败**（镜像构建缺 Prisma client 生成步骤），根因与修复候选见 [`docs/research/2026-09-23-docker-acceptance-run.md`](docs/research/2026-09-23-docker-acceptance-run.md)，修复待单开 Task |
 | LIB-004 的正文片段字符级锚点与 Artifact 批注目标 | 已改标 Phase 3（批注目前只能挂整条 Story／Entry／Topic） | PROJECT-STATUS Phase 2 尾巴遗留状态 |
+| 看板撤销（编辑模式下误操作可恢复） | **当前不做**，登记为额外需求（后置） | 维护者 2026-09-24 裁定；原话见 [`0001-original-requirements.md`](docs/requirements/0001-original-requirements.md) 同日条目，登记位置 PRD §13 待决定事项 25，设计输入保留在 [`board-undo-v1`](docs/proposals/board-undo-v1.md)（`rejected`） |
 
 ---
 

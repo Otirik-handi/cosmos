@@ -216,6 +216,7 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 22. 知识管理者 Web Chat、`cosmos cli`、ingest 参与方式和高权限操作的最小 Capability/运行合同；当前不建设审批 UI。
 23. Agent 记忆与行为观察生成程序可读个性化配置的 schema、更新频率和人工覆盖边界。
 24. Workflow Context、Action 调用、Child Workflow、Research Request、Workflow kind/tags 和用户/Agent 配置绑定的公共 API。
+25. 看板撤销（编辑模式下误操作可恢复）。（2026-09-24 维护者裁定：**当前不需要该功能，登记为额外需求（后置）**，原始原话见 [`0001-original-requirements.md`](0001-original-requirements.md) 同日条目。设计输入保留在 [`board-undo-v1` Proposal](../proposals/board-undo-v1.md)（`rejected`，不采用），其中核实到：看板删除是**物理删行**、现行 DomainEvent payload **不足以回放**、仓库已有两条可逆性先例（ADR-0020「反向调用、不建账本」与 Topic 成员 tombstone+restore），且「删除」与「隐藏」的用户可见边界从未被定义。BRD-002 只要求「删除区块不删除内容」，**不要求可撤销**。）
 
 → §14 原始需求追踪、§15 当前解释与勘误候选 已归档:[part-14-15.md](0002-product-requirements/part-14-15.md)
 

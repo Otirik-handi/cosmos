@@ -1,6 +1,6 @@
 # 看板撤销 v1（Board Undo）
 
-> 状态：**draft**
+> 状态：**rejected**（不采用）——维护者 2026-09-24 裁定「当前不需要这个功能，可以记录为额外需求」；原话见 [`0001-original-requirements.md`](../requirements/0001-original-requirements.md) 同日条目，登记位置为 PRD §13 待决定事项 25。本文件保留为**设计输入**：将来若要重启，先读「待裁定项」与「当前行为与证据」两节。
 >
 > 日期：2026-09-24
 >
@@ -191,4 +191,5 @@ grep `撤销|恢复|undo|Undo|revert` 于 `docs/adr/0010-board-section-block-v1.
 | 日期 | 决策者 | 决定 |
 | --- | --- | --- |
 | 2026-09-24 | 维护者 | 按 `Phase-2-UNDO.md` P4-3 要求**先出本 Proposal**（只出文档、不写实现） |
+| 2026-09-24 | 维护者 | **不采用**。原话：「我认为当前不需要这个功能，可以记录为额外需求。」→ 登记为**额外需求（后置）**：原话进 [`0001-original-requirements.md`](../requirements/0001-original-requirements.md) 同日条目、位置进 PRD §13 待决定事项 25、台账 P4-3 移入「已裁定后置」；本 Proposal 转 `rejected` 并保留为设计输入（重启时先读「待裁定项」与「当前行为与证据」） |
 | 2026-09-24 | Agent | 起草 draft；并完成一次只读侦察核实「删除是否已存在、事件能否回放、仓库既有可逆性范式」。**核实结果推翻了起草初稿的两处判断**：①现有 DomainEvent 不可回放（payload 不够），故「复用审计做快照」不成立；②仓库已有 ADR-0020（反向调用，不建账本）与 Topic 成员 tombstone+restore 两条先例，初稿漏掉了 |
