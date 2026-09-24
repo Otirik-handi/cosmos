@@ -16,11 +16,9 @@ import {
 } from "@notnotype/nb-workflow";
 import { PrismaClient } from "@prisma/client";
 
-import {
-    PrismaWorkflowBackend,
-    createWorkflowEnvelopeMarker,
-    WorkflowStateIntegrityError,
-} from "./workflow-backend.js";
+import { PrismaWorkflowBackend } from "./workflow-backend.js";
+import { WorkflowStateIntegrityError } from "./workflow-backend-errors.js";
+import { createWorkflowEnvelopeMarker } from "./workflow-envelope-marker.js";
 import { resolvePrismaCliPath } from "./prisma-cli.js";
 import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 
