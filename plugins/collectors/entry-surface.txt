@@ -1,0 +1,16 @@
+type	AiHotConnectorOptions
+type	OpenCliConnectorOptions
+type	OpenCliRunOptions
+type	OpenCliRunResult
+type	OpenCliRunner
+type	OpenCliRunnerOptions
+value	aiHotConnectorId
+value	aiHotItemsUrl
+value	bilibiliConnectorId
+value	createAiHotConnector
+value	createBilibiliConnector
+value	createBuiltInConnectorRegistry
+value	createNodeOpenCliRunner
+value	createOpenCliConnector
+value	openCliExecutableEnv
+value	supportedOpenCliMajor
