@@ -97,7 +97,7 @@ Non-goals（见 Proposal / ADR-0017）：
 
 切片 4（2026-09-23，连接登录生命周期）按 Proposal [`connection-login-lifecycle-v1`](../../../docs/proposals/connection-login-lifecycle-v1.md)（accepted）的「切片 1」再拆两半：**4a 连接承载 profile**、**4b 登录探测**。EXT-006 由本 Task 的 4a/4b 与 Task [`23`](../23-trigger-sdk/README.md) 的切片 8（per-operation 配置 schema + Bilibili `search`，即该 Proposal 的「切片 2」）共同闭合。
 
-- 生命周期阶段（切片 4a／4b）：**代码、验证与权威文档同步完成并提交**（2026-09-23；worktree `.worktree/ext-006-login-lifecycle`、分支 `feat/t22-ext-006-login-lifecycle`，基线 `61ac764`；切片 4a `bd9a9c0`、切片 4b `94c6dec`）。剩余动作是**合并**（需维护者授权）与合并后的 `PROJECT-STATUS.md` 更新（沿用仓库惯例：进行中的状态记在 Task，合并后写状态快照）。
+- 生命周期阶段（切片 4a／4b）：**已完成、合并并推送**（2026-09-23；worktree `.worktree/ext-006-login-lifecycle`、分支 `feat/t22-ext-006-login-lifecycle`，基线 `61ac764`；切片 4a `bd9a9c0`、切片 4b `94c6dec`、侧栏溢出修复 `3ce3322`）。EXT-006 由本 Task 的 4a／4b 与 Task 23 的切片 8 共同闭合，`--no-ff` 合并 `da5ae84`，`PROJECT-STATUS.md` 已同步；worktree 与任务分支已清理。
 - 连贯目标（切片 4a）：让「连接」在运行时真实存在——`ConnectionInstance` 新增非秘密适配器配置字段，OpenCLI profile 从 `Source.config.profile` 迁到连接，执行快照带连接投影，连接器从连接读 profile。
 - 可观察验收（切片 4a，≤3 条）：
   1. 迁移后来源配置不再有 `profile`；同一 profile 的多个来源合并到同一条连接，且这些计划的 `connectionId` 指向它；迁移可重复执行且结果相同；
