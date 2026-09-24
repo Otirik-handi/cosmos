@@ -15,12 +15,17 @@ export {
 } from "./catalog.js";
 export {
     mediaDownloadCapability, mediaAcquisitionDefaults, mediaRetryDefaults,
-    resolveMediaPolicy, acquireItemsSkippingUnchanged, parseAllowedHosts,
-    createMediaAcquirer, isPublicAddress, type MediaAcquisitionLimits, type MediaPolicy,
+    resolveMediaPolicy, parseAllowedHosts, type MediaAcquisitionLimits, type MediaPolicy,
+} from "./media-policy.js";
+export {
     type HostResolver, type MediaAcquirerOptions, type MediaAcquisitionContext,
     type MediaAcquirer, type MediaRetryCandidate, type MediaRetryOutcome,
     type MediaRetryContext, type MediaRetrier,
-} from "./media-acquisition.js";
+} from "./media-ports.js";
+export {
+    acquireItemsSkippingUnchanged, createMediaAcquirer,
+} from "./media-acquirer.js";
+export { isPublicAddress } from "./public-address.js";
 export {
     WorkflowHostError, WorkflowHostConflictError, type WorkflowRunStatus,
     type WorkflowJobStatus, type WorkflowCompletionStatus, type WorkflowActivityJobKind,

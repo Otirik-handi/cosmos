@@ -29,7 +29,12 @@
 | `workflow-ingest.ts` | 采集 Workflow 执行体 | ~7.4k |
 | `workflow-host.ts` / `workflow-host-runtime.ts` | Workflow Host 端口 / 运行时常驻部件(自身仍越 800 行红线,待后续治理) | ~3.3k / ~11.2k |
 | `action.ts` / `catalog.ts` | Action 注册表 / manifest 目录 | ~3.1k / ~4.0k |
-| `media-acquisition.ts` / `media-cleanup.ts` | 媒体获取与策略 / 清理 | ~7.4k / ~1.8k |
+| `media-policy.ts` | 媒体策略解析:默认值、上限与 `parseAllowedHosts` | ~0.6k |
+| `media-ports.ts` | 媒体端口与结果类型(`MediaAcquirer`/`MediaRetrier`/`MediaOutcome` 家族) | ~0.6k |
+| `media-acquirer.ts` | 采集器装配、跳过未变化项与资产改写 | ~2.6k |
+| `media-download.ts` | 有界下载管道:URL/主机校验、重定向、体积与 MIME 嗅探 | ~3.0k |
+| `public-address.ts` | 公网地址判定(SSRF 边界) | ~1.0k |
+| `media-cleanup.ts` | 媒体清理 | ~1.8k |
 | `workflow-control.ts` / `secret-store.ts` / `connector-state-store.ts` | Run 控制 / Secret 端口 / 状态 KV 端口 | ~1.4k / ~0.2k / ~0.4k |
 
 测试与源码同级(`*.test.ts`),property 测试为 `workflow-control.property.test.ts`;共享测试 helper 在 `test-support.ts`。
@@ -47,4 +52,4 @@
 - 实现模块不从 `./index.js` 取类型(会重新引入环);
 - 不重新生成 `entry-surface.txt` 就不改导出面。
 
-更新日期:2026-09-14
+更新日期:2026-09-24

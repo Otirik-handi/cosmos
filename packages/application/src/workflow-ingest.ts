@@ -42,14 +42,9 @@ import {
 import type {
     SourceExecutionSnapshot,
 } from "@cosmos/contracts";
-import {
-    acquireItemsSkippingUnchanged,
-    mediaDownloadCapability,
-    resolveMediaPolicy,
-    type MediaAcquirer,
-    type MediaRetrier,
-    type MediaRetryOutcome,
-} from "./media-acquisition.js";
+import { acquireItemsSkippingUnchanged } from "./media-acquirer.js";
+import { mediaDownloadCapability, resolveMediaPolicy } from "./media-policy.js";
+import type { MediaAcquirer, MediaRetrier, MediaRetryOutcome } from "./media-ports.js";
 import type {
     ConnectorResolver,
     ConnectorStateHandle,

@@ -33,7 +33,7 @@ import type {
 } from "@cosmos/contracts";
 import type {
     MediaRetryCandidate, MediaRetryOutcome,
-} from "./media-acquisition.js";
+} from "./media-ports.js";
 
 import type {
     JobLease,
