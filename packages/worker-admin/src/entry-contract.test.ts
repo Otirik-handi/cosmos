@@ -1,0 +1,30 @@
+import { readFileSync } from "node:fs";
+
+import { describe, expect, it } from "vitest";
+
+import * as entry from "./index.js";
+
+/**
+ * 包入口契约：冻结 `@cosmos/worker-admin` 的公共导出面。
+ *
+ * 入口拆分（继承链拆文件 + 门面）只允许移动实现，不允许增删导出；`entry-surface.txt` 由
+ * `bun run scripts/entry-export-surface.ts packages/worker-admin/src/index.ts --out packages/worker-admin/entry-surface.txt`
+ * 生成，是允许导出的唯一真相源，需要增删导出时必须显式重新生成它并在评审中说明。
+ *
+ * 本测试只覆盖运行时存在的值导出；类型导出不存在于运行时，由同目录快照与脚本 diff 看守
+ * （快照的 `type` 行无法在运行时断言）。
+ */
+function snapshotValueExports(): string[] {
+    const surface = readFileSync(new URL("../entry-surface.txt", import.meta.url), "utf8");
+    return surface
+        .split("\n")
+        .filter((line) => line.startsWith("value\t"))
+        .map((line) => line.slice("value\t".length))
+        .sort();
+}
+
+describe("worker-admin package entry contract", () => {
+    it("运行时值导出与冻结的导出面一致", () => {
+        expect(Object.keys(entry).sort()).toEqual(snapshotValueExports());
+    });
+});
