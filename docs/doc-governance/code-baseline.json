@@ -10,7 +10,6 @@
     "apps/web/src/components/cosmos/story-panel.tsx": 37869,
     "apps/worker/src/workflow-ingest.test.ts": 39008,
     "e2e/browser/phase2-organization.spec.ts": 33431,
-    "packages/application/src/workflow-host-runtime.ts": 44831,
     "packages/logging/src/index.ts": 19935,
     "packages/storage-prisma/src/repository/sources.ts": 31120,
     "packages/storage-prisma/src/workflow-backend.ts": 32164,

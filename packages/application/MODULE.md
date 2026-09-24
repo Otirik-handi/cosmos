@@ -27,7 +27,13 @@
 | `logger.ts` | 结构化日志端口与默认实现 | ~0.3k |
 | `health.ts` | 健康快照装配 | ~0.2k |
 | `workflow-ingest.ts` | 采集 Workflow 执行体 | ~7.4k |
-| `workflow-host.ts` / `workflow-host-runtime.ts` | Workflow Host 端口 / 运行时常驻部件(自身仍越 800 行红线,待后续治理) | ~3.3k / ~11.2k |
+| `workflow-host.ts` | Workflow Host 端口与存储合同 | ~3.3k |
+| `workflow-host-runtime-types.ts` | 运行时常驻部件的端口类型、依赖与 `FixedRunIdGenerator` | ~1.4k |
+| `workflow-runtime-support.ts` | lease/runner 支撑:租约时长、runner 装配与租约感知包装 | ~2.0k |
+| `workflow-run-lane.ts` | Run lane:单次 Run 的领取、心跳与终态化 | ~1.8k |
+| `workflow-activity-worker.ts` | Activity worker:Activity Job 的领取、执行与完成回执 | ~4.0k |
+| `workflow-completion-dispatcher.ts` | Completion dispatcher:Workflow 完成投递与重排/死信 | ~2.8k |
+| `workflow-action-support.ts` | Action 错误/取消/重试判定、心跳与租约竞速助手 | ~2.1k |
 | `action.ts` / `catalog.ts` | Action 注册表 / manifest 目录 | ~3.1k / ~4.0k |
 | `media-policy.ts` | 媒体策略解析:默认值、上限与 `parseAllowedHosts` | ~0.6k |
 | `media-ports.ts` | 媒体端口与结果类型(`MediaAcquirer`/`MediaRetrier`/`MediaOutcome` 家族) | ~0.6k |

@@ -46,13 +46,15 @@ export {
     type WorkflowHostErrorCode,
 } from "./workflow-host.js";
 export {
-    FixedRunIdGenerator, WorkflowRunLane, WorkflowActivityWorker,
-    WorkflowCompletionDispatcher, type WorkflowRunnerLike, type WorkflowRunnerFactory,
+    FixedRunIdGenerator, type WorkflowRunnerLike, type WorkflowRunnerFactory,
     type WorkflowRuntimeDependencies, type WorkflowLeaseRuntimeOptions,
     type WorkflowRunLaneOptions, type WorkflowActivityWorkerOptions,
     type WorkflowCompletionDispatcherOptions, type WorkflowRunLaneResult,
     type WorkflowActivityWorkerResult, type WorkflowCompletionDispatcherResult,
-} from "./workflow-host-runtime.js";
+} from "./workflow-host-runtime-types.js";
+export { WorkflowRunLane } from "./workflow-run-lane.js";
+export { WorkflowActivityWorker } from "./workflow-activity-worker.js";
+export { WorkflowCompletionDispatcher } from "./workflow-completion-dispatcher.js";
 export {
     type SecretStorePort,
 } from "./secret-store.js";
