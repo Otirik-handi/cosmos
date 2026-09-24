@@ -1,13 +1,23 @@
 {
- "version": 1,
- "generated": "2026-09-14",
- "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
- "files": {
-  "apps/web/src/components/cosmos/board-view.tsx": 31352,
-  "apps/web/src/components/cosmos/story-panel.tsx": 33425,
-  "apps/worker/src/workflow-ingest.test.ts": 38271,
-  "packages/application/src/workflow-host-runtime.ts": 44825,
-  "packages/storage-prisma/src/workflow-backend.ts": 32164,
-  "packages/worker-admin/src/index.ts": 38914
- }
+  "version": 1,
+  "generated": "2026-09-24",
+  "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
+  "files": {
+    "apps/web/src/app/page.tsx": 31143,
+    "apps/web/src/component-lab/product-fixtures.tsx": 43966,
+    "apps/web/src/components/cosmos/board-view.tsx": 36711,
+    "apps/web/src/components/cosmos/collection-plan-list.tsx": 41708,
+    "apps/web/src/components/cosmos/story-panel.tsx": 37869,
+    "apps/worker/src/workflow-ingest.test.ts": 39008,
+    "e2e/browser/phase2-organization.spec.ts": 33431,
+    "packages/application/src/media-acquisition.ts": 29484,
+    "packages/application/src/workflow-host-runtime.ts": 44831,
+    "packages/domain/src/index.ts": 26005,
+    "packages/logging/src/index.ts": 19935,
+    "packages/storage-prisma/src/repository/sources.ts": 31120,
+    "packages/storage-prisma/src/workflow-backend.ts": 32164,
+    "packages/worker-admin/src/index.ts": 38914,
+    "plugins/collectors/src/index.ts": 34351,
+    "plugins/rss/src/index.ts": 21771
+  }
 }

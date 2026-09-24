@@ -37,6 +37,10 @@ jobs:
                   bun-version: ${{ env.BUN_VERSION }}
             - run: bun run docs:check
             - run: python3 scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new
+            # 代码类三轨门禁（字节/token/行数）。放在本 job 是因为它与文档门禁同依赖（只要 python3），
+            # 不必把 quality job 拉进来。行数参数把本批限定为「只拦红线」：警戒线默认值仍是提案的
+            # 400/100 行，收紧时去掉这四个参数即可。
+            - run: python3 scripts/size-governance.py -c code tests --check --baseline docs/doc-governance/code-baseline.json --fail-on-new --warn-lines 800 --fail-lines 800 --entry-warn-lines 300 --entry-fail-lines 300
 
     quality:
         name: Quality
