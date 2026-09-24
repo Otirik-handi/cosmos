@@ -1,6 +1,6 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-23。代码基线 `da5ae84`（EXT-006 收口，`--no-ff` 合并；上一基线 `2cfe379`）。**本地 `master` 领先 `origin/master` 8 个提交（尚未 push）；worktree `.worktree/ext-006-login-lifecycle` 与分支保留待清理**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-09-23。代码基线 `da5ae84`（EXT-006 收口，`--no-ff` 合并；上一基线 `2cfe379`）。**本地 `master` 领先 `origin/master` 8 个提交（未 push）；worktree 与分支保留待清理**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 
 ## 历史分册索引
 
@@ -49,7 +49,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 **Phase 2 尾巴遗留状态（2026-09-16 起）**：
 
 - **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。
-- **Phase 2 仍未闭合的 1 行（2026-09-23 更新）**：**ING-012 已交付并合并**——归属登记（`ConnectorStateNamespace`）与按命名空间／计划／连接／来源的导出、导入（默认只补缺失）与 Web 入口由 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 的追加切片 2 补齐（`--no-ff` 合并 `1b5cabc`；决定见 ADR [`0026`](docs/adr/0026-connector-state-export-v1.md)）；**EXT-006 已收口**——连接承载登录态（profile 进 `ConnectionInstance.configJson`、执行快照冻结连接投影）、登录探测（`auth.probeSupported` 声明驱动，结论回写连接）与「多 operation 有真实消费者」（Bilibili `search` + per-operation 配置 schema + Web 操作选择器）由 Task 22 的切片 4a／4b 与 Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 的切片 8 交付（合并 `da5ae84`；ADR [`0027`](docs/adr/0027-connection-login-lifecycle-v1.md)）；仅剩延后到 Phase 3 的 **LIB-004** 正文片段字符级锚点。AUT-010／EXT-007 已由采集计划 v1 收口（`4ef3636`），AUT-009 的「多个来源／计划引用同一连接」随之成立；**AUT-009 的可见性半边由切片 3 补齐**（连接面板显示并记录授权范围与失效原因，`--no-ff` 合并 `2cfe379`），连接可见性面板至此闭合。LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口（`d7af0cc`）。逐条证据在勘误台账与 [`Phase-2-UNDO.md`](Phase-2-UNDO.md)。
+- **Phase 2 仍未闭合的 1 行（2026-09-23 更新）**：**ING-012 已交付并合并**——归属登记（`ConnectorStateNamespace`）与按命名空间／计划／连接／来源的导出、导入（默认只补缺失）与 Web 入口由 Task [`22`](.agents/tasks/22-connection-state-store/README.md) 的追加切片 2 补齐（`--no-ff` 合并 `1b5cabc`；决定见 ADR [`0026`](docs/adr/0026-connector-state-export-v1.md)）；**EXT-006 已收口**——连接承载登录态（profile 进连接的非秘密配置、快照冻结连接投影）、登录探测（声明驱动，结论回写连接）与「多 operation 有真实消费者」（Bilibili `search` + per-operation 配置 schema + Web 选择器）由 Task 22 的切片 4a／4b 与 Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 的切片 8 交付（合并 `da5ae84`；ADR [`0027`](docs/adr/0027-connection-login-lifecycle-v1.md)）；仅剩延后到 Phase 3 的 **LIB-004** 正文片段字符级锚点。AUT-010／EXT-007 已由采集计划 v1 收口（`4ef3636`），AUT-009 的「多个来源／计划引用同一连接」随之成立；**AUT-009 的可见性半边由切片 3 补齐**（连接面板显示并记录授权范围与失效原因，`--no-ff` 合并 `2cfe379`），连接可见性面板至此闭合。LIB-008 与 OPS-004 已由 2026-09-20 的用户数据导出收口（`d7af0cc`）。逐条证据在勘误台账与 [`Phase-2-UNDO.md`](Phase-2-UNDO.md)。
 - **Phase 2 第四条验收条件尚无写入路径可考**：「重分析不覆盖用户批注和人工关系修正」目前只靠「Phase 2 尚无自动重分析写入路径」在结构上成立，未被真正考验；Phase 3 的 Knowledge Workflow 落地后需重新回归。
 - **真人验收暴露的三条界面方向**（维护者 2026-09-15，尚未排期）：Topic/Entity/用户组织缺独立操作面板、看板需要拖拽、文案过于专业化。前两条对应已 accepted 的 [`ui-surface-ownership-v1`](docs/proposals/ui-surface-ownership-v1.md)（PRD §8 / 架构 §11.4 / 新 ADR 与 Task 在 `master` 上尚未执行）；第三条对应仍 `reviewing` 的 [`ui-copy-review-v1`](docs/proposals/ui-copy-review-v1.md)。
 
@@ -57,7 +57,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - Entity merge/dedup；批注的正文片段字符级锚点；`size-governance.py --check` 的行数阈值（G 系列暂停时留下的门禁欠账，完整口径下仍有 8 个文件超红线）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）——`-` 等 FTS5 运算符会让用户输入变成畸形查询；现按维护者裁定「全当字面文本」处理（按空白切词、每段作字面短语、多词保持 AND、无词可搜时退回无文本条件）。**代价**：搜索框不再是 FTS5 查询接口。
-- **已知不稳定的测试用例**（2026-09-23 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**（根因是 Feed 卡片列表的 React key 重复，改用 `entryId`），同一次排查还修掉一个陈旧刷新覆盖搜索结果的竞态；过程见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。**仍未归因**：同文件 `:103`、`:417`、`ingest.spec.ts:119` 的 `toBeFocused` 与整套慢跑时 `media-policy.spec.ts` 的来源健康行等待超时；两处 390px 断言随移动端适配后置**暂停执行**。2026-09-23 另修掉一个**确定性**布局缺陷（`webhook-entry.spec.ts` 的点击被溢出的连接面板拦截，已给侧栏那条 flex/grid 链铺 `min-w-0`），它不是抖动。症状与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
+- **已知不稳定的测试用例**（2026-09-23 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**（根因是 Feed 卡片列表的 React key 重复，改用 `entryId`），同一次排查还修掉一个陈旧刷新覆盖搜索结果的竞态；过程见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。**仍未归因**：同文件 `:103`、`:417`、`ingest.spec.ts:119` 的 `toBeFocused` 与整套慢跑时 `media-policy.spec.ts` 的来源健康行等待超时；两处 390px 断言随移动端适配后置**暂停执行**。2026-09-23 另修掉一个**确定性**布局缺陷（`webhook-entry.spec.ts` 的点击被溢出的连接面板拦截），它不是抖动。症状与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
@@ -156,9 +156,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 尚未实现
 
-- Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；本机 Docker CLI 已安装但守护进程未启动，`test:docker` 因此未跑。
+- Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；2026-09-23 首次实跑 `test:docker` **失败**：镜像构建在 `bun run build` 报 storage 的 `$transaction` 回调 TS7006——`docker/Dockerfile` 没有生成 Prisma client 的步骤（bun 默认不跑 `postinstall`，容器里 `this.prisma` 因此是 `any`）。修复待定，另需确认容器内能否下载 Prisma 引擎。
 - 真实 RSS/RSSHub 的**长时定时抓取**与更长时间的 Worker 重启演练。真实公网 RSS 的完整采集链路已于 2026-09-18 通过验收（阮一峰源，item count 3）；跨平台 Node 由远端 CI 的 Windows Node smoke job 覆盖。
-- Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E（`itemCount=20`），2026-09-22 的 Task 33 验收在同一连接下同时跑通 hot 与 feed 两个计划（各 20 items），2026-09-23 的 EXT-006 验收另跑通连接登录探测（本机一次约 52s）与匿名的 `search` 操作（20 条真实搜索结果、不带 profile）；限流与跨环境登录态仍未验。
+- Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E（`itemCount=20`），2026-09-22 的 Task 33 验收在同一连接下同时跑通 hot 与 feed 两个计划（各 20 items），2026-09-23 的 EXT-006 验收另跑通登录探测与匿名 `search`（20 条真实搜索结果）；限流与跨环境登录态仍未验。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
 - **Phase 1 收口五切片（Task [`32`](.agents/tasks/32-phase1-closure/README.md)，合并 `cd7f7bb`，完整记录见 [`history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)）**：仍然有效的是 Gateway（RUN-010/011、OPS-010）改标 `Phase 3`、OPS-002 的「预算」收窄为媒体预算、`EXT-008` 与 AUT-001「删除凭据」已收口。
 - Activity Host 的跨进程 durable recovery、双 Worker 长时 fencing、Worker Admin SIGTERM/活跃 Attempt deadline 和完整生产 executable registration 验收；当前代码/测试已有部分 Activity Job、lease、completion 和 direct loopback 证据，不能替代这些边界。
@@ -176,7 +176,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
-- 最近一次全量证据（2026-09-23，主工作区，HEAD `da5ae84`，EXT-006 合并后）：`typecheck` 0、`bun run test` **124 文件 / 726 用例全绿**、`docs:check` **768 文件 0 失败**、size 门禁 PASS、路由表守卫 3/3、`git diff --check` 干净；同片在 worktree 内另跑 Node 进程 E2E 11 例、组件实验室 19 passed、浏览器整套一次 **33 passed**（另一次 31/33 为在册抖动）、真实来源验收四条全绿（含新增的 `test:real:bilibili-search`：20 条真实搜索结果且不带 profile）。**schema 变更合并后必须先 `bun run db:generate`**。未运行：Docker（守护进程未启动）、`test:real:aihot`、Windows smoke、发布部署；本机 e2e 需 `BUN_BINARY` 指向 `bun.exe`。逐条命令与数字在 Task 22／23 与勘误台账。
+- 最近一次全量证据（2026-09-23，主工作区，HEAD `da5ae84`，EXT-006 合并后）：`typecheck` 0、`bun run test` **124 文件 / 726 用例全绿**、`docs:check` **768 文件 0 失败**、size 门禁 PASS、路由表守卫 3/3、`git diff --check` 干净；同片在 worktree 内另跑 Node 进程 E2E 11 例、组件实验室 19 passed、浏览器整套一次 **33 passed**（另一次 31/33 为在册抖动）、真实来源验收四条全绿（含新增的 `test:real:bilibili-search`）。**schema 变更合并后必须先 `bun run db:generate`**。未运行：Docker（首次实跑失败，见上）、`test:real:aihot`、Windows smoke、发布部署；本机 e2e 需 `BUN_BINARY`。逐条数字在 Task 22／23 与勘误台账。
 - **公开 Asset 投影的内部 Blob key 已剥离**（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，合入 `3ded765`；完整记录见 [`history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)）。
 - **浏览器产品 E2E 仍有间歇失败**（`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 根因已修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；2026-09-23 又确认 `webhook-entry.spec.ts` 那次**不是抖动而是确定性布局缺陷**（侧栏溢出，已修）；其余（含 `ingest.spec.ts:119` 的 `toBeFocused`）仍未归因。症状与观察次数只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
 - 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
