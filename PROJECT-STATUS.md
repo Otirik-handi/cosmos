@@ -55,7 +55,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
-- Entity merge/dedup；批注的正文片段字符级锚点；**代码规模行数门禁已由 G08 修复**（完整口径下仍有 6 个文件超 800 行、2 个入口超 300 行；G09–G12 已拆 `packages/domain`、`media-acquisition`、`workflow-host-runtime` 与 `worker-admin`）。
+- Entity merge/dedup；批注的正文片段字符级锚点；**代码规模行数门禁已由 G08 修复**（完整口径下仍有 5 个文件超 800 行、2 个入口超 300 行；G09–G13 已拆 `packages/domain`、`media-acquisition`、`workflow-host-runtime`、`worker-admin` 与 `collectors`）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）——`-` 等 FTS5 运算符会让用户输入变成畸形查询；现按维护者裁定「全当字面文本」处理（按空白切词、每段作字面短语、多词保持 AND、无词可搜时退回无文本条件）。**代价**：搜索框不再是 FTS5 查询接口。
 - **已知不稳定的测试用例**（2026-09-24 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**（根因是 Feed 卡片列表的 React key 重复，改用 `entryId`），同一次排查还修掉一个陈旧刷新覆盖搜索结果的竞态；过程见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。2026-09-23 另修掉一个**确定性**布局缺陷（`webhook-entry.spec.ts` 的点击被溢出的连接面板拦截），它不是抖动。**仍未归因且失败点漂移**：8 轮整套里 4 轮失败，落点分别在 `source-lifecycle-and-search-filters.spec.ts`（`locator.fill` 卡满 300 秒、整轮 7.2 分钟）、`collection-plan-multi.spec.ts`、`phase2-organization.spec.ts`（`:103`/`:417` 与拆分场景）——症状集中在 DOM/前端层。**Task [`34`](.agents/tasks/34-sqlite-lock-observation/README.md) 已证伪「SQLite 锁/慢操作同根因」这条候选路径**（3/4 个失败轮次慢操作总数为 0）；下一步看 Playwright 的失败 trace。两处 390px 断言随移动端适配后置**暂停执行**。症状与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。

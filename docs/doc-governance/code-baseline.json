@@ -13,7 +13,6 @@
     "packages/logging/src/index.ts": 19935,
     "packages/storage-prisma/src/repository/sources.ts": 31120,
     "packages/storage-prisma/src/workflow-backend.ts": 32164,
-    "plugins/collectors/src/index.ts": 34351,
     "plugins/rss/src/index.ts": 21771
   }
 }
