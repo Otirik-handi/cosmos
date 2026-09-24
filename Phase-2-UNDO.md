@@ -1,24 +1,24 @@
 # Phase 2 UNDO（未完成清单）
 
-> 复核日期：2026-09-20（2026-09-22 增量更新：P0-1 与 P0-2 已闭合）｜ 代码基线：`5cbb670`（2026-09-20 复核时的基线；当前 `master` 为 `89f86c4`，与 [`PROJECT-STATUS.md`](PROJECT-STATUS.md) 的最新快照同一基线）
+> 复核日期：2026-09-20（2026-09-22 增量：P0 已清空；2026-09-23 增量：P1 已清空）｜ 代码基线：`5cbb670`（2026-09-20 复核时的基线；当前 `master` 为 `8a1b2f2`，与 [`PROJECT-STATUS.md`](PROJECT-STATUS.md) 的最新快照同一基线）
 >
 > 本文只回答一件事：**按 PRD 口径，Phase 2 还差什么**。按优先级从高到低排列，每条给出「需求要求什么 / 现在实际是什么 / 证据 / 建议下一步」。
 >
 > 证据等级：**【代码核实】**= 本次直接读了实现、合同或数据库模型；**【文档核实】**= 只读了仓库记录，未运行验证；**【未验证】**= 没有可考察的路径。
 >
-> 最近更新：2026-09-22（P0-1 与 P0-2 均已交付并合并，见下方「当前暂停点」）
+> 最近更新：2026-09-23（P1-2 交付并合并，**P1 已清空**，见下方「当前暂停点」）
 
 ## 一句话结论
 
-Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 四条验收标准里前三条有自动化与真人两层证据。**仍未闭合的是 3 行需求（全部为部分交付）和 1 条无法判定的验收条件**；另有 2 条已 accepted 但未落地的界面决定、3 条证据与门禁欠账。P0-1（AUT-010 一个连接下的多个采集计划）与 P0-2（AUT-004 的 webhook 形态）均已交付并合并，**P0 已清空**。
+Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 四条验收标准里前三条有自动化与真人两层证据。**P0 与 P1 均已清空**——P0-1（AUT-010 多采集计划）、P0-2（AUT-004 的 webhook 形态）与 P1 的三行部分交付需求（ING-012、EXT-006、AUT-009）全部收口。**仍未闭合的是 1 条无法判定的验收条件**（P2-1）、**2 条已 accepted 但未落地的界面决定**（P3-1／P3-2）与 **3 条证据与门禁欠账**（P4）。需求表里 Phase 2 只剩 LIB-004（正文片段字符级锚点，已改标 Phase 3，见附表）。
 
-## 当前暂停点（2026-09-22 更新：P0-1 与 P0-2 均已交付）
+## 当前暂停点（2026-09-23 更新：P0 与 P1 均已清空）
 
-**P0-2（AUT-004 的 webhook 形态）已交付并合并**：Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 的切片 3–7，`--no-ff` 合并 `da932cd`。先按 2026-09-22 的口径裁定收窄——Phase 2 只欠 `webhook` 形态，`event`／`condition`／`dependency` 记 Phase 3（ADR [`0024`](docs/adr/0024-trigger-forms-v1.md)）；实现为「一个计划可持有多个触发器」（ADR [`0025`](docs/adr/0025-multi-trigger-per-plan.md)，取代 ADR-0018 的单绑定口径）＋入口标识与凭证（凭证进 SecretStore、明文只回显一次）＋独立于 `/api/v1` 的 inbound 端点（体积上限、速率上限、常量时间凭证校验、事件标识幂等）＋计划面板入口＋真实消费者验收。合并后门禁：单元 119 文件／685 用例、Node 进程 E2E 6 文件／11 用例、浏览器 E2E 29 用例、真实来源 `test:real:entry`（真实外网 RSS 经入口触发，20 条条目、证据匹配）全绿。
+**P1-2（EXT-006）已交付并合并**：Task [`22`](.agents/tasks/22-connection-state-store/README.md) 的切片 4a／4b 与 Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 的切片 8，`--no-ff` 合并 `da5ae84`，已推送到 `origin` 与 `upstream`。4a 让连接成为登录态载体（OpenCLI profile 进 `ConnectionInstance.configJson`，执行快照随入队冻结连接投影，`feed` 的登录态校验从建目标时改到连接器读投影时）；4b 让登录状态有自动写入方（manifest 的 `auth.probeSupported` 声明驱动探测入口，`connection-probe` Job 由 Worker 执行，结论写回 `status`／`account`／`lastError`／`lastCheckedAt`；ADR [`0027`](docs/adr/0027-connection-login-lifecycle-v1.md) 部分取代 ADR-0017 决策 1）；切片 8 补齐「多 operation 的真实消费者」——operation 可自带配置 schema、canonical 校验按 `(ref, operationId)` 检索、Bilibili 声明第二个 operation `search`（匿名可用）并在 Web 上可选，**没有**数据库迁移也没有新路由，正是「加 Adapter 不改核心表／Worker 专用分支」那条验收。验收中另修掉本片自己的两个缺口（API 的 Source `config` 投影按 connectorId 白名单会丢掉第二个 operation 的字段；侧栏溢出盖住计划列表的确定性布局缺陷）。合并后门禁：单元 124 文件／726 用例、Node 进程 E2E 6 文件／11 用例、组件实验室 19 passed、浏览器整套一次 33 passed、真实来源验收四条全绿（含新增的 `test:real:bilibili-search`：20 条真实搜索结果且不带 profile）、`docs:check` 768 文件 0 失败、size 门禁 PASS、路由表守卫 3/3。
 
-**P0-1（AUT-010 一个连接下的多个采集计划）已交付并合并**：Task [`33`](.agents/tasks/33-collection-plan/README.md)，`--no-ff` 合并 `4ef3636`。v1 形态按 ADR [`0023`](docs/adr/0023-collection-plan-v1.md)——`CollectionPlan` 与采集目标一对一，持有连接、触发器、媒体预算、计划级 checkpoint 与状态命名空间；迁移按 expand／backfill／read switch 落地，第 4 步 contract 单独排期与授权（不纳入该 Task）。产品面从「来源健康」改造为按连接分组的「采集计划」，新建计划可选连接与连接器、字段按 manifest 声明渲染。Task 33 的验证：全量测试 116 文件 / 656 用例、Node 进程 E2E 5 文件 / 6 用例、浏览器 E2E 28 用例全绿；真实来源验收 `test:real:bilibili` 在同一连接下跑通 hot 与 feed 两个 Bilibili 计划（各 `itemCount=20`，连续两次 exit 0）。过程、偏差与未运行项见 Task 33 walkthrough。
+**P0-2（AUT-004 的 webhook 形态）与 P0-1（AUT-010 一个连接下的多个采集计划）已交付并合并**：Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 切片 3–7（`--no-ff` 合并 `da932cd`）与 Task [`33`](.agents/tasks/33-collection-plan/README.md)（`--no-ff` 合并 `4ef3636`）。原始缺口描述、口径裁定与逐条验证证据已随 P0 清空归档到 [`Phase-2-UNDO/history-2026-09-22-p0.md`](Phase-2-UNDO/history-2026-09-22-p0.md)；仍在生效的结论只有两条——AUT-004 的 `event`／`condition`／`dependency` 三种形态属 Phase 3（ADR [`0024`](docs/adr/0024-trigger-forms-v1.md)），AUT-010 迁移的第 4 步 contract 单独排期与授权（ADR [`0023`](docs/adr/0023-collection-plan-v1.md)）。
 
-**本清单的下一个缺口**：**P1-1（ING-012）已交付并合并**（Task [`22`](.agents/tasks/22-connection-state-store/README.md) 追加切片 2，`--no-ff` 合并 `1b5cabc`）；**P1-3（AUT-009 连接可见性）已交付并合并**（同 Task 追加切片 3，`--no-ff` 合并 `2cfe379`）。**P1 只剩 P1-2（EXT-006）**：它缺的是真实认证 Adapter 的接入（Bilibili 登录态从 OpenCLI profile 迁到 Connection + SecretRef）与 manifest 多 operation 的真实消费者，成本明显高于前两项，是否现在做请维护者裁定。
+**本清单的下一个缺口**：P1 已清空。按优先级剩下的是 **P2-1**（§12 第 4 条「重分析不覆盖用户批注和人工关系修正」无法判定，风险会外溢到 Phase 3 的 Knowledge Workflow）、**P3-1／P3-2**（已 accepted 但未落地／未同步的界面决定）与 **P4** 的三条证据与门禁欠账。是否现在处理请维护者裁定。
 
 ## 优先级总表
 
@@ -27,7 +27,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 | 优先级 | 编号 | 缺口 | 性质 | 卡住什么 |
 | --- | --- | --- | --- | --- |
 | P1 | P1-1 | ING-012：Connector 状态的备份、恢复、迁移与范围隔离 | **已交付并合并 `1b5cabc`** | 已闭合 |
-| P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | 部分交付 | 该行验收条件未满足 |
+| P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | **已交付并合并 `da5ae84`** | 已闭合；两条验收条件全部满足（凭证载体见下文的如实说明） |
 | P1 | P1-3 | AUT-009：连接状态／授权范围／失效原因的可见性与来源绑定入口 | **已交付并合并 `2cfe379`** | 已闭合；验收条件四条全部满足 |
 | P2 | P2-1 | §12 第 4 条「重分析不覆盖用户批注和人工关系修正」＋ LIB-003 同类验收 | 无法判定 | Phase 2 验收第 4 条不能宣布通过；风险外溢到 Phase 3 |
 | P3 | P3-1 | 界面职责重划：Topic／Entity／用户组织独立面板 | 已 accepted 未落地 | 真人验收第一条结论未解决；PRD／架构／ADR 未同步 |
@@ -38,15 +38,9 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 
 ---
 
-## P0：完全未交付（2026-09-22 已清空）
+## P0：完全未交付（2026-09-22 已清空，历史见分册）
 
-### P0-2 AUT-004 事件类触发 → 已交付（webhook 形态）
-
-- **需求要求**（[`part-07-1.md`](docs/requirements/0002-product-requirements/part-07-1.md) §7.1）：Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发；每次触发保存触发原因、输入、时间和对应定义版本。
-- **当时的现状【代码核实】**：触发器类型枚举只有「定时」和「手动」两种，代码注释明确写着 Webhook、内部事件与上游 Workflow 触发**已推迟**（`packages/contracts/src/base.ts` 的 `triggerKindSchema`）。Task 23 的标题写了 AUT-004，实际交付的是「单绑定 schedule／manual」这一半。
-- **裁定（2026-09-22）**：按 ADR [`0024`](docs/adr/0024-trigger-forms-v1.md) 收窄——Phase 2 只交付 `webhook`，`event`／`condition`／`dependency` 记 Phase 3。裁定同时纠正了本文原先的判断：`event`／`condition` 并不依赖 Phase 3 的交付物（它们缺的是订阅分发与条件求值），只有 `dependency` 真依赖用户自定义 Workflow 产品面；三者后置的理由是价值峰值在 Knowledge Workflow 之后，而不是依赖关系。
-- **交付**：Task [`23`](.agents/tasks/23-trigger-sdk/README.md) 切片 3–7，合并 `da932cd`（入口端点、一计划多触发器 ADR [`0025`](docs/adr/0025-multi-trigger-per-plan.md)、计划面板入口、真实消费者验收）；证据见 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 2026-09-22 的三条记录与 Task 23 的验证段。
-- **剩余**：三种形态仍属 Phase 3；`dependency` 依赖用户自定义 Workflow 产品面，`event`／`condition` 依赖订阅分发与条件求值（见 ADR-0024 的 Revisit Gate）。
+P0-2（AUT-004 的 webhook 形态）的原始缺口描述、口径裁定与交付证据已随本轮清空归档到 [`Phase-2-UNDO/history-2026-09-22-p0.md`](Phase-2-UNDO/history-2026-09-22-p0.md)；P0-1（AUT-010）的交付证据在同处与上方「当前暂停点」。
 
 ---
 
@@ -66,6 +60,8 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 - **现状【代码核实】**：声明面已交付（`auth` 与 `operations` 结构齐全，operation 是数组）。缺的是使用面：四个内置 manifest **都只声明了单个 `fetch` 操作**，`auth.kind` 只有「无认证」和「外部」两种，因此「按声明展示登录状态」没有数据可展示——登录状态要等真实认证 Adapter。
 - **影响**：结构上支持多 operation，但没有任何一个真实 Adapter 用过；新 Adapter 的能力边界仍未被验证过一次，属于「合同先行、无人消费」。
 - **建议下一步**：多 operation 的真正消费者是「一个连接下多个计划」，而 P0-1 已于 2026-09-22 交付（Task 33 的 Bilibili 计划仍只走 `source.bilibili@1` 的单一 `fetch` operation，没有用上多 operation）；本行闭合还差真实认证 Adapter 接入（Bilibili 从外部 profile 迁到连接），那是 Task 22 已登记的后续项。
+- **交付（2026-09-23，`--no-ff` 合并 `da5ae84`，已推送 `origin` 与 `upstream`）**：按 Proposal [`connection-login-lifecycle-v1`](docs/proposals/connection-login-lifecycle-v1.md)（accepted）的两个切片落地。**登录状态半边**——4a 让连接成为登录态载体：OpenCLI profile 从来源配置迁进 `ConnectionInstance.configJson`（迁移 `20260923180000_connection_adapter_config`），执行快照随入队冻结连接投影（AUT-016 点名 Connection），`feed` 的「必须有登录态」从建目标时改到连接器读投影时；4b 让登录状态有自动写入方：manifest 的 `auth.probeSupported` 声明驱动探测入口（API 的 409 与 Web 的按钮都按声明判断，不硬编码 connectorId），`connection-probe` Job 由 Worker 执行，结论写回 `status`／`account`／`lastError`／`lastCheckedAt`（迁移 `20260923190000_connection_last_checked_at`）；决定见 ADR [`0027`](docs/adr/0027-connection-login-lifecycle-v1.md)（部分取代 ADR-0017 决策 1）。**多 operation 半边**——Task 23 的切片 8：operation 可自带配置 schema（`null` = 沿用定义级），canonical 校验按 `(sourceDefinitionRef, operationId)` 检索，Bilibili 声明第二个 operation `search`（查询词必填、匿名可用、`discoveryChannel = search`）作为真实消费者，连接器按 `operationId` 分派，Web 出操作选择器；**没有**数据库迁移、没有新路由——这正是「加 Adapter 不改核心表或 Worker 专用分支」那条验收。验收中还修掉本片自己的两个缺口（Source `config` 投影会丢掉第二个 operation 的字段、侧栏溢出盖住计划列表）。逐条门禁与证据见上方「当前暂停点」与 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md) 2026-09-23 的 EXT-006 收口行。
+- **如实说明（本行收口时仍缺的一半）**：Proposal 决定 4 的**凭证载体只冻结合同、未实现**——没有 `SecretRef` 的第一个真实来源、没有租约（lease）与凭证命令；登录态今天仍是「外部登录态 + 非秘密 profile」，即 Cosmos 自己不持有凭证。因此本行满足的是**两条验收条件**（Web／API 按声明展示配置和登录状态；加 Adapter 不改核心表／Worker 分支），不是「Cosmos 自己管理凭证」。真实凭证来源仍是 Task 22 的 Follow-up，也是 `PROJECT-STATUS.md`「尚未实现」里的一条。
 
 ### P1-3 AUT-009 连接状态／授权范围／失效原因的可见性与来源绑定入口
 
@@ -112,7 +108,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 
 ### P4-1 Phase 2 浏览器验收仍有未归因的间歇失败
 
-- **现状【文档核实】**：`phase2-organization.spec.ts:103`（证据关系反向视图等待超时）与 `:417`（用户组织场景耗时异常）仍未归因；`media-policy.spec.ts` 的来源健康行等待超时只在「整轮变慢」的运行里出现。根因已查清并修掉的两条（`:539` 重复 key、陈旧刷新竞态）见 Task 30。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
+- **现状【文档核实】**：`phase2-organization.spec.ts:103`（证据关系反向视图等待超时）与 `:417`（用户组织场景耗时异常）仍未归因；`ingest.spec.ts:119` 的 `toBeFocused`（关抽屉后焦点未归还触发按钮）与 `media-policy.spec.ts` 的来源健康行等待超时只在「整轮变慢」的运行里出现。根因已查清并修掉的三条（`:539` 重复 key、陈旧刷新竞态，以及 2026-09-23 查明的 `webhook-entry.spec.ts` 点击被溢出的连接面板拦截——那一次**不是抖动而是确定性布局缺陷**）见 Task 30 与 Task 22／23 的记录。症状、观察次数与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护（2026-09-23 补记了两次整套运行的观察）。
 - **影响**：Phase 2 的浏览器验收绿灯目前是「重跑／单跑即过」的结论，不是稳定绿灯；同一份记录里还怀疑与「SQLite WAL／busy timeout 未显式配置」同根因。
 - **建议下一步**：按该文件第 1 条的建议次序先做诊断（WAL 与 busy timeout 显式配置 + 记录请求与提交顺序），再决定是修测试环境隔离还是按 Bug 处理。**不要用重跑结案。**
 
@@ -145,7 +141,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 | 跨分区拖拽 | **不做**（分区是「关注方面」语义容器，跨区重归类保留显式「移到」入口） | ADR-0010 决定 7 |
 | 移动端 390px 适配 | 暂停（PC 优先），恢复条件写在 `e2e/support/viewports.ts` | PROJECT-STATUS 当前运维边界 |
 | Entity merge／dedup | 未纳入 Phase 2 验收，仍开着 | PROJECT-STATUS「本次未纳入、仍开着的项」 |
-| Docker／Compose、发布部署、真实公网长时定时抓取、非 Windows smoke、长时故障恢复 | Phase 1 后置债，按 2026-09-07 划线保留 | PROJECT-STATUS「本次未纳入、仍开着的项」 |
+| Docker／Compose、发布部署、真实公网长时定时抓取、非 Windows smoke、长时故障恢复 | Phase 1 后置债，按 2026-09-07 划线保留 | PROJECT-STATUS「本次未纳入、仍开着的项」；其中 Docker／Compose 于 2026-09-23 **首次实跑并失败**（镜像构建缺 Prisma client 生成步骤），根因与修复候选见 [`docs/research/2026-09-23-docker-acceptance-run.md`](docs/research/2026-09-23-docker-acceptance-run.md)，修复待单开 Task |
 | LIB-004 的正文片段字符级锚点与 Artifact 批注目标 | 已改标 Phase 3（批注目前只能挂整条 Story／Entry／Topic） | PROJECT-STATUS Phase 2 尾巴遗留状态 |
 
 ---
@@ -167,4 +163,9 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 **复核结论的适用范围**
 
 - 本文是**缺口台账**，不替代 [`PROJECT-STATUS.md`](PROJECT-STATUS.md)（当前快照与有效决定）和 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)（需求表口径更正）。三者的关系：PROJECT-STATUS 记现状，ERRATA 记需求表怎么读，本文记还差什么。
-- 本文新登记的 AUT-009 部分交付（P1-3）此前不在任何清单里，建议由维护者裁定后同步进 ERRATA 或 PROJECT-STATUS。
+- 本文新登记的 AUT-009 部分交付（P1-3）此前不在任何清单里：**已由维护者裁定并同步**——AUT-009 与 ING-012、EXT-006 的收口都已进 ERRATA 与 PROJECT-STATUS。
+
+**2026-09-23 增量的边界（只改台账，未做新复核）**
+
+- 本次只做两件事：把 P1-2（EXT-006）从「部分交付」改成已交付（证据取自该片的合并前验证与合并后主工作区门禁），以及把 P4-1 的间歇失败清单按当天的实际观察更新（新增 `ingest.spec.ts:119`，并把已查明为确定性布局缺陷的 `webhook-entry` 从「间歇」里剔除）。
+- 没有重跑 P2／P3／P4-2／P4-3 的判定依据；它们的证据等级与「未运行」清单仍是 2026-09-20 复核时的那一份，除 P4-1 外未更新。需求表逐行复核（37 行）也没有重做——那一轮的结论仍以 ERRATA 为准。
