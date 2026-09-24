@@ -85,3 +85,33 @@ Non-goals：
 - 三个 Web 文件（`product-fixtures.tsx`、`board-view.tsx`、`story-panel.tsx`）留到 UI 重做同批——**P4-2 的非 UI 侧到此清空**。
 - 台账第 8 条（`afterEach` 清理撞 `EBUSY`）仍开放：本次两轮全量未复现，但机制未查清，修法需单独裁定。
 - parity 长场景若要拆，应作为**测试重构**单独提案（要说明 62 个断言如何重组）。
+
+## 勘误（2026-09-24，热修）：本次拆分曾让 `apps/worker` 的生产构建失败
+
+**回归由本记录的拆分引入，所以勘误记在这里。**
+
+**症状**：`bun run build`、`bun run test:e2e`、`bun run test:browser`（它先 build）全部失败；CI 的 `ci.yml:61`／`:75`／`:90` 三步自合并 `4126dc9` 起为红。报错 **40 条 `TS6059`**：
+
+```
+src/workflow-ingest.fixtures.ts(11,8): error TS6059: File '.../packages/application/src/index.ts'
+is not under 'rootDir' 'apps/worker/src'
+```
+
+**根因**：`apps/worker/tsconfig.json` 的 `include` 是 `src/**/*.ts`（构建可见），只有 `apps/worker/tsconfig.build.json` 排除 `src/**/*.test.ts`。原文件 `workflow-ingest.test.ts` 因此被排除；本次新建的 **`workflow-ingest.fixtures.ts` 不匹配 `*.test.ts`**，于是进入生产构建，而它用**相对源码路径**导入 `packages/application/src/*` 与 `packages/storage-prisma/src/*`，把 rootDir 之外的文件拉进程序。
+
+**修复**：`apps/worker/tsconfig.build.json` 的 `exclude` 增加 `"src/**/*.fixtures.ts"`。该配置的语义本就是「排除测试专用文件」，而 `.fixtures.ts` 正是测试专用文件（`packages/storage-prisma` 已有 `index.fixtures.ts`、`workflow-host-store.fixtures.ts` 两个先例）。
+
+**验证**（worktree `fix-worker-build`，分支 `fix/worker-build-fixtures-exclude`）：
+
+| 检查 | 结果 |
+| --- | --- |
+| `bun run build`（api + worker + web） | **exit 0**（修前 40 条 TS6059） |
+| `apps/worker/dist` 是否还有 `*fixtures*` | **无**（修前有 `workflow-ingest.fixtures.js` + `.map`） |
+| `test:e2e`（带 `BUN_BINARY`） | **6 文件 / 11 用例全绿，exit 0** |
+| worker 测试（fixtures 对测试仍须可用） | **2 文件 / 4 用例全绿** |
+
+**同类风险排查**：全仓搜索「逃出本项目 rootDir 的相对导入」（`from "../../../`），**只有本次这三个文件命中**（fixtures + 两个测试文件），其它 app／包／插件一律走 `@cosmos/*` 别名。**没有第二处同类隐患。**
+
+**流程教训（本勘误最重要的一条）**：本次拆分在 `apps/worker/src` 下**新增了一个非 `*.test.ts` 的文件**，而那是**构建可见**的目录——**验证清单里却没有「跑构建」这一项**。当时只覆盖了聚焦测试、typecheck、全量单测、体积门禁与 `docs:check`，**构建与 `test:e2e` 都漏了**（上一次跑 e2e 是 G14，在拆分之前）。**凡在 `apps/*/src` 或 `packages/*/src` 下新增非测试文件，验证必须包含 `bun run build`。**
+
+**顺带观察（既有问题，本次未修）**：`apps/api/tsconfig.json` 只排除 `dist`，因此 `apps/api/dist` 里有编译后的 `*.test.js`；各包（domain 2／application 13／storage-prisma 54／collectors 2）的 `dist` 里也有测试与 fixtures 产物。不影响构建通过，属**产物卫生**问题，需要时单开切片。
