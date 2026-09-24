@@ -1,5 +1,5 @@
 import { WorkflowHostConflictError, WorkflowHostError, type CancelWorkflowRunInput, type MarkResumeRequiredInput, type RecoveryRunsInput, type RecoverWorkflowRunInput, type ListWorkflowRunsInput, type WorkflowEnvelope, type FailWorkflowRunInput } from "@cosmos/application";
-import { isWorkflowEnvelopeMarker } from "../workflow-backend.js";
+import { isWorkflowEnvelopeMarker } from "../workflow-envelope-marker.js";
 import { PrismaWorkflowHostCompletionDeliveryStore } from "./completion-delivery-store.js";
 import { RECOVERABLE_RUN_STATUSES, type WorkflowRunRow, assertValidDate, invalidState, isTerminalRunStatus, parseJson, requireNonEmptyString } from "./internals-core.js";
 import { normalizeRunLease, toEnvelope } from "./internals-activity.js";

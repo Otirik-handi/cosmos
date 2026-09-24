@@ -2,7 +2,7 @@ import { retryPolicySchema } from "@cosmos/contracts";
 import { PrismaClient } from "@prisma/client";
 import { assertJsonValue, canonicalJson, fingerprint, type ActivityExecutionRequest, type ActivityIdentity, type DeferredActivityCompletionInput, type DeferredActivityStartResult, type JsonValue, type WorkflowDefinitionReference } from "@notnotype/nb-workflow";
 import { WorkflowHostConflictError, type ActivityJobLease, type ActivityJobTerminalResult, type CompleteActivityResult, type CreateWorkflowEnvelopeInput, type WorkflowActivityJobClaim, type WorkflowActivityJobPayload, type WorkflowCompletion, type WorkflowEnvelope, type WorkflowJobStatus, type WorkflowRunLease, type WorkflowRunStatus } from "@cosmos/application";
-import { isWorkflowEnvelopeMarker } from "../workflow-backend.js";
+import { isWorkflowEnvelopeMarker } from "../workflow-envelope-marker.js";
 import { ACTIVITY_KIND, type ActivityJobRow, type PrismaOptions, VALID_COMPLETION_STATUSES, VALID_JOB_STATUSES, VALID_RUN_STATUSES, type WorkflowCompletionRow, type WorkflowRunRow, decodeJson, invalidState, isRecord, normalizeRetryDelay, parseIsoDate, parseJson, requireNonEmptyString, serializationError } from "./internals-core.js";
 
 export function isPrismaOptions(

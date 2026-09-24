@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { canonicalJson, fingerprint, type ActivityExecutionRequest, type DeferredActivityCompletionInput, type DeferredActivityStartResult } from "@notnotype/nb-workflow";
 import { WorkflowHostConflictError, WorkflowHostError, type ClaimActivityJobInput, type CompleteActivityInput, type CompleteActivityResult, type HeartbeatActivityJobInput, type ReleaseActivityJobInput, type WorkflowActivityJobClaim, type WorkflowActivityJobPayload, type WorkflowJobStatus } from "@cosmos/application";
-import { isWorkflowEnvelopeMarker } from "../workflow-backend.js";
+import { isWorkflowEnvelopeMarker } from "../workflow-envelope-marker.js";
 import { PrismaWorkflowHostRunLeaseStore } from "./run-lease-store.js";
 import { ACTIVITY_KIND, type ActivityJobRow, DEFAULT_COMPLETION_MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS, TERMINAL_RUN_STATUSES, type WorkflowCompletionRow, type WorkflowRunRow, assertValidDate, encodeJson, invalidState, isTerminalRunStatus, isUniqueConstraintError, normalizeRetryDelay, parseJson, requireNonEmptyString, validateLeaseMs } from "./internals-core.js";
 import { activityIdentityJson, existingActionResult, normalizeActivityJobLease, normalizeActivityRequest, normalizeRunLease, parseActivityPayload, pendingActivityForState, previousJobLeaseGuard, rejectedActivityResult, sameCompletionIdentity, toActivityJobClaim, toCompletion, validateActivityTerminalResult, validateCompletionForJob } from "./internals-activity.js";

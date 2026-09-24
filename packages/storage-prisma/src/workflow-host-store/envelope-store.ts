@@ -1,6 +1,6 @@
 import { canonicalJson } from "@notnotype/nb-workflow";
 import { WorkflowHostConflictError, WorkflowHostError, type CreateWorkflowEnvelopeInput, type WorkflowEnvelope } from "@cosmos/application";
-import { createWorkflowEnvelopeMarker, isWorkflowEnvelopeMarker } from "../workflow-backend.js";
+import { createWorkflowEnvelopeMarker, isWorkflowEnvelopeMarker } from "../workflow-envelope-marker.js";
 import { PrismaWorkflowHostStoreBase } from "./base.js";
 import { type WorkflowRunRow, encodeJson, isUniqueConstraintError, parseJson, requireNonEmptyString } from "./internals-core.js";
 import { assertEnvelopeIdentity, normalizeEnvelopeInput, toEnvelope } from "./internals-activity.js";
