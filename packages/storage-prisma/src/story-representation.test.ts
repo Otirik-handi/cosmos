@@ -169,6 +169,82 @@ describe("Story representation extension persistence", () => {
             await prisma.$disconnect();
         }
     });
+
+    /**
+     * The fallback-only shape (`exact: null` + `fallback`) is a distinct stored
+     * representation from the exact one, so it needs its own round-trip and
+     * no-op guard: a repeat submission that silently rewrote or dropped
+     * keyFacts would still look like a no-op while losing data.
+     */
+    it("persists a fallback-only timeRange and keeps an identical resubmission a no-op", async () => {
+        const { prisma, repository } = await createRepository();
+        try {
+            await seedLegacyStory(prisma);
+            const timeRange = {
+                start: {
+                    exact: null,
+                    exactPrecision: null,
+                    fallback: {
+                        raw: "2026-09-14 上午",
+                        lowerBound: "2026-09-14T00:00:00.000Z",
+                        precision: "day" as const,
+                        timezone: null,
+                        confidence: "inferred" as const,
+                    },
+                },
+                end: null,
+            };
+            const keyFacts = [
+                { text: "只有原文的日期", entryId: null },
+                { text: "精度到天", entryId: "entry-2" },
+            ];
+
+            const saved = await repository.updateStoryRevision({
+                storyId: "story-legacy",
+                baseRevisionId: "rev-legacy-1",
+                title: "Legacy event title",
+                summary: null,
+                kind: "event",
+                subtype: null,
+                timeRange,
+                keyFacts,
+                actor: "user",
+                reason: "add fallback-only representation",
+            });
+            expect(saved?.story.revisionId).not.toBe("rev-legacy-1");
+            expect(saved?.story.timeRange?.start.fallback).toMatchObject(timeRange.start.fallback);
+            expect(saved?.story.timeRange?.start.exact ?? null).toBeNull();
+            expect(saved?.story.keyFacts).toEqual(keyFacts);
+            expect(await prisma.storyRevision.count({ where: { storyId: "story-legacy" } })).toBe(2);
+            const storedRow = await prisma.storyRevision.findUniqueOrThrow({
+                where: { id: saved!.story.revisionId },
+                select: { timeRangeJson: true },
+            });
+            expect(storedRow.timeRangeJson).not.toBeNull();
+            expect(JSON.parse(storedRow.timeRangeJson!)).toMatchObject({ start: { exact: null } });
+
+            const repeated = await repository.updateStoryRevision({
+                storyId: "story-legacy",
+                baseRevisionId: saved!.story.revisionId,
+                title: "Legacy event title",
+                summary: null,
+                kind: "event",
+                subtype: null,
+                timeRange,
+                keyFacts,
+            });
+            expect(repeated?.story.revisionId).toBe(saved?.story.revisionId);
+            expect(await prisma.storyRevision.count({ where: { storyId: "story-legacy" } })).toBe(2);
+            const repeatedFacts = repeated?.story.keyFacts ?? [];
+            expect(repeatedFacts).toHaveLength(keyFacts.length);
+            keyFacts.forEach((fact, index) => {
+                expect(repeatedFacts[index]?.text).toBe(fact.text);
+                expect(repeatedFacts[index]?.entryId).toBe(fact.entryId);
+            });
+        } finally {
+            await prisma.$disconnect();
+        }
+    });
 });
 
 function deployMigrations(databasePath: string): void {

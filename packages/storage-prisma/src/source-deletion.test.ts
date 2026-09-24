@@ -109,6 +109,34 @@ it("deletes the source but keeps its ingested history (AUT-001)", async () => {
     }
 });
 
+it("drops the collection plan from the list projection when its source is deleted (AUT-001)", async () => {
+    const { repository, sourceId, revisionId } = await setup();
+    try {
+        // 反例先行：删除前计划必须在投影里，否则「删除后消失」是空断言。
+        const before = await repository.listCollectionPlans();
+        const planId = before.find((plan) => plan.sourceId === sourceId)?.id;
+        expect(planId).toBeDefined();
+
+        await repository.deleteSource({
+            sourceId,
+            baseRevisionId: revisionId,
+            idempotencyKey: "delete-plan-projection",
+            actor: null,
+            reason: null,
+        });
+
+        // 看板的「采集计划」行由这个投影驱动。计划行本身仍在库里（只被停用），
+        // 消失靠的是 listCollectionPlans 的 `source: { deletedAt: null }` 墓碑过滤。
+        const after = await repository.listCollectionPlans();
+        expect(after.map((plan) => plan.id)).not.toContain(planId);
+        expect(after.map((plan) => plan.sourceId)).not.toContain(sourceId);
+        const row = await repository.prisma.collectionPlan.findUnique({ where: { id: planId! } });
+        expect(row?.enabled).toBe(false);
+    } finally {
+        await repository.close();
+    }
+});
+
 it("rejects a stale revision and hides the tombstone from edit commands", async () => {
     const { repository, sourceId, revisionId } = await setup();
     try {

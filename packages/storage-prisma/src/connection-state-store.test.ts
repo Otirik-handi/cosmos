@@ -75,6 +75,58 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
     });
 
     /**
+     * 授权范围是连接行的一部分（ADR-0017）：建连接时写入的 `scopeJson` 必须原样读回，
+     * 否则重连后「这个账号授权过什么」就丢了。它是不透明 JSON 文本，存储层不做解释。
+     */
+    it("round-trips the connection authorization scope", async () => {
+        const repository = await createRepository();
+        try {
+            const scopeJson = '{"read":true,"comment":false}';
+            const created = await repository.createConnection({
+                name: "主账号",
+                connectorId: "bilibili",
+                scopeJson,
+            });
+            expect(created.scopeJson).toBe(scopeJson);
+
+            await expect(repository.getConnection(created.id)).resolves.toMatchObject({ scopeJson });
+        } finally {
+            await repository.close();
+        }
+    });
+
+    /**
+     * 手工恢复走公开的更新命令，和探测回写是两条路：手工把连接改回可用时，失效原因要一起
+     * 清空——`lastError: null` 必须真的写进存储，不能被当成「未提供」而跳过。
+     */
+    it("clears the failure reason when a connection is manually restored", async () => {
+        const repository = await createRepository();
+        try {
+            const connection = await repository.createConnection({
+                name: "主账号",
+                connectorId: "bilibili",
+            });
+            await repository.updateConnection(connection.id, {
+                status: "revoked",
+                lastError: "授权已撤销",
+            });
+
+            const restored = await repository.updateConnection(connection.id, {
+                status: "active",
+                lastError: null,
+            });
+            expect(restored).toMatchObject({ status: "active", lastError: null });
+
+            await expect(repository.getConnection(connection.id)).resolves.toMatchObject({
+                status: "active",
+                lastError: null,
+            });
+        } finally {
+            await repository.close();
+        }
+    });
+
+    /**
      * 登录探测的回写（Proposal connection-login-lifecycle-v1 决定 2）：状态、账号、失效原因
      * 与检查时间一次写入。`lastCheckedAt` 刻意不走公开的更新命令——它是系统观测。
      */
