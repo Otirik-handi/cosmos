@@ -4,10 +4,9 @@ import type {
     IngestResult, RunSnapshot, SourceSnapshot,
 } from "@cosmos/contracts";
 
-import {
-    acquireItemsSkippingUnchanged, mediaDownloadCapability, resolveMediaPolicy,
-    type MediaAcquirer,
-} from "./media-acquisition.js";
+import { acquireItemsSkippingUnchanged } from "./media-acquirer.js";
+import { mediaDownloadCapability, resolveMediaPolicy } from "./media-policy.js";
+import type { MediaAcquirer } from "./media-ports.js";
 
 import {
     ConnectorExecutionError,

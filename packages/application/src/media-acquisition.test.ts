@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { NormalizedAssetInput, NormalizedIngestItem } from "@cosmos/domain";
-import {
-    createMediaAcquirer,
-    isPublicAddress,
-    parseAllowedHosts,
-    resolveMediaPolicy,
-    type HostResolver,
-} from "./media-acquisition.js";
+import { createMediaAcquirer } from "./media-acquirer.js";
+import { parseAllowedHosts, resolveMediaPolicy } from "./media-policy.js";
+import type { HostResolver } from "./media-ports.js";
+import { isPublicAddress } from "./public-address.js";
 
 const pngSignature = new Uint8Array([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3,

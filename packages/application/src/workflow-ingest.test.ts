@@ -94,7 +94,8 @@ describe("source.fetch connector error classification", () => {
 });
 
 import type { NormalizedIngestItem } from "@cosmos/domain";
-import { createMediaAcquirer, mediaDownloadCapability } from "./media-acquisition.js";
+import { createMediaAcquirer } from "./media-acquirer.js";
+import { mediaDownloadCapability } from "./media-policy.js";
 
 function ingestItemWithImage(): NormalizedIngestItem {
     return {
