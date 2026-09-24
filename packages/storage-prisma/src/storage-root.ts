@@ -2,6 +2,7 @@ import { join, relative, resolve } from "node:path";
 import { readdir, stat } from "node:fs/promises";
 import { CollectionPlanRevisionConflictError, SourceRevisionConflictError } from "@cosmos/application";
 import { PrismaClient } from "@prisma/client";
+import { createDiagnosedPrismaClient, sqliteDiagnosticsEnabled } from "./sqlite-diagnostics.js";
 
 export interface StorageRoots {
     dataRoot: string;
@@ -37,14 +38,12 @@ export function createPrismaClient(
     dataRoot = process.env.COSMOS_DATA_ROOT?.trim() || ".cosmos",
 ): PrismaClient {
     const roots = resolveStorageRoots(dataRoot);
+    const url = process.env.DATABASE_URL || roots.databaseUrl;
 
-    return new PrismaClient({
-        datasources: {
-            db: {
-                url: process.env.DATABASE_URL || roots.databaseUrl,
-            },
-        },
-    });
+    // 开关关掉时构造参数与以前逐字相同：不注册任何 log 事件。
+    return sqliteDiagnosticsEnabled()
+        ? createDiagnosedPrismaClient(url)
+        : new PrismaClient({ datasources: { db: { url } } });
 }
 
 export function resolveContainedPath(root: string, child: string): string {

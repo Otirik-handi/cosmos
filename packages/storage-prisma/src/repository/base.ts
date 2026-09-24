@@ -2,6 +2,7 @@ import { createBuiltinManifestCatalog, type CatalogPort, type LoggerPort, type S
 import { FileBlobStore } from "@cosmos/blob-store";
 import { PrismaClient } from "@prisma/client";
 import { FileSecretStore } from "../secret-store.js";
+import { recordSqlitePragmaFacts } from "../sqlite-diagnostics.js";
 import { type StorageRoots, createPrismaClient, resolveStorageRoots } from "../storage-root.js";
 
 export class PrismaCosmosRepositoryBase {
@@ -35,6 +36,9 @@ export class PrismaCosmosRepositoryBase {
         this.logger?.info("storage.initialize.started");
         try {
             await this.prisma.$connect();
+            // 诊断运行时把这次连接的 SQLite 环境事实（journal_mode/busy_timeout/synchronous）
+            // 写进证据；关掉开关时这行是 no-op。
+            await recordSqlitePragmaFacts(this.prisma);
             await this.prisma.$executeRawUnsafe(`
                 CREATE VIRTUAL TABLE IF NOT EXISTS entry_search USING fts5(
                     entry_id UNINDEXED,
