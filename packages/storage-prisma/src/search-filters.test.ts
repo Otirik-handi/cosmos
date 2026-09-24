@@ -140,3 +140,137 @@ it("filters search by author, media type and local media status (LIB-001)", asyn
         await repository.close();
     }
 });
+
+/**
+ * `skipped` 是资产状态四个取值里的降级态（ADR-0015：拿到候选但按大小上限、
+ * 安全策略或预算没下载），上一个用例只覆盖了 saved／failed／metadata_only。
+ * 这条用例固定它也参与 `assetStatus` 过滤，而不是被当成「没有媒体」的同义词。
+ */
+it("filters search by the skipped asset status (LIB-001)", async () => {
+    const { repository } = await seedFilterFixture([
+        { externalId: "saved-media", title: "已保存的图片", kind: "video", status: "saved", author: "Alice" },
+        { externalId: "skipped-media", title: "被跳过的图片", kind: "article", status: "skipped", author: "Bob" },
+    ]);
+    try {
+        const titles = async (query: Parameters<typeof repository.search>[0]) =>
+            (await repository.search({ ...query, limit: 20 })).items.map((item) => item.title);
+
+        expect(await titles({ assetStatus: "skipped" })).toEqual(["被跳过的图片"]);
+        // 非空转：别的状态条件不命中 skipped 那条，skipped 条件也不命中别的状态。
+        expect(await titles({ assetStatus: "saved" })).toEqual(["已保存的图片"]);
+        expect(await titles({ assetStatus: "failed" })).toEqual([]);
+        expect(await titles({ assetStatus: "metadata_only" })).toEqual([]);
+    } finally {
+        await repository.close();
+    }
+});
+
+/**
+ * 浏览器用例的「清除筛选后回到默认 Feed」在数据侧就是这个：三个维度全部清空后
+ * 回到该来源的全量，而不是回到某一个维度上一次的取值。
+ */
+it("returns every entry of the source once author, contentKind and assetStatus are all cleared (LIB-001)", async () => {
+    const { repository, sourceId } = await seedFilterFixture([
+        { externalId: "video-by-alice", title: "Alice 的评测视频", kind: "video", status: "saved", author: "Alice" },
+        { externalId: "article-by-bob", title: "Bob 的文章", kind: "article", status: "skipped", author: "Bob" },
+        { externalId: "post-without-author", title: "无作者的帖子", kind: "post", status: "failed", author: null },
+    ]);
+    try {
+        // 先确认夹具本身是有区分的：每个维度单独用都能把结果收窄到一条。
+        expect((await repository.search({ author: "alice", limit: 20 })).items).toHaveLength(1);
+        expect((await repository.search({ contentKind: "video", limit: 20 })).items).toHaveLength(1);
+        expect((await repository.search({ assetStatus: "failed", limit: 20 })).items).toHaveLength(1);
+
+        const allTitles = ["Alice 的评测视频", "Bob 的文章", "无作者的帖子"].sort();
+
+        // 三个维度都不传：返回该来源的全部条目，条数与灌入条数相等。
+        const cleared = await repository.search({ sourceId, limit: 20 });
+        expect(cleared.items).toHaveLength(3);
+        expect(cleared.items.map((item) => item.title).sort()).toEqual(allTitles);
+
+        // 显式 undefined 与不传同义，不残留上一次筛选的取值。
+        const explicit = await repository.search({
+            sourceId,
+            author: undefined,
+            contentKind: undefined,
+            assetStatus: undefined,
+            limit: 20,
+        });
+        expect(explicit.items).toHaveLength(3);
+        expect(explicit.items.map((item) => item.title).sort()).toEqual(allTitles);
+    } finally {
+        await repository.close();
+    }
+});
+
+/** 资产状态从领域合同的资产输入推导，避免测试里另抄一份取值集合。 */
+type FixtureAssetStatus = NormalizedIngestItem["assets"][number]["status"];
+
+type FilterFixtureEntry = {
+    externalId: string;
+    title: string;
+    kind: NormalizedIngestItem["kind"];
+    status: FixtureAssetStatus;
+    /** 发布者名字；null 表示这条没有发布者（作者条件不该命中它）。 */
+    author: string | null;
+};
+
+/**
+ * 真库 + 真 IngestionService 灌入夹具条目。连接器不带 mediaDownload 能力、调用方也
+ * 不注入 mediaAcquirer，所以资产状态按夹具原样落库——`skipped` 与 `saved` 走的是
+ * 同一条持久化路径（只有 saved 会去写 blob）。
+ */
+async function seedFilterFixture(entries: readonly FilterFixtureEntry[]): Promise<{
+    repository: PrismaCosmosRepository;
+    sourceId: string;
+}> {
+    const root = await mkdtemp(join(tmpdir(), "cosmos-search-filters-"));
+    temporaryRoots.push(root);
+    prepareDatabase(root);
+
+    const repository = new PrismaCosmosRepository({ dataRoot: root });
+    await repository.initialize();
+    const source = await createFixtureSource(repository, { name: "Filter fixture", config: {} });
+    const items: readonly NormalizedIngestItem[] = entries.map((entry) => ({
+        externalId: entry.externalId,
+        title: entry.title,
+        summary: null,
+        contentText: `${entry.title}的正文`,
+        webUrl: null,
+        kind: entry.kind,
+        publisher: entry.author === null ? null : {
+            platformId: `u-${entry.externalId}`,
+            name: entry.author,
+            handle: `@${entry.author.toLowerCase()}`,
+            profileUrl: null,
+            kind: "user",
+            metrics: null,
+        },
+        metrics: null,
+        publishedAt: null,
+        updatedAt: null,
+        sourceLocator: { provider: "fixture", item: entry.externalId },
+        rawPayload: `<item>${entry.externalId}</item>`,
+        assets: [{
+            kind: "image",
+            sourceUrl: `https://example.test/${entry.externalId}.png`,
+            status: entry.status,
+            mimeType: entry.status === "saved" ? "image/png" : null,
+            byteSize: entry.status === "saved" ? 3 : null,
+            content: entry.status === "saved" ? new TextEncoder().encode("abc") : null,
+            ...(entry.status === "saved" ? {} : { errorMessage: `夹具给出的降级状态：${entry.status}` }),
+        }],
+    }));
+    const connector: IngestConnector = {
+        id: "test-fixture",
+        description: "Test fixture",
+        configVersion: "v1",
+        capabilities: ["test"],
+        validate: () => undefined,
+        async fetchItems() {
+            return { items, nextCursor: null };
+        },
+    };
+    await new IngestionService(repository, () => connector).runSource(source.id);
+    return { repository, sourceId: source.id };
+}

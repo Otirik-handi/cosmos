@@ -167,6 +167,50 @@ describe("Story orchestration commands", () => {
             await repository.close();
         }
     });
+
+    it("merges two single-member Stories into a canonical Story with exactly two members", async () => {
+        const root = await mkdtemp(join(tmpdir(), "cosmos-story-orchestration-member-count-"));
+        roots.push(root);
+        const databasePath = join(root, "cosmos.sqlite");
+        deployMigrations(databasePath);
+        const prisma = new PrismaClient({
+            datasources: { db: { url: sqliteUrl(databasePath) } },
+        });
+        const repository = new PrismaCosmosRepository({
+            dataRoot: root,
+            prisma,
+        });
+        await repository.initialize();
+
+        try {
+            // story-a holds entry-a and story-b holds entry-b: the merged Story
+            // must answer with exactly those two members, not with a count that
+            // merely grew (ingest.spec.ts reads the same number back).
+            await seedStories(prisma);
+            const merged = await repository.mergeStories({
+                canonicalStoryId: "story-a",
+                obsoleteStoryIds: ["story-b"],
+                actor: "user",
+                reason: "duplicate coverage",
+            });
+            expect(merged?.story.id).toBe("story-a");
+
+            const canonical = await repository.story("story-a");
+            expect(canonical?.entries).toHaveLength(2);
+            expect(canonical?.entries.map((entry) => entry.id).sort()).toEqual([
+                "entry-a",
+                "entry-b",
+            ]);
+
+            // The merged Story id redirects to the canonical row and reports the
+            // same two members.
+            const redirected = await repository.story("story-b");
+            expect(redirected?.story.id).toBe("story-a");
+            expect(redirected?.entries).toHaveLength(2);
+        } finally {
+            await repository.close();
+        }
+    });
 });
 
 async function seedStories(prisma: PrismaClient): Promise<void> {

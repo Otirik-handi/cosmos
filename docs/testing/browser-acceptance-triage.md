@@ -166,3 +166,45 @@
 - I 的「外部触发」中文标签映射（`run-history.tsx`）——属文案层。
 - 各条用例的**渲染/文案半边**（`[data-story-shell]`、迁移面板控件、「作为证据关联到」的拼装、`[data-story-human-protected]` 标记与「自动更新已暂停」等）——这些是 UI 层，属重做 UI 时的重写范围。
 - F 的「不依赖外网」没有显式断言（现有证据是「读本地 Blob Root」的隐含本地性）。
+
+### 8.1 第二轮：另外 15 条「可重写」用例的契约半边
+
+第 8 节只核实了 13 条「必须保留」对应的 12 条契约。这一轮把**另外 15 条「可重写」用例**的产品契约断言也逐条对下层核过（4 个只读代理分工）。
+
+**判定口径（本轮定下的）**：**下层测试会在用户可见行为坏掉时失败，才算已覆盖**——所以「纯函数规则被断言」不等于「行为被保护」（例如主题偏好的纯函数全绿时，provider 的写入/清除接线照样可能被改坏）。另外 **`e2e/component-lab/*.spec.ts` 不算下层**：它测的是 Web 组件，重做 UI 时和浏览器验收套件一样会被重写。
+
+**结论：大部分下层早就有了。** `phase2-organization:417`（Topic/Entity/收藏/收藏夹/批注，7 条契约）、`connectors:12`、`connectors:93`（各 5 条）**下层 100% 覆盖，一处都不用补**。
+
+本轮补的缺口（**全部纯新增**，9 个文件 + 1 个新建文件，`git diff --numstat` 的 removed 全为 0）：
+
+| 缺口 | 落在哪 |
+| --- | --- |
+| 服务端同分区 `position` 语义（**双向区分**「目标分区内下标」与「全量下标」）+ 移动后 fresh read | `board-domain.test.ts` |
+| 套用已保存视图 → 条件 → 同一结果集 | `user-organization-domain.test.ts` |
+| 必填枚举 `mode` 缺失被拒 | `contracts/src/source.test.ts` |
+| 创建路径不落库 + **回读证据** | `apps/api/src/source-lifecycle.test.ts` |
+| 客户端表单必填校验（纯函数） | `apps/web/src/components/cosmos/source-form.test.ts`（新建） |
+| `assetStatus: "skipped"` 取值 + 三维度全清空回全量 | `search-filters.test.ts` |
+| `maxFileBytes` 真实往返 + `listCollectionPlans()` 同连接两行 + **计划读投影的失败诊断**（bad 计划 `lastError` 精确串、healthy 计划跑成功后离开「尚未运行」、两者互不串账） | `collection-plan-repository.test.ts` |
+| 归并后 canonical 成员数 = 2 | `story-orchestration.test.ts` |
+| **标记关系不改 Feed / 搜索顺序**（ADR-0022 决定 6） | `entry-relation-domain.test.ts` |
+| 同一 Story 的两个成员出两张 Feed 卡 | `workflow-ingest.parity.test.ts` |
+
+**验证**：全量 **133 文件 / 760 用例 exit 0**（原 132/745）；全仓 `typecheck` exit 0；`test:e2e` **6 文件 / 12 用例 exit 0**；两份门禁 PASS；`docs:check` **829 文件 0 失败**。
+
+**明确不能下沉、必须留在浏览器层的（5 条，附理由）**：
+
+| 缺口 | 为什么不能下沉 |
+| --- | --- |
+| `:496` 的三条区块级行为（未绑定区块取最新 / 视图条件→搜索映射 / 多区块各自取数不共享状态） | 都是 `BoardFeedBlock` 客户端组件行为；仓库**没有 jsdom 层**（`vitest.config.ts` 是 `environment: "node"`） |
+| `theme:117` 的写入/清除/系统变化传播接线 | 同上（provider 是 React 组件） |
+| `media-policy:60` 的「0 候选时无确认入口」 | 同上（组件条件渲染） |
+| `:78` 的「UI 条数 == API 同条件同 limit 条数」 | **按定义是跨层一致性**，下层表达不了；且下层没有任何测试断言 Web 搜索固定 `limit: 20` |
+| `entry-relation:28` 的「重放已存在关系返回 HTTP 201」 | 域层幂等已覆盖，但 **HTTP 状态码映射**断不到——控制器测试直接调方法、不走 supertest |
+
+**过程中两处值得记的**：
+
+1. **我给错了一个数字，被子代理实测纠正。** 我让它「把 B 移到 position=1，期望 `[A,C,B,D]`」。按服务端口径（先移除被拖区块、再在剩余之间插入），position=1 是 **no-op**（B 本就在第 1 格），实测返回 `[A,B,C,D]`；`[A,C,B,D]` 对应 **position=2**。它先按字面跑、把失败原文报给我，再按正确值落地，并**另加**一条「第一个区块移到 position=1」从反方向区分两种口径。**教训：我给的证据引用也会错，「先跑一遍再信」是唯一可靠把关。**
+2. **一处差点写成空转断言。** `entry-relation-domain.test.ts` 的 seed 直接写表、绕过录入写路径，而文本搜索读的是 `entry_search` 索引表（只有 `persistIngestPage` 维护）——搜索一开始返回 0 条，`if [] === []` 会永远通过。补了索引数据后才成立。
+
+**一个需要留意的余量**：本轮往既有测试文件里加了 500+ 行，它们现在多在 440–645 行（`user-organization-domain.test.ts` 645、`entry-relation-domain.test.ts` 619）。**再往这些文件加同类断言会更快撞 800 行红线**，届时应按分册拆测试文件，而不是继续堆。

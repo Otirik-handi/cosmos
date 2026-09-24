@@ -396,6 +396,51 @@ describe("Entry↔Entry duplicate relations", () => {
         }
     });
 
+    it("keeps Feed and search order identical across a relation mark", async () => {
+        const { repository, prisma } = await setup();
+        try {
+            const readFeedOrder = async (): Promise<string[]> =>
+                (await repository.feed({ limit: 20 })).items.map((item) => item.entryId);
+            const readSearchOrder = async (): Promise<string[]> =>
+                (await repository.search({ text: "body", limit: 20 })).items.map((item) => item.entryId);
+
+            // 文本搜索读 FTS5 索引，而索引只由录入写路径维护；本文件的 seed 直接写表，
+            // 所以这里按同一形状补索引行，否则文本搜索永远返回空集、下面的比对就是空转。
+            for (const entryId of ["entry-a", "entry-b", "entry-c", "entry-d"]) {
+                await prisma.$executeRawUnsafe(
+                    "INSERT INTO entry_search (entry_id, title, content_text) VALUES (?, ?, ?)",
+                    entryId,
+                    entryId,
+                    `${entryId} body`,
+                );
+            }
+
+            // 先记录标记前的两个序列：没有这一步，下面的比对就是空转。
+            const feedBefore = await readFeedOrder();
+            const searchBefore = await readSearchOrder();
+            expect(feedBefore).toHaveLength(4);
+            expect(searchBefore).toHaveLength(4);
+
+            await repository.linkEntryRelation({
+                fromEntryId: "entry-b",
+                toEntryId: "entry-a",
+                relationType: "syndicated_from",
+                evidence: "原文链接一致",
+                actor: "user",
+                reason: "门户转载官网",
+            });
+            // 标记确实落库了，再读一遍才有意义。
+            expect((await repository.entry("entry-b"))?.relations).toHaveLength(1);
+
+            // 标记只是标记与展示（ADR-0022 决定 6）：顺序与集合逐字节不变。
+            expect(await readFeedOrder()).toEqual(feedBefore);
+            expect(await readSearchOrder()).toEqual(searchBefore);
+        } finally {
+            await prisma.$disconnect();
+            clients.delete(prisma);
+        }
+    });
+
     it("upgrades an existing database by adding an empty table only", async () => {
         const root = await mkdtemp(join(tmpdir(), "cosmos-entry-relation-upgrade-"));
         roots.push(root);

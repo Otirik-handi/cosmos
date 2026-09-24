@@ -451,6 +451,28 @@ describe("Worker Ingest Workflow composition", () => {
                 workerId: "workflow-parity-worker",
             });
             expect(await repository.getWorkflowAttempt(attempts[0].id)).toEqual(attempts[0]);
+
+            // 同一 Story 的两个成员在 Feed 里各出一张卡：storyId 相同、entryId 不同
+            // （phase2-entry-relation.spec.ts 归并后按同一个事实数卡片）。
+            if (!revisedEntry.storyId || !urlFreeEntry.storyId) {
+                throw new Error("workflow parity story ids missing");
+            }
+            const canonicalStoryId: string = revisedEntry.storyId;
+            expect(urlFreeEntry.storyId).not.toBe(canonicalStoryId);
+            await repository.moveEntryToStory({
+                entryId: urlFreeEntry.id,
+                storyId: canonicalStoryId,
+                actor: "user",
+                reason: "same event",
+            });
+
+            const mergedFeed = await repository.feed({ limit: 10 });
+            const memberCards = mergedFeed.items.filter((item) => item.storyId === canonicalStoryId);
+            expect(memberCards).toHaveLength(2);
+            expect(new Set(memberCards.map((item) => item.entryId)).size).toBe(2);
+            expect(memberCards.map((item) => item.entryId).sort()).toEqual(
+                [revisedEntry.id, urlFreeEntry.id].sort(),
+            );
         } finally {
             await repository.close();
         }
