@@ -24,6 +24,7 @@
 - [`G09-domain-barrel/`](G09-domain-barrel/):P4-2 重启后的**第一个拆分对象**——`packages/domain/src/index.ts`(885 行纯单体、68 个导出)拆为 8 个分册 + 门面。**已完成实现与验证**(未 commit):入口 **885 → 12 行**、最大分册 `temporal.ts` **221 行**(九个文件全部 ≤400 行,落在提案健康区);**导出面 68 → 68 逐字节零 diff**(脚本比对 + 新增 `entry-contract.test.ts` 常驻护栏)、madge **0 环**、domain 测试 23/23、全仓 typecheck 0、全量 **128 文件/735 用例**、两份体积门禁 PASS、`docs:check` 783 文件 0 失败;新增 `packages/domain/MODULE.md`(提案硬性要求,该包此前没有);`code-baseline.json` **16 → 15 条**(domain 入口回健康区,治理目标「条目只减不增」第一次产生收敛)。
 - [`G10-media-acquisition/`](G10-media-acquisition/):P4-2 batch 1 第二个对象——`packages/application/src/media-acquisition.ts`(918 行单体)拆为 5 个分册(`media-policy`/`media-ports`/`media-acquirer`/`media-download`/`public-address`),单体删除、6 处引用点改指向所属分册。**已完成实现与验证**(未 commit):最大分册 `media-download.ts` **385 行**(五个新文件全部 ≤400 行);**导出面 157 → 157 逐字节零 diff**(对 G05 冻结的快照)、madge **0 环**、application 测试 95/95 与全量 **128 文件/735 用例**均与拆分前计数一致、全仓 typecheck 0、两份体积门禁 PASS、`docs:check` 788 文件 0 失败;`application/MODULE.md` 子模块地图同批更新;`code-baseline.json` **15 → 14 条**。**踩到的坑**:结果类型 `MediaOutcome` 家族放 acquirer 或 download 任一边都会成环,必须放 `media-ports`(实测 tsc 报缺名暴露)。
 - [`G11-workflow-host-runtime/`](G11-workflow-host-runtime/):P4-2 第三个对象、也是**当前最大者**——`packages/application/src/workflow-host-runtime.ts`(1205 行)拆为 6 个分册(`workflow-host-runtime-types`/`workflow-runtime-support`/`workflow-run-lane`/`workflow-activity-worker`/`workflow-completion-dispatcher`/`workflow-action-support`),单体删除、门面 13 个导出重排为 4 段、测试 3 个值导入改指。**已完成实现与验证**(未 commit):最大分册 `workflow-activity-worker.ts` **345 行**(六个新文件全部 ≤400 行,原 1205);**导出面 157 → 157 逐字节零 diff**、madge **0 环**、application 测试 95/95 与全量 **128 文件/735 用例**均与拆分前一致、全仓 typecheck 0;`application/MODULE.md` 同批更新;`code-baseline.json` **14 → 13 条**。**收敛经验**:首轮 20 个 tsc 错误里 17 个是 `workflow-runtime-support.ts` 缺三个类型导入造成的,补上后一次归零——连带错误不要逐个去查。
+- [`G12-worker-admin/`](G12-worker-admin/):P4-2 第四个对象、**入口文件**——`packages/worker-admin/src/index.ts`(1047 行)拆为 5 个分册(`types`/`drain`/`health`/`service`/`http`),入口改写成**门面**(导出清单直接由冻结快照生成,构造上保证零 diff)。**已完成实现与验证**(未 commit):入口 **1047 → 14 行**;最大分册 `service.ts` **487 行**(单个内聚的 `WorkerAdminService` 类,高于 400 警戒线、低于 800 红线,落在提案「100~600 为佳」区间,**保留不拆**并记入 MODULE.md);**导出面 21 → 21 逐字节零 diff**、madge **0 环**、worker-admin 测试 13/13、全量 **129 文件/736 用例**、全仓 typecheck 0;补齐该包此前缺失的 `entry-surface.txt`/`entry-contract.test.ts`/`MODULE.md`;`code-baseline.json` **13 → 12 条**。**两个坑**:`delay` 归 `service`(放 http 会与 http → service 成环);`LoggerPort` 是我凭空加的导入,原文件根本不依赖 logger 类型——第三方导入清单必须从原 import 块推导。
 
 ## 待治理候选(编号未分配,待维护者裁决)
 
@@ -35,20 +36,19 @@
 
 **门禁缺口（2026-09-24 已由 G08 修复）**：原先 `scripts/size-governance.py --check` 只判字节/token、**行数越界不拦**，而且 CI 只跑 `-c docs`（代码类根本不检查）——两个缺口叠起来让行数欠账对门禁完全不可见。G08 已把行数轨并入 `--check`（源码/测试与入口/桶文件各自阈值，行数轨只对源码/测试生效）、为存量建立行数基线，并在 CI 增加代码类门禁步骤；**本批只拦红线**（维护者 2026-09-24 裁定），警戒线默认值仍是提案的 400/100 行。详见 [`G08-size-gate-lines/README.md`](G08-size-gate-lines/README.md)。
 
-**完整口径下当前超红线文件（2026-09-24 G11 后实测 7 个，全部为行数越界；行数降序）**：
+**完整口径下当前超红线文件（2026-09-24 G12 后实测 6 个，全部为行数越界；行数降序）**：
 
 | 文件 | 行 | 字节 |
 |---|---|---|
 | `apps/web/src/component-lab/product-fixtures.tsx` | 1192 | 42.9 KB |
-| `packages/worker-admin/src/index.ts` | 1047 | 38.0 KB |
 | `plugins/collectors/src/index.ts` | 1014 | 33.5 KB |
 | `apps/web/src/components/cosmos/board-view.tsx` | 972 | 35.9 KB |
 | `packages/storage-prisma/src/workflow-backend.ts` | 896 | 31.4 KB |
 | `apps/worker/src/workflow-ingest.test.ts` | 871 | 38.1 KB |
 | `apps/web/src/components/cosmos/story-panel.tsx` | 849 | 37.0 KB |
 
-（另有 2 个文件只因入口行数红线越界：`packages/logging/src/index.ts` 674 行、`plugins/rss/src/index.ts` 621 行。已治理：`packages/domain/src/index.ts`（G09，885 → 12 行）、`packages/application/src/media-acquisition.ts`（G10，918 行 → 5 个分册）、`packages/application/src/workflow-host-runtime.ts`（G11，1205 行 → 6 个分册）。）
+（另有 2 个文件只因入口行数红线越界：`packages/logging/src/index.ts` 674 行、`plugins/rss/src/index.ts` 621 行。已治理：`packages/domain/src/index.ts`（G09，885 → 12 行）、`packages/application/src/media-acquisition.ts`（G10，918 行 → 5 个分册）、`packages/application/src/workflow-host-runtime.ts`（G11，1205 行 → 6 个分册）、`packages/worker-admin/src/index.ts`（G12，1047 → 14 行）。）
 
-**G 系列状态（2026-09-24 更新）**：G01–G07 已收口；G08 为**机制修复**（行数门禁）已完成；G09/G10/G11 为拆分对象，已实现与验证。红线文件已从 G08 时的 **10 个降到 7 个**，`code-baseline.json` 从 16 条降到 **13 条**。G 系列因 P4-2 重启，**不做非红线文件**。选型时仍应核对 `--json` 的 `lines` 字段——门禁现在会拦新增越界，但基线内文件的存量增长只报 warning。
+**G 系列状态（2026-09-24 更新）**：G01–G07 已收口；G08 为**机制修复**（行数门禁）已完成；G09–G12 为拆分对象，已实现与验证。红线文件已从 G08 时的 **10 个降到 6 个**，`code-baseline.json` 从 16 条降到 **12 条**。G 系列因 P4-2 重启，**不做非红线文件**。选型时仍应核对 `--json` 的 `lines` 字段——门禁现在会拦新增越界，但基线内文件的存量增长只报 warning。
 
-治理队列：**G09/G10/G11 已完成**（domain 入口、media-acquisition、workflow-host-runtime；红线文件 10 → **7**）。**下一个 = G12：`apps/web/src/component-lab/product-fixtures.tsx`（1192 行）或按行数降序的 `packages/worker-admin/src/index.ts`（1047）/ `plugins/collectors/src/index.ts`（1014）**——三个 Web 文件（`product-fixtures.tsx`、`board-view.tsx`、`story-panel.tsx`）**留到 UI 重做同批**，所以非 UI 的下一项是 `worker-admin/index.ts`（入口文件，走 G03/G07 的「继承链拆文件 + 门面」先例）或 `collectors/index.ts`。`workflow-backend.ts`（896）属运行时关键路径，拆分需 focused + 全量 + e2e 门禁。
+治理队列：**G09–G12 已完成**（domain 入口、media-acquisition、workflow-host-runtime、worker-admin 入口；红线文件 10 → **6**）。**下一个 = G13：`plugins/collectors/src/index.ts`（1014 行，插件边界）**——三个 Web 文件（`product-fixtures.tsx`、`board-view.tsx`、`story-panel.tsx`）**留到 UI 重做同批**，所以非 UI 的下一项是它；其后 `workflow-backend.ts`（896）与 `workflow-ingest.test.ts`（871）。`workflow-backend.ts` 属运行时关键路径，拆分需 focused + 全量 + e2e 门禁。
