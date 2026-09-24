@@ -260,6 +260,7 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                 summary: story.currentRevision.summary,
                 timeRange: parseJson<StoryTimeRange>(story.currentRevision.timeRangeJson),
                 keyFacts: parseJson<StoryKeyFact[]>(story.currentRevision.keyFactsJson) ?? [],
+                producer: story.currentRevision.producer,
                 status: shellReplacements.length > 0 ? "split" : "active",
                 replacedBy: shellReplacements.map((replacement) => ({
                     storyId: replacement.successorStoryId,

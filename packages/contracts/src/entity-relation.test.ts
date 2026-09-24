@@ -76,6 +76,7 @@ describe("entity and relation contracts", () => {
                 revisionId: "rev-s-1",
                 title: "T",
                 summary: null,
+                producer: "system",
                 status: "active",
                 replacedBy: [],
             },
@@ -135,6 +136,7 @@ describe("entity and relation contracts", () => {
                 revisionId: "rev-sb-1",
                 title: "Event",
                 summary: null,
+                producer: "system",
                 status: "active",
                 replacedBy: [],
             },
@@ -220,6 +222,7 @@ describe("entity and relation contracts", () => {
                 revisionId: "rev-shell-1",
                 title: "Was one Story",
                 summary: null,
+                producer: "human",
                 status: "split",
                 replacedBy: [
                     { storyId: "story-a", title: "Event A", kind: "event" },

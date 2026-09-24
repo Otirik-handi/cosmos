@@ -295,7 +295,7 @@ const feedBrowserControls = [
 const storyPanelControls = [
     control("title", "Story title", "text", "Cosmos fixture story"),
     control("contentText", "Content", "text", "A synthetic Story body for component inspection."),
-    control("state", "State", "select", "revision", ["revision", "empty", "splittable", "split", "legacy-subtype", "representation", "entry-relations"]),
+    control("state", "State", "select", "revision", ["revision", "empty", "splittable", "split", "legacy-subtype", "representation", "entry-relations", "human-protected"]),
 ] as const satisfies readonly LabControlDefinition[];
 
 const topicPanelControls = [
@@ -564,6 +564,7 @@ export const labComponentDefinitions = [
             {id: "splittable", label: "Splittable (two members)", props: {title: "Cosmos fixture story", contentText: "Two members let the laboratory exercise the split form.", state: "splittable"}},
             {id: "split-shell", label: "Historical shell", props: {title: "Cosmos fixture story", contentText: "", state: "split"}},
             {id: "representation", label: "Time range and key facts", props: {title: "Cosmos fixture story", contentText: "The laboratory renders the event time line and the key facts block from the fixture values.", state: "representation"}},
+            {id: "human-protected", label: "Human-edited representation", props: {title: "Cosmos fixture story", contentText: "The laboratory renders the notice that automatic updates stopped because a human wrote the current revision.", state: "human-protected"}},
             {id: "entry-relations", label: "Duplicate and syndication", props: {title: "Cosmos fixture story", contentText: "The laboratory renders the member-row relation annotation and its mark/remove controls.", state: "entry-relations"}},
             {id: "legacy-subtype", label: "Legacy subtype", props: {title: "Story with an unregistered subtype", contentText: "", state: "legacy-subtype"}},
         ],

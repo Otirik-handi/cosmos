@@ -165,7 +165,7 @@ checkpoint 使用 `expectedRevision` CAS。revision 匹配时更新 cursor/revis
 
 对每个状态为 `saved` 且带 `content: Uint8Array` 的 asset，`toJsonItem` 调用 `WorkflowBlobStore.put(content, { mimeType })`，并在 Workflow JSON 中写入 `{ key, hash, byteSize, mediaType }` BlobRef；非 saved、无 content 的 asset 写 `blobRef: null`。host `library.ingest@1` 再用 `readVerifiedBlob` 将 BlobRef 恢复为 bytes 后传给领域端口。
 
-`library.ingest@1` 的 Action 元数据为 `effect: none`，但其领域端口在 host fence 与 ingest command idempotency 保护下会持久化 raw payload Blob、资产 Blob、`Observation`、`Entry`、`EntryRevision`、`Story`/`StoryRevision`、`Asset`、FTS，以及 entry/feed events。raw payload Blob 的最终写入由生产 `PrismaCosmosRepository.persistIngestItemInternal` 完成，不由 WorkflowBlobStore 的 asset 转换重复写入。
+`library.ingest@1` 的 Action 元数据为 `effect: none`，但其领域端口在 host fence 与 ingest command idempotency 保护下会持久化 raw payload Blob、资产 Blob、`Observation`、`Entry`、`EntryRevision`、`Story`/`StoryRevision`、`Asset`、FTS，以及 entry/feed events（Story 的当前 Revision 由人工写入时，Entry→Story 投影整条跳过并写 `story.representation_projection_skipped.v1`，ADR-0028）。raw payload Blob 的最终写入由生产 `PrismaCosmosRepository.persistIngestItemInternal` 完成，不由 WorkflowBlobStore 的 asset 转换重复写入。
 
 `collection-plan.checkpoint@1` 同样在 host fence 与 DomainEvent idempotency 下更新计划的 checkpoint，并记录 committed 或 superseded event。工作流自身另写 `workflow.checkpoint`，再发出 type 为 `ingest.page.persisted`、version 为 `v1` 的事件。
 

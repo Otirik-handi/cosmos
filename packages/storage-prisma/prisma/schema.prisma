@@ -386,6 +386,12 @@ model StoryRevision {
     storyId         String
     revision        Int     @default(1)
     fingerprint     String?
+    /// Who wrote this Revision: `human` (a user command), `system` (the
+    /// deterministic ingest projection) or `agent` (future derived analysis).
+    /// A current Revision with `producer = "human"` is protected from automatic
+    /// overwrite, so every automatic writer must declare itself here
+    /// (ADR-0028). `system` is the default because it claims the least.
+    producer        String  @default("system")
     actorJson       String?
     reason          String?
     title           String

@@ -20,6 +20,7 @@ describe("HttpCosmosClient Story", () => {
                         revisionId: "rev-shell-1",
                         title: "Was one Story",
                         summary: null,
+                        producer: "human",
                         status: "split",
                         replacedBy: [
                             { storyId: "story-a", title: "Event A", kind: "event" },

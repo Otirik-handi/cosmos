@@ -103,6 +103,12 @@ export const storyDetailSchema = z.object({
         // extension still parse; the repository always emits both.
         timeRange: storyTimeRangeSchema.nullish(),
         keyFacts: z.array(storyKeyFactSchema).nullish(),
+        // Who wrote the current Revision: "human" means the representation is
+        // frozen against automatic writers, so a client can say so instead of
+        // showing a Story that silently stopped following its source
+        // (ADR-0028). Loose on read like the other producer fields; the write
+        // side is server-assigned and not caller-supplied.
+        producer: z.string(),
         // "split" means this Story is a historical shell: it keeps its id,
         // revisions and history but no id redirects to a single successor
         // (ADR-0012 decision 1).

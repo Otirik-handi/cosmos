@@ -116,6 +116,9 @@ describe("Story split", () => {
                 summary: "A 的摘要",
                 status: "active",
                 replacedBy: [],
+                // A split is a human action, so its successors start protected
+                // against the automatic projection (ADR-0028).
+                producer: "human",
             });
             expect(successorA?.entries.map((entry) => entry.id)).toEqual(["entry-a"]);
             expect(successorA?.evidence.map((item) => item.entryId)).toEqual(["entry-d"]);

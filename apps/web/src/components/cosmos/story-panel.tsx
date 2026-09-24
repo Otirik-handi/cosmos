@@ -52,6 +52,7 @@ import {
 } from "./story-panel/representation-form";
 import {
     StoryEventTimeLine,
+    StoryHumanProtectedNotice,
     StoryKeyFactsBlock,
 } from "./story-panel/representation";
 import {
@@ -746,6 +747,7 @@ export function StoryPanel({
                             )}
                         </div>
                         <StoryEventTimeLine story={story} />
+                        <StoryHumanProtectedNotice story={story} />
                         <p className="text-sm text-muted-foreground">
                             {story.entry
                                 ? `${story.entry.sourceName} · ${story.entry.revisions.length} 个 Revision`

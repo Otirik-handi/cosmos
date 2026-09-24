@@ -335,3 +335,44 @@ schema/Transport/conformance 验收。
 偏差：发现活跃状态文档曾把归档 WIP 的验证结果写成当前主线证据，已在本轮纠正。
 
 leader 判定：当前主线状态已与代码一致；若未来恢复 Worker Registry，必须在当前基线上重新实现持久模型、生命周期、API 和行为验收，不能直接把归档提交合并当作完成证明。
+
+## Round 109：用户真相保护 v1（P2-1 / §12 Phase 2 第 4 条 / LIB-003 / ADR-0028）
+
+日期：2026-09-24
+
+**复用本 Task 的理由**：本切片要冻结的是「自动写入方在人工结果面前如何降级」，这正是 Phase 3 Knowledge Workflow 的入口硬前置，落在本 Task 的 Knowledge/Research 边界职责内。候选 Task 10（Story 域）、12（Entity/关系）、13（用户组织）各自只覆盖一个真相面，任一单点 Task 都会把合同写窄。
+
+**目标**：把 P2-1 从「无法判定」变成有判据、有数据、有回归测试。
+
+**复核结论（本轮第一个发现）**：`Phase-2-UNDO.md` 的「Phase 2 里没有任何自动重分析写入路径，所以只是结构上成立」**不成立**。Knowledge 路径确实不存在，但 ingest 的 Entry→Story 投影（`helpers-4.ts`）已经是一条自动写入路径：来源发布内容修订时它无条件改写 `Story.kind`，用 Entry 的标题/摘要新建 StoryRevision 顶掉 `currentRevisionId`，新 Revision 的时间范围与关键事实落 `NULL`。它不检查写入者身份，全仓也没有对应测试。九条 ADR 的 Revisit Gate 都指向同一个未定义合同。
+
+**范围**：`StoryRevision.producer` + 回填 + 投影冻结与跳过事件 + DTO/Web 可见性 + 回归测试 + 稳定文档。
+**不在范围**：Knowledge Workflow 与任何自动重分析；候选 Revision 模型与接受/拒绝界面（ORG-019）；字段级保护掩码；关系表的人工行守卫（按裁定只进合同，v1 不实现，因为没有自动写入方会碰那些行）。
+
+**合同（ADR-0028）**：判据是写入者身份（服务端按写入方赋值，调用方不可传；`actorJson` 今天区分不了人工与自动，因为 Web 编辑根本不传它）；v1 保护粒度是整条当前 Revision（含 `Story.kind`）；自动结果**按写入方分两类降级**——确定性投影跳过并记事件，派生分析只能产生候选 Revision；`producer = "human"` 的关系行不可被自动方删除或改写。
+
+**RED**：新增 `packages/storage-prisma/src/story-human-protection.test.ts`，未改实现前 **2 例失败**（人工编辑后被来源重发布、人工 merge 后成员被重发布，断言当前 Revision 未变），第 3 例（未编辑的 Story 仍跟随来源）通过——证明覆盖行为真实存在，且正常路径可作反向约束。
+
+**GREEN**：migration `20260924100000_story_revision_producer`（加列 + 按 `story.revision_created.v1` 事件回填 `human`；该事件只由 `updateStoryRevision` 与 `splitStory` 的后继发出，投影不发）；`updateStoryRevision`/`splitStory` 写 `human`，投影写 `system` 且只在本该写入时记 `story.representation_projection_skipped.v1`；`StoryDetail.story.producer` 进公开读合同；Story 面板显示「人工已修改 · 自动更新已暂停」。
+
+**实际修改**：26 个文件修改 + 4 个新增（`docs/adr/0028-user-truth-protection-v1.md`、migration 目录、`story-human-protection.test.ts`、`story-revision-producer-migration.test.ts`）。核心在 `helpers-4.ts`（投影冻结）、`stories.ts`（两处 `producer`）、`schema.prisma` + migration、`contracts/src/story.ts`、`story-panel/representation.tsx` 与 `story-panel.tsx`，其余是四处 spec、ERRATA、架构勘误节、ADR 索引、testing README、PROJECT-STATUS 与受影响夹具。
+
+**验证（全部实际运行）**：
+
+- `bun run typecheck` → 0；
+- `bun run test` → **126 文件 / 731 用例全绿**（含新增 5 例；新增迁移回填测试把「有匹配事件才算人工」钉在数据上，含一条同 Story 不同 revision 的诱饵事件）；
+- `bun run test:browser:component-lab` → **20 passed**（新增 `human-protected` 场景断言，并断言未受保护场景不出现标记）；
+- `bun run test:browser` → **33 passed**（`story-representation.spec.ts` 新增「保存表示前无标记 → 保存后出现」）；
+- `bun run docs:check` → 766 文件 0 失败；`python scripts/size-governance.py -c docs --check --baseline docs/doc-governance/docs-baseline.json --fail-on-new` → PASS（含 warning）；`git diff --check` → 干净；`bun run build` → 0。
+
+**偏差与代价（如实）**：
+
+- 整条 Revision 级保护的代价是「人工改过标题后该 Story 的自动投影停更」；这是「人工优先」的定义，已用 Web 标记说明而不是静默行为变化。
+- 回填依赖 DomainEvent 未被裁剪：事件缺失的库对应行回填为 `system`，即历史人工编辑要重新编辑一次才受保护（反向误判会让所有既有 Story 停止跟随来源，代价更大）。
+- 首次并发跑组件实验室与产品浏览器两套 Playwright 时，`entry-relations` 场景报 1 例失败；单独重跑 20/20 通过，确认是两套运行争用同一 Web 服务，不是本切片缺陷。
+- `PROJECT-STATUS.md` 已逼近文档体积警戒线（约 9.0k token）：为不触发门禁，本轮那条记录压到了最短。**下次改动该文件前应先按治理规则把更早的历史条目切进 `PROJECT-STATUS/history-*.md`。**
+- 本文件追加本轮后为 22.5 KB（健康区内，门禁未拦），已越过「接近 20 KB 即滚动归档」的触发线：**下一次追加前应先把 Round 107 整段移入 `walkthrough/rounds-0107.md` 并在原位留链接**（移动时注意所有相对链接要多一级 `../`）。
+
+**未运行**：Node 进程 E2E（`bun run test:e2e`）、真实来源验收（`test:real:*`）、Docker、发布部署。本切片不触碰连接器、Worker 运行路径与外部来源，故未跑真实来源；Node 进程 E2E 未跑属本次边界，合并前可按需补。
+
+**下一步**：本轮未 commit、未 push、未合并，分支 `feat/t04-user-truth-protection` 与 worktree `.worktree/t04-user-truth-protection` 保留待授权；ORG-019 落地时按 ADR-0028 的 Revisit Gate 把判据细化为字段掩码，并在第一个派生分析写入方落地时实现候选 Revision 降级。
