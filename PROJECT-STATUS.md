@@ -156,7 +156,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 尚未实现
 
-- Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；2026-09-23 首次实跑 `test:docker` **失败**：镜像构建在 `bun run build` 报 storage 的 `$transaction` 回调 TS7006——`docker/Dockerfile` 没有生成 Prisma client 的步骤（bun 默认不跑 `postinstall`，容器里 `this.prisma` 因此是 `any`）。修复待定，另需确认容器内能否下载 Prisma 引擎。
+- Docker/Compose 实际容器启动、共享卷和 healthcheck 验收；2026-09-23 首次实跑 `test:docker` **失败**（镜像构建缺 Prisma client 生成步骤），根因、证据、候选修复与未验证项见 [`docs/research/2026-09-23-docker-acceptance-run.md`](docs/research/2026-09-23-docker-acceptance-run.md)；修复待单开 Task。
 - 真实 RSS/RSSHub 的**长时定时抓取**与更长时间的 Worker 重启演练。真实公网 RSS 的完整采集链路已于 2026-09-18 通过验收（阮一峰源，item count 3）；跨平台 Node 由远端 CI 的 Windows Node smoke job 覆盖。
 - Bilibili 登录态 feed 的限流、长期稳定性和跨环境登录态验收；feed 场景已于 2026-09-04 通过真实数据 E2E（`itemCount=20`），2026-09-22 的 Task 33 验收在同一连接下同时跑通 hot 与 feed 两个计划（各 20 items），2026-09-23 的 EXT-006 验收另跑通登录探测与匿名 `search`（20 条真实搜索结果）；限流与跨环境登录态仍未验。
 - 完整的 Source/Trigger/Workflow/Action 产品配置模型；Phase 1 只把固定 Ingest Workflow 接入生产，不包含用户自定义 Workflow 编辑/安装/管理。
