@@ -375,4 +375,6 @@ leader 判定：当前主线状态已与代码一致；若未来恢复 Worker Re
 
 **未运行**：Node 进程 E2E（`bun run test:e2e`）、真实来源验收（`test:real:*`）、Docker、发布部署。本切片不触碰连接器、Worker 运行路径与外部来源，故未跑真实来源；Node 进程 E2E 未跑属本次边界，合并前可按需补。
 
-**下一步**：本轮未 commit、未 push、未合并，分支 `feat/t04-user-truth-protection` 与 worktree `.worktree/t04-user-truth-protection` 保留待授权；ORG-019 落地时按 ADR-0028 的 Revisit Gate 把判据细化为字段掩码，并在第一个派生分析写入方落地时实现候选 Revision 降级。
+**合并（2026-09-24）**：分支 `feat/t04-user-truth-protection` 已 `--no-ff` 合入 `master`（合并提交 `f66ee27`）并推送 `origin`；合并后按仓库教训先 `bun run db:generate` 再重跑门禁全绿——typecheck 0、单元 126 文件／731 用例、`docs:check` 776 文件 0 失败、size 门禁 PASS、`git diff --check` 干净。worktree 与分支已清理：`git worktree remove` 注销成功但目录残留，原因是浏览器验收时从该 worktree 启动的 opencli daemon（`node_modules/@jackwener/opencli/.../daemon.js`）仍持有句柄，结束该进程后目录删除成功。**未做**：`20260924100000_story_revision_producer` 未对真实数据根执行（迁移属数据生命周期变更，需单独授权）；推送只到 `origin`，未推 `upstream`。
+
+**下一步**：ORG-019 落地时按 ADR-0028 的 Revisit Gate 把判据细化为字段掩码，并在第一个派生分析写入方落地时实现候选 Revision 降级。
