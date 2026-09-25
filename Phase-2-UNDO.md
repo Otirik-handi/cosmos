@@ -32,7 +32,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 | P2 | P2-1 | §12 第 4 条「重分析不覆盖用户批注和人工关系修正」＋ LIB-003 同类验收 | **已闭合**（2026-09-24） | 唯一现存的自动写入路径（ingest 的 Entry→Story 投影）已受保护并有回归测试；「批注」与「人工关系修正」两类今天无自动写入方，属无威胁对象，其保护规则已进合同、考验随 Phase 3 写入方落地 |
 | P3 | P3-1 | 界面职责重划：Topic／Entity／用户组织独立面板 | 已 accepted 未落地 | 真人验收第一条结论未解决；PRD／架构／ADR 未同步 |
 | P3 | P3-2 | UI 文案专业化 | Proposal 仍 `reviewing` | 真人验收第三条结论未解决 |
-| P4 | P4-1 | Phase 2 浏览器用例仍有未归因的间歇失败 | 数据库线已证伪（Task 34）；**前端线已归因：产品缺陷（丢失更新竞态），不是测试抖动**——见下 | 验收绿灯要打折 |
+| P4 | P4-1 | Phase 2 浏览器用例仍有未归因的间歇失败 | 数据库线已证伪（Task 34）；**前端线已归因并已修**：产品缺陷（丢失更新竞态），不是测试抖动——见下 | 已消除 |
 | P4 | P4-2 | 代码规模红线门禁欠账 | **非 UI 侧已清零**（G08–G16） | 余 3 个 Web 文件按裁定留到 UI 重做同批 |
 
 ---
@@ -87,8 +87,10 @@ P1-1（ING-012）、P1-2（EXT-006）与 P1-3（AUT-009）的原始缺口描述�
 - **现状【实测归因，2026-09-25】**：前端线**已归因，而且不是测试抖动，是产品缺陷**。整套跑一次（1 failed / 32 passed，7.5 分钟）并在失败后立刻拷出 trace，查明 `phase2-organization.spec.ts:30` 是在「给第二条 Story 加已有标签」这一步等满 300 秒超时——因为**标签选择下拉框从未渲染**。
 - **机制（丢失更新竞态）**：`use-feed-workspace.ts` 的 `refresh()` 在 `Promise.all` 之后**无守卫地**写 `sources`／`labels`／`collections`／`savedViews`，注释给的理由是「与搜索条件无关，任何一次刷新都可以写」；但这四个列表是**用户可变的**。实测时序：t=109944 有两个刷新周期同时在飞，周期 A 的 `/sources` 耗时 **93.3 ms**，使它整个 `Promise.all` 直到 **≈110037** 才落地；它携带的 `labels` 是 **109944 抓的空列表**（当时标签还不存在），于是在创建路径刚写入新列表（110004.8，172 B，含标签）之后**把状态覆盖回空**。界面失去标签 → `attachableLabels` 为空 → 下拉框不渲染（`organization.tsx:192` 的条件是 `attachableLabels.length > 0`）→ 测试等满超时。
 - **证据链**：① 接口侧全对——`POST /labels` 201、`POST /label-assignments` 201、`GET /labels` 172 B 且含 `assignedCount:1`；② 客户端 `labelListSchema` 与该响应逐字段吻合，不是解析失败；③ 整份 trace 里「选择要添加的标签」只出现 2 次（动作定义与日志行），**任何 DOM 快照里都没有**；④ 页面级「按分类筛选」chip 与下拉框**同源**（都来自 `labels.items`，见 `page.tsx:509` 与 `:732`），它在 110005 的快照里在、在 110197 的快照里没了，而**这中间没有任何 `/labels` 请求** → 状态是被**无请求地**覆盖的，唯一无守卫的写入者就是 `refresh()`。
-- **影响**：**用户可见**——在一条 Story 上创建标签后，标签会从界面消失，导致无法把它加到另一条 Story。与已修的 `feed-search-race`（Task 30）**同类**，但当时的守卫 `isSearchWriteCurrent(generation)` 只覆盖 Feed 与游标，这四个列表没被覆盖。
-- **建议下一步**：**按 Bug 修，不是修测试隔离**。最小修法是让这四个列表也纳入陈旧性判断（每类列表各一个请求序号，或把整体 generation 覆盖到它们），并补一条能复现该竞态的测试。**未做**：本轮只归因、未改代码——改的是产品行为，口径需维护者确认。
+- **影响**：**用户可见**——在一条 Story 上创建标签后，标签会从界面消失，导致无法把它加到另一条 Story。与已修的 `feed-search-race`（Task 30）**同类**，但当时的守卫 `isSearchWriteCurrent(generation)` 只覆盖 Feed 与游标，其余三个用户可变列表没被覆盖。
+- **已修（2026-09-25，分支 `fix/no-ref-stale-list-write`）**：新增 `useGuardedList`（`apps/web/src/app/home/list-write-guard.ts`）——本地写入推进版本，刷新落地前比对，期间用户改过就丢弃这次快照。**只给「两条路径都写」的三个列表用**：`labels`／`collections`（在 story workspace 里守卫）与 `savedViews`（在 feed hook 里守卫）。**`sources` 故意不加守卫**——它只有刷新这一个写入者，加了会让新建来源永远刷不出来：原注释对 `sources` 是对的，对其余三个是错的。顺手把 `setLabels`／`setCollections` 从 hook 的公开面移除，避免绕过守卫。
+- **验证**：规则本身抽成纯逻辑（`createWriteVersion`）并在 node 层测了 4 条（含「刷新之间不互相作废」——否则连续两次刷新里后一次会永远写不进去）；全量 **134 文件 / 764 用例 exit 0**；全仓 `typecheck` exit 0；**浏览器验收连跑两遍都是 33 passed / exit 0，用时 2.2 与 2.4 分钟**（修前那一遍是 1 failed / 32 passed / **7.5 分钟**，多出来的 5 分多钟全被那次 300 秒超时占掉）；两份门禁 PASS、`docs:check` 831 文件 0 失败。
+- **未做**：没有做「放大竞态」的确定性复现（用路由拦截把 `/api/v1/sources` 拖慢以稳定触发），所以端到端证据是「修前 1 红 + 修后 2 绿」，不是机制级的确定性证明；规则级由那 4 条 node 测试钉住。
 - 症状、观察次数与其余条目仍只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护；数据库线（WAL／busy timeout）已在 Task 34 证伪，不再是候选根因。
 
 ### P4-2 代码规模红线门禁欠账
