@@ -3,6 +3,13 @@ import { randomUUID } from "node:crypto";
 
 const FEED_URL = "http://127.0.0.1:4380/feed.xml";
 
+/** fixture feed 的三条内容；每个来源都会录入这三条，标题在所有来源之间重复。 */
+const FIXTURE_TITLES = [
+    "Cosmos scaffold is ready",
+    "Message without a web URL",
+    "Fixture media metadata",
+] as const;
+
 /** 每个场景自建来源并触发录入，不依赖其它 spec 留下的数据。 */
 async function ingestFeed(page: import("@playwright/test").Page, prefix: string): Promise<string> {
     const sourceName = `${prefix}-${randomUUID().slice(0, 8)}`;
@@ -21,9 +28,16 @@ async function ingestFeed(page: import("@playwright/test").Page, prefix: string)
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
     // 同一栈内其它 spec 也用同一份 fixture，未限定来源的标题断言可能在其它来源
     // 录入完成时就通过；这里再等本来源自己的卡片出现。
-    await expect(
-        page.locator("article").filter({ hasText: sourceName }).first(),
-    ).toBeVisible({ timeout: 180_000 });
+    //
+    // 一次录入是一条 Run：第一张卡片出现时后面几条可能还没落库，而 Story 面板的
+    // 证据候选是打开面板时一次性取回的（use-story-workspace 的 entries?limit=50）。
+    // 本来源只有一条时，候选里就只剩别的来源——共享 fixture 下标题相同，按标题
+    // 回找卡片会落到本来源同名的另一条 Story 上。所以必须等本来源三条都录入完。
+    for (const title of FIXTURE_TITLES) {
+        await expect(
+            page.locator("article").filter({ hasText: sourceName }).filter({ hasText: title }).first(),
+        ).toBeVisible({ timeout: 180_000 });
+    }
     return sourceName;
 }
 
@@ -122,10 +136,26 @@ test("links an entry from another Story as evidence and shows the reverse view",
     const evidenceSection = dialog.locator('section[aria-label="证据来源"]');
     await expect(evidenceSection.getByText(/还没有其它 Story 引用/)).toBeVisible();
 
-    // 从另一条 Story 的条目里选一条作为证据。
+    // 从另一条 Story 的条目里选一条作为证据。必须按**来源身份**挑，不能按位置挑：
+    // 候选列表里还有别的来源的条目，而共享 fixture 让所有来源用同一组标题，
+    // 拿别的来源的条目按标题回找卡片会落到本来源同名的另一条 Story 上，
+    // 那条 Story 里没有这个条目，成员行永远等不到（2026-09-25 trace 实测）。
     const option = evidenceSection.getByLabel("选择证据条目");
-    await option.selectOption({ index: 1 });
-    const entryId = await option.inputValue();
+    const candidate = await option.locator("option").evaluateAll((nodes, prefix) => {
+        for (const node of nodes) {
+            const value = (node as HTMLOptionElement).value;
+            const text = node.textContent ?? "";
+            if (value !== "" && text.startsWith(`${prefix} · `)) {
+                return { value, label: text };
+            }
+        }
+        return null;
+    }, sourceName);
+    if (!candidate) {
+        throw new Error(`证据候选里没有本来源（${sourceName}）的另一条 Story`);
+    }
+    await option.selectOption(candidate.value);
+    const entryId = candidate.value;
     await evidenceSection.getByLabel("证据关系类型").selectOption("evidence_for");
     await evidenceSection.getByRole("button", { name: "添加" }).click();
     const evidenceItem = evidenceSection.locator(

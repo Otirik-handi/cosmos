@@ -77,6 +77,11 @@ function formatCheckedAt(value: string): string {
 
 type ConnectionPanelProps = {
     client: HttpCosmosClient;
+    /**
+     * 连接增删后通知页面。来源表单的连接下拉读的是页面自己的连接列表，
+     * 不通知它就会一直停在旧列表上（新建的连接在表单里选不到，只能刷新页面）。
+     */
+    onConnectionsChanged?: () => void;
     /** 页面在连接变化后递增，驱动列表重取。 */
     refreshToken?: number;
 };
@@ -90,7 +95,7 @@ type ConnectionPanelProps = {
  * Bilibili 的 OpenCLI profile 住在这里，连接器抓取时读它。授权范围与失效原因今天仍
  * 没有自动写入方（登录探测属本 Task 的切片 4b），所以面板同时提供用户侧记录入口。
  */
-export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelProps) {
+export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0 }: ConnectionPanelProps) {
     const [connections, setConnections] = useState<readonly ConnectionInstance[] | null>(null);
     const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
     const [name, setName] = useState("");
@@ -196,13 +201,17 @@ export function ConnectionPanel({ client, refreshToken = 0 }: ConnectionPanelPro
                 setScope("");
                 setAdapterConfig("");
                 load();
+                onConnectionsChanged?.();
             })
             .catch(() => setState("error"));
     };
 
     const remove = (connectionId: string): void => {
         client.deleteConnection(connectionId)
-            .then(load)
+            .then(() => {
+                load();
+                onConnectionsChanged?.();
+            })
             .catch(() => setState("error"));
     };
 

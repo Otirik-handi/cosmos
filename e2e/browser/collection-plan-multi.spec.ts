@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import {
+    expectNoticeAppeared,
+    installNoticeRecorder,
+    resetNoticeLog,
+} from "../support/notice-log";
+
 const WORKING_FEED_URL = "http://127.0.0.1:4380/feed.xml";
 const BROKEN_FEED_URL = "http://127.0.0.1:4380/missing.xml";
 
@@ -12,6 +18,7 @@ const BROKEN_FEED_URL = "http://127.0.0.1:4380/missing.xml";
  */
 test("creates two plans under one connection and shows each plan's own schedule and failure", async ({ page }) => {
     test.setTimeout(180_000);
+    await installNoticeRecorder(page);
     const suffix = randomUUID().slice(0, 8);
     const connectionName = `主账号-${suffix}`;
     const healthyName = `动态-${suffix}`;
@@ -59,8 +66,13 @@ test("creates two plans under one connection and shows each plan's own schedule 
 
     await brokenRow.getByRole("button", { name: `启用 ${brokenName}`, exact: true }).click();
     await expect(page.getByText(`计划 ${brokenName} 已启用`, { exact: false })).toBeVisible();
+    // 坏来源的「录入任务已排队」是瞬时状态：实测只存在 480–554ms，而且运行失败得很快，
+    // 失败提示（「一次录入运行失败…」）可能先于它出现、也会把它替换掉。对这条提示做
+    // 轮询断言等于赌"某一次轮询落在窗口里"，慢轮里就会落空。这里改成断言页面内记录里
+    // 出现过这段文字——要求不变，只是不再依赖轮询撞上窗口。
+    await resetNoticeLog(page);
     await brokenRow.getByRole("button", { name: brokenName, exact: true }).click();
-    await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+    await expectNoticeAppeared(page, "录入任务已排队");
 
     // 失败只落在坏的那一行：好的一行不出现错误文本，也不显示「尚未运行」。
     await expect(brokenRow.locator("span.text-destructive")).toBeVisible({ timeout: 60_000 });

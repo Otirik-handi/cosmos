@@ -35,6 +35,7 @@ import {
     PROBE_POLL_INTERVAL_MS,
     PROBE_POLL_TIMEOUT_MS,
 } from "./page-runtime";
+import { useGuardedList } from "./list-write-guard";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { SourceFormValues } from "@/components/cosmos/source-form";
@@ -68,6 +69,12 @@ export function useSourceWorkspace(
     const [probeState, setProbeState] = useState<ProbeState>({status: "idle"});
     const [plans, setPlans] = useState<readonly CollectionPlanSnapshot[]>([]);
     const [connections, setConnections] = useState<readonly ConnectionInstance[]>([]);
+    /**
+     * 计划与连接都由多次读取写入（首屏、动作后的重读），读取之间没有顺序保证：
+     * 先发起的那次读取晚落地时，会把刚建出来的计划从列表里抹掉，行内按钮也就再也等不到。
+     */
+    const planList = useGuardedList(setPlans);
+    const connectionList = useGuardedList(setConnections);
     const probeConfigKeyRef = useRef<string | null>(null);
     const planSummary = useMemo(() => {
         if (plans.length === 0) {
@@ -81,17 +88,19 @@ export function useSourceWorkspace(
      * 连接名要在分组标题里显示，所以两个列表一起取。
      */
     const loadPlans = useCallback(async (): Promise<void> => {
+        const planRead = planList.beginRead();
+        const connectionRead = connectionList.beginRead();
         try {
             const [nextPlans, nextConnections] = await Promise.all([
                 client.listCollectionPlans(),
                 client.listConnections(),
             ]);
-            setPlans(nextPlans);
-            setConnections(nextConnections);
+            planList.writeFromRead(nextPlans, planRead);
+            connectionList.writeFromRead(nextConnections, connectionRead);
         } catch (caught) {
             ctx.setError(readError(caught));
         }
-    }, [ctx]);
+    }, [ctx, planList, connectionList]);
 
     /**
      * 首屏加载在 effect 内直接发起：`react-hooks/set-state-in-effect` 会把 effect 直接调用的
@@ -100,14 +109,16 @@ export function useSourceWorkspace(
      */
     useEffect(() => {
         let cancelled = false;
+        const planRead = planList.beginRead();
+        const connectionRead = connectionList.beginRead();
         void Promise.all([
             client.listCollectionPlans(),
             client.listConnections(),
         ])
             .then(([nextPlans, nextConnections]) => {
                 if (cancelled) return;
-                setPlans(nextPlans);
-                setConnections(nextConnections);
+                planList.writeFromRead(nextPlans, planRead);
+                connectionList.writeFromRead(nextConnections, connectionRead);
             })
             .catch((caught: unknown) => {
                 if (cancelled) return;
@@ -116,7 +127,7 @@ export function useSourceWorkspace(
         return () => {
             cancelled = true;
         };
-    }, [ctx]);
+    }, [ctx, planList, connectionList]);
 
     /**
      * 表单字段由 catalog manifest 驱动；目录不可用时只提供重试，不回退硬编码字段。

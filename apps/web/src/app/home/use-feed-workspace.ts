@@ -55,14 +55,20 @@ export function useFeedWorkspace(
     );
     const [savedViews, setSavedViews] = useState<readonly SavedView[]>([]);
     const savedViewList = useGuardedList(setSavedViews);
+    /**
+     * 来源列表只有读取这一个写入者，所以不需要本地写入守卫；但读取之间仍要排序——
+     * 先发起的那次读取晚落地时，同样会把刚建出来的来源抹掉。
+     */
+    const sourceList = useGuardedList(setSources);
     const [savedViewName, setSavedViewName] = useState("");
     const [loadingMore, setLoadingMore] = useState(false);
     const refresh = useCallback(async (): Promise<void> => {
         const generation = searchGeneration.current;
         // 用户可变列表的版本必须在**发起抓取之前**取：落地时若用户已经改过，这批快照就是旧的。
-        const labelVersion = storyApi.labelList.version();
-        const collectionVersion = storyApi.collectionList.version();
-        const savedViewVersion = savedViewList.version();
+        const labelRead = storyApi.labelList.beginRead();
+        const collectionRead = storyApi.collectionList.beginRead();
+        const savedViewRead = savedViewList.beginRead();
+        const sourceRead = sourceList.beginRead();
         ctx.setError(null);
         ctx.setLoading(true);
         try {
@@ -78,13 +84,14 @@ export function useFeedWorkspace(
             ]);
             // 陈旧响应有两条判定轴，别混：
             // - Feed 与游标属于"当前搜索条件"，怕的是条件已变 → 比 searchGeneration；
-            // - 分类/收藏夹/已保存视图是**用户可变**列表，怕的是用户改过 → 比各自的写入版本。
+            // - 分类/收藏夹/已保存视图/来源是列表状态，怕的是这份快照本身已经旧了 →
+            //   比各自的读取票据（是不是最新一次读取、期间用户有没有改过）。
             //   一次刷新可能在用户创建标签之前抓到空列表、却在创建之后落地，把新值覆盖回旧值。
-            // 来源列表只有刷新这一个写入者，故意不加守卫——加了会让新建的来源永远刷不出来。
-            setSources(nextSources);
-            storyApi.labelList.writeFromRefresh(nextLabels, labelVersion);
-            storyApi.collectionList.writeFromRefresh(nextCollections, collectionVersion);
-            savedViewList.writeFromRefresh(nextSavedViews.items, savedViewVersion);
+            // 来源列表没有本地写入者，票据里的版本恒定，只有"是不是最新读取"这一条在起作用。
+            sourceList.writeFromRead(nextSources, sourceRead);
+            storyApi.labelList.writeFromRead(nextLabels, labelRead);
+            storyApi.collectionList.writeFromRead(nextCollections, collectionRead);
+            savedViewList.writeFromRead(nextSavedViews.items, savedViewRead);
             if (!isSearchWriteCurrent(generation)) {
                 return;
             }
@@ -97,7 +104,7 @@ export function useFeedWorkspace(
         } finally {
             ctx.setLoading(false);
         }
-    }, [storyApi.story, isSearchWriteCurrent]);
+    }, [storyApi.story, isSearchWriteCurrent, savedViewList, sourceList]);
 
     /**
      * SSE 与首次加载只跑一次：refresh 经 latest-ref 读取，

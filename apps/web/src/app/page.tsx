@@ -104,8 +104,15 @@ export default function Home() {
     const [error, setError] = useState<string | null>(null);
     const [eventStreamState, setEventStreamState] = useState<EventStreamState>("connecting");
 
+    /**
+     * 工作区上下文必须**身份稳定**：各域 hook 把它放进 effect／callback 的依赖里，
+     * 每次渲染新建一个对象会让这些 effect 每次渲染都重跑——实测一个页面会话因此对
+     * `/collection-plans` 与 `/connections` 各发了 300+ 次读取，整套验收被拖慢数倍。
+     */
+    const workspaceContext = useMemo(() => ({setError, setNotice, setLoading}), []);
+
     /** 跨域钩子:各域 hook 在首次渲染时写入自己实现的回调,事件处理里按需调用。 */
-    const storyWorkspace = useStoryWorkspace({setError, setNotice, setLoading});
+    const storyWorkspace = useStoryWorkspace(workspaceContext);
     const {
         attachLabelToStory,
         closeStory,
@@ -140,7 +147,7 @@ export default function Home() {
         updateStoryAnnotation,
         updateStoryRevision,
     } = storyWorkspace;
-    const entityWorkspace = useEntityWorkspace({setError, setNotice, setLoading}, storyWorkspace);
+    const entityWorkspace = useEntityWorkspace(workspaceContext, storyWorkspace);
     const {
         addEntityAliasPage,
         createEntityLinkedToStory,
@@ -158,7 +165,7 @@ export default function Home() {
         unlinkStoryFromEntityPage,
         updateEntityPage,
     } = entityWorkspace;
-    const topicWorkspace = useTopicWorkspace({setError, setNotice, setLoading}, storyWorkspace);
+    const topicWorkspace = useTopicWorkspace(workspaceContext, storyWorkspace);
     const {
         createTopicAnnotation,
         createTopicFromStory,
@@ -177,7 +184,7 @@ export default function Home() {
         updateTopicAnnotation,
         updateTopicMemberRole,
     } = topicWorkspace;
-    const boardWorkspace = useBoardWorkspace({setError, setNotice, setLoading}, storyWorkspace, topicWorkspace);
+    const boardWorkspace = useBoardWorkspace(workspaceContext, storyWorkspace, topicWorkspace);
     const {
         board,
         boardCommands,
@@ -219,7 +226,7 @@ export default function Home() {
     });
 
     const feedWorkspace = useFeedWorkspace(
-        {setError, setNotice, setLoading},
+        workspaceContext,
         storyWorkspace,
         searchForm,
         setSources,
@@ -245,7 +252,7 @@ export default function Home() {
         setSavedViewName,
     } = feedWorkspace;
     const sourceWorkspace = useSourceWorkspace(
-        {setError, setNotice, setLoading},
+        workspaceContext,
         sourceForm,
         {error, loading, sources, setSources},
         feedWorkspace,
@@ -260,6 +267,7 @@ export default function Home() {
         deletingPlanId,
         health,
         loadDefinitions,
+        loadPlans,
         planSummary,
         plans,
         probeConfigKeyRef,
@@ -306,9 +314,11 @@ export default function Home() {
      * 保留旧列表可读，避免阅读中的内容被占位卡替换。
      */
     const refreshRef = useRef(refresh);
+    const loadPlansRef = useRef(loadPlans);
     useEffect(() => {
         refreshRef.current = refresh;
-    }, [refresh]);
+        loadPlansRef.current = loadPlans;
+    }, [refresh, loadPlans]);
 
     useEffect(() => {
         void refreshRef.current();
@@ -329,6 +339,9 @@ export default function Home() {
                     || event.type === "job.failed_terminal.v1"
                 ) {
                     void refreshRef.current();
+                    // 计划行显示的是"最近一次运行的时间与错误"，所以运行事件也必须重读计划列表：
+                    // 否则失败提示让用户"在计划行内查看错误信息"，行里却一直什么都没有。
+                    void loadPlansRef.current();
                 }
                 if (event.type === "run.failed.v1") {
                     setNotice("一次录入运行失败，已刷新“采集计划”；请在计划行内查看错误信息。");
@@ -665,7 +678,7 @@ export default function Home() {
                     </section>
                     <section aria-label="连接" className="grid gap-2">
                         <h2 className="font-display text-lg font-semibold">连接</h2>
-                        <ConnectionPanel client={client} />
+                        <ConnectionPanel client={client} onConnectionsChanged={() => void loadPlans()} />
                     </section>
                     <section aria-label="存储" className="grid gap-2">
                         <h2 className="font-display text-lg font-semibold">存储</h2>
