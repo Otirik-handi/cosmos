@@ -12,7 +12,7 @@
         }
     },
     "scripts": {
-        "build": "tsc -p tsconfig.json",
+        "build": "tsc -p tsconfig.build.json",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "db:validate": "bun run ../../scripts/prisma.ts validate",
         "db:generate": "bun run ../../scripts/prisma.ts generate",
