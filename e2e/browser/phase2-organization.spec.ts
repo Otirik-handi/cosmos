@@ -621,9 +621,9 @@ test("moves a block to the slot right below its drop target", async ({ page }) =
     }
 
     // 回归：把 A 拖到 B 下方应落在 B 与 C 之间。
-    // `dropPositionFor`（board-drag.test.ts 钉住）对该场景算出 position=1；这里确认真实
-    // 服务端在该 position 上得到 [B, A, C, D]。旧口径把「全量下标」当 position 用，会
-    // 得到 [B, C, A, D]——即用户报告的「插到 C 和 D 之间」。
+    // `resolveDropTarget`（board-drag.test.ts 钉住：拖到哪个区块就用它在分区内的下标）
+    // 对该场景算出 position=1；这里确认真实服务端在该 position 上得到 [B, A, C, D]。
+    // 旧口径把「全量下标」当 position 用，会得到 [B, C, A, D]——即用户报告的「插到 C 和 D 之间」。
     const moved = await page.evaluate(async (blockId) => {
         const response = await fetch(`/api/v1/board-blocks/${blockId}/moves`, {
             method: "POST",
