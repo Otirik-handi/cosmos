@@ -11,7 +11,7 @@
 
 ## 1. `e2e/browser/phase2-organization.spec.ts` 的间歇失败
 
-已结案（归因并修复），整条记录移入分册：[`known-unstable-cases/0001-browser-intermittent.md`](known-unstable-cases/0001-browser-intermittent.md)。
+**只结了一条，不是整条结案**：`phase2-organization.spec.ts:30` 的标签丢失更新已归因并修复；本条记录里其余的 `:103`、`:417` 与 `collection-plan-multi.spec.ts:63` **仍未归因**。整段记录移入分册供追溯：[`known-unstable-cases/0001-browser-intermittent.md`](known-unstable-cases/0001-browser-intermittent.md)。
 
 ## 2. `e2e/browser/ingest.spec.ts:127` 的 390px 横向溢出断言
 

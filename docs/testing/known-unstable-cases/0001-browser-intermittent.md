@@ -1,6 +1,6 @@
 # 已知不稳定用例分册 0001：浏览器验收的间歇失败
 
-主文档：[`../known-unstable-cases.md`](../known-unstable-cases.md)。本条已结案（归因并修复），整段保留在此供追溯。
+主文档：[`../known-unstable-cases.md`](../known-unstable-cases.md)。整段保留在此供追溯。**注意：本条只有 `:30` 那一条被归因并修复，其余失败点（`:103`、`:417`、`collection-plan-multi.spec.ts:63`）仍未归因**——不要按标题把整条读成已结案。
 
 ## 1. `e2e/browser/phase2-organization.spec.ts` 的间歇失败
 
