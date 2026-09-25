@@ -3,6 +3,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { useGuardedList } from "./list-write-guard";
 import {
     type Annotation,
     type CollectionList,
@@ -40,6 +41,9 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
     const [keyFactEntryOptions, setKeyFactEntryOptions] = useState<readonly StoryEntryOption[]>([]);
     const [labels, setLabels] = useState<LabelList>({ items: [] });
     const [collections, setCollections] = useState<CollectionList>({ items: [] });
+    /** 分类与收藏夹都是"用户动作会写、周期刷新也会写"的列表，两条路径都要过守卫。 */
+    const labelList = useGuardedList(setLabels);
+    const collectionList = useGuardedList(setCollections);
     const [storyAnnotations, setStoryAnnotations] = useState<readonly Annotation[]>([]);
     const [openingStoryId, setOpeningStoryId] = useState<string | null>(null);
     const openStoryIdRef = useRef<string | null>(null);
@@ -72,7 +76,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
             targetId: storyDetail.story.id,
         });
         setStory(storyDetail);
-        setCollections(storyCollections);
+        collectionList.writeLocal(storyCollections);
         setStoryAnnotations(annotationList.items);
         setEntryOptions(entryPage.items
             .filter((item) => item.storyId !== storyDetail.story.id)
@@ -261,7 +265,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
             client.listLabels(),
         ]);
         setStory(nextStory);
-        setLabels(nextLabels);
+        labelList.writeLocal(nextLabels);
         await refreshRelatedStories(nextStory);
     };
 
@@ -270,7 +274,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         if (!story) {
             return;
         }
-        setCollections(await client.listCollections({ storyId: story.story.id }));
+        collectionList.writeLocal(await client.listCollections({ storyId: story.story.id }));
     };
 
     const toggleStoryFavorite = async (favorited: boolean): Promise<void> => {
@@ -412,6 +416,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         attachLabelToStory,
         closeStory,
         collections,
+        collectionList,
         createCollectionFromPanel,
         createLabelForStory,
         createStoryAnnotation,
@@ -420,6 +425,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         entryOptions,
         keyFactEntryOptions,
         labels,
+        labelList,
         linkEntryRelation,
         linkEntryStory,
         loadStoryUserState,
@@ -429,8 +435,6 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         openingStoryId,
         refreshRelatedStories,
         relatedStories,
-        setCollections,
-        setLabels,
         setStory,
         setStorySubtypes,
         splitStory,

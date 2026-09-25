@@ -127,8 +127,6 @@ export default function Home() {
         openingStoryId,
         refreshRelatedStories,
         relatedStories,
-        setCollections,
-        setLabels,
         setStory,
         setStorySubtypes,
         splitStory,

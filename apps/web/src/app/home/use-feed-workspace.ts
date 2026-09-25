@@ -15,6 +15,7 @@ import {
     toBoundaryIso,
     toDateInputValue,
 } from "./page-runtime";
+import { useGuardedList } from "./list-write-guard";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { SearchFormValues } from "@/components/cosmos/feed-browser";
@@ -53,10 +54,15 @@ export function useFeedWorkspace(
         [],
     );
     const [savedViews, setSavedViews] = useState<readonly SavedView[]>([]);
+    const savedViewList = useGuardedList(setSavedViews);
     const [savedViewName, setSavedViewName] = useState("");
     const [loadingMore, setLoadingMore] = useState(false);
     const refresh = useCallback(async (): Promise<void> => {
         const generation = searchGeneration.current;
+        // 用户可变列表的版本必须在**发起抓取之前**取：落地时若用户已经改过，这批快照就是旧的。
+        const labelVersion = storyApi.labelList.version();
+        const collectionVersion = storyApi.collectionList.version();
+        const savedViewVersion = savedViewList.version();
         ctx.setError(null);
         ctx.setLoading(true);
         try {
@@ -70,13 +76,15 @@ export function useFeedWorkspace(
                 client.listCollections(storyApi.story ? { storyId: storyApi.story.story.id } : {}),
                 client.listSavedViews(),
             ]);
-            // 来源/分类/集合/已保存视图与搜索条件无关，任何一次刷新都可以写；
-            // 只有 Feed 与游标属于"当前搜索条件"，陈旧响应必须丢弃——否则会出现
-            // 提示语说 0 条、列表却还留着旧内容。
+            // 陈旧响应有两条判定轴，别混：
+            // - Feed 与游标属于"当前搜索条件"，怕的是条件已变 → 比 searchGeneration；
+            // - 分类/收藏夹/已保存视图是**用户可变**列表，怕的是用户改过 → 比各自的写入版本。
+            //   一次刷新可能在用户创建标签之前抓到空列表、却在创建之后落地，把新值覆盖回旧值。
+            // 来源列表只有刷新这一个写入者，故意不加守卫——加了会让新建的来源永远刷不出来。
             setSources(nextSources);
-            storyApi.setLabels(nextLabels);
-            storyApi.setCollections(nextCollections);
-            setSavedViews(nextSavedViews.items);
+            storyApi.labelList.writeFromRefresh(nextLabels, labelVersion);
+            storyApi.collectionList.writeFromRefresh(nextCollections, collectionVersion);
+            savedViewList.writeFromRefresh(nextSavedViews.items, savedViewVersion);
             if (!isSearchWriteCurrent(generation)) {
                 return;
             }
@@ -147,7 +155,7 @@ export function useFeedWorkspace(
                 },
             });
             setSavedViewName("");
-            setSavedViews((await client.listSavedViews()).items);
+            savedViewList.writeLocal((await client.listSavedViews()).items);
             ctx.setNotice(`已保存视图「${trimmedName}」。`);
         } catch (caught) {
             ctx.setError(readError(caught));
@@ -198,7 +206,7 @@ export function useFeedWorkspace(
         ctx.setError(null);
         try {
             await client.deleteSavedView(viewId);
-            setSavedViews((await client.listSavedViews()).items);
+            savedViewList.writeLocal((await client.listSavedViews()).items);
             ctx.setNotice("已删除保存的视图。");
         } catch (caught) {
             ctx.setError(readError(caught));
