@@ -1,11 +1,8 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { IngestionService, SourceRevisionConflictError, type IngestConnector } from "@cosmos/application";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import { PrismaCosmosRepository } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { createFixtureSource, withRepository } from "./index.fixtures.js";
 
 /**
  * AUT-001 删除来源：墓碑语义。
@@ -13,18 +10,11 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
  * 删除只移除来源配置与调度绑定；已录入的 Entry/Observation/Revision 必须保留
  * （Entry.sourceInstanceId 是必填级联外键，硬删会连带删掉全部历史）。
  */
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
+async function setup(repository: PrismaCosmosRepository): Promise<{
     sourceId: string;
     revisionId: string;
     entryId: string;
 }> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-source-deletion-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
     const source = await createFixtureSource(repository, {
         name: "To be deleted",
         config: {},
@@ -61,12 +51,12 @@ async function setup(): Promise<{
     // 来源必须先启用才会进入调度；这里直接断言绑定存在。
     expect(await repository.listScheduleTriggers()).toHaveLength(1);
 
-    return { repository, sourceId: source.id, revisionId: source.revisionId, entryId: entries.items[0]!.id };
+    return { sourceId: source.id, revisionId: source.revisionId, entryId: entries.items[0]!.id };
 }
 
 it("deletes the source but keeps its ingested history (AUT-001)", async () => {
-    const { repository, sourceId, revisionId, entryId } = await setup();
-    try {
+    await withRepository("source-deletion", async (repository) => {
+        const { sourceId, revisionId, entryId } = await setup(repository);
         const deleted = await repository.deleteSource({
             sourceId,
             baseRevisionId: revisionId,
@@ -104,14 +94,12 @@ it("deletes the source but keeps its ingested history (AUT-001)", async () => {
         expect(await repository.prisma.domainEvent.count({
             where: { type: "source.deleted.v1" },
         })).toBe(1);
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 it("drops the collection plan from the list projection when its source is deleted (AUT-001)", async () => {
-    const { repository, sourceId, revisionId } = await setup();
-    try {
+    await withRepository("source-deletion", async (repository) => {
+        const { sourceId, revisionId } = await setup(repository);
         // 反例先行：删除前计划必须在投影里，否则「删除后消失」是空断言。
         const before = await repository.listCollectionPlans();
         const planId = before.find((plan) => plan.sourceId === sourceId)?.id;
@@ -132,14 +120,12 @@ it("drops the collection plan from the list projection when its source is delete
         expect(after.map((plan) => plan.sourceId)).not.toContain(sourceId);
         const row = await repository.prisma.collectionPlan.findUnique({ where: { id: planId! } });
         expect(row?.enabled).toBe(false);
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 it("rejects a stale revision and hides the tombstone from edit commands", async () => {
-    const { repository, sourceId, revisionId } = await setup();
-    try {
+    await withRepository("source-deletion", async (repository) => {
+        const { sourceId, revisionId } = await setup(repository);
         await expect(repository.deleteSource({
             sourceId,
             baseRevisionId: `${sourceId}:99`,
@@ -161,7 +147,5 @@ it("rejects a stale revision and hides the tombstone from edit commands", async 
             baseRevisionId: revisionId,
             name: "renamed",
         })).rejects.toThrow();
-    } finally {
-        await repository.close();
-    }
+    });
 });

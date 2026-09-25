@@ -1,19 +1,9 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { PrismaCosmosRepository } from "./index.js";
-import { captureLogger, createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { captureLogger, createFixtureSource, withRepository } from "./index.fixtures.js";
 
     it("deduplicates queued commands, takes over expired leases, and rejects stale completion", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-job-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("job-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Queue fixture",
                 config: {},
@@ -75,20 +65,11 @@ import { captureLogger, createFixtureSource, prepareDatabase, temporaryRoots } f
                 afterSequence: 0,
                 limit: 100,
             })).some((event) => event.type === "job.succeeded.v1")).toBe(true);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("keeps workflow activity jobs out of legacy claims", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-accepted-kinds-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("accepted-kinds-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Accepted kinds fixture",
                 config: {},
@@ -126,9 +107,7 @@ import { captureLogger, createFixtureSource, prepareDatabase, temporaryRoots } f
                 kind: "workflow-activity",
                 status: "queued",
             });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("logs claim competition and terminal attempts with source correlation", async () => {

@@ -1,11 +1,8 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { IngestionService, type IngestConnector } from "@cosmos/application";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import { PrismaCosmosRepository } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { createFixtureSource, withRepository as withSharedRepository } from "./index.fixtures.js";
 
 /**
  * PRD §12 Phase 2 验收第 4 条「重分析不覆盖用户批注和人工关系修正」与 LIB-003
@@ -68,6 +65,7 @@ function republishableConnector(pages: () => readonly NormalizedIngestItem[]): I
     };
 }
 
+/** 本文件的场景包装：在共享生命周期之上补来源、录入服务与翻页。 */
 async function withRepository(
     name: string,
     body: (context: {
@@ -77,13 +75,7 @@ async function withRepository(
         setPages: (pages: readonly NormalizedIngestItem[]) => void;
     }) => Promise<void>,
 ): Promise<void> {
-    const root = await mkdtemp(join(tmpdir(), `cosmos-${name}-`));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    try {
+    await withSharedRepository(name, async (repository) => {
         const source = await createFixtureSource(repository, { name, config: {} });
         let pages: readonly NormalizedIngestItem[] = [];
         const service = new IngestionService(repository, () => republishableConnector(() => pages));
@@ -97,9 +89,7 @@ async function withRepository(
                 pages = next;
             },
         });
-    } finally {
-        await repository.close();
-    }
+    });
 }
 
 async function onlyStoryId(repository: PrismaCosmosRepository): Promise<string> {

@@ -1,8 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     createMediaAcquirer,
@@ -16,29 +11,19 @@ import {
     createIngestWorkflowDefinition,
 } from "../../../packages/application/src/workflow-ingest.js";
 import { IngestWorkflowControlService } from "../../../packages/application/src/workflow-control.js";
-import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
-import { resolvePrismaCliPath } from "../../../packages/storage-prisma/src/prisma-cli.js";
-
 import { createWorkflowHost } from "./workflow-host.js";
 import {
     cleanupTemporaryRoots,
     createFixtureSource,
     drainWorkflow,
-    prepareDatabase,
-    temporaryRoots,
+    withRepository,
 } from "./workflow-ingest.fixtures.js";
 
 afterEach(cleanupTemporaryRoots);
 
 describe("Worker Ingest Workflow composition", () => {
     it("does not re-acquire media when a later run sees unchanged items", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-skip-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("workflow-media-skip", async (repository) => {
             const source = await createFixtureSource(repository, "Media skip workflow");
             const item: NormalizedIngestItem = {
                 externalId: "media-skip-1",
@@ -130,19 +115,11 @@ describe("Worker Ingest Workflow composition", () => {
             expect(entries.items).toHaveLength(1);
             expect(entries.items[0]?.revisionCount).toBe(1);
             expect(entries.items[0]?.observationCount).toBe(2);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("honours the plan's media policy frozen into the run snapshot", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-policy-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("workflow-media-policy", async (repository) => {
             const created = await repository.createSource({
                 name: "Media policy workflow",
                 sourceDefinitionRef: "source.fixture-rss@1",
@@ -248,19 +225,11 @@ describe("Worker Ingest Workflow composition", () => {
                 status: "metadata_only",
                 blobRef: null,
             });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("retries degraded media on the next run without creating a new revision", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-media-retry-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("workflow-media-retry", async (repository) => {
             const created = await repository.createSource({
                 name: "Media retry workflow",
                 sourceDefinitionRef: "source.fixture-rss@1",
@@ -385,8 +354,6 @@ describe("Worker Ingest Workflow composition", () => {
             expect(await repository.prisma.domainEvent.count({
                 where: { type: "media.retry.attempted.v1" },
             })).toBe(1);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

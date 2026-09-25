@@ -1,30 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import { canonicalJson, fingerprint, type ActivityExecutionRequest, type DeferredActivityCompletionInput } from "@notnotype/nb-workflow";
-import { PrismaClient } from "@prisma/client";
 import type { RetryPolicy } from "@cosmos/contracts";
-import { afterEach } from "vitest";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
+import type { TestDatabase } from "./index.fixtures.js";
 import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export const roots: string[] = [];
-export const clients = new Set<PrismaClient>();
-export const databasePaths = new WeakMap<PrismaWorkflowHostStore, string>();
 
 export const definition = {
     key: "cosmos.ingest",
@@ -42,39 +19,17 @@ export const productRun = {
     sourceId: "source-1",
     triggerKind: "manual",
 };
-afterEach(async () => {
-    await Promise.all([...clients].map((client) => client.$disconnect()));
-    clients.clear();
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
 
-export async function createStore(
+/**
+ * 用例侧的 store 组合：在调用方给的隔离数据库上部署当前 schema，再开一个已登记的客户端。
+ * 根、客户端登记与清理都归 `withTestDatabase`，这里只负责建 store。
+ */
+export function createStore(
+    database: TestDatabase,
     options: { actionRetryPolicies?: Readonly<Record<string, RetryPolicy>> } = {},
-): Promise<PrismaWorkflowHostStore> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-host-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    const client = new PrismaClient({
-        datasources: { db: { url: `file:${databasePath}` } },
-    });
-    clients.add(client);
-    deployMigrations(databasePath, resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"));
-    const store = new PrismaWorkflowHostStore(client, options);
-    databasePaths.set(store, databasePath);
-    return store;
-}
-
-export function deployMigrations(databasePath: string, schemaPath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        schemaPath,
-    ], {
-        env: { ...process.env, DATABASE_URL: `file:${databasePath}` },
-        stdio: "ignore",
-    });
+): PrismaWorkflowHostStore {
+    database.deploy();
+    return new PrismaWorkflowHostStore(database.openClient(), options);
 }
 
 export async function createRunningRun(

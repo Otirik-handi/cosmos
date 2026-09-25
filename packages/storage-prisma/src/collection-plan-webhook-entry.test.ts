@@ -1,39 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-function prepareDatabase(root: string): void {
-    const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolvePrismaCliPath();
-    const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
-    execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {
-        cwd: process.cwd(),
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "ignore",
-    });
-}
-
-async function createRepository(): Promise<PrismaCosmosRepository> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-webhook-entry-"));
-    roots.push(root);
-    prepareDatabase(root);
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    return repository;
-}
+import { withRepository } from "./index.fixtures.js";
 
 async function createPlanWithSchedule(repository: PrismaCosmosRepository) {
     return repository.createSource({
@@ -47,8 +15,7 @@ async function createPlanWithSchedule(repository: PrismaCosmosRepository) {
 
 describe("CollectionPlan webhook 入口 (ADR-0024)", () => {
     it("生成入口：标识进路径、凭证进 SecretStore，读投影只回答「已配置」", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("webhook-entry", async (repository) => {
             const source = await createPlanWithSchedule(repository);
             const entry = await repository.rotateCollectionPlanWebhookEntry(source.planId);
 
@@ -70,14 +37,11 @@ describe("CollectionPlan webhook 入口 (ADR-0024)", () => {
             await expect(repository.secrets.read(binding.secretRef ?? "")).resolves.toBe(entry.credential);
             // 调度行不受影响：生成入口不等于换掉定时触发（ADR-0025）。
             expect(plan?.scheduleIntervalMs).toBe(1_800_000);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("轮换入口：标识与凭证一起换新，旧凭证字节被删除", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("webhook-entry", async (repository) => {
             const source = await createPlanWithSchedule(repository);
             const first = await repository.rotateCollectionPlanWebhookEntry(source.planId);
             const firstBinding = await repository.prisma.triggerBinding.findFirstOrThrow({
@@ -100,14 +64,11 @@ describe("CollectionPlan webhook 入口 (ADR-0024)", () => {
             await expect(repository.secrets.read(secondBinding.secretRef ?? "")).resolves.toBe(second.credential);
             await expect(repository.getCollectionPlan(source.planId))
                 .resolves.toMatchObject({ webhook: { entryPath: second.entryPath } });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("撤销入口是幂等的：删掉入口标识与凭证字节，调度行保持不动", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("webhook-entry", async (repository) => {
             const source = await createPlanWithSchedule(repository);
             await repository.rotateCollectionPlanWebhookEntry(source.planId);
             const binding = await repository.prisma.triggerBinding.findFirstOrThrow({
@@ -125,26 +86,20 @@ describe("CollectionPlan webhook 入口 (ADR-0024)", () => {
             // 再撤一次不报错，也不动调度行。
             await expect(repository.revokeCollectionPlanWebhookEntry(source.planId))
                 .resolves.toMatchObject({ webhook: null, scheduleIntervalMs: 1_800_000 });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("计划不存在时两个入口命令都报 not_found", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("webhook-entry", async (repository) => {
             await expect(repository.rotateCollectionPlanWebhookEntry("plan:missing"))
                 .rejects.toMatchObject({ code: "not_found" });
             await expect(repository.revokeCollectionPlanWebhookEntry("plan:missing"))
                 .rejects.toMatchObject({ code: "not_found" });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("入口解析与凭证校验：只回答能不能触发，且轮换/停用后旧入口立刻失效", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("webhook-entry", async (repository) => {
             const source = await createPlanWithSchedule(repository);
             const entry = await repository.rotateCollectionPlanWebhookEntry(source.planId);
             const tokenOf = (entryPath: string) => entryPath.split("/").pop() ?? "";
@@ -182,8 +137,6 @@ describe("CollectionPlan webhook 入口 (ADR-0024)", () => {
             // 撤销后入口解析不到。
             await repository.revokeCollectionPlanWebhookEntry(source.planId);
             await expect(repository.resolveCollectionPlanWebhookEntry(tokenOf(rotated.entryPath))).resolves.toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

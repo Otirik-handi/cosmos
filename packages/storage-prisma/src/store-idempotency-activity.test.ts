@@ -1,9 +1,11 @@
 import { canonicalJson } from "@notnotype/nb-workflow";
 import { expect, it } from "vitest";
+import { withTestDatabase } from "./index.fixtures.js";
 import { activityRequest, completionFor, createRunningRun, createStore, definition, inputSnapshot, productRun, seedPendingActivity } from "./workflow-host-store.fixtures.js";
 
-    it("finds an envelope by idempotency key and rejects identity changes", async () => {
-        const store = await createStore();
+it("finds an envelope by idempotency key and rejects identity changes", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const first = await store.createWorkflowEnvelope({
             runId: "workflow-run-1",
             idempotencyKey: "enqueue-1",
@@ -63,9 +65,11 @@ import { activityRequest, completionFor, createRunningRun, createStore, definiti
             resumeRequired: false,
         });
     });
+});
 
-    it("rejects late Activity completion for terminal Runs while the old lease is still valid", async () => {
-        const store = await createStore();
+it("rejects late Activity completion for terminal Runs while the old lease is still valid", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         for (const status of ["completed", "cancelled"] as const) {
             const run = await createRunningRun(store, `workflow-run-late-${status}`, "activity-worker");
             const request = activityRequest(run.runId, `late-completion-${status}`);
@@ -96,11 +100,13 @@ import { activityRequest, completionFor, createRunningRun, createStore, definiti
             await expect(store.prisma.workflowCompletion.findUnique({ where: { jobId: job.id } }))
                 .resolves.toBeNull();
         }
-    }, 30_000);
+    });
+}, 30_000);
 
-    it("rejects terminal startAction and does not create a Job", async () => {
+it("rejects terminal startAction and does not create a Job", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
         for (const status of ["completed", "cancelled"] as const) {
-            const store = await createStore();
+            const store = createStore(database);
             const run = await createRunningRun(store, `workflow-run-start-${status}`, "activity-worker");
             await store.prisma.workflowRun.update({ where: { id: run.runId }, data: { status } });
             await expect(store.startAction(activityRequest(run.runId, `terminal-start-${status}`)))
@@ -108,10 +114,12 @@ import { activityRequest, completionFor, createRunningRun, createStore, definiti
             await expect(store.prisma.job.count({ where: { workflowRunId: run.runId } }))
                 .resolves.toBe(0);
         }
-    }, 30_000);
+    });
+}, 30_000);
 
-    it("fences completion on Kernel revision and pending-activity identity", async () => {
-        const store = await createStore();
+it("fences completion on Kernel revision and pending-activity identity", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-state-fence", "activity-worker");
         const request = activityRequest(run.runId, "state-fence");
         const pending = await store.startAction(request);
@@ -163,9 +171,11 @@ import { activityRequest, completionFor, createRunningRun, createStore, definiti
         await expect(store.prisma.workflowCompletion.findUnique({ where: { jobId: job.id } }))
             .resolves.toBeNull();
     });
+});
 
-    it("leaves an orphan queued Activity Job unclaimed", async () => {
-        const store = await createStore();
+it("leaves an orphan queued Activity Job unclaimed", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-orphan", "activity-worker");
         const request = activityRequest(run.runId, "orphan");
         const pending = await store.startAction(request);
@@ -174,4 +184,5 @@ import { activityRequest, completionFor, createRunningRun, createStore, definiti
         await expect(store.prisma.job.findUnique({ where: { id: pending.receipt } }))
             .resolves.toMatchObject({ status: "queued", workflowRunId: run.runId });
     });
+});
 

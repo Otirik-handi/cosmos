@@ -1,20 +1,9 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { ConnectorExecutionError, ConnectorProbeService, ConnectionProbeService, createBuiltinManifestCatalog, ConnectorRegistry, IngestionService, IngestionWorker, SourceConfigProbeService, type IngestConnector } from "@cosmos/application";
-import { PrismaCosmosRepository } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { createFixtureSource, withRepository } from "./index.fixtures.js";
 
     it("lets the persistent worker consume a queued source run end to end", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-worker-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("worker-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Worker fixture",
                 config: {},
@@ -65,20 +54,11 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             expect((await repository.getRun(run.id))?.status).toBe("succeeded");
             expect((await repository.feed({ limit: 20 })).items).toHaveLength(1);
             expect(await repository.getCheckpoint(source.id)).toBe("worker-cursor");
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("runs source probes in a worker without persisting entries or checkpoints", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-probe-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("probe-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Probe fixture",
                 config: {},
@@ -139,20 +119,11 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             });
             expect((await repository.entries({ limit: 20 })).items).toHaveLength(0);
             expect(await repository.getCheckpoint(source.id)).toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("runs a source config probe job idempotently without persisting library data", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-config-probe-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("config-probe-test", async (repository) => {
             const command = {
                 sourceDefinitionRef: "source.rss@1",
                 operationId: "fetch",
@@ -223,9 +194,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             });
             expect((await repository.entries({ limit: 20 })).items).toHaveLength(0);
             expect((await repository.listSources()).filter((source) => source.id === "config-probe")).toHaveLength(0);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     /**
@@ -233,14 +202,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
      * 跑完、结论写回连接。认领清单是显式的，所以这条用例同时守住「新 kind 进了 acceptedKinds」。
      */
     it("dispatches a connection probe job and writes the conclusion back", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-connection-probe-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("connection-probe-test", async (repository) => {
             const connection = await repository.createConnection({
                 name: "主账号",
                 connectorId: "bilibili",
@@ -294,20 +256,11 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
                 lastError: "需要重新登录。",
                 lastCheckedAt: "2026-09-23T09:00:00.000Z",
             });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("does not retry non-retryable connector failures", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-failure-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("failure-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Auth fixture",
                 config: {},
@@ -355,20 +308,11 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             expect(result?.status).toBe("failed_terminal");
             expect((await repository.getRun(run.id))?.status).toBe("failed");
             expect(job?.errorCode).toBe("authentication_required");
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("queues a scheduled source once per interval bucket", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-schedule-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("schedule-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Scheduled fixture",
                 config: {},
@@ -403,74 +347,68 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
 
             expect(result?.status).toBe("succeeded");
             expect(await repository.getCheckpoint(source.id)).toBe("schedule-cursor");
-        } finally {
-            await repository.close();
-        }
+        });
     });
     it("commits Workflow checkpoint revisions only under the current dual fence", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-checkpoint-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        const workflowRunId = "workflow-checkpoint-run";
-        const jobId = "workflow-checkpoint-job";
-        await repository.prisma.workflowRun.create({
-            data: {
-                id: workflowRunId,
-                stateJson: JSON.stringify({ runId: workflowRunId, status: "running", revision: 1 }),
-                kernelRevision: 1,
-                status: "running",
-                resumeRequired: false,
-                definitionKey: "cosmos.ingest",
-                definitionVersion: "1",
-                manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v1",
-                idempotencyKey: "workflow-checkpoint-command",
-                inputSnapshotJson: "{}",
-                productRunJson: "{}",
-                runLeaseOwner: "worker-checkpoint",
-                runLeaseToken: "run-fence",
-                runLeaseExpiresAt: new Date(Date.now() + 60_000),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-        });
-        await repository.prisma.sourceInstance.create({
-            data: {
-                id: "source-checkpoint",
-                name: "Checkpoint",
-                kind: "fixture-rss",
-                sourceDefinitionRef: "source.fixture-rss@1",
-                operationId: "fetch",
-                configJson: "{}",
-                enabled: true,
-                revision: 1,
-            },
-        });
-        await repository.prisma.job.create({
-            data: {
-                id: jobId,
-                workflowRunId,
-                kind: "workflow-activity",
-                status: "leased",
-                idempotencyKey: "workflow-checkpoint-job-key",
-                attempts: 1,
-                maxAttempts: 3,
-                payloadJson: JSON.stringify({
-                    activity: {
-                        key: "collection-plan.checkpoint",
-                        path: "root",
-                        seq: 0,
-                        kind: "action",
-                        fingerprint: "sha256:checkpoint",
-                    },
-                }),
-                leaseOwner: "worker-checkpoint",
-                leaseToken: "job-fence",
-                leaseExpiresAt: new Date(Date.now() + 60_000),
-                workflowKernelRevision: 1,
-            },
-        });
-        try {
+        await withRepository("workflow-checkpoint-test", async (repository) => {
+            const workflowRunId = "workflow-checkpoint-run";
+            const jobId = "workflow-checkpoint-job";
+            await repository.prisma.workflowRun.create({
+                data: {
+                    id: workflowRunId,
+                    stateJson: JSON.stringify({ runId: workflowRunId, status: "running", revision: 1 }),
+                    kernelRevision: 1,
+                    status: "running",
+                    resumeRequired: false,
+                    definitionKey: "cosmos.ingest",
+                    definitionVersion: "1",
+                    manifestHash: "builtin:cosmos.ingest@1:source-snapshot-v1",
+                    idempotencyKey: "workflow-checkpoint-command",
+                    inputSnapshotJson: "{}",
+                    productRunJson: "{}",
+                    runLeaseOwner: "worker-checkpoint",
+                    runLeaseToken: "run-fence",
+                    runLeaseExpiresAt: new Date(Date.now() + 60_000),
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                },
+            });
+            await repository.prisma.sourceInstance.create({
+                data: {
+                    id: "source-checkpoint",
+                    name: "Checkpoint",
+                    kind: "fixture-rss",
+                    sourceDefinitionRef: "source.fixture-rss@1",
+                    operationId: "fetch",
+                    configJson: "{}",
+                    enabled: true,
+                    revision: 1,
+                },
+            });
+            await repository.prisma.job.create({
+                data: {
+                    id: jobId,
+                    workflowRunId,
+                    kind: "workflow-activity",
+                    status: "leased",
+                    idempotencyKey: "workflow-checkpoint-job-key",
+                    attempts: 1,
+                    maxAttempts: 3,
+                    payloadJson: JSON.stringify({
+                        activity: {
+                            key: "collection-plan.checkpoint",
+                            path: "root",
+                            seq: 0,
+                            kind: "action",
+                            fingerprint: "sha256:checkpoint",
+                        },
+                    }),
+                    leaseOwner: "worker-checkpoint",
+                    leaseToken: "job-fence",
+                    leaseExpiresAt: new Date(Date.now() + 60_000),
+                    workflowKernelRevision: 1,
+                },
+            });
             await expect(repository.setWorkflowIngestCheckpoint({
                 planId: "plan:source-checkpoint",
                 workflowRunId,
@@ -501,7 +439,5 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             });
             await expect(repository.getCheckpointSnapshot("plan:source-checkpoint"))
                 .resolves.toEqual({ cursor: "cursor-1", revision: 1 });
-        } finally {
-            await repository.close();
-        }
+        });
     });

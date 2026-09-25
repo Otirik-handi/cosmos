@@ -1,11 +1,8 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { IngestionService, type IngestConnector } from "@cosmos/application";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import { PrismaCosmosRepository } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { createFixtureSource, withRepository } from "./index.fixtures.js";
 
 /**
  * LIB-001 的三个过滤维度：作者、媒体类型、录入状态。
@@ -15,14 +12,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
  * （即资产里存在该状态的媒体），不是"读没读过"——后者是 Read State（Phase 4）。
  */
 it("filters search by author, media type and local media status (LIB-001)", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-search-filters-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("search-filters", async (repository) => {
         const source = await createFixtureSource(repository, {
             name: "Filter fixture",
             config: {},
@@ -136,9 +126,7 @@ it("filters search by author, media type and local media status (LIB-001)", asyn
         expect(await titles({ author: "alice", contentKind: "video", assetStatus: "saved" }))
             .toEqual(["Alice 的评测视频"]);
         expect(await titles({ author: "alice", contentKind: "article" })).toEqual([]);
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 /**
@@ -147,11 +135,11 @@ it("filters search by author, media type and local media status (LIB-001)", asyn
  * 这条用例固定它也参与 `assetStatus` 过滤，而不是被当成「没有媒体」的同义词。
  */
 it("filters search by the skipped asset status (LIB-001)", async () => {
-    const { repository } = await seedFilterFixture([
-        { externalId: "saved-media", title: "已保存的图片", kind: "video", status: "saved", author: "Alice" },
-        { externalId: "skipped-media", title: "被跳过的图片", kind: "article", status: "skipped", author: "Bob" },
-    ]);
-    try {
+    await withRepository("search-filters", async (repository) => {
+        await seedFilterFixture(repository, [
+            { externalId: "saved-media", title: "已保存的图片", kind: "video", status: "saved", author: "Alice" },
+            { externalId: "skipped-media", title: "被跳过的图片", kind: "article", status: "skipped", author: "Bob" },
+        ]);
         const titles = async (query: Parameters<typeof repository.search>[0]) =>
             (await repository.search({ ...query, limit: 20 })).items.map((item) => item.title);
 
@@ -160,9 +148,7 @@ it("filters search by the skipped asset status (LIB-001)", async () => {
         expect(await titles({ assetStatus: "saved" })).toEqual(["已保存的图片"]);
         expect(await titles({ assetStatus: "failed" })).toEqual([]);
         expect(await titles({ assetStatus: "metadata_only" })).toEqual([]);
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 /**
@@ -170,12 +156,12 @@ it("filters search by the skipped asset status (LIB-001)", async () => {
  * 回到该来源的全量，而不是回到某一个维度上一次的取值。
  */
 it("returns every entry of the source once author, contentKind and assetStatus are all cleared (LIB-001)", async () => {
-    const { repository, sourceId } = await seedFilterFixture([
-        { externalId: "video-by-alice", title: "Alice 的评测视频", kind: "video", status: "saved", author: "Alice" },
-        { externalId: "article-by-bob", title: "Bob 的文章", kind: "article", status: "skipped", author: "Bob" },
-        { externalId: "post-without-author", title: "无作者的帖子", kind: "post", status: "failed", author: null },
-    ]);
-    try {
+    await withRepository("search-filters", async (repository) => {
+        const { sourceId } = await seedFilterFixture(repository, [
+            { externalId: "video-by-alice", title: "Alice 的评测视频", kind: "video", status: "saved", author: "Alice" },
+            { externalId: "article-by-bob", title: "Bob 的文章", kind: "article", status: "skipped", author: "Bob" },
+            { externalId: "post-without-author", title: "无作者的帖子", kind: "post", status: "failed", author: null },
+        ]);
         // 先确认夹具本身是有区分的：每个维度单独用都能把结果收窄到一条。
         expect((await repository.search({ author: "alice", limit: 20 })).items).toHaveLength(1);
         expect((await repository.search({ contentKind: "video", limit: 20 })).items).toHaveLength(1);
@@ -198,9 +184,7 @@ it("returns every entry of the source once author, contentKind and assetStatus a
         });
         expect(explicit.items).toHaveLength(3);
         expect(explicit.items.map((item) => item.title).sort()).toEqual(allTitles);
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 /** 资产状态从领域合同的资产输入推导，避免测试里另抄一份取值集合。 */
@@ -220,16 +204,10 @@ type FilterFixtureEntry = {
  * 不注入 mediaAcquirer，所以资产状态按夹具原样落库——`skipped` 与 `saved` 走的是
  * 同一条持久化路径（只有 saved 会去写 blob）。
  */
-async function seedFilterFixture(entries: readonly FilterFixtureEntry[]): Promise<{
-    repository: PrismaCosmosRepository;
-    sourceId: string;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-search-filters-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
+async function seedFilterFixture(
+    repository: PrismaCosmosRepository,
+    entries: readonly FilterFixtureEntry[],
+): Promise<{ sourceId: string }> {
     const source = await createFixtureSource(repository, { name: "Filter fixture", config: {} });
     const items: readonly NormalizedIngestItem[] = entries.map((entry) => ({
         externalId: entry.externalId,
@@ -272,5 +250,5 @@ async function seedFilterFixture(entries: readonly FilterFixtureEntry[]): Promis
         },
     };
     await new IngestionService(repository, () => connector).runSource(source.id);
-    return { repository, sourceId: source.id };
+    return { sourceId: source.id };
 }

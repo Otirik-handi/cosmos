@@ -1,28 +1,13 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import { StoryUserStateMigrationConflictError } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-const clients = new Set<PrismaClient>();
-
-afterEach(async () => {
-    await Promise.all([...clients].map((client) => client.$disconnect()));
-    clients.clear();
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("Story user-state migration", () => {
     it("moves only the named Story-target state and leaves the rest on the shell", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
 
             const result = await repository.migrateStoryUserState({
@@ -81,15 +66,11 @@ describe("Story user-state migration", () => {
                 reason: "拆分后把标记归到主事件",
                 basis: "entry-a 才是主事件",
             });
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("treats the reverse direction as the undo", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
             const selection = {
                 favorite: true,
@@ -124,15 +105,11 @@ describe("Story user-state migration", () => {
             const successor = await repository.story(family.successorAId);
             expect(successor?.favorited).toBe(false);
             expect(successor?.labels).toEqual([]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("lets the target's own row win when the same state is already there", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
             await repository.setFavorite({ targetType: "story", targetId: family.successorAId });
             await repository.attachLabel({
@@ -184,15 +161,11 @@ describe("Story user-state migration", () => {
             expect(await prisma.labelAssignment.count({
                 where: { targetType: "story", targetId: "story-shell" },
             })).toBe(1);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("stays inside one split family", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
             const base = {
                 favorite: true,
@@ -241,15 +214,11 @@ describe("Story user-state migration", () => {
             expect(await prisma.favorite.count({
                 where: { targetType: "story", targetId: "story-shell" },
             })).toBe(1);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("rejects a named row that is not on the source Story", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
             // A label of another Story, and a label attached to an Entry rather
             // than to a Story: neither can be named as Story-target state.
@@ -307,15 +276,11 @@ describe("Story user-state migration", () => {
             expect(await prisma.domainEvent.count({
                 where: { type: "story.user_state_migrated.v1" },
             })).toBe(0);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("never touches state whose target is an Entry", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
             // entry-a moved to successor A during the split; state hung on the
             // Entry follows the Entry, not the Story.
@@ -352,15 +317,11 @@ describe("Story user-state migration", () => {
             expect(await prisma.labelAssignment.count({
                 where: { labelId: family.labelBId, targetType: "entry", targetId: "entry-a" },
             })).toBe(1);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("treats an empty selection as a no-op with no audit event", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const family = await seedSplitFamily(repository, prisma);
 
             const result = await repository.migrateStoryUserState({
@@ -379,31 +340,15 @@ describe("Story user-state migration", () => {
                 where: { type: "story.user_state_migrated.v1" },
             })).toBe(0);
             expect((await repository.story("story-shell"))?.favorited).toBe(true);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
 
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-story-user-state-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(
-        databasePath,
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    );
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    clients.add(prisma);
-    const repository = new PrismaCosmosRepository({ dataRoot: root, prisma });
-    await repository.initialize();
-    return { repository, prisma };
+/** 本文件的场景包装：共享生命周期之上把用例正文交回给调用点。 */
+async function withRepositoryFixture(
+    body: (repository: PrismaCosmosRepository, prisma: PrismaClient) => Promise<void>,
+): Promise<void> {
+    await withRepository("story-user-state", body);
 }
 
 interface SplitFamily {
@@ -537,21 +482,4 @@ async function seedSplitFamily(
         placementId: placement.id,
         boardId: board.id,
     };
-}
-
-function deployMigrations(databasePath: string, schemaPath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        schemaPath,
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

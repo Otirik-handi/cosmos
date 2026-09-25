@@ -1,8 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import {
     EntityNotFoundError,
@@ -10,21 +5,15 @@ import {
     EntityRevisionConflictError,
     StoryNotFoundError,
 } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("Entity domain commands", () => {
     it("creates an entity with an alias and versions identity revisions", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("entity-relation", async (repository, prisma) => {
+            await seedStories(prisma);
             const created = await repository.createEntity({
                 name: "Jeff Dean",
                 type: "person",
@@ -78,15 +67,12 @@ describe("Entity domain commands", () => {
                 name: "X",
                 type: "person",
             })).rejects.toBeInstanceOf(EntityNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("links and unlinks a story with idempotent provenance and reflects on Story detail", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("entity-relation", async (repository, prisma) => {
+            await seedStories(prisma);
             const entity = await repository.createEntity({
                 name: "Jeff Dean",
                 type: "person",
@@ -144,15 +130,12 @@ describe("Entity domain commands", () => {
                 storyId: "story-a",
                 entityId: "entity-missing",
             })).rejects.toBeInstanceOf(EntityNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("creates typed relations with provenance and validates distinct endpoints", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("entity-relation", async (repository, prisma) => {
+            await seedStories(prisma);
             const jeff = await repository.createEntity({ name: "Jeff Dean", type: "person" });
             const loop = await repository.createEntity({ name: "Discovery Loop", type: "organization" });
             const google = await repository.createEntity({ name: "Google", type: "organization" });
@@ -225,15 +208,12 @@ describe("Entity domain commands", () => {
             expect((await repository.entity(jeffId))?.relations.some((r) => {
                 return r.toEntityId === googleId && r.relationType === "works_at";
             })).toBe(false);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("migrates Story↔Entity links when Stories are merged (move and collision)", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("entity-relation", async (repository, prisma) => {
+            await seedStories(prisma);
             const jeff = await repository.createEntity({ name: "Jeff Dean", type: "person" });
             const entityId = jeff!.entity.id;
 
@@ -264,15 +244,12 @@ describe("Entity domain commands", () => {
 
             const events = await repository.events({ afterSequence: 0, limit: 50 });
             expect(events.some((event) => event.type === "story_entity.merged.v1")).toBe(true);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("lists entities with link and relation counts", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("entity-relation", async (repository, prisma) => {
+            await seedStories(prisma);
             const jeff = await repository.createEntity({ name: "Jeff Dean", type: "person" });
             const loop = await repository.createEntity({ name: "Discovery Loop", type: "organization" });
             const jeffId = jeff!.entity.id;
@@ -293,32 +270,9 @@ describe("Entity domain commands", () => {
             expect(loopSummary.storyCount).toBe(0);
             expect(loopSummary.relationCount).toBe(1);
             expect(page.nextCursor).toBeNull();
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
-
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-entity-relation-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath);
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    const repository = new PrismaCosmosRepository({
-        dataRoot: root,
-        prisma,
-    });
-    await repository.initialize();
-    await seedStories(prisma);
-    return { repository, prisma };
-}
 
 async function seedStories(prisma: PrismaClient): Promise<void> {
     for (const id of ["source-a", "source-b"]) {
@@ -376,21 +330,4 @@ async function seedStories(prisma: PrismaClient): Promise<void> {
             data: { storyId: `story-${id.at(-1)}`, currentRevisionId: `er-${id}-1` },
         });
     }
-}
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

@@ -1,15 +1,14 @@
-import { cp, mkdir, mkdtemp } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { fingerprint } from "@notnotype/nb-workflow";
-import { PrismaClient } from "@prisma/client";
 import { expect, it } from "vitest";
+import { withTestDatabase } from "./index.fixtures.js";
 import { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 import { PrismaWorkflowEventSink } from "./workflow-event-sink.js";
-import { acceptCompletionInKernel, activityRequest, clients, completionFor, createRunningRun, createStore, databasePaths, definition, deployMigrations, roots, seedPendingActivity } from "./workflow-host-store.fixtures.js";
+import { acceptCompletionInKernel, activityRequest, completionFor, createRunningRun, createStore, seedPendingActivity } from "./workflow-host-store.fixtures.js";
 
-    it("applies the complete migration set to a fresh isolated SQLite root", async () => {
-        const store = await createStore();
+it("applies the complete migration set to a fresh isolated SQLite root", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const tables = await store.prisma.$queryRawUnsafe<readonly { name: string }[]>(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('WorkflowRun', 'WorkflowCompletion', 'Job') ORDER BY name",
         );
@@ -23,9 +22,11 @@ import { acceptCompletionInKernel, activityRequest, clients, completionFor, crea
         await expect(store.prisma.workflowRun.count()).resolves.toBe(0);
         await expect(store.prisma.workflowCompletion.count()).resolves.toBe(0);
     });
+});
 
-    it("rejects EventSink writes after the Run lease expires", async () => {
-        const store = await createStore();
+it("rejects EventSink writes after the Run lease expires", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const lease = await createRunningRun(store, "workflow-event-fence");
         const sink = new PrismaWorkflowEventSink(store.prisma);
         const request = {
@@ -62,11 +63,10 @@ import { acceptCompletionInKernel, activityRequest, clients, completionFor, crea
         }, lease)).rejects.toMatchObject({ code: "lease_lost" });
         await expect(store.prisma.domainEvent.count({ where: { workflowRunId: lease.runId } })).resolves.toBe(2);
     });
-    it("upgrades an isolated pre-host database while preserving old WorkflowRun data", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-host-upgrade-"));
-        roots.push(root);
-        const databasePath = join(root, "upgrade.sqlite");
-        const oldPrismaRoot = join(root, "old-prisma");
+});
+it("upgrades an isolated pre-host database while preserving old WorkflowRun data", async () => {
+    await withTestDatabase("workflow-host-upgrade", async (database) => {
+        const oldPrismaRoot = join(database.root, "old-prisma");
         const oldMigrationsRoot = join(oldPrismaRoot, "migrations");
         await mkdir(oldMigrationsRoot, { recursive: true });
         const sourcePrismaRoot = resolve(process.cwd(), "packages/storage-prisma/prisma");
@@ -80,20 +80,16 @@ import { acceptCompletionInKernel, activityRequest, clients, completionFor, crea
         ]) {
             await cp(join(sourcePrismaRoot, "migrations", migration), join(oldMigrationsRoot, migration), { recursive: true });
         }
-        await deployMigrations(databasePath, join(oldPrismaRoot, "schema.prisma"));
-        const oldClient = new PrismaClient({ datasources: { db: { url: `file:${databasePath}` } } });
-        clients.add(oldClient);
+        database.deploy(join(oldPrismaRoot, "schema.prisma"));
+        const oldClient = database.openClient();
         await oldClient.$executeRawUnsafe(
             `INSERT INTO "WorkflowRun" ("id", "stateJson", "kernelRevision", "status", "resumeRequired", "definitionKey", "definitionVersion", "manifestHash", "createdAt", "updatedAt") VALUES ('old-run', '{"runId":"old-run","definition":{"key":"cosmos.ingest","version":"1","manifestHash":"sha256:old"},"input":{"kind":"inline","value":{}},"extensionContext":{},"status":"running","resumeRequired":true,"cancelRequestedAt":null,"budget":null,"checkpoint":null,"pendingAsks":[],"pendingWaits":[],"pendingActivities":[],"activityCompletions":[],"logs":[],"progress":null,"journal":[],"revision":0,"createdAt":"2026-08-14T00:00:00.000Z","updatedAt":"2026-08-14T00:00:00.000Z"}', 0, 'running', 1, 'cosmos.ingest', '1', 'sha256:old', '2026-08-14T00:00:00.000Z', '2026-08-14T00:00:00.000Z')`,
         );
         await oldClient.$disconnect();
-        clients.delete(oldClient);
 
-        await deployMigrations(databasePath, join(sourcePrismaRoot, "schema.prisma"));
-        const client = new PrismaClient({ datasources: { db: { url: `file:${databasePath}` } } });
-        clients.add(client);
+        database.deploy(join(sourcePrismaRoot, "schema.prisma"));
+        const client = database.openClient();
         const store = new PrismaWorkflowHostStore(client);
-        databasePaths.set(store, databasePath);
         await expect(client.workflowRun.findUnique({ where: { id: "old-run" } }))
             .resolves.toMatchObject({
                 id: "old-run",
@@ -105,14 +101,12 @@ import { acceptCompletionInKernel, activityRequest, clients, completionFor, crea
         await expect(store.loadWorkflowEnvelope("old-run"))
             .resolves.toMatchObject({ runId: "old-run", status: "running" });
     });
+});
 
-    it("fences claims and old completion leases across two Prisma clients", async () => {
-        const firstStore = await createStore();
-        const databasePath = databasePaths.get(firstStore);
-        if (!databasePath) throw new Error("expected isolated database path");
-        const secondClient = new PrismaClient({ datasources: { db: { url: `file:${databasePath}` } } });
-        clients.add(secondClient);
-        const secondStore = new PrismaWorkflowHostStore(secondClient);
+it("fences claims and old completion leases across two Prisma clients", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const firstStore = createStore(database);
+        const secondStore = new PrismaWorkflowHostStore(database.openClient());
         const claimNow = new Date("2026-08-14T00:01:00.000Z");
         const run = await createRunningRun(
             firstStore,
@@ -187,4 +181,5 @@ import { acceptCompletionInKernel, activityRequest, clients, completionFor, crea
             now: new Date(available.availableAt.getTime() + 2_000),
         })).toBe(true);
     });
+});
 

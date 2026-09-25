@@ -1,28 +1,13 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import { StorySubtypeInvalidError } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-const clients = new Set<PrismaClient>();
-
-afterEach(async () => {
-    await Promise.all([...clients].map((client) => client.$disconnect()));
-    clients.clear();
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("Story subtype registry", () => {
     it("persists a registered subtype and a changed kind on the Story", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await seedStory(prisma, { storyId: "story-1", kind: "document", subtype: null, title: "作品" });
 
             const updated = await repository.updateStoryRevision({
@@ -39,15 +24,11 @@ describe("Story subtype registry", () => {
             expect(updated?.story).toMatchObject({ kind: "media", subtype: "media.comic" });
             expect(await prisma.storyRevision.count({ where: { storyId: "story-1" } })).toBe(2);
             expect((await repository.story("story-1"))?.story.subtype).toBe("media.comic");
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("rejects unregistered and cross-kind subtypes without touching the Story", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await seedStory(prisma, { storyId: "story-1", kind: "media", subtype: null, title: "作品" });
 
             await expect(repository.updateStoryRevision({
@@ -80,15 +61,11 @@ describe("Story subtype registry", () => {
             const story = await repository.story("story-1");
             expect(story?.story).toMatchObject({ kind: "media", subtype: null, title: "作品" });
             expect(await prisma.storyRevision.count({ where: { storyId: "story-1" } })).toBe(1);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("keeps an unregistered legacy subtype while other fields change", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await seedStory(prisma, {
                 storyId: "story-legacy",
                 kind: "event",
@@ -122,15 +99,11 @@ describe("Story subtype registry", () => {
                 subtype: "media.anime",
             });
             expect(migrated?.story).toMatchObject({ kind: "media", subtype: "media.anime" });
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("rejects a legacy subtype when the kind changes or the value is replaced", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await seedStory(prisma, {
                 storyId: "story-legacy",
                 kind: "event",
@@ -155,15 +128,11 @@ describe("Story subtype registry", () => {
                 kind: "event",
                 subtype: "event.other",
             })).rejects.toBeInstanceOf(StorySubtypeInvalidError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("rejects an unregistered successor subtype on split", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await seedStory(prisma, { storyId: "story-shell", kind: "media", subtype: null, title: "被合并的作品" });
             await seedSourceAndEntries(prisma, ["entry-a", "entry-b"], "story-shell");
 
@@ -228,31 +197,15 @@ describe("Story subtype registry", () => {
             });
             expect(successors.map((successor) => successor.subtype).sort())
                 .toEqual(["media.comic", "media.video"]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
 
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-story-subtype-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(
-        databasePath,
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    );
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    clients.add(prisma);
-    const repository = new PrismaCosmosRepository({ dataRoot: root, prisma });
-    await repository.initialize();
-    return { repository, prisma };
+/** 本文件的场景包装：共享生命周期之上把用例正文交回给调用点。 */
+async function withRepositoryFixture(
+    body: (repository: PrismaCosmosRepository, prisma: PrismaClient) => Promise<void>,
+): Promise<void> {
+    await withRepository("story-subtype", body);
 }
 
 async function seedStory(
@@ -317,21 +270,4 @@ async function seedSourceAndEntries(
             data: { storyId, currentRevisionId: `er-${entryId}` },
         });
     }
-}
-
-function deployMigrations(databasePath: string, schemaPath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        schemaPath,
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

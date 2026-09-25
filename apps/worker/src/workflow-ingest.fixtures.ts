@@ -23,15 +23,50 @@ import { createWorkflowHost } from "./workflow-host.js";
 
 export const temporaryRoots: string[] = [];
 
+/** 还开着的测试仓储；清理时先兜底断开，再删根（见 `cleanupTemporaryRoots`）。 */
+const openRepositories = new Set<PrismaCosmosRepository>();
+
 /**
  * 每个测试文件各自注册 `afterEach(cleanupTemporaryRoots)`——装置模块不注册钩子，
  * 否则被导入时会重复注册清理。
+ *
+ * 删根之前先断开还开着的仓储：用例被 vitest 超时中断时它的 `finally` 不会跑到，
+ * Prisma 客户端会把 sqlite 文件句柄留着，`rm` 就会撞 `EBUSY`，而那条 EBUSY 会把
+ * 真正的中断报错盖住，失败点还会漂到同文件后面某个用例的清理上。
  */
 export async function cleanupTemporaryRoots(): Promise<void> {
+    await Promise.all([...openRepositories].map((repository) => releaseRepository(repository)));
     await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, {
         recursive: true,
         force: true,
     })));
+}
+
+/** 测试仓储的唯一生命周期实现：建隔离根 → 迁移 → 打开 → 交给用例 → 无论成败都关闭。 */
+export async function withRepository(
+    name: string,
+    body: (repository: PrismaCosmosRepository) => Promise<void>,
+): Promise<void> {
+    const root = await mkdtemp(join(tmpdir(), `cosmos-${name}-`));
+    temporaryRoots.push(root);
+    prepareDatabase(root);
+
+    const repository = new PrismaCosmosRepository({ dataRoot: root });
+    openRepositories.add(repository);
+    await repository.initialize();
+    try {
+        await body(repository);
+    } finally {
+        await releaseRepository(repository);
+    }
+}
+
+/** 幂等释放：登记表里已经没有了就什么都不做。 */
+async function releaseRepository(repository: PrismaCosmosRepository): Promise<void> {
+    if (!openRepositories.delete(repository)) {
+        return;
+    }
+    await repository.close();
 }
 
 

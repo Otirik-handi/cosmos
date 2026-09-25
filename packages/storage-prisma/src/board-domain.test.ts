@@ -1,8 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import {
     BoardBlockNotFoundError,
@@ -13,20 +8,13 @@ import {
     StoryNotFoundError,
 } from "@cosmos/application";
 import { type BoardDetail } from "@cosmos/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("board domain commands", () => {    it("seeds the default board idempotently with hot/curation/feed sections", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const first = await repository.ensureDefaultBoard();
             expect(first.name).toBe("默认看板");
             expect(first.sections.map((section) => section.title)).toEqual([
@@ -51,15 +39,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
             const recreated = await repository.ensureDefaultBoard();
             expect(recreated.id).not.toBe(first.id);
             expect(recreated.sections).toHaveLength(3);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("creates, renames and deletes boards with unique names", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const created = await repository.createBoard({
                 name: "工作",
                 description: "工作相关",
@@ -84,15 +68,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
                 boardId: created.id,
                 name: "任意",
             })).rejects.toBeInstanceOf(BoardNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("validates block configs against the per-type whitelist", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const board = await repository.createBoard({ name: "看板" });
             const section = await repository.createSection({
                 boardId: board.id,
@@ -141,15 +121,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
                 config: {},
             });
             expect(updated.sections[0]!.blocks[0]!.config).toEqual({});
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("moves blocks across sections with resequencing and toggles visibility", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const board = await repository.createBoard({ name: "看板" });
             const sections = await repository.createSection({
                 boardId: board.id,
@@ -209,15 +185,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
                 blockId: "missing-block",
                 visible: true,
             })).rejects.toBeInstanceOf(BoardBlockNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("reorders blocks inside one section by the post-removal index and persists it", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const { boardId, blockIds, orderOf } = await seedFourBlockSection(repository);
             const [, blockB] = blockIds;
 
@@ -236,15 +208,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
             expect(orderOf(reloaded!)).toEqual(["A", "C", "B", "D"]);
             expect(reloaded!.sections[0]!.blocks.map((block) => block.position))
                 .toEqual([0, 1, 2, 3]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("moves the first block of a section into the second slot", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const { boardId, sectionId, blockIds, orderOf } = await seedFourBlockSection(repository);
             const [blockA] = blockIds;
 
@@ -260,15 +228,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
 
             const reloaded = await repository.getBoard(boardId);
             expect(orderOf(reloaded!)).toEqual(["B", "A", "C", "D"]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("duplicates a block with the same config and deletes blocks without touching content", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             const savedView = await repository.createSavedView({
                 name: "开发",
                 conditions: { text: "dev", labelIds: [], topicIds: [] },
@@ -313,15 +277,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
                 savedViewId: savedView.id,
                 limit: 10,
             });
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("pins and unpins spotlight placements and follows Story merges", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             await seedStory(prisma, "story-a", "Story A");
             await seedStory(prisma, "story-b", "Story B");
             await seedTopic(prisma, "topic-a", "Topic A");
@@ -379,15 +339,11 @@ describe("board domain commands", () => {    it("seeds the default board idempot
             expect(afterUnpin.items).toHaveLength(1);
             await expect(repository.deleteSpotlightPlacement(pinned.id))
                 .rejects.toBeInstanceOf(SpotlightPlacementNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("collapses duplicate spotlight placements on a same-board merge collision", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("board", async (repository, prisma) => {
             await seedStory(prisma, "story-a", "Story A");
             await seedStory(prisma, "story-b", "Story B");
             const board = await repository.createBoard({ name: "看板" });
@@ -409,31 +365,9 @@ describe("board domain commands", () => {    it("seeds the default board idempot
             const placements = await repository.listSpotlightPlacements({ boardId: board.id });
             expect(placements.items).toHaveLength(1);
             expect(placements.items[0]!.targetId).toBe("story-b");
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
-
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-board-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath);
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    const repository = new PrismaCosmosRepository({
-        dataRoot: root,
-        prisma,
-    });
-    await repository.initialize();
-    return { repository, prisma };
-}
 
 async function seedStory(prisma: PrismaClient, id: string, title: string): Promise<void> {
     await prisma.story.create({ data: { id, kind: "document" } });
@@ -511,21 +445,4 @@ async function seedTopic(prisma: PrismaClient, id: string, title: string): Promi
         where: { id },
         data: { currentRevisionId: `rev-${id}-1` },
     });
-}
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

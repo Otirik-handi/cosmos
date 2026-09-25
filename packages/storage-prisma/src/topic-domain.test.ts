@@ -1,8 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import {
     StoryNotFoundError,
@@ -11,21 +6,15 @@ import {
     TopicNotFoundError,
     TopicRevisionConflictError,
 } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("Topic domain commands", () => {
     it("creates a topic with seed and versions revisions", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("topic-domain", async (repository, prisma) => {
+            await seedStories(prisma);
             const created = await repository.createTopic({
                 title: "Jeff Dean 离职为什么轰动",
                 purpose: "理解离职的来龙去脉",
@@ -82,15 +71,12 @@ describe("Topic domain commands", () => {
                 purpose: "p",
                 scope: null,
             })).rejects.toBeInstanceOf(TopicNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("manages members with idempotent add, role change, remove, and restore", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("topic-domain", async (repository, prisma) => {
+            await seedStories(prisma);
             const topic = await repository.createTopic({
                 title: "Members",
                 purpose: "p",
@@ -168,15 +154,12 @@ describe("Topic domain commands", () => {
                 storyId: "story-missing",
                 role: "core",
             })).rejects.toBeInstanceOf(StoryNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("merges topics with member dedup and alias redirect", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("topic-domain", async (repository, prisma) => {
+            await seedStories(prisma);
             const topicOne = await repository.createTopic({
                 title: "Topic One",
                 purpose: "p1",
@@ -235,15 +218,12 @@ describe("Topic domain commands", () => {
                 canonicalTopicId: topicOne!.topic.id,
                 obsoleteTopicIds: ["topic-missing"],
             })).rejects.toBeInstanceOf(TopicNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("migrates topic memberships when Stories are merged (move and collision)", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("topic-domain", async (repository, prisma) => {
+            await seedStories(prisma);
             // Move path: topic has only story-b; merging story-b into story-a moves it.
             const topic = await repository.createTopic({
                 title: "Move case",
@@ -287,15 +267,12 @@ describe("Topic domain commands", () => {
             expect(membershipEvents.some((event) => {
                 return event.type === "topic.membership_merged.v1";
             })).toBe(true);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("lists topics with active member counts", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("topic-domain", async (repository, prisma) => {
+            await seedStories(prisma);
             const topic = await repository.createTopic({
                 title: "List me",
                 purpose: "p",
@@ -316,32 +293,9 @@ describe("Topic domain commands", () => {
             expect(page.items[0].memberCount).toBe(1);
             expect(page.items[0].title).toBe("List me");
             expect(page.nextCursor).toBeNull();
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
-
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-topic-domain-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath);
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    const repository = new PrismaCosmosRepository({
-        dataRoot: root,
-        prisma,
-    });
-    await repository.initialize();
-    await seedStories(prisma);
-    return { repository, prisma };
-}
 
 async function seedStories(prisma: PrismaClient): Promise<void> {
     for (const id of ["source-a", "source-b"]) {
@@ -399,21 +353,4 @@ async function seedStories(prisma: PrismaClient): Promise<void> {
             data: { storyId: `story-${id.at(-1)}`, currentRevisionId: `er-${id}-1` },
         });
     }
-}
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

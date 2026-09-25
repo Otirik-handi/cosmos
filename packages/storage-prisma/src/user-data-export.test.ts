@@ -1,25 +1,14 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import { userDataExportSchema } from "@cosmos/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("user data export (LIB-008 / OPS-004)", () => {
     it("bundles user truth objects with resolved reference targets", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-data-export", async (repository, prisma) => {
+            await seedStory(prisma);
             const label = await repository.createLabel({ name: "关注" });
             await repository.attachLabel({ labelId: label.id, targetType: "story", targetId: "story-a" });
             await repository.attachLabel({ labelId: label.id, targetType: "entry", targetId: "entry-a" });
@@ -75,15 +64,12 @@ describe("user data export (LIB-008 / OPS-004)", () => {
             const entryTarget = payload.data.targets.find((target) => target.targetType === "entry");
             expect(entryTarget?.title).toBe("entry-a");
             expect(entryTarget?.webUrl).toBe("https://example.com/entry-a");
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("excludes secrets, connections, sources and internal storage keys", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-data-export", async (repository, prisma) => {
+            await seedStory(prisma);
             await prisma.connectionInstance.create({
                 data: {
                     id: "conn-1",
@@ -119,15 +105,12 @@ describe("user data export (LIB-008 / OPS-004)", () => {
             expect(text).not.toContain("source-a");
             expect(text).not.toContain("etag-1");
             expect(text).not.toContain("storageKey");
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("keeps dangling references and stays deterministic across exports", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-data-export", async (repository, prisma) => {
+            await seedStory(prisma);
             await repository.createLabel({ name: "乙" });
             await repository.createLabel({ name: "甲" });
             // Favorite 没有外键，目标 Story 被删后引用仍然留在用户数据里。
@@ -146,29 +129,9 @@ describe("user data export (LIB-008 / OPS-004)", () => {
                 title: null,
                 webUrl: null,
             }]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
-
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-user-data-export-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath);
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    const repository = new PrismaCosmosRepository({ dataRoot: root, prisma });
-    await repository.initialize();
-    await seedStory(prisma);
-    return { repository, prisma };
-}
 
 async function seedStory(prisma: PrismaClient): Promise<void> {
     await prisma.sourceInstance.create({
@@ -219,21 +182,4 @@ async function seedStory(prisma: PrismaClient): Promise<void> {
         where: { id: "entry-a" },
         data: { storyId: "story-a", currentRevisionId: "er-entry-a-1" },
     });
-}
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

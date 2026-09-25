@@ -1,42 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ConnectorStateImportRejectedError } from "@cosmos/application";
 import { connectorStateExportSchema, type ConnectorStateExport } from "@cosmos/contracts";
 
 import { PrismaConnectorStateStore, PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-function prepareDatabase(root: string): void {
-    const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolvePrismaCliPath();
-    const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
-    execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {
-        cwd: process.cwd(),
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "ignore",
-    });
-}
-
-async function createRepository(): Promise<PrismaCosmosRepository> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-connector-state-export-"));
-    roots.push(root);
-    prepareDatabase(root);
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    return repository;
-}
+import { withRepository } from "./index.fixtures.js";
 
 /** 建一个采集计划（v1 与来源一对一），返回计划身份与来源身份。 */
 async function createPlan(
@@ -71,8 +39,7 @@ function exportFile(namespaces: ConnectorStateExport["namespaces"]): ConnectorSt
 
 describe("ConnectorStateNamespace 归属登记 (ADR-0026)", () => {
     it("同一计划的重复登记是常态；别的计划抢同一个抽屉时保留首个登记", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connector-state-export", async (repository) => {
             const store = new PrismaConnectorStateStore(repository.prisma);
             const first = await createPlan(repository, "推荐流");
             const second = await createPlan(repository, "动态");
@@ -88,16 +55,13 @@ describe("ConnectorStateNamespace 归属登记 (ADR-0026)", () => {
             const rows = await repository.prisma.connectorStateNamespace.findMany();
             expect(rows.map((row) => [row.namespace, row.planId]))
                 .toEqual([[first.planId, first.planId]]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });
 
 describe("连接器状态清单与导出 (ING-012 / ADR-0026)", () => {
     it("清单以实际存在的抽屉为准，导出按范围收窄且不带走未归属抽屉", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connector-state-export", async (repository) => {
             const store = new PrismaConnectorStateStore(repository.prisma);
             const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
             const owned = await createPlan(repository, "推荐流");
@@ -161,16 +125,13 @@ describe("连接器状态清单与导出 (ING-012 / ADR-0026)", () => {
                     updatedAt: expect.any(String),
                 },
             ]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });
 
 describe("连接器状态导出件契约 (ING-012 / ADR-0026)", () => {
     it("真库导出件通过 schema 校验、不含 secretRef，且原样回导不覆盖任何东西", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connector-state-export", async (repository) => {
             const store = new PrismaConnectorStateStore(repository.prisma);
             const connection = await repository.createConnection({
                 name: "主账号",
@@ -213,16 +174,13 @@ describe("连接器状态导出件契约 (ING-012 / ADR-0026)", () => {
                 overwritten: 0,
                 skipped: 2,
             });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });
 
 describe("连接器状态导入 (ADR-0026)", () => {
     it("默认只补缺失；显式覆盖时把版本提到本地 +1，导入保持幂等", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connector-state-export", async (repository) => {
             const store = new PrismaConnectorStateStore(repository.prisma);
             const plan = await createPlan(repository, "推荐流");
             await store.registerNamespace(plan.planId, { planId: plan.planId });
@@ -275,14 +233,11 @@ describe("连接器状态导入 (ADR-0026)", () => {
                 .resolves.toEqual({ value: { etag: "imported" }, version: 3 });
             await expect(store.getState(plan.planId, "page"))
                 .resolves.toEqual({ value: { cursor: "p-1" }, version: 8 });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("换机改名只允许单抽屉，且目标抽屉必须已有归属登记", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connector-state-export", async (repository) => {
             const store = new PrismaConnectorStateStore(repository.prisma);
             const target = await createPlan(repository, "新环境的计划");
             await store.registerNamespace(target.planId, { planId: target.planId });
@@ -332,8 +287,6 @@ describe("连接器状态导入 (ADR-0026)", () => {
                 targetNamespace: "plan:not-registered",
                 export: single,
             })).rejects.toBeInstanceOf(ConnectorStateImportRejectedError);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });
