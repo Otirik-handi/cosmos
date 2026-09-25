@@ -1,5 +1,9 @@
 {
     "compilerOptions": {
+        // 编译报错时不产出。tsc 默认是 false，会让失败的构建留下看似正常的半成品；
+        // 实测过一次失败的 worker 构建把 rootDir 之外的包源码编译产物写进了它们自己的
+        // 源码目录（82 个未跟踪文件，与 dist 里的产物逐字节相同）。
+        "noEmitOnError": true,
         "target": "ES2022",
         "strict": true,
         "skipLibCheck": true,
