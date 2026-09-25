@@ -1,44 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-function prepareDatabase(root: string): void {
-    const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolvePrismaCliPath();
-    const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
-    execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {
-        cwd: process.cwd(),
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "ignore",
-    });
-}
-
-async function createRepository(): Promise<PrismaCosmosRepository> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-trigger-binding-"));
-    roots.push(root);
-    prepareDatabase(root);
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    return repository;
-}
+import { withRepository } from "./index.fixtures.js";
 
 describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
     it("creates a schedule TriggerBinding on source create and exposes it", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("trigger-binding", async (repository) => {
             const source = await repository.createSource({
                 name: "动态",
                 sourceDefinitionRef: "source.fixture-rss@1",
@@ -59,14 +25,11 @@ describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
             await expect(repository.listScheduleTriggers()).resolves.toEqual([
                 { planId: `plan:${source.id}`, sourceId: source.id, intervalMs: 60_000, lastRunAt: null },
             ]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("upserts and removes the schedule via the plan endpoint", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("trigger-binding", async (repository) => {
             const source = await repository.createSource({
                 name: "动态",
                 sourceDefinitionRef: "source.fixture-rss@1",
@@ -87,8 +50,6 @@ describe("PrismaCosmosRepository trigger binding (ADR-0018)", () => {
             });
             expect(cleared.scheduleIntervalMs).toBeNull();
             await expect(repository.listScheduleTriggers()).resolves.toEqual([]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

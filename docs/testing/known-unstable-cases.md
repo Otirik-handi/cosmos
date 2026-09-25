@@ -101,7 +101,7 @@
 
 ## 8. `afterEach` 清理临时根时的 `EBUSY`（Windows SQLite 文件锁）
 
-**状态（2026-09-24 观察；2026-09-25 机制查清，见下）**：测试用例本身跑完并通过，失败发生在**清理阶段**——删除临时根时 `cosmos.sqlite` 仍被占用。
+**状态（2026-09-24 观察；2026-09-25 机制查清并已修，见下）**：测试用例本身跑完并通过，失败发生在**清理阶段**——删除临时根时 `cosmos.sqlite` 仍被占用。
 
 | 跑法 | 结果 |
 |---|---|
@@ -121,6 +121,21 @@
 2. 「`close()` 与 `rm` 之间有未等待的异步收尾」——**不成立**。`repository.close()`（`packages/storage-prisma/src/repository/base.ts:61`）`await this.prisma.$disconnect()`。
 3. 「migrate CLI 进程还在跑」——**不成立**。`prepareDatabase` 用 `execFileSync`（`index.fixtures.ts:65`），会等 CLI 退出。
 
-**探针（负结果）**：按「建根 → `prepareDatabase` → 开仓储 → 查一次 → `close()` → 立刻 `rm`」跑 12 轮（37 秒），**EBUSY 0 次**。所以这段时序本身不脆——触发条件是**中断**，不是时序。
+**探针一（负结果）**：按「建根 → `prepareDatabase` → 开仓储 → 查一次 → `close()` → 立刻 `rm`」跑 12 轮（37 秒），**EBUSY 0 次**。所以这段时序本身不脆——触发条件是**中断**，不是时序。
 
-**建议的处理次序（已更新）**：原第③步「把清理改成有界重试」**推断无效**——被中断泄漏的客户端会一直连着，几秒退避也删不掉，不要走这条。真正的修法是**清理时先把还开着的仓储断开再删根**，仓库里已有现成范式：`media-retry.test.ts` 与 `entry-relation-domain.test.ts` 用 `const clients = new Set<PrismaClient>()` 跟踪客户端，`afterEach` 里先 `$disconnect()` 再 `rm`；而共享 fixture（约 35 个文件在用）缺这一步。**未做**：改动面约 35 个文件（或把各文件本地的 `withRepository` 收敛成一个共享助手），规模超出本轮，口径待维护者选。
+**探针二（确定性复现，2026-09-25）**：用「启动共享生命周期助手但不 `await` 它」来模拟用例被中断——被中断的 async 函数不会继续执行，`finally` 跑不到。结果：
+
+| 步骤 | 结果 |
+|---|---|
+| 中断留下的仓储 + **直接 `rm`** | `EBUSY: resource busy or locked, unlink '...\cosmos.sqlite'`——**与上面表格里的错误一字不差** |
+| 同一状态走**共享清理**（先兜底断开登记的仓储再删根） | 根已删除 |
+
+所以机制不再是推断：**中断 → `finally` 不跑 → 句柄留着 → `rm` 撞 EBUSY**，而修复确实覆盖它。
+
+**已修（2026-09-25，分支 `refactor/no-ref-shared-test-lifecycle`）**：把各文件自己写一遍的「建根 + 迁移 + 开仓储 + `finally` 关闭」收敛成共享助手的**唯一实现**，并且关闭走**登记**而不是只靠用例的 `finally`——清理会兜底断开还开着的客户端再删根。
+
+- **两个原语，一套清理**（都在 `packages/storage-prisma/src/index.fixtures.ts`）：`withRepository(name, body(repository, prisma))` 给「用例要仓储」的；`withTestDatabase(name, body(database))` 给「只有数据库」的（迁移/升级/backfill：要在**同一个 DB 文件上分步部署 schema**、分步开关裸客户端）。另有 `deploySchema` / `sqliteUrl` / `prepareDatabase` 供文件级复用。`apps/worker/src/workflow-ingest.fixtures.ts` 同样加了兜底断开，并保留它「不在模块级注册钩子」的既有设计。
+- **收敛范围**：`packages/storage-prisma` 34 个测试文件 + `apps/worker` 2 个 + 两处装置模块（`index.fixtures.ts`、`workflow-host-store.fixtures.ts`——后者原本自带第三份 `deployMigrations`，且 URL 拼法没把反斜杠转正斜杠）。`blob-store`(2) / `logging`(1) / `apps/worker` 的 `workflow-host.test.ts` 只用临时**目录**、不碰 SQLite，**无句柄可泄漏，不在范围内**。
+- **再验证（对着定稿的 fixture 重做，覆盖两个原语）**：用「启动原语但不 `await` 它」模拟用例被中断——两个原语下**直接 `rm` 都撞出与上面表格一字不差的 EBUSY**，而走共享清理后根都被删除。
+- **一个附带事实**：Prisma **懒连接**——只 `new` 出来、没跑过查询的客户端**不持有文件句柄**（第一次探针因此没复现出 EBUSY，修正为真的 `$connect()` 后才复现）。所以泄漏的前提是「客户端已经连上」，而 `withRepository` 里的 `initialize()` 正是连上的那一步。
+- **这也顺带否掉了原建议的第③步「有界重试」**：被中断泄漏的客户端会一直连着，几秒退避删不掉，不要走那条。

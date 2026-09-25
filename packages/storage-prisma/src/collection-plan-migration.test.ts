@@ -1,46 +1,12 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-function prepareDatabase(root: string): void {
-    const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolvePrismaCliPath();
-    const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
-    execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {
-        cwd: process.cwd(),
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "ignore",
-    });
-}
-
-async function createRepository(): Promise<PrismaCosmosRepository> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-collection-plan-"));
-    roots.push(root);
-    prepareDatabase(root);
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    return repository;
-}
+import { withRepository } from "./index.fixtures.js";
 
 type ColumnInfo = { name: string; notnull: number | bigint };
 
 describe("CollectionPlan expand 迁移 (ADR-0023 决策 2)", () => {
     it("建出计划表，并给 Run/WorkflowRun/Checkpoint/TriggerBinding 增加可空计划列", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan", async (repository) => {
             const planColumns = await repository.prisma.$queryRawUnsafe<ColumnInfo[]>(
                 `PRAGMA table_info("CollectionPlan")`,
             );
@@ -66,14 +32,11 @@ describe("CollectionPlan expand 迁移 (ADR-0023 决策 2)", () => {
                 expect(planId, `${table}.planId 必须存在`).toBeDefined();
                 expect(Number(planId?.notnull), `${table}.planId 必须可空`).toBe(0);
             }
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("计划与采集目标一对一：同一目标的第二个计划被数据库拒绝", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan", async (repository) => {
             // 创建来源已经带出默认计划（切片 1c-1a），这里要证明的是第二个计划进不来，
             // 而不是靠调用方自觉维持一对一。
             const source = await repository.createSource({
@@ -86,8 +49,6 @@ describe("CollectionPlan expand 迁移 (ADR-0023 决策 2)", () => {
             await expect(repository.prisma.collectionPlan.create({
                 data: { id: "plan-2", name: "同一目标的第二个计划", sourceId: source.id },
             })).rejects.toThrow(/Unique constraint/);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

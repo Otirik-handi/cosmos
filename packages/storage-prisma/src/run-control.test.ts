@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { withTestDatabase } from "./index.fixtures.js";
 import { createRunningRun, createStore, definition, inputSnapshot, productRun } from "./workflow-host-store.fixtures.js";
 
-    describe("Run control (RUN-004 / ADR-0016)", () => {
-        it("cancelWorkflowRun terminalizes a running Run, clears the lease and fences heartbeat", async () => {
-            const store = await createStore();
+describe("Run control (RUN-004 / ADR-0016)", () => {
+    it("cancelWorkflowRun terminalizes a running Run, clears the lease and fences heartbeat", async () => {
+        await withTestDatabase("workflow-host", async (database) => {
+            const store = createStore(database);
             const lease = await createRunningRun(store, "run-cancel");
 
             const envelope = await store.cancelWorkflowRun({ runId: lease.runId });
@@ -23,9 +25,11 @@ import { createRunningRun, createStore, definition, inputSnapshot, productRun } 
                 where: { workflowRunId: lease.runId, type: "run.cancelled.v1" },
             })).resolves.toBe(1);
         });
+    });
 
-        it("cancelWorkflowRun rejects a missing or terminal Run", async () => {
-            const store = await createStore();
+    it("cancelWorkflowRun rejects a missing or terminal Run", async () => {
+        await withTestDatabase("workflow-host", async (database) => {
+            const store = createStore(database);
             await expect(store.cancelWorkflowRun({ runId: "missing" }))
                 .rejects.toMatchObject({ code: "not_found" });
 
@@ -43,9 +47,11 @@ import { createRunningRun, createStore, definition, inputSnapshot, productRun } 
             await expect(store.cancelWorkflowRun({ runId: envelope.runId }))
                 .rejects.toMatchObject({ code: "conflict" });
         });
+    });
 
-        it("recoverWorkflowRun marks a lease-less Run resume-required", async () => {
-            const store = await createStore();
+    it("recoverWorkflowRun marks a lease-less Run resume-required", async () => {
+        await withTestDatabase("workflow-host", async (database) => {
+            const store = createStore(database);
             const envelope = await store.createWorkflowEnvelope({
                 runId: "run-recover",
                 idempotencyKey: "recover",
@@ -59,9 +65,11 @@ import { createRunningRun, createStore, definition, inputSnapshot, productRun } 
             expect(row.resumeRequired).toBe(true);
             expect(row.runLeaseOwner).toBeNull();
         });
+    });
 
-        it("recoverWorkflowRun rejects a missing, terminal or actively-executing Run", async () => {
-            const store = await createStore();
+    it("recoverWorkflowRun rejects a missing, terminal or actively-executing Run", async () => {
+        await withTestDatabase("workflow-host", async (database) => {
+            const store = createStore(database);
             await expect(store.recoverWorkflowRun({ runId: "missing" }))
                 .rejects.toMatchObject({ code: "not_found" });
 
@@ -83,9 +91,11 @@ import { createRunningRun, createStore, definition, inputSnapshot, productRun } 
             await expect(store.recoverWorkflowRun({ runId: terminal.runId }))
                 .rejects.toMatchObject({ code: "conflict" });
         });
+    });
 
-        it("listWorkflowRuns returns recent runs newest-first, limited and source-filtered", async () => {
-            const store = await createStore();
+    it("listWorkflowRuns returns recent runs newest-first, limited and source-filtered", async () => {
+        await withTestDatabase("workflow-host", async (database) => {
+            const store = createStore(database);
             await store.createWorkflowEnvelope({
                 runId: "run-old",
                 idempotencyKey: "run-old",
@@ -124,3 +134,4 @@ import { createRunningRun, createStore, definition, inputSnapshot, productRun } 
             expect(filtered.map((envelope) => envelope.runId)).toEqual(["run-new-a", "run-old"]);
         });
     });
+});

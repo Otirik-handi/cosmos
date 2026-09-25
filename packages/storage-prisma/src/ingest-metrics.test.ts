@@ -1,24 +1,13 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { IngestionService, type IngestConnector } from "@cosmos/application";
-import { PrismaCosmosRepository } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { createFixtureSource, withRepository } from "./index.fixtures.js";
 
 /**
  * 指标刷新与时间回退的行为回归。原先寄居在 `source-activation.test.ts` 里，那条激活路径
  * 随 ADR-0023 的归属切换删除后，这个用例与本文件主题无关，独立成文件。
  */
 it("refreshes metrics without creating a revision and keeps publisher ids nullable", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-metrics-test-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("metrics-test", async (repository) => {
         const source = await createFixtureSource(repository, {
             name: "Metrics fixture",
             config: {},
@@ -116,7 +105,5 @@ it("refreshes metrics without creating a revision and keeps publisher ids nullab
         });
         expect((await repository.feed({ limit: 20 })).items[0]?.storyKind)
             .toBe("media");
-    } finally {
-        await repository.close();
-    }
+    });
 });

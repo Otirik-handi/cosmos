@@ -1,11 +1,10 @@
-import { mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { createMediaAcquirer, IngestionService, mediaDownloadCapability, type IngestConnector } from "@cosmos/application";
 import type { NormalizedIngestItem } from "@cosmos/domain";
-import { PrismaCosmosRepository, resolveStorageRoots } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { resolveStorageRoots } from "./index.js";
+import { createFixtureSource, withRepository } from "./index.fixtures.js";
 
     it("anchors relative data roots to the workspace root", () => {
         const workspaceRoot = resolve(tmpdir(), "cosmos-workspace-root");
@@ -20,14 +19,7 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
     });
 
     it("persists observations, revisions, assets, Story projections and FTS results", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-storage-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("storage-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Test fixture",
                 config: {},
@@ -190,20 +182,11 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             // Content revision without display-field change must not append a StoryRevision (ADR-0006).
             expect(storyRevisions.map((revision) => revision.revision)).toEqual([1]);
             expect(storyRevisions[0].fingerprint).toHaveLength(64);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("preflights unchanged items and skips media re-download on legacy runs", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-media-skip-legacy-test-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("media-skip-legacy-test", async (repository) => {
             const source = await createFixtureSource(repository, {
                 name: "Media skip fixture",
                 config: {},
@@ -289,8 +272,6 @@ import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fi
             expect(otherSourceUnchanged).toEqual([false]);
             expect(revisedUnchanged).toEqual([false]);
             expect(fetched).toHaveLength(1);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 

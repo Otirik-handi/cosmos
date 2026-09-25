@@ -1,11 +1,8 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { IngestionService, type IngestConnector } from "@cosmos/application";
 import type { NormalizedIngestItem } from "@cosmos/domain";
 import { PrismaCosmosRepository } from "./index.js";
-import { createFixtureSource, prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { createFixtureSource, withRepository } from "./index.fixtures.js";
 
 /**
  * ING-004：Observation 要记录「内容为什么被发现」。渠道由连接器在域层声明，
@@ -48,14 +45,7 @@ function baseItem(overrides: Partial<NormalizedIngestItem> = {}): NormalizedInge
 }
 
 it("persists the connector-declared discovery channel on the Observation (ING-004)", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-discovery-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("discovery", async (repository) => {
         const entryId = await ingestOne(repository, baseItem({ discoveryChannel: "recommendation" }));
 
         const detail = await repository.entry(entryId);
@@ -67,25 +57,14 @@ it("persists the connector-declared discovery channel on the Observation (ING-00
         });
         const legacy = await repository.entry(entryId);
         expect(legacy?.observations[0]?.discoveryChannel).toBe("unknown");
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 it("records unknown when the connector declares no channel", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-discovery-none-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("discovery-none", async (repository) => {
         const entryId = await ingestOne(repository, baseItem({ externalId: "discovery-2" }));
 
         const detail = await repository.entry(entryId);
         expect(detail?.observations[0]?.discoveryChannel).toBe("unknown");
-    } finally {
-        await repository.close();
-    }
+    });
 });

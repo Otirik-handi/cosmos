@@ -1,7 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 
 import { PrismaClient } from "@prisma/client";
 import {
@@ -9,19 +7,10 @@ import {
     EntryStoryLinkConflictError,
     StoryNotFoundError,
 } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-const clients = new Set<PrismaClient>();
-
-afterEach(async () => {
-    await Promise.all([...clients].map((client) => client.$disconnect()));
-    clients.clear();
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository, withTestDatabase } from "./index.fixtures.js";
 
 /** Everything before the Entry↔Story evidence migration. */
 const legacyMigrations = [
@@ -47,8 +36,7 @@ const legacyMigrations = [
 
 describe("Entry↔Story evidence relations", () => {
     it("links an entry to another story and projects both directions", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const updated = await repository.linkEntryStory({
                 entryId: "entry-a",
                 storyId: "story-b",
@@ -111,15 +99,11 @@ describe("Entry↔Story evidence relations", () => {
                 entryId: "entry-a",
                 storyId: "story-b",
             }))?.evidence).toEqual([]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("rejects linking an entry to its own primary story and unknown targets", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await expect(repository.linkEntryStory({
                 entryId: "entry-a",
                 storyId: "story-a",
@@ -142,15 +126,11 @@ describe("Entry↔Story evidence relations", () => {
                 entryId: "entry-missing",
                 storyId: "story-b",
             })).rejects.toBeInstanceOf(EntryNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("moves links to the canonical story on merge and drops links to the entry's own story", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await repository.linkEntryStory({
                 entryId: "entry-a",
                 storyId: "story-b",
@@ -190,15 +170,11 @@ describe("Entry↔Story evidence relations", () => {
             expect(mergedAgain?.evidence).toEqual([]);
             expect((await repository.entry("entry-a"))?.relatedStories).toEqual([]);
             expect((await repository.entry("entry-c"))?.relatedStories).toEqual([]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("collapses a duplicate link when both the obsolete and canonical story are linked", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await repository.linkEntryStory({
                 entryId: "entry-c",
                 storyId: "story-b",
@@ -225,15 +201,11 @@ describe("Entry↔Story evidence relations", () => {
                     title: "Story a",
                     reason: null,
                 }]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("drops a redundant link when the entry moves to its linked story", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             await repository.linkEntryStory({
                 entryId: "entry-a",
                 storyId: "story-b",
@@ -245,120 +217,98 @@ describe("Entry↔Story evidence relations", () => {
             });
             expect(moved?.evidence).toEqual([]);
             expect((await repository.entry("entry-a"))?.relatedStories).toEqual([]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("upgrades a pre-evidence database without losing entries, stories or links", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-entry-story-upgrade-"));
-        roots.push(root);
-        const databasePath = join(root, "upgrade.sqlite");
-        const prismaSource = resolve(process.cwd(), "packages/storage-prisma/prisma");
-        const oldPrismaRoot = join(root, "old-prisma");
-        const oldMigrationsRoot = join(oldPrismaRoot, "migrations");
-        await mkdir(oldMigrationsRoot, { recursive: true });
-        await cp(join(prismaSource, "schema.prisma"), join(oldPrismaRoot, "schema.prisma"));
-        await cp(
-            join(prismaSource, "migrations", "migration_lock.toml"),
-            join(oldMigrationsRoot, "migration_lock.toml"),
-        );
-        for (const migration of legacyMigrations) {
+        await withTestDatabase("entry-story-upgrade", async (database) => {
+            const prismaSource = resolve(process.cwd(), "packages/storage-prisma/prisma");
+            const oldPrismaRoot = join(database.root, "old-prisma");
+            const oldMigrationsRoot = join(oldPrismaRoot, "migrations");
+            await mkdir(oldMigrationsRoot, { recursive: true });
+            await cp(join(prismaSource, "schema.prisma"), join(oldPrismaRoot, "schema.prisma"));
             await cp(
-                join(prismaSource, "migrations", migration),
-                join(oldMigrationsRoot, migration),
-                { recursive: true },
+                join(prismaSource, "migrations", "migration_lock.toml"),
+                join(oldMigrationsRoot, "migration_lock.toml"),
             );
-        }
-        deployMigrations(databasePath, join(oldPrismaRoot, "schema.prisma"));
+            for (const migration of legacyMigrations) {
+                await cp(
+                    join(prismaSource, "migrations", migration),
+                    join(oldMigrationsRoot, migration),
+                    { recursive: true },
+                );
+            }
+            database.deploy(join(oldPrismaRoot, "schema.prisma"));
 
-        const oldClient = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        clients.add(oldClient);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "SourceInstance" ("id", "name", "kind", "sourceDefinitionRef", "operationId", "configJson", "enabled", "revision", "createdAt", "updatedAt") VALUES
-                ('source-a', 'source-a', 'rss', 'source.rss@1', 'fetch', '{}', 1, 1, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "Story" ("id", "kind", "subtype", "createdAt", "updatedAt") VALUES
-                ('story-a', 'document', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z'),
-                ('story-b', 'event', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "StoryRevision" ("id", "storyId", "revision", "fingerprint", "title", "summary", "createdAt") VALUES
-                ('rev-a-1', 'story-a', 1, 'fp-a', 'Story a', NULL, '2026-09-09T00:00:00.000Z'),
-                ('rev-b-1', 'story-b', 1, 'fp-b', 'Story b', NULL, '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            UPDATE "Story" SET "currentRevisionId" = 'rev-a-1' WHERE "id" = 'story-a';
-        `);
-        await oldClient.$executeRawUnsafe(`
-            UPDATE "Story" SET "currentRevisionId" = 'rev-b-1' WHERE "id" = 'story-b';
-        `);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "Entry" ("id", "sourceInstanceId", "canonicalExternalId", "storyId", "createdAt", "updatedAt") VALUES
-                ('entry-a', 'source-a', 'external:entry-a', 'story-a', '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "EntryRevision" ("id", "entryId", "revision", "title", "contentText", "contentFingerprint", "contentKind", "createdAt") VALUES
-                ('er-a-1', 'entry-a', 1, 'entry-a', 'body', 'fp-er-a', 'article', '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            UPDATE "Entry" SET "currentRevisionId" = 'er-a-1' WHERE "id" = 'entry-a';
-        `);
-        await oldClient.$disconnect();
-        clients.delete(oldClient);
+            const oldClient = database.openClient();
+            await oldClient.$executeRawUnsafe(`
+                INSERT INTO "SourceInstance" ("id", "name", "kind", "sourceDefinitionRef", "operationId", "configJson", "enabled", "revision", "createdAt", "updatedAt") VALUES
+                    ('source-a', 'source-a', 'rss', 'source.rss@1', 'fetch', '{}', 1, 1, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
+            `);
+            await oldClient.$executeRawUnsafe(`
+                INSERT INTO "Story" ("id", "kind", "subtype", "createdAt", "updatedAt") VALUES
+                    ('story-a', 'document', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z'),
+                    ('story-b', 'event', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
+            `);
+            await oldClient.$executeRawUnsafe(`
+                INSERT INTO "StoryRevision" ("id", "storyId", "revision", "fingerprint", "title", "summary", "createdAt") VALUES
+                    ('rev-a-1', 'story-a', 1, 'fp-a', 'Story a', NULL, '2026-09-09T00:00:00.000Z'),
+                    ('rev-b-1', 'story-b', 1, 'fp-b', 'Story b', NULL, '2026-09-09T00:00:00.000Z')
+            `);
+            await oldClient.$executeRawUnsafe(`
+                UPDATE "Story" SET "currentRevisionId" = 'rev-a-1' WHERE "id" = 'story-a';
+            `);
+            await oldClient.$executeRawUnsafe(`
+                UPDATE "Story" SET "currentRevisionId" = 'rev-b-1' WHERE "id" = 'story-b';
+            `);
+            await oldClient.$executeRawUnsafe(`
+                INSERT INTO "Entry" ("id", "sourceInstanceId", "canonicalExternalId", "storyId", "createdAt", "updatedAt") VALUES
+                    ('entry-a', 'source-a', 'external:entry-a', 'story-a', '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
+            `);
+            await oldClient.$executeRawUnsafe(`
+                INSERT INTO "EntryRevision" ("id", "entryId", "revision", "title", "contentText", "contentFingerprint", "contentKind", "createdAt") VALUES
+                    ('er-a-1', 'entry-a', 1, 'entry-a', 'body', 'fp-er-a', 'article', '2026-09-09T00:00:00.000Z')
+            `);
+            await oldClient.$executeRawUnsafe(`
+                UPDATE "Entry" SET "currentRevisionId" = 'er-a-1' WHERE "id" = 'entry-a';
+            `);
+            await oldClient.$disconnect();
 
-        deployMigrations(databasePath, join(prismaSource, "schema.prisma"));
-        const client = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        clients.add(client);
+            database.deploy();
+            const client = database.openClient();
 
-        // Existing rows survive the upgrade and the new relation table works.
-        expect(await client.entry.count()).toBe(1);
-        expect(await client.story.count()).toBe(2);
-        await client.entryStoryLink.create({
-            data: {
-                id: "link-1",
-                entryId: "entry-a",
-                storyId: "story-b",
-                relationType: "evidence_for",
-            },
+            // Existing rows survive the upgrade and the new relation table works.
+            expect(await client.entry.count()).toBe(1);
+            expect(await client.story.count()).toBe(2);
+            await client.entryStoryLink.create({
+                data: {
+                    id: "link-1",
+                    entryId: "entry-a",
+                    storyId: "story-b",
+                    relationType: "evidence_for",
+                },
+            });
+            expect(await client.entryStoryLink.count()).toBe(1);
+            await expect(client.entryStoryLink.create({
+                data: {
+                    id: "link-2",
+                    entryId: "entry-a",
+                    storyId: "story-b",
+                    relationType: "mentions",
+                },
+            })).rejects.toThrow(/Unique constraint failed/);
         });
-        expect(await client.entryStoryLink.count()).toBe(1);
-        await expect(client.entryStoryLink.create({
-            data: {
-                id: "link-2",
-                entryId: "entry-a",
-                storyId: "story-b",
-                relationType: "mentions",
-            },
-        })).rejects.toThrow(/Unique constraint failed/);
     });
 });
 
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-entry-story-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath, resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"));
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
+/** 本文件的场景包装：共享生命周期之上补一份 Story/Entry seed。 */
+async function withRepositoryFixture(
+    body: (repository: PrismaCosmosRepository, prisma: PrismaClient) => Promise<void>,
+): Promise<void> {
+    await withRepository("entry-story", async (repository, prisma) => {
+        await seedStories(prisma);
+        await body(repository, prisma);
     });
-    clients.add(prisma);
-    const repository = new PrismaCosmosRepository({
-        dataRoot: root,
-        prisma,
-    });
-    await repository.initialize();
-    await seedStories(prisma);
-    return { repository, prisma };
 }
 
 async function seedStories(prisma: PrismaClient): Promise<void> {
@@ -418,21 +368,4 @@ async function seedStories(prisma: PrismaClient): Promise<void> {
             data: { storyId, currentRevisionId: `er-${suffix}-1` },
         });
     }
-}
-
-function deployMigrations(databasePath: string, schemaPath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        schemaPath,
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

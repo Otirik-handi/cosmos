@@ -1,9 +1,5 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
-import { PrismaCosmosRepository } from "./index.js";
-import { prepareDatabase, temporaryRoots } from "./index.fixtures.js";
+import { withRepository } from "./index.fixtures.js";
 
 /**
  * 启用状态归采集计划（ADR-0023 决策 2）：写入口是 `updateCollectionPlan` 的 `enabled`，
@@ -12,14 +8,7 @@ import { prepareDatabase, temporaryRoots } from "./index.fixtures.js";
  * 归属切换删除，不再是第二个所有者。
  */
 it("enables and disables the plan through its own revision CAS", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-plan-activation-test-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("plan-activation-test", async (repository) => {
         const created = await repository.createSource({
             name: "Plan activation fixture",
             sourceDefinitionRef: "source.fixture-rss@1",
@@ -60,20 +49,11 @@ it("enables and disables the plan through its own revision CAS", async () => {
             enabled: false,
             revisionId: `${created.planId}:3`,
         });
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 it("keeps a stale plan revision from passing as a source revision", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-plan-activation-domain-test-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("plan-activation-domain-test", async (repository) => {
         const created = await repository.createSource({
             name: "Plan CAS domain fixture",
             sourceDefinitionRef: "source.fixture-rss@1",
@@ -91,20 +71,11 @@ it("keeps a stale plan revision from passing as a source revision", async () => 
             enabled: true,
             baseRevisionId: "plan:someone-else:1",
         })).rejects.toMatchObject({ code: "conflict" });
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 it("schedules by plan enabled state, not by the source row", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-plan-schedule-gate-test-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("plan-schedule-gate-test", async (repository) => {
         const created = await repository.createSource({
             name: "Schedule gate fixture",
             sourceDefinitionRef: "source.fixture-rss@1",
@@ -130,20 +101,11 @@ it("schedules by plan enabled state, not by the source row", async () => {
             data: { enabled: false },
         });
         await expect(repository.listScheduleTriggers()).resolves.toHaveLength(1);
-    } finally {
-        await repository.close();
-    }
+    });
 });
 
 it("stops scheduling a plan whose source was deleted", async () => {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-plan-tombstone-test-"));
-    temporaryRoots.push(root);
-    prepareDatabase(root);
-
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-
-    try {
+    await withRepository("plan-tombstone-test", async (repository) => {
         const created = await repository.createSource({
             name: "Tombstone fixture",
             sourceDefinitionRef: "source.fixture-rss@1",
@@ -175,7 +137,5 @@ it("stops scheduling a plan whose source was deleted", async () => {
             enabled: true,
             baseRevisionId: enabled.revisionId,
         })).rejects.toMatchObject({ code: "not_found" });
-    } finally {
-        await repository.close();
-    }
+    });
 });

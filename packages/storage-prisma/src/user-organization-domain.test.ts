@@ -1,8 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import {
     CollectionNotFoundError,
@@ -15,21 +10,15 @@ import {
     TopicNotFoundError,
 } from "@cosmos/application";
 import { type SavedView, type SearchQuery } from "@cosmos/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("user organization domain commands", () => {
     it("creates and deletes labels with unique names and assignment counts", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const created = await repository.createLabel({ name: "AI" });
             expect(created.assignedCount).toBe(0);
             await expect(repository.createLabel({ name: "AI" }))
@@ -52,15 +41,12 @@ describe("user organization domain commands", () => {
             expect(await repository.label(created.id)).toBeNull();
             await expect(repository.deleteLabel(created.id))
                 .rejects.toBeInstanceOf(LabelNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("attaches labels to story/entry/topic targets and resolves titles on detail", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const topic = await repository.createTopic({
                 title: "Jeff Dean 去向",
                 purpose: "跟踪去向",
@@ -130,15 +116,12 @@ describe("user organization domain commands", () => {
                 targetType: "story",
                 targetId: "story-a",
             })).rejects.toBeInstanceOf(LabelNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("manages collections and their Story membership", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const created = await repository.createCollection({
                 name: "Reading",
                 description: "稍后阅读",
@@ -196,15 +179,12 @@ describe("user organization domain commands", () => {
             await expect(repository.collection(created.id)).resolves.toBeNull();
             await expect(repository.deleteCollection(created.id))
                 .rejects.toBeInstanceOf(CollectionNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("sets and unsets Story/Entry favorites and reflects them on Story detail", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const story = await repository.story("story-a");
             expect(story?.favorited).toBe(false);
             expect(story?.labels).toEqual([]);
@@ -231,15 +211,12 @@ describe("user organization domain commands", () => {
                 targetType: "entry",
                 targetId: "entry-missing",
             })).rejects.toBeInstanceOf(EntryNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("migrates collections, favorites and labels when Stories are merged", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             // Move path: obsolete story-b owns the only row.
             const reading = await repository.createCollection({ name: "Reading" });
             await repository.addCollectionItem({
@@ -297,14 +274,11 @@ describe("user organization domain commands", () => {
             const events = await repository.events({ afterSequence: 0, limit: 100 });
             expect(events.some((event) => event.type === "collection.item_merged.v1")).toBe(true);
             expect(events.some((event) => event.type === "label.assignment_merged.v1")).toBe(true);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
     it("creates, edits and deletes annotations with target revision capture", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const created = await repository.createAnnotation({
                 targetType: "story",
                 targetId: "story-a",
@@ -378,15 +352,12 @@ describe("user organization domain commands", () => {
             const events = await repository.events({ afterSequence: 0, limit: 100 });
             expect(events.some((event) => event.type === "annotation.created.v1")).toBe(true);
             expect(events.some((event) => event.type === "annotation.deleted.v1")).toBe(true);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("re-points annotations to the canonical Story on merge", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const annotation = await repository.createAnnotation({
                 targetType: "story",
                 targetId: "story-b",
@@ -406,15 +377,12 @@ describe("user organization domain commands", () => {
                 targetType: "story",
                 targetId: "story-b",
             })).items.map((item) => item.id)).toEqual([annotation.id]);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("manages saved views and applies label/topic filters in search", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const created = await repository.createSavedView({
                 name: "AI 关注",
                 conditions: {
@@ -486,15 +454,12 @@ describe("user organization domain commands", () => {
                 name: "x",
                 conditions: {},
             })).rejects.toBeInstanceOf(SavedViewNotFoundError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("re-runs search from the conditions stored in a saved view", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
             const label = await repository.createLabel({ name: "关注" });
             await repository.attachLabel({
                 labelId: label.id,
@@ -526,10 +491,7 @@ describe("user organization domain commands", () => {
             expect(searchQueryFromSavedView(unmatched).labelIds).toBe(unused.id);
             expect((await repository.search(searchQueryFromSavedView(unmatched))).items)
                 .toHaveLength(0);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
 
@@ -547,26 +509,6 @@ function searchQueryFromSavedView(view: SavedView): SearchQuery {
         topicIds: view.topicIds.join(",") || undefined,
         limit: 20,
     };
-}
-
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-user-organization-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath);
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    const repository = new PrismaCosmosRepository({
-        dataRoot: root,
-        prisma,
-    });
-    await repository.initialize();
-    await seedStories(prisma);
-    return { repository, prisma };
 }
 
 async function seedStories(prisma: PrismaClient): Promise<void> {
@@ -625,21 +567,4 @@ async function seedStories(prisma: PrismaClient): Promise<void> {
             data: { storyId: `story-${id.at(-1)}`, currentRevisionId: `er-${id}-1` },
         });
     }
-}
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

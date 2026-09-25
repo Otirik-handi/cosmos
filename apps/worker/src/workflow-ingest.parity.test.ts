@@ -1,8 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     createMediaAcquirer,
@@ -16,29 +11,19 @@ import {
     createIngestWorkflowDefinition,
 } from "../../../packages/application/src/workflow-ingest.js";
 import { IngestWorkflowControlService } from "../../../packages/application/src/workflow-control.js";
-import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
-import { resolvePrismaCliPath } from "../../../packages/storage-prisma/src/prisma-cli.js";
-
 import { createWorkflowHost } from "./workflow-host.js";
 import {
     cleanupTemporaryRoots,
     createFixtureSource,
     drainWorkflow,
-    prepareDatabase,
-    temporaryRoots,
+    withRepository,
 } from "./workflow-ingest.fixtures.js";
 
 afterEach(cleanupTemporaryRoots);
 
 describe("Worker Ingest Workflow composition", () => {
     it("keeps durable ingest parity across idempotency, snapshots, revisions and projections", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-workflow-ingest-parity-"));
-        temporaryRoots.push(root);
-        prepareDatabase(root);
-        const repository = new PrismaCosmosRepository({ dataRoot: root });
-        await repository.initialize();
-
-        try {
+        await withRepository("workflow-ingest-parity", async (repository) => {
             const source = await createFixtureSource(repository, "Workflow fixture");
             const otherSource = await createFixtureSource(repository, "Other workflow fixture");
             const imageV1 = new TextEncoder().encode("workflow-image-v1");
@@ -473,8 +458,6 @@ describe("Worker Ingest Workflow composition", () => {
             expect(memberCards.map((item) => item.entryId).sort()).toEqual(
                 [revisedEntry.id, urlFreeEntry.id].sort(),
             );
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

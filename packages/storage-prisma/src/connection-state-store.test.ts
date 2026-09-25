@@ -1,49 +1,13 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ConnectorStateConflictError } from "@cosmos/application";
 
-import {
-    PrismaConnectorStateStore,
-    PrismaCosmosRepository,
-} from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-function prepareDatabase(root: string): void {
-    const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolvePrismaCliPath();
-    const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
-    execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {
-        cwd: process.cwd(),
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "ignore",
-    });
-}
-
-async function createRepository(): Promise<PrismaCosmosRepository> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-connection-state-"));
-    roots.push(root);
-    prepareDatabase(root);
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    return repository;
-}
+import { PrismaConnectorStateStore } from "./index.js";
+import { withRepository } from "./index.fixtures.js";
 
 describe("PrismaCosmosRepository connections (ADR-0017)", () => {
     it("creates, lists, reads, updates and deletes a connection", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const created = await repository.createConnection({
                 name: "我的 Bilibili 主账号",
                 connectorId: "bilibili",
@@ -69,9 +33,7 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
 
             await expect(repository.deleteConnection(created.id)).resolves.toBe(true);
             await expect(repository.getConnection(created.id)).resolves.toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     /**
@@ -79,8 +41,7 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
      * 否则重连后「这个账号授权过什么」就丢了。它是不透明 JSON 文本，存储层不做解释。
      */
     it("round-trips the connection authorization scope", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const scopeJson = '{"read":true,"comment":false}';
             const created = await repository.createConnection({
                 name: "主账号",
@@ -90,9 +51,7 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
             expect(created.scopeJson).toBe(scopeJson);
 
             await expect(repository.getConnection(created.id)).resolves.toMatchObject({ scopeJson });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     /**
@@ -100,8 +59,7 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
      * 清空——`lastError: null` 必须真的写进存储，不能被当成「未提供」而跳过。
      */
     it("clears the failure reason when a connection is manually restored", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const connection = await repository.createConnection({
                 name: "主账号",
                 connectorId: "bilibili",
@@ -121,9 +79,7 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
                 status: "active",
                 lastError: null,
             });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     /**
@@ -131,8 +87,7 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
      * 与检查时间一次写入。`lastCheckedAt` 刻意不走公开的更新命令——它是系统观测。
      */
     it("records a login probe onto the connection", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const connection = await repository.createConnection({
                 name: "主账号",
                 connectorId: "bilibili",
@@ -164,14 +119,11 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
                 lastError: null,
                 checkedAt: "2026-09-23T09:00:00.000Z",
             })).rejects.toThrow("Connection not found: missing");
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("links a source to a connection and detaches it on delete", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const connection = await repository.createConnection({
                 name: "主账号",
                 connectorId: "bilibili",
@@ -192,13 +144,10 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
 
             await repository.deleteConnection(connection.id);
             await expect(repository.getSource(source.id)).resolves.toMatchObject({ connectionId: null });
-        } finally {
-            await repository.close();
-        }
+        });
     });
     it("deletes the stored secret bytes when the connection is removed (AUT-001)", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const connection = await repository.createConnection({
                 name: "带凭据的连接",
                 connectorId: "bilibili",
@@ -212,14 +161,11 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
             // 连接行与密钥字节一起消失：删除凭据是删除动作的一部分，不是只解引用。
             await expect(repository.getConnection(connection.id)).resolves.toBeNull();
             await expect(repository.secrets.read("secret:conn-delete")).resolves.toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("removes a connection without a secretRef and stays idempotent", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("connection-state", async (repository) => {
             const connection = await repository.createConnection({
                 name: "无凭据的连接",
                 connectorId: "bilibili",
@@ -227,17 +173,14 @@ describe("PrismaCosmosRepository connections (ADR-0017)", () => {
 
             await expect(repository.deleteConnection(connection.id)).resolves.toBe(true);
             await expect(repository.getConnection(connection.id)).resolves.toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });
 
 describe("PrismaConnectorStateStore (ADR-0017)", () => {
     it("writes with version CAS and rejects stale versions", async () => {
-        const repository = await createRepository();
-        const store = new PrismaConnectorStateStore(repository.prisma);
-        try {
+        await withRepository("connection-state", async (repository) => {
+            const store = new PrismaConnectorStateStore(repository.prisma);
             await expect(store.getState("connection:c1", "cursor")).resolves.toBeNull();
 
             const created = await store.putState("connection:c1", "cursor", { next: "abc" }, null);
@@ -258,8 +201,6 @@ describe("PrismaConnectorStateStore (ADR-0017)", () => {
             await expect(
                 store.putState("connection:c1", "other", {}, null),
             ).resolves.toMatchObject({ version: 1 });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

@@ -1,20 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 
 import { PrismaClient } from "@prisma/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 /**
  * ADR-0021 decision 4: a Story Revision written before the representation
@@ -30,22 +19,6 @@ function preExtensionFingerprint(input: {
     subtype: string | null;
 }): string {
     return createHash("sha256").update(JSON.stringify(input)).digest("hex");
-}
-
-async function createRepository(): Promise<{
-    prisma: PrismaClient;
-    repository: PrismaCosmosRepository;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-story-representation-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(databasePath);
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    const repository = new PrismaCosmosRepository({ dataRoot: root, prisma });
-    await repository.initialize();
-    return { prisma, repository };
 }
 
 async function seedLegacyStory(prisma: PrismaClient): Promise<void> {
@@ -74,8 +47,7 @@ async function seedLegacyStory(prisma: PrismaClient): Promise<void> {
 
 describe("Story representation extension persistence", () => {
     it("treats a pre-extension Revision as unchanged instead of appending a phantom version", async () => {
-        const { prisma, repository } = await createRepository();
-        try {
+        await withRepository("story-representation", async (repository, prisma) => {
             await seedLegacyStory(prisma);
 
             const noOp = await repository.updateStoryRevision({
@@ -91,14 +63,11 @@ describe("Story representation extension persistence", () => {
             expect(await prisma.storyRevision.count({ where: { storyId: "story-legacy" } })).toBe(1);
             expect(noOp?.story.timeRange ?? null).toBeNull();
             expect(noOp?.story.keyFacts ?? []).toEqual([]);
-        } finally {
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("appends one Revision per real change, keeps identical submissions as no-ops and clears on omission", async () => {
-        const { prisma, repository } = await createRepository();
-        try {
+        await withRepository("story-representation", async (repository, prisma) => {
             await seedLegacyStory(prisma);
             const timeRange = {
                 start: {
@@ -165,9 +134,7 @@ describe("Story representation extension persistence", () => {
             });
             expect(clearedRow.timeRangeJson).toBeNull();
             expect(clearedRow.keyFactsJson).toBeNull();
-        } finally {
-            await prisma.$disconnect();
-        }
+        });
     });
 
     /**
@@ -177,8 +144,7 @@ describe("Story representation extension persistence", () => {
      * keyFacts would still look like a no-op while losing data.
      */
     it("persists a fallback-only timeRange and keeps an identical resubmission a no-op", async () => {
-        const { prisma, repository } = await createRepository();
-        try {
+        await withRepository("story-representation", async (repository, prisma) => {
             await seedLegacyStory(prisma);
             const timeRange = {
                 start: {
@@ -241,25 +207,6 @@ describe("Story representation extension persistence", () => {
                 expect(repeatedFacts[index]?.text).toBe(fact.text);
                 expect(repeatedFacts[index]?.entryId).toBe(fact.entryId);
             });
-        } finally {
-            await prisma.$disconnect();
-        }
+        });
     });
 });
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
-}

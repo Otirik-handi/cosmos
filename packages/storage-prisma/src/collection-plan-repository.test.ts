@@ -1,44 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-function prepareDatabase(root: string): void {
-    const schema = resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma");
-    const prismaCli = resolvePrismaCliPath();
-    const databaseUrl = `file:${resolve(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    writeFileSync(resolve(root, "cosmos.sqlite"), new Uint8Array());
-    execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", schema], {
-        cwd: process.cwd(),
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "ignore",
-    });
-}
-
-async function createRepository(): Promise<PrismaCosmosRepository> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-collection-plan-repo-"));
-    roots.push(root);
-    prepareDatabase(root);
-    const repository = new PrismaCosmosRepository({ dataRoot: root });
-    await repository.initialize();
-    return repository;
-}
+import { withRepository } from "./index.fixtures.js";
 
 describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
     it("创建来源时同批建出默认计划，并把调度绑定挂到计划上", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const source = await repository.createSource({
                 name: "动态",
                 sourceDefinitionRef: "source.rss@1",
@@ -64,14 +30,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             // 读取切换后调度按计划走，所以新建来源的绑定必须已经有计划归属。
             const bindings = await repository.prisma.triggerBinding.findMany();
             expect(bindings.map((binding) => binding.planId)).toEqual([`plan:${source.id}`]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("来源没有媒体策略时计划不写空对象，也不写调度绑定", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const source = await repository.createSource({
                 name: "推荐流",
                 sourceDefinitionRef: "source.rss@1",
@@ -83,14 +46,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             expect(plans.map((plan) => plan.mediaPolicyJson)).toEqual([null]);
             await expect(repository.prisma.triggerBinding.count()).resolves.toBe(0);
             await expect(repository.prisma.collectionPlan.count({ where: { sourceId: source.id } })).resolves.toBe(1);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("调度按计划取数：同一连接下的两个计划各带自己的间隔与计划归属", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
             const feed = await repository.createSource({
                 name: "动态",
@@ -134,14 +94,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             });
             const afterPause = await repository.listScheduleTriggers();
             expect(afterPause.map((trigger) => trigger.planId)).toEqual([`plan:${feed.id}`]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("读投影一次返回同一连接下的两个计划", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
             const feed = await repository.createSource({
                 name: "动态",
@@ -172,14 +129,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             expect(plans.map((plan) => plan.connectionId)).toEqual([connection.id, connection.id]);
             expect(plans.filter((plan) => plan.connectionId === connection.id).map((plan) => plan.id).sort())
                 .toEqual(expectedIds);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("读投影按计划返回连接、频率与媒体预算，并跟随来源编辑", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
             const source = await repository.createSource({
                 name: "动态",
@@ -234,14 +188,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             });
 
             await expect(repository.getCollectionPlan("plan:missing")).resolves.toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("给已有来源补上调度时，绑定同时挂到计划上", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const source = await repository.createSource({
                 name: "无调度来源",
                 sourceDefinitionRef: "source.rss@1",
@@ -264,14 +215,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             await expect(repository.listScheduleTriggers()).resolves.toMatchObject([
                 { planId: `plan:${source.id}`, intervalMs: 3_600_000 },
             ]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("媒体预算只在计划端点上写，来源配置里不留第二份", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const source = await repository.createSource({
                 name: "动态",
                 sourceDefinitionRef: "source.rss@1",
@@ -300,14 +248,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             });
             expect(cleared.mediaPolicy).toBeNull();
             await expect(repository.getSource(source.id)).resolves.toMatchObject({ mediaPolicy: null });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("maxFileBytes 经计划端点写入后原样读回，来源配置里不留第二份", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const source = await repository.createSource({
                 name: "动态",
                 sourceDefinitionRef: "source.rss@1",
@@ -338,14 +283,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             // 来源配置里仍然没有第二份 media。
             const raw = await repository.prisma.sourceInstance.findUniqueOrThrow({ where: { id: source.id } });
             expect(JSON.parse(raw.configJson)).toEqual({ feedUrl: "https://example.test/feed.xml" });
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("一个计划可以同时持有 schedule 与 webhook 触发器，删调度不动 webhook", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const source = await repository.createSource({
                 name: "动态",
                 sourceDefinitionRef: "source.rss@1",
@@ -386,14 +328,11 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
                 data: { enabled: true },
             });
             await expect(repository.listScheduleTriggers()).resolves.toEqual([]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("失败只落在失败的那个计划上：健康计划跑成功后无错误也不停留在「尚未运行」", async () => {
-        const repository = await createRepository();
-        try {
+        await withRepository("collection-plan-repo", async (repository) => {
             const connection = await repository.createConnection({ name: "主账号", connectorId: "bilibili" });
             const bad = await repository.createSource({
                 name: "动态",
@@ -449,8 +388,6 @@ describe("CollectionPlan 与来源同批创建 (ADR-0023 决策 1)", () => {
             expect(healthyPlan?.lastRunAt).not.toBeNull();
             expect(failed?.lastError).toBe("feed 拉取失败");
             expect(failed?.lastRunAt).not.toBeNull();
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });

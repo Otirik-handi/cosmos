@@ -1,7 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 
 import { PrismaClient } from "@prisma/client";
 import {
@@ -9,19 +7,10 @@ import {
     StoryRevisionConflictError,
     StorySplitConflictError,
 } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-const clients = new Set<PrismaClient>();
-
-afterEach(async () => {
-    await Promise.all([...clients].map((client) => client.$disconnect()));
-    clients.clear();
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository, withTestDatabase } from "./index.fixtures.js";
 
 /** Everything before the Story split migration. */
 const legacyMigrations = [
@@ -48,8 +37,7 @@ const legacyMigrations = [
 
 describe("Story split", () => {
     it("keeps a historical shell and moves only the explicitly mapped relations", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const shell = await seedShell(repository, prisma);
             const entityA = shell.entities[0]!;
             const entityB = shell.entities[1]!;
@@ -163,15 +151,11 @@ describe("Story split", () => {
             expect(await prisma.storyRevision.count({
                 where: { storyId: successorA!.story.id },
             })).toBe(1);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("rejects mappings that do not describe the shell's current relations", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const shell = await seedShell(repository, prisma);
             const entityB = shell.entities[1]!;
             const base = {
@@ -237,15 +221,11 @@ describe("Story split", () => {
             // None of the rejected commands changed anything.
             expect(await prisma.storyReplacement.count()).toBe(0);
             expect((await repository.story("story-shell"))?.story.status).toBe("active");
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("treats a shell as history: no merge, no revision update, no second split", async () => {
-        const { repository, prisma } = await setup();
-        try {
+        await withRepositoryFixture(async (repository, prisma) => {
             const shell = await seedShell(repository, prisma);
             const split = await repository.splitStory({
                 storyId: "story-shell",
@@ -344,80 +324,68 @@ describe("Story split", () => {
                     },
                 ],
             })).rejects.toThrow(StorySplitConflictError);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 
     it("reads a shell with no member left and upgrades a pre-split database", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-story-split-legacy-"));
-        roots.push(root);
-        const databasePath = join(root, "cosmos.sqlite");
-        const prismaSource = resolve(process.cwd(), "packages/storage-prisma/prisma");
-        const oldPrismaRoot = join(root, "old-prisma");
-        const oldMigrationsRoot = join(oldPrismaRoot, "migrations");
-        await mkdir(oldMigrationsRoot, { recursive: true });
-        await cp(join(prismaSource, "schema.prisma"), join(oldPrismaRoot, "schema.prisma"));
-        await cp(
-            join(prismaSource, "migrations", "migration_lock.toml"),
-            join(oldMigrationsRoot, "migration_lock.toml"),
-        );
-        for (const migration of legacyMigrations) {
+        await withTestDatabase("story-split-legacy", async (database) => {
+            const prismaSource = resolve(process.cwd(), "packages/storage-prisma/prisma");
+            const oldPrismaRoot = join(database.root, "old-prisma");
+            const oldMigrationsRoot = join(oldPrismaRoot, "migrations");
+            await mkdir(oldMigrationsRoot, { recursive: true });
+            await cp(join(prismaSource, "schema.prisma"), join(oldPrismaRoot, "schema.prisma"));
             await cp(
-                join(prismaSource, "migrations", migration),
-                join(oldMigrationsRoot, migration),
-                { recursive: true },
+                join(prismaSource, "migrations", "migration_lock.toml"),
+                join(oldMigrationsRoot, "migration_lock.toml"),
             );
-        }
-        deployMigrations(databasePath, join(oldPrismaRoot, "schema.prisma"));
+            for (const migration of legacyMigrations) {
+                await cp(
+                    join(prismaSource, "migrations", migration),
+                    join(oldMigrationsRoot, migration),
+                    { recursive: true },
+                );
+            }
+            database.deploy(join(oldPrismaRoot, "schema.prisma"));
 
-        const oldClient = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        clients.add(oldClient);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "SourceInstance" ("id", "name", "kind", "sourceDefinitionRef", "operationId", "configJson", "enabled", "revision", "createdAt", "updatedAt")
-            VALUES ('source-a', 'source-a', 'rss', 'source.rss@1', 'fetch', '{}', 1, 1, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "Story" ("id", "kind", "subtype", "createdAt", "updatedAt") VALUES
-                ('story-shell', 'event', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z'),
-                ('story-other', 'event', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            INSERT INTO "StoryRevision" ("id", "storyId", "revision", "fingerprint", "title", "summary", "createdAt") VALUES
-                ('rev-shell-1', 'story-shell', 1, 'fp-shell', '被错误合并的 Story', NULL, '2026-09-09T00:00:00.000Z'),
-                ('rev-other-1', 'story-other', 1, 'fp-other', '另一个 Story', NULL, '2026-09-09T00:00:00.000Z')
-        `);
-        await oldClient.$executeRawUnsafe(`
-            UPDATE "Story" SET "currentRevisionId" = 'rev-shell-1' WHERE "id" = 'story-shell';
-            UPDATE "Story" SET "currentRevisionId" = 'rev-other-1' WHERE "id" = 'story-other';
-        `);
-        for (const [entryId, revisionId] of [["entry-a", "er-a-1"], ["entry-b", "er-b-1"]] as const) {
+            const oldClient = database.openClient();
             await oldClient.$executeRawUnsafe(`
-                INSERT INTO "Entry" ("id", "sourceInstanceId", "canonicalExternalId", "storyId", "createdAt", "updatedAt")
-                VALUES ('${entryId}', 'source-a', 'external:${entryId}', 'story-shell', '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
+                INSERT INTO "SourceInstance" ("id", "name", "kind", "sourceDefinitionRef", "operationId", "configJson", "enabled", "revision", "createdAt", "updatedAt")
+                VALUES ('source-a', 'source-a', 'rss', 'source.rss@1', 'fetch', '{}', 1, 1, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
             `);
             await oldClient.$executeRawUnsafe(`
-                INSERT INTO "EntryRevision" ("id", "entryId", "revision", "title", "contentText", "contentFingerprint", "contentKind", "createdAt")
-                VALUES ('${revisionId}', '${entryId}', 1, '${entryId}', 'body', 'fp-${entryId}', 'article', '2026-09-09T00:00:00.000Z')
+                INSERT INTO "Story" ("id", "kind", "subtype", "createdAt", "updatedAt") VALUES
+                    ('story-shell', 'event', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z'),
+                    ('story-other', 'event', NULL, '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
             `);
             await oldClient.$executeRawUnsafe(`
-                UPDATE "Entry" SET "currentRevisionId" = '${revisionId}' WHERE "id" = '${entryId}';
+                INSERT INTO "StoryRevision" ("id", "storyId", "revision", "fingerprint", "title", "summary", "createdAt") VALUES
+                    ('rev-shell-1', 'story-shell', 1, 'fp-shell', '被错误合并的 Story', NULL, '2026-09-09T00:00:00.000Z'),
+                    ('rev-other-1', 'story-other', 1, 'fp-other', '另一个 Story', NULL, '2026-09-09T00:00:00.000Z')
             `);
-        }
-        await oldClient.$disconnect();
-        clients.delete(oldClient);
+            await oldClient.$executeRawUnsafe(`
+                UPDATE "Story" SET "currentRevisionId" = 'rev-shell-1' WHERE "id" = 'story-shell';
+                UPDATE "Story" SET "currentRevisionId" = 'rev-other-1' WHERE "id" = 'story-other';
+            `);
+            for (const [entryId, revisionId] of [["entry-a", "er-a-1"], ["entry-b", "er-b-1"]] as const) {
+                await oldClient.$executeRawUnsafe(`
+                    INSERT INTO "Entry" ("id", "sourceInstanceId", "canonicalExternalId", "storyId", "createdAt", "updatedAt")
+                    VALUES ('${entryId}', 'source-a', 'external:${entryId}', 'story-shell', '2026-09-09T00:00:00.000Z', '2026-09-09T00:00:00.000Z')
+                `);
+                await oldClient.$executeRawUnsafe(`
+                    INSERT INTO "EntryRevision" ("id", "entryId", "revision", "title", "contentText", "contentFingerprint", "contentKind", "createdAt")
+                    VALUES ('${revisionId}', '${entryId}', 1, '${entryId}', 'body', 'fp-${entryId}', 'article', '2026-09-09T00:00:00.000Z')
+                `);
+                await oldClient.$executeRawUnsafe(`
+                    UPDATE "Entry" SET "currentRevisionId" = '${revisionId}' WHERE "id" = '${entryId}';
+                `);
+            }
+            await oldClient.$disconnect();
 
-        deployMigrations(databasePath, join(prismaSource, "schema.prisma"));
-        const prisma = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        clients.add(prisma);
-        const repository = new PrismaCosmosRepository({ dataRoot: root, prisma });
-        await repository.initialize();
-        try {
+            database.deploy();
+            const prisma = database.openClient();
+            const repository = new PrismaCosmosRepository({ dataRoot: database.root, prisma });
+            await repository.initialize();
+
             expect((await repository.story("story-shell"))?.story.status).toBe("active");
 
             const split = await repository.splitStory({
@@ -452,31 +420,15 @@ describe("Story split", () => {
             expect(split?.entries).toEqual([]);
             expect(split?.story.replacedBy).toHaveLength(2);
             expect(await prisma.storyReplacement.count()).toBe(2);
-        } finally {
-            await repository.close();
-            await prisma.$disconnect();
-        }
+        });
     });
 });
 
-async function setup(): Promise<{
-    repository: PrismaCosmosRepository;
-    prisma: PrismaClient;
-}> {
-    const root = await mkdtemp(join(tmpdir(), "cosmos-story-split-"));
-    roots.push(root);
-    const databasePath = join(root, "cosmos.sqlite");
-    deployMigrations(
-        databasePath,
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    );
-    const prisma = new PrismaClient({
-        datasources: { db: { url: sqliteUrl(databasePath) } },
-    });
-    clients.add(prisma);
-    const repository = new PrismaCosmosRepository({ dataRoot: root, prisma });
-    await repository.initialize();
-    return { repository, prisma };
+/** 本文件的场景包装：共享生命周期之上把用例正文交回给调用点。 */
+async function withRepositoryFixture(
+    body: (repository: PrismaCosmosRepository, prisma: PrismaClient) => Promise<void>,
+): Promise<void> {
+    await withRepository("story-split", body);
 }
 
 /** A shell with two mapped members plus unlisted evidence/entities/topics. */
@@ -574,21 +526,4 @@ async function seedShell(
     await repository.attachLabel({ labelId: label.id, targetType: "story", targetId: "story-shell" });
     await repository.setFavorite({ targetType: "story", targetId: "story-shell" });
     return { entities: [entityA.id, entityB.id], topics: [topicA.id, topicB.id] };
-}
-
-function deployMigrations(databasePath: string, schemaPath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        schemaPath,
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

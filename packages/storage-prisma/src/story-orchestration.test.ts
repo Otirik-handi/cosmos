@@ -1,41 +1,16 @@
-import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-
 import { PrismaClient } from "@prisma/client";
 import {
     StoryMergeConflictError,
     StoryNotFoundError,
     StoryRevisionConflictError,
 } from "@cosmos/application";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { PrismaCosmosRepository } from "./index.js";
-import { resolvePrismaCliPath } from "./prisma-cli.js";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+import { withRepository } from "./index.fixtures.js";
 
 describe("Story orchestration commands", () => {
     it("moves entries, versions revisions with CAS, and merges Stories via canonical alias", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-story-orchestration-"));
-        roots.push(root);
-        const databasePath = join(root, "cosmos.sqlite");
-        deployMigrations(databasePath);
-        const prisma = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        const repository = new PrismaCosmosRepository({
-            dataRoot: root,
-            prisma,
-        });
-        await repository.initialize();
-
-        try {
+        await withRepository("story-orchestration", async (repository, prisma) => {
             await seedStories(prisma);
 
             // moveEntryToStory: entry-b joins story-a, old Story row keeps no members.
@@ -134,26 +109,11 @@ describe("Story orchestration commands", () => {
                 "story.revision_created.v1",
                 "story.merged.v1",
             ]);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("returns null when moving a missing entry and merges into itself is rejected", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-story-orchestration-missing-"));
-        roots.push(root);
-        const databasePath = join(root, "cosmos.sqlite");
-        deployMigrations(databasePath);
-        const prisma = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        const repository = new PrismaCosmosRepository({
-            dataRoot: root,
-            prisma,
-        });
-        await repository.initialize();
-
-        try {
+        await withRepository("story-orchestration-missing", async (repository, prisma) => {
             await seedStories(prisma);
             await expect(repository.moveEntryToStory({
                 entryId: "entry-missing",
@@ -163,26 +123,11 @@ describe("Story orchestration commands", () => {
                 canonicalStoryId: "story-a",
                 obsoleteStoryIds: ["story-a"],
             })).rejects.toBeInstanceOf(StoryMergeConflictError);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 
     it("merges two single-member Stories into a canonical Story with exactly two members", async () => {
-        const root = await mkdtemp(join(tmpdir(), "cosmos-story-orchestration-member-count-"));
-        roots.push(root);
-        const databasePath = join(root, "cosmos.sqlite");
-        deployMigrations(databasePath);
-        const prisma = new PrismaClient({
-            datasources: { db: { url: sqliteUrl(databasePath) } },
-        });
-        const repository = new PrismaCosmosRepository({
-            dataRoot: root,
-            prisma,
-        });
-        await repository.initialize();
-
-        try {
+        await withRepository("story-orchestration-member-count", async (repository, prisma) => {
             // story-a holds entry-a and story-b holds entry-b: the merged Story
             // must answer with exactly those two members, not with a count that
             // merely grew (ingest.spec.ts reads the same number back).
@@ -207,9 +152,7 @@ describe("Story orchestration commands", () => {
             const redirected = await repository.story("story-b");
             expect(redirected?.story.id).toBe("story-a");
             expect(redirected?.entries).toHaveLength(2);
-        } finally {
-            await repository.close();
-        }
+        });
     });
 });
 
@@ -344,21 +287,4 @@ async function seedStories(prisma: PrismaClient): Promise<void> {
         where: { id: "entry-c" },
         data: { storyId: "story-c", currentRevisionId: "er-c-1" },
     });
-}
-
-function deployMigrations(databasePath: string): void {
-    execFileSync(process.execPath, [
-        resolvePrismaCliPath(),
-        "migrate",
-        "deploy",
-        "--schema",
-        resolve(process.cwd(), "packages/storage-prisma/prisma/schema.prisma"),
-    ], {
-        env: { ...process.env, DATABASE_URL: sqliteUrl(databasePath) },
-        stdio: "ignore",
-    });
-}
-
-function sqliteUrl(databasePath: string): string {
-    return `file:${databasePath.replaceAll("\\", "/")}`;
 }

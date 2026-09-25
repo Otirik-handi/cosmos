@@ -1,10 +1,12 @@
 import { canonicalJson } from "@notnotype/nb-workflow";
 import type { RetryPolicy } from "@cosmos/contracts";
 import { expect, it } from "vitest";
+import { withTestDatabase } from "./index.fixtures.js";
 import { acceptCompletionInKernel, activityRequest, completionFor, createRunningRun, createStore, definition, inputSnapshot, productRun, seedPendingActivity } from "./workflow-host-store.fixtures.js";
 
-    it("takes over expired Run leases and fences heartbeat/release", async () => {
-        const store = await createStore();
+it("takes over expired Run leases and fences heartbeat/release", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         await store.createWorkflowEnvelope({
             runId: "workflow-run-lease",
             idempotencyKey: "enqueue-lease",
@@ -40,8 +42,10 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         expect(await store.releaseRun(first)).toBe(false);
         expect(await store.releaseRun({ ...takeover!, now: new Date(now.getTime() + 1001) })).toBe(true);
     });
-    it("preserves Kernel resumeRequired during execution lease takeover", async () => {
-        const store = await createStore();
+});
+it("preserves Kernel resumeRequired during execution lease takeover", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         await store.createWorkflowEnvelope({
             runId: "workflow-run-resume-required",
             idempotencyKey: "enqueue-resume-required",
@@ -95,9 +99,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         expect(await store.prisma.workflowRun.findUnique({ where: { id: initial.runId } }))
             .toMatchObject({ status: "running", resumeRequired: true });
     });
+});
 
-    it("finds or creates Activity Jobs by exact idempotency identity", async () => {
-        const store = await createStore();
+it("finds or creates Activity Jobs by exact idempotency identity", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-action", "activity-worker");
         const request = activityRequest(run.runId, "action-key-1");
 
@@ -128,9 +134,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
             status: "leased",
         });
     });
+});
 
-    it("atomically completes success, does not enqueue retry_wait, and rejects old leases", async () => {
-        const store = await createStore();
+it("atomically completes success, does not enqueue retry_wait, and rejects old leases", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-activity", "activity-worker-a");
         const runLease = run;
         const request = activityRequest(run.runId, "action-key-2");
@@ -267,9 +275,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
             }
         }
     });
+});
 
-    it("reclaims and delivers a completion after Kernel acceptance but before outbox delivery", async () => {
-        const store = await createStore();
+it("reclaims and delivers a completion after Kernel acceptance but before outbox delivery", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const base = new Date("2026-08-14T00:00:00.000Z");
         const run = await createRunningRun(store, "workflow-run-crash-window", "activity", base);
         const request = activityRequest(run.runId, "crash-window");
@@ -320,9 +330,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         await expect(store.prisma.workflowCompletion.findUnique({ where: { id: reclaimed.id } }))
             .resolves.toMatchObject({ status: "delivered", attempts: 2 });
     });
+});
 
-    it("claims an exhausted completion for dispatcher-owned dead-letter handling", async () => {
-        const store = await createStore();
+it("claims an exhausted completion for dispatcher-owned dead-letter handling", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-completion-exhausted", "activity");
         const request = activityRequest(run.runId, "completion-exhausted");
         const pending = await store.startAction(request);
@@ -352,9 +364,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         await expect(store.prisma.workflowCompletion.findUnique({ where: { jobId: job.id } }))
             .resolves.toMatchObject({ status: "dead_letter", attempts: 6 });
     });
+});
 
-    it("rejects delivery with a stale Run lease or stale Kernel state", async () => {
-        const store = await createStore();
+it("rejects delivery with a stale Run lease or stale Kernel state", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-stale-delivery", "activity");
         const request = activityRequest(run.runId, "stale-delivery");
         const pending = await store.startAction(request);
@@ -396,9 +410,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         await expect(store.prisma.workflowCompletion.findUnique({ where: { id: completion.id } }))
             .resolves.toMatchObject({ status: "leased", leaseToken: completion.leaseToken });
     });
+});
 
-    it("requeues and dead-letters completion leases without touching legacy Jobs", async () => {
-        const store = await createStore();
+it("requeues and dead-letters completion leases without touching legacy Jobs", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-completion", "activity");
         const request = activityRequest(run.runId, "action-key-completion");
         const pending = await store.startAction(request);
@@ -479,9 +495,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         expect(await store.prisma.job.findUnique({ where: { id: legacyJob.id } }))
             .toMatchObject({ kind: "source-ingest", status: "queued" });
     });
+});
 
-    it("delivers a completion already accepted before its Workflow Run becomes terminal", async () => {
-        const store = await createStore();
+it("delivers a completion already accepted before its Workflow Run becomes terminal", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-terminal-completion", "activity");
         const request = activityRequest(run.runId, "action-key-terminal-completion");
         const pending = await store.startAction(request);
@@ -515,8 +533,10 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         expect(await store.prisma.workflowCompletion.findUnique({ where: { id: completion.id } }))
             .toMatchObject({ status: "delivered" });
     });
-    it("finds an ingest envelope by idempotency key", async () => {
-        const store = await createStore();
+});
+it("finds an ingest envelope by idempotency key", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const first = await store.createWorkflowEnvelope({
             runId: "workflow-ingest-find",
             idempotencyKey: "ingest-command-find",
@@ -532,13 +552,15 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         await expect(store.findWorkflowEnvelopeByIdempotencyKey("missing-command"))
             .resolves.toBeNull();
     });
-    it("persists the Action manifest retry policy on the Activity Job", async () => {
+});
+it("persists the Action manifest retry policy on the Activity Job", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
         const retryPolicy: RetryPolicy = {
             maxAttempts: 5,
             backoffMs: 700,
             retryableErrors: ["timeout"],
         };
-        const store = await createStore({
+        const store = createStore(database, {
             actionRetryPolicies: { "library.ingest@1": retryPolicy },
         });
         const run = await createRunningRun(store, "workflow-run-policy", "activity-worker");
@@ -549,9 +571,11 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         expect(job).toMatchObject({ maxAttempts: 5 });
         expect(job?.payloadJson ? JSON.parse(job.payloadJson) : null).toMatchObject({ retryPolicy });
     });
+});
 
-    it("terminalizes exhausted Activity Jobs and creates one failure completion", async () => {
-        const store = await createStore();
+it("terminalizes exhausted Activity Jobs and creates one failure completion", async () => {
+    await withTestDatabase("workflow-host", async (database) => {
+        const store = createStore(database);
         const run = await createRunningRun(store, "workflow-run-max-attempts", "activity-worker");
         const request = activityRequest(run.runId, "action-key-max-attempts");
         const pending = await store.startAction(request);
@@ -570,4 +594,5 @@ import { acceptCompletionInKernel, activityRequest, completionFor, createRunning
         await expect(store.prisma.workflowCompletion.findUnique({ where: { jobId: pending.receipt } }))
             .resolves.toMatchObject({ status: "queued", jobId: pending.receipt });
     });
+});
 
