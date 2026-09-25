@@ -68,7 +68,9 @@ TEST_NAME_RE = re.compile(r"\.(test|spec)\.[cm]?[tj]sx?$", re.IGNORECASE)
 EXCLUDE_NAMES = {"bun.lock", "bun.lockb", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "deno.lock"}
 
 # 依赖目录与构建产物整个跳过；.worktree 是整仓副本，不跳会全量重复统计
-SKIP_DIRS = {"node_modules", ".git", ".worktree", ".next", "dist", "build", "out", "coverage", ".turbo", ".venv", "__pycache__"}
+# test-results/playwright-report 是浏览器验收的运行产物（已在 .gitignore 里），
+# 一次失败会留下 60 KB 的 error-context.md，把本地文档门禁判红——它与文档无关。
+SKIP_DIRS = {"node_modules", ".git", ".worktree", ".next", "dist", "build", "out", "coverage", ".turbo", ".venv", "__pycache__", "test-results", "playwright-report"}
 # 会话临时目录不是仓库内容，不入治理口径（其中残留的扫描输出会污染统计）
 SKIP_DIR_PATHS = {".agent/tmp"}
 
