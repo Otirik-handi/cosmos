@@ -125,3 +125,20 @@ is not under 'rootDir' 'apps/worker/src'
 已把这 82 个文件删除，主工作区恢复干净。**未做**：没有做受控复现（需要在主工作区临时还原坏配置），所以「是那次 `build:worker` 写出来的」是**由时间戳、内容一致性与导入范围三重吻合推出的结论，不是直接观测**。
 
 **建议的根治方向（需单独切片）**：给会产出 `dist` 的构建配置加 **`"noEmitOnError": true`**（tsc 默认是 `false`，所以出错时照样产出半成品）；顺带把 `packages/*/src/**/*.js` 之类的源码目录产物纳入忽略或在构建前清理。这样「构建失败」就不会再留下看似正常的产物。
+
+### 根治切片已执行（2026-09-24，分支 `chore/no-ref-noemit-on-error`）
+
+上面那条建议**已落地**：`noEmitOnError: true` 加在 **`tsconfig.base.json`**（一处覆盖全部 12 个会 emit 的配置；`apps/web` 本来就是 `noEmit`，不受影响）。
+
+**A/B 实证**（在 `packages/logging` 上故意制造一个 `TS2322`）：
+
+| | 报错 | 产出 |
+| --- | --- | --- |
+| 新配置（`noEmitOnError: true`） | `TS2322`，exit 1 | **`dist` 根本不存在——零产出** |
+| 对照（显式 `noEmitOnError: false`，即旧行为） | 同一个错 | **`dist-probe` 存在，产出 2 个文件** |
+
+对照那一行就是原来的隐患本身：**构建失败仍然留下看似正常的产物**。实证后源码已还原、探针配置已删。
+
+**验证**：`bun run build` exit 0、全仓 `typecheck` exit 0、`test:e2e` 6 文件 / 12 用例 exit 0、全量 133 文件 / 760 用例 exit 0。
+
+**产物卫生那一半没有按原建议做——因为原建议是错的，照做会退步。** `packages/*/tsconfig.json` **同一个文件既被 `build`（`tsc -p tsconfig.json`）又被 `typecheck`（`tsc -p tsconfig.json --noEmit`）使用**；如果按「把 `*.test.ts` 加进它的 `exclude`」来清产物，**typecheck 会静默地停止检查所有测试文件**——那是拿验证覆盖换产物干净。正确做法是像 `apps/worker` 那样给每个包拆出独立的 `tsconfig.build.json`（build 用它、typecheck 继续用 `tsconfig.json`），即 **12 个新配置 + 12 处脚本改动**，属于另一个规模的切片，本次**未做**。
