@@ -13,6 +13,7 @@ import {
     client,
     readError,
 } from "./page-runtime";
+import { useGuardedList } from "./list-write-guard";
 import type { WorkspaceContext } from "./page-bridge";
 import type { useStoryWorkspace } from "./use-story-workspace";
 
@@ -21,16 +22,22 @@ type StoryApi = ReturnType<typeof useStoryWorkspace>;
 /** 由 G06 切片 4 从 page.tsx 拆出的域 hook（搬运，未改行为）。 */
 export function useEntityWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
     const [entities, setEntities] = useState<readonly EntitySummary[]>([]);
+    /**
+     * 首屏读取与动作后的重读都会写这个列表：先发起的那次读取晚落地时，
+     * 会把刚建的实体从侧栏抹掉（实测：创建后 7 秒内消失，且不会自己回来）。
+     */
+    const entityList = useGuardedList(setEntities);
     const [entity, setEntity] = useState<EntityDetail | null>(null);
     const [openingEntityId, setOpeningEntityId] = useState<string | null>(null);
     const loadEntities = useCallback(async (): Promise<void> => {
+        const read = entityList.beginRead();
         try {
             const page = await client.listEntities({ limit: 50 });
-            setEntities(page.items);
+            entityList.writeFromRead(page.items, read);
         } catch {
             // 实体列表读取失败不阻断主 Feed；显式打开时才暴露错误。
         }
-    }, []);
+    }, [entityList]);
 
     const openEntity = async (entityId: string): Promise<void> => {
         setOpeningEntityId(entityId);

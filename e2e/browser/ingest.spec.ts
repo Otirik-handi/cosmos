@@ -75,6 +75,13 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     // 阅读抽屉：打开后焦点进入关闭按钮，正文可读，原文外链存在。
     const openStoryTrigger = sourceCards.getByRole("button", { name: "打开 Story" }).first();
     await openStoryTrigger.click();
+    // 焦点断言要盯住**被点的那个节点**：本用例随后会归并并改标题，Feed 按更新时间
+    // 重排，`.first()` 会指向另一张卡片，位置断言就再也对不上（2026-09-25 trace 实测：
+    // 归并后顺序从 [media, message, scaffold] 变成 [merged, merged, scaffold]）。
+    const openedTrigger = await openStoryTrigger.elementHandle();
+    if (!openedTrigger) {
+        throw new Error("没有拿到打开 Story 的按钮节点");
+    }
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(
@@ -116,7 +123,11 @@ test("creates an RSS source, runs ingest, and opens a Story", async ({ page }) =
     // Escape 关闭抽屉并把焦点还给触发按钮。
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(openStoryTrigger).toBeFocused();
+    // toBeFocused 只接受 Locator，而这里必须盯住具体节点：用节点自身与 activeElement 比对。
+    await expect.poll(
+        () => openedTrigger.evaluate((node) => node === document.activeElement),
+        { timeout: 10_000 },
+    ).toBe(true);
 
     // 搜索条件回显为筛选 chip，清除后恢复默认 Feed。
     await page.getByLabel("搜索已保存内容").fill("fixture");

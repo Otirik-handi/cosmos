@@ -13,6 +13,7 @@ import {
     client,
     readError,
 } from "./page-runtime";
+import { useGuardedList } from "./list-write-guard";
 import type { WorkspaceContext } from "./page-bridge";
 import type { useStoryWorkspace } from "./use-story-workspace";
 
@@ -21,17 +22,23 @@ type StoryApi = ReturnType<typeof useStoryWorkspace>;
 /** 由 G06 切片 4 从 page.tsx 拆出的域 hook（搬运，未改行为）。 */
 export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
     const [topics, setTopics] = useState<readonly TopicSummary[]>([]);
+    /**
+     * 首屏读取与动作后的重读都会写这个列表：先发起的那次读取晚落地时，
+     * 会把刚建的 Topic 从侧栏抹掉（实测：创建后 7 秒内消失，且不会自己回来）。
+     */
+    const topicList = useGuardedList(setTopics);
     const [topic, setTopic] = useState<TopicDetail | null>(null);
     const [openingTopicId, setOpeningTopicId] = useState<string | null>(null);
     const [topicAnnotations, setTopicAnnotations] = useState<readonly Annotation[]>([]);
     const loadTopics = useCallback(async (): Promise<void> => {
+        const read = topicList.beginRead();
         try {
             const page = await client.listTopics({ limit: 50 });
-            setTopics(page.items);
+            topicList.writeFromRead(page.items, read);
         } catch {
             // 话题列表读取失败不阻断主 Feed；显式打开时才暴露错误。
         }
-    }, []);
+    }, [topicList]);
 
     const openTopic = async (topicId: string): Promise<void> => {
         setOpeningTopicId(topicId);
