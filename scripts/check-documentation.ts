@@ -206,17 +206,20 @@ function isActiveMarkdown(path: string): boolean {
 function collectRelativeLinkTargets(markdown: string): string[] {
     const text = stripMarkdownCode(markdown);
     const targets: string[] = [];
-    const inlineLinkPattern = /!?\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^\s)]+))(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/gu;
-    const referenceDefinitionPattern = /^ {0,3}\[[^\]\n]+\]:\s*(?:<([^>\n]+)>|([^\s]+))/gmu;
+    // 链接目标允许配对括号：Next 的路由组目录形如 `app/(shell)/page.tsx`，
+    // CommonMark 把配对括号视为地址的一部分。用 `[^\s)]+` 会在第一个 `(` 处截断，
+    // 把合法链接误报成断链。命名组避免 `<...>` 与裸地址两种写法共享编号。
+    const inlineLinkPattern = /!?\[[^\]\n]*\]\(\s*(?:<(?<angle>[^>\n]+)>|(?<bare>[^\s()]*(?:\([^\s()]*\)[^\s()]*)*))(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/gu;
+    const referenceDefinitionPattern = /^ {0,3}\[[^\]\n]+\]:\s*(?:<(?<angle>[^>\n]+)>|(?<bare>[^\s]+))/gmu;
 
     for (const match of text.matchAll(inlineLinkPattern)) {
-        const target = match[1] ?? match[2];
+        const target = match.groups?.angle ?? match.groups?.bare;
         if (target) {
             targets.push(target);
         }
     }
     for (const match of text.matchAll(referenceDefinitionPattern)) {
-        const target = match[1] ?? match[2];
+        const target = match.groups?.angle ?? match.groups?.bare;
         if (target) {
             targets.push(target);
         }

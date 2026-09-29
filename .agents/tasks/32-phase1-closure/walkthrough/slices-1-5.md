@@ -36,7 +36,7 @@ Test Files  1 failed (1)
 - [`packages/contracts/src/search.ts`](../../../../packages/contracts/src/search.ts)：`searchQuerySchema` 增加三个可选字段与口径注释。
 - [`packages/storage-prisma/src/repository/search.ts`](../../../../packages/storage-prisma/src/repository/search.ts)：作者用 `json_extract(r.publisherJson, '$.name'/'$.handle') LIKE ? ESCAPE '\'`（含 LIKE 通配符转义，`a_b` 不会匹配 `axb`）；媒体类型 `r.contentKind = ?`；录入状态 `EXISTS (SELECT 1 FROM Asset a WHERE a.entryRevisionId = r.id AND a.status = ?)`。JSON1 的 `json_extract` 在本仓库 SQLite 上实测可用（该用例转绿即证据）。
 - [`packages/transport-http/src/client-content.ts`](../../../../packages/transport-http/src/client-content.ts)：`search()` 拼上三个 query 参数。
-- Web：[`feed-browser.tsx`](../../../../apps/web/src/components/cosmos/feed-browser.tsx) 表单加「作者」输入与「媒体类型」「录入状态」两个下拉（受管枚举，用 `contentKindSchema`/`assetStatusSchema` 收窄类型），筛选回显 chip 同步；[`page.tsx`](../../../../apps/web/src/app/page.tsx) 的默认值、`onSearch`、结果提示同步；[`use-feed-workspace.ts`](../../../../apps/web/src/app/home/use-feed-workspace.ts) 的套用视图显式清空这三个条件。
+- Web：[`feed-browser.tsx`](../../../../apps/web/src/components/cosmos/feed-browser.tsx) 表单加「作者」输入与「媒体类型」「录入状态」两个下拉（受管枚举，用 `contentKindSchema`/`assetStatusSchema` 收窄类型），筛选回显 chip 同步；[`page.tsx`](../../../../apps/web/src/app/%28shell%29/page.tsx)（2026-09-24 由 `apps/web/src/app/page.tsx` 移入路由组）的默认值、`onSearch`、结果提示同步；[`use-feed-workspace.ts`](../../../../apps/web/src/app/home/use-feed-workspace.ts) 的套用视图显式清空这三个条件。
 
 ```text
 bunx vitest run packages/storage-prisma/src/search-filters.test.ts

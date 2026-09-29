@@ -47,6 +47,18 @@ export class PrismaCosmosRepositoryHelpers1 extends PrismaCosmosRepositoryBase {
                 reason: relation.reason,
             })),
         ];
+        // 批量取关联 Story 的当前标题：Entity 页要列出「这个实体出现在哪些内容里」，
+        // 逐个查询会变成 N+1。
+        const linkedStoryIds = entity.storyLinks.map((link) => link.storyId);
+        const linkedStories = linkedStoryIds.length === 0
+            ? []
+            : await this.prisma.story.findMany({
+                where: { id: { in: linkedStoryIds } },
+                select: { id: true, currentRevision: { select: { title: true } } },
+            });
+        const titleByStoryId = new Map(
+            linkedStories.map((story) => [story.id, story.currentRevision?.title ?? null]),
+        );
         return {
             entity: {
                 id: entity.id,
@@ -63,6 +75,7 @@ export class PrismaCosmosRepositoryHelpers1 extends PrismaCosmosRepositoryBase {
                 evidence: link.evidence,
                 actor: link.actorJson == null ? null : parseJson<string>(link.actorJson),
                 reason: link.reason,
+                title: titleByStoryId.get(link.storyId) ?? null,
             })),
             relations,
         };

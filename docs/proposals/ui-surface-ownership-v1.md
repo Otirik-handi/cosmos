@@ -26,7 +26,7 @@
 - **Entity 同样**。创建和关联都在 Story 抽屉（[story-panel/link-entity.tsx](../../apps/web/src/components/cosmos/story-panel/link-entity.tsx)）；Entity 自己的抽屉（[entity-panel.tsx](../../apps/web/src/components/cosmos/entity-panel.tsx)）能做别名、关系、解除关联，但新建入口不在它这里。
 - **标签与收藏夹没有任何管理面**。建标签、挂标签、建收藏夹、勾选收藏夹成员全在 Story 抽屉的「用户组织」区（[story-panel/organization.tsx](../../apps/web/src/components/cosmos/story-panel/organization.tsx)）。标签本身没有页面：不能改名、不能删除、不能看「这个标签下有哪些 Story」。
 - **「收藏」是一个承诺了但不存在的地方**。Story 抽屉文案写「收藏后可在收藏列表快速找回本条 Story」（[organization.tsx:157](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L157)），但 Web 里**没有任何收藏列表界面**；接口 `listFavorites` 已经写好，前端一次都没调用。
-- **已保存视图只在搜索区出现**。它能套用、能删，但不能改名，且入口粘在「信息库与搜索」区里（[page.tsx:405-458](../../apps/web/src/app/page.tsx#L405)）。
+- **已保存视图只在搜索区出现**。它能套用、能删，但不能改名，且入口粘在「信息库与搜索」区里（[page.tsx:405-458](../../apps/web/src/app/%28shell%29/page.tsx#L405)）。
 - **Topic 列表本身也藏在看板的一个区块里**。侧栏没有 Topics；`topic-list` 区块的空态写着「尚未创建 Topic；在 Story 详情里可创建并加入」（[board-view.tsx:623](../../apps/web/src/components/cosmos/board-view.tsx#L623)）。
 
 需要强调的是：**这不是「没设计」，是实现偏离了已写的设计**。架构 §11.4「深入页面」写的是「点击热点后进入 Story / Topic 深入页」，PRD §8.3 的标题是「Story / Topic 深入页」，§8.2 是「信息库与搜索」，§8.6「设置与数据管理」明确包含「标签、关注 Topic」。设计里本来就是页面级分工，实现把它们全塞进了首页抽屉。

@@ -374,6 +374,8 @@ Entry interaction。
 | Planned | `GET` | `/topics/{id}/maintenance-binding` | 独立维护绑定 |
 | Planned | `PUT` | `/topics/{id}/maintenance-binding` | 更新维护 Workflow/预算 |
 
+> **落地注记**：目标合同与当前实现的差异记在分册 [`0002-product-service-api/landing-notes.md`](0002-product-service-api/landing-notes.md)（主文档已超文档健康区，注记不再追加到本文）。最近一条（2026-09-24，Task 35 切片 3a）是 §8.2 的成员 Story 标题、§8.3 的关联 Story 标题、§9 的收藏标题与跨目标批注。本册只记目标形状与规则，不改写注记。
+
 ### 8.3 Entity 与 Relationship
 
 | 成熟度 | Method | Path | 结果 |
@@ -383,6 +385,8 @@ Entry interaction。
 | Planned | `GET` | `/relationships` | target/type/evidence 查询 |
 | Planned | `POST` | `/relationship-proposals` | 自动或人工关系候选 |
 | Planned | `POST` | `/relationship-commands` | accept/reject/correct |
+
+> **落地注记**：见分册 [`0002-product-service-api/landing-notes.md`](0002-product-service-api/landing-notes.md) 第 2 项（2026-09-24，Task 35 切片 3a：关联 Story 的当前标题）。
 
 ## 9. 用户真相：Label、Annotation、Collection、SavedView
 
@@ -396,6 +400,9 @@ Entry interaction。
 | Planned | `GET/PATCH/DELETE` | `/collections/{id}` | stable identity |
 | Planned | `POST` | `/collection-membership-commands` | 显式成员变更 |
 | Planned | `GET/POST` | `/saved-views` | 保存 Query/Feed 条件 |
+
+> **落地注记**：见分册 [`0002-product-service-api/landing-notes.md`](0002-product-service-api/landing-notes.md) 第 3、4 项（2026-09-24，Task 35 切片 3a：收藏标题、跨目标批注列表）。
+
 | Planned | `GET/PATCH/DELETE` | `/saved-views/{id}` | revision-protected |
 
 ## 10. Knowledge、Proposal 与 Research

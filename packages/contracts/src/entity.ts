@@ -56,6 +56,9 @@ export const entityStoryLinkSchema = z.object({
     evidence: z.string().nullable(),
     actor: z.string().nullable(),
     reason: z.string().nullable(),
+    // 关联 Story 的当前标题。Entity 页要列出「这个实体出现在哪些内容里」，
+    // 只有 storyId 时界面只能显示裸 ID。可选是为了让扩展前的 payload 仍能解析。
+    title: z.string().nullable().optional(),
 });
 
 export type EntityStoryLink = z.infer<typeof entityStoryLinkSchema>;

@@ -112,13 +112,23 @@ export class PrismaCosmosRepositoryAnnotations extends PrismaCosmosRepositoryCol
         });
     }
 
+    /**
+     * 批注查询。不给目标表示「我的全部批注」，用于整理页的批注分区——
+     * 扩展前必须带 targetType + targetId，因此无法回答「我写过哪些批注」。
+     * 给了目标时行为与扩展前一致（含别名解析）。
+     */
     async listAnnotations(input: {
-        targetType: TargetType;
-        targetId: string;
+        targetType?: TargetType;
+        targetId?: string;
     }): Promise<AnnotationList> {
-        const targetId = await this.resolveTargetTargetId(input.targetType, input.targetId);
+        const where = input.targetType !== undefined && input.targetId !== undefined
+            ? {
+                targetType: input.targetType,
+                targetId: await this.resolveTargetTargetId(input.targetType, input.targetId),
+            }
+            : {};
         const rows = await this.prisma.annotation.findMany({
-            where: { targetType: input.targetType, targetId },
+            where,
             orderBy: { createdAt: "asc" },
         });
         return { items: rows.map((row) => this.toAnnotation(row)) };

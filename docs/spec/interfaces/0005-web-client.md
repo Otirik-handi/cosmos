@@ -540,7 +540,7 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 
 ## 实现与测试锚点
 
-- 页面状态、调用、SSE、表单、搜索、Story 和渲染：[`apps/web/src/app/page.tsx`](../../../apps/web/src/app/page.tsx)。
+- 页面状态、调用、SSE、表单、搜索、Story 和渲染：[`apps/web/src/app/(shell)/page.tsx`](../../../apps/web/src/app/%28shell%29/page.tsx)（2026-09-24 Task 35 切片 1 由 `apps/web/src/app/page.tsx` 移入路由组 `(shell)`；文件名中的括号是 Next 路由组的常规写法。链接目标里的括号按 URL 规则编码为 `%28`/`%29`，解码后即上面的路径）。
 - 文档 metadata、lang、字体、主题引导与 Provider：[`apps/web/src/app/layout.tsx`](../../../apps/web/src/app/layout.tsx)。
 - 外观主题合同/Provider/引导脚本：[`apps/web/src/theme/theme.ts`](../../../apps/web/src/theme/theme.ts)、
   [`theme-provider.tsx`](../../../apps/web/src/theme/theme-provider.tsx)、

@@ -21,6 +21,9 @@ export const topicMemberSchema = z.object({
     actor: z.string().nullable(),
     revision: z.number().int().positive(),
     removed: z.boolean(),
+    // 成员 Story 的当前标题。话题页要列出成员，只有 storyId 时界面只能显示裸 ID，
+    // 而判据 R3 明确禁止要求用户认内部标识符。可选是为了让扩展前的 payload 仍能解析。
+    title: z.string().nullable().optional(),
 });
 
 export type TopicMember = z.infer<typeof topicMemberSchema>;
