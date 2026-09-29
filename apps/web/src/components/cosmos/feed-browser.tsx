@@ -227,74 +227,83 @@ export function FeedBrowser({
                         {feed.length > 0 && <span>{feed.length} 篇内容</span>}
                     </div>
                 </div>
-                <form
-                    className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center"
-                    onSubmit={onSubmit}
-                >
-                    <Input
-                        aria-label="搜索已保存内容"
-                        placeholder="搜索标题或正文"
-                        className="lg:max-w-xs"
-                        {...searchForm.register("text")}
-                    />
-                    <select
-                        aria-label="搜索来源"
-                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-                        {...searchForm.register("sourceId")}
-                    >
-                        <option value="">全部来源</option>
-                        {sources.map((source) => (
-                            <option key={source.id} value={source.id}>
-                                {source.name}
-                            </option>
-                        ))}
-                    </select>
-                    <Input
-                        aria-label="开始日期"
-                        type="date"
-                        {...searchForm.register("publishedAfter")}
-                    />
-                    <Input
-                        aria-label="结束日期"
-                        type="date"
-                        {...searchForm.register("publishedBefore")}
-                    />
-                    <Input
-                        aria-label="搜索作者"
-                        placeholder="作者或账号"
-                        className="lg:max-w-[10rem]"
-                        {...searchForm.register("author")}
-                    />
-                    <select
-                        aria-label="媒体类型"
-                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-                        {...searchForm.register("contentKind")}
-                    >
-                        <option value="">全部媒体类型</option>
-                        {Object.entries(CONTENT_KIND_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                                {label}
-                            </option>
-                        ))}
-                    </select>
-                    <select
-                        aria-label="录入状态"
-                        className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-                        {...searchForm.register("assetStatus")}
-                    >
-                        <option value="">全部录入状态</option>
-                        {Object.entries(ASSET_STATUS_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                                {label}
-                            </option>
-                        ))}
-                    </select>
-                    <Button type="submit" variant="outline">
-                        <Search data-icon="inline-start" />
-                        搜索
-                    </Button>
+                <form className="flex flex-col gap-[22px]" onSubmit={onSubmit}>
+                    {/* 主搜索行：关键词框占据主要视觉份额，搜索按钮紧邻其右侧。
+                        高度取当前 36px 的 1.25 倍；行距比筛选行宽出一档，让主次分明。 */}
+                    <div className="flex items-center gap-2">
+                        <Input
+                            aria-label="搜索已保存内容"
+                            className="h-[45px] max-w-[32rem] flex-1 text-[15px]"
+                            placeholder="搜索标题或正文"
+                            {...searchForm.register("text")}
+                        />
+                        <Button className="h-[45px] px-4" type="submit">
+                            <Search data-icon="inline-start" />
+                            搜索
+                        </Button>
+                    </div>
+                    {/* 筛选行：时间区间在同一行内以「从 - 至」表达。 */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                        <div className="flex items-center gap-1.5">
+                            <Input
+                                aria-label="开始日期"
+                                className="w-[11.5rem]"
+                                type="date"
+                                {...searchForm.register("publishedAfter")}
+                            />
+                            <span className="text-xs text-muted-foreground">至</span>
+                            <Input
+                                aria-label="结束日期"
+                                className="w-[11.5rem]"
+                                type="date"
+                                {...searchForm.register("publishedBefore")}
+                            />
+                        </div>
+                        <Input
+                            aria-label="搜索作者"
+                            className="w-[9rem]"
+                            placeholder="作者或账号"
+                            {...searchForm.register("author")}
+                        />
+                        <select
+                            aria-label="搜索来源"
+                            className="h-8 rounded-[var(--radius-control)] border border-input bg-background px-2 text-sm"
+                            {...searchForm.register("sourceId")}
+                        >
+                            <option value="">全部来源</option>
+                            {sources.map((source) => (
+                                <option key={source.id} value={source.id}>
+                                    {source.name}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            aria-label="媒体类型"
+                            className="h-8 rounded-[var(--radius-control)] border border-input bg-background px-2 text-sm"
+                            {...searchForm.register("contentKind")}
+                        >
+                            <option value="">全部媒体类型</option>
+                            {Object.entries(CONTENT_KIND_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            aria-label="录入状态"
+                            className="h-8 rounded-[var(--radius-control)] border border-input bg-background px-2 text-sm"
+                            {...searchForm.register("assetStatus")}
+                        >
+                            <option value="">全部录入状态</option>
+                            {Object.entries(ASSET_STATUS_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                     {(labels.length > 0 || topics.length > 0) && (
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:w-full">
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                             {labels.length > 0 && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs text-muted-foreground">分类</span>

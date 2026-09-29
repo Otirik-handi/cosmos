@@ -10,14 +10,22 @@ import {
 } from "./registry";
 
 const expectedPublicModules = [
+    "components/ui/alert-dialog.tsx",
     "components/ui/badge.tsx",
     "components/ui/button.tsx",
     "components/ui/card.tsx",
+    "components/ui/combobox.tsx",
+    "components/ui/dialog.tsx",
     "components/ui/field.tsx",
     "components/ui/input.tsx",
     "components/ui/label.tsx",
+    "components/ui/menu.tsx",
+    "components/ui/select.tsx",
     "components/ui/separator.tsx",
+    "components/ui/tabs.tsx",
     "components/ui/textarea.tsx",
+    "components/ui/toast.tsx",
+    "components/ui/tooltip.tsx",
     "components/cosmos/connection-panel.tsx",
     "components/cosmos/feed-browser.tsx",
     "components/cosmos/run-control.tsx",

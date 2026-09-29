@@ -32,17 +32,17 @@ describe("component lab token drafts", () => {
     });
 
     it("reads a valid versioned draft", () => {
-        const storage = createStorage('{"overrides":{"--radius":"1rem"},"version":1}');
+        const storage = createStorage('{"overrides":{"--radius-card":"1rem"},"version":1}');
 
         expect(loadLabTokenDraft(storage, labTokenDefinitions)).toEqual({
             error: null,
-            overrides: {"--radius": "1rem"},
+            overrides: {"--radius-card": "1rem"},
         });
     });
 
     it("reports corrupted drafts without leaking partial overrides", () => {
         const result = readLabTokenDraft(
-            '{"overrides":{"--radius":"1rem","--unknown":"red"},"version":1}',
+            '{"overrides":{"--radius-card":"1rem","--unknown":"red"},"version":1}',
             labTokenDefinitions,
         );
 
@@ -53,13 +53,13 @@ describe("component lab token drafts", () => {
     it("writes a deterministic versioned draft", () => {
         const storage = createStorage();
         const result = saveLabTokenDraft(storage, {
-            "--radius": "1rem",
+            "--radius-card": "1rem",
             "--primary": "#123456",
         });
 
         expect(result).toEqual({error: null});
         expect(storage.value()).toBe(
-            '{"overrides":{"--primary":"#123456","--radius":"1rem"},"version":1}',
+            '{"overrides":{"--primary":"#123456","--radius-card":"1rem"},"version":1}',
         );
         expect(storage.getItem(LAB_TOKEN_DRAFT_STORAGE_KEY)).toBe(storage.value());
     });
@@ -72,7 +72,7 @@ describe("component lab token drafts", () => {
             },
         };
 
-        expect(saveLabTokenDraft(storage, {"--radius": "1rem"})).toEqual({
+        expect(saveLabTokenDraft(storage, {"--radius-card": "1rem"})).toEqual({
             error: "quota exceeded",
         });
     });
@@ -80,10 +80,10 @@ describe("component lab token drafts", () => {
 
 describe("component lab token inspector", () => {
     it("keeps a persisted override when a field is blurred without editing", () => {
-        expect(resolveLabTokenValueOnBlur({}, {"--radius": "1rem"}, "--radius")).toBe("1rem");
+        expect(resolveLabTokenValueOnBlur({}, {"--radius-card": "1rem"}, "--radius-card")).toBe("1rem");
     });
 
     it("allows an explicitly cleared field to remove its override", () => {
-        expect(resolveLabTokenValueOnBlur({"--radius": ""}, {"--radius": "1rem"}, "--radius")).toBe("");
+        expect(resolveLabTokenValueOnBlur({"--radius-card": ""}, {"--radius-card": "1rem"}, "--radius-card")).toBe("");
     });
 });
