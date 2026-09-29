@@ -1,15 +1,22 @@
-export const COSMOS_THEME_ID = "neurobook";
 export const COSMOS_THEME_STORAGE_KEY = "cosmos.theme.preference.v1";
 
-export type CosmosThemePreference = "system" | "macos-light" | "macos-night";
-export type CosmosColorwayId = "macos-light" | "macos-night";
+/**
+ * 单一明暗轴（ADR-0029 决策 5）：删除了 `theme × colorway` 两套轴。
+ * 「未来可安装第三方主题」已排除，保留一个只有单一取值的 theme 轴没有意义。
+ */
+export type CosmosThemePreference = "system" | "light" | "dark";
+export type CosmosAppearance = "light" | "dark";
 
 const THEME_PREFERENCES: readonly CosmosThemePreference[] = [
     "system",
-    "macos-light",
-    "macos-night",
+    "light",
+    "dark",
 ];
 
+/**
+ * 存量 `localStorage` 里的 `macos-light` / `macos-night` 会落回 `system`，
+ * 因此轴收敛不需要迁移代码。
+ */
 export function parseThemePreference(value: unknown): CosmosThemePreference {
     return typeof value === "string"
         && (THEME_PREFERENCES as readonly string[]).includes(value)
@@ -17,29 +24,24 @@ export function parseThemePreference(value: unknown): CosmosThemePreference {
         : "system";
 }
 
-export function resolveThemeColorway(
+export function resolveAppearance(
     preference: CosmosThemePreference,
     systemPrefersDark: boolean,
-): CosmosColorwayId {
+): CosmosAppearance {
     if (preference !== "system") {
         return preference;
     }
-    return systemPrefersDark ? "macos-night" : "macos-light";
+    return systemPrefersDark ? "dark" : "light";
 }
 
 export type CosmosThemeAttributes = {
-    theme: typeof COSMOS_THEME_ID;
-    colorway: CosmosColorwayId;
-    appearance: "light" | "dark";
+    appearance: CosmosAppearance;
     dark: boolean;
-    colorScheme: "light" | "dark";
+    colorScheme: CosmosAppearance;
 };
 
-export function themeAttributesFor(colorway: CosmosColorwayId): CosmosThemeAttributes {
-    const appearance = colorway === "macos-night" ? "dark" : "light";
+export function themeAttributesFor(appearance: CosmosAppearance): CosmosThemeAttributes {
     return {
-        theme: COSMOS_THEME_ID,
-        colorway,
         appearance,
         dark: appearance === "dark",
         colorScheme: appearance,

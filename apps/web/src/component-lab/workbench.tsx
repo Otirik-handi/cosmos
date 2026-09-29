@@ -18,7 +18,7 @@ import {LabNav} from "./lab-nav";
 import {LabStage} from "./lab-stage";
 import {notifyLabTokenDraftChange, useLabTokenDraft} from "./use-token-draft";
 import {labTokenDefinitions} from "./tokens";
-import type {LabColorwayId, LabProps, LabThemeId, LabTokenName, LabViewportId} from "./types";
+import type {LabAppearanceId, LabProps, LabTokenName, LabViewportId} from "./types";
 
 const labContext: LabUrlContext = {
     componentIds: labComponentDefinitions.map((definition) => definition.id),
@@ -32,14 +32,12 @@ const labContext: LabUrlContext = {
         labComponentDefinitions.map((definition) => [definition.id, definition.defaultSceneId]),
     ),
     viewportIds: ["responsive", "wide"],
-    themeIds: ["neurobook"],
-    colorwayIds: ["macos-light", "macos-night"],
+    appearanceIds: ["light", "dark"],
     defaults: {
         component: labComponentDefinitions[0]?.id ?? "button",
         scene: labComponentDefinitions[0]?.defaultSceneId ?? "default",
         viewport: "responsive",
-        theme: "neurobook",
-        colorway: "macos-light",
+        appearance: "light",
     },
 };
 
@@ -171,14 +169,13 @@ function LabSurface({definition, onSessionChange, scene, session}: LabSurfacePro
                     selectedId={definition.id}
                 />
                 <LabStage
-                    colorway={session.colorway as LabColorwayId}
+                    appearance={session.appearance as LabAppearanceId}
                     definition={definition}
-                    onColorwayChange={(colorway) => onSessionChange({colorway})}
+                    onAppearanceChange={(appearance) => onSessionChange({appearance})}
                     onSceneChange={(sceneId) => onSessionChange({scene: sceneId})}
                     onViewportChange={(viewport) => onSessionChange({viewport})}
                     props={props}
                     scene={scene}
-                    theme={session.theme as LabThemeId}
                     tokenOverrides={draft.overrides}
                     viewport={session.viewport as LabViewportId}
                 />
@@ -196,7 +193,7 @@ function LabSurface({definition, onSessionChange, scene, session}: LabSurfacePro
             </div>
             <Card className="mx-auto mb-6 max-w-[1600px] border-dashed">
                 <CardContent className="p-4 text-xs text-muted-foreground">
-                    URL 保存组件、场景、画布、主题和配色；token 草稿版本化保存在 localStorage，可导入或导出 JSON。
+                    URL 保存组件、场景、画布和明暗；token 草稿版本化保存在 localStorage，可导入或导出 JSON。
                 </CardContent>
             </Card>
         </>

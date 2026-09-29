@@ -47,12 +47,12 @@ import {
 } from "@cosmos/contracts";
 import { CosmosTransportError } from "@cosmos/transport-http";
 
-import { useBoardWorkspace } from "./home/use-board-workspace";
-import { useEntityWorkspace } from "./home/use-entity-workspace";
-import { useFeedWorkspace } from "./home/use-feed-workspace";
-import { useSourceWorkspace } from "./home/use-source-workspace";
-import { useStoryWorkspace } from "./home/use-story-workspace";
-import { useTopicWorkspace } from "./home/use-topic-workspace";
+import { useBoardWorkspace } from "@/app/home/use-board-workspace";
+import { useEntityWorkspace } from "@/app/home/use-entity-workspace";
+import { useFeedWorkspace } from "@/app/home/use-feed-workspace";
+import { useSourceWorkspace } from "@/app/home/use-source-workspace";
+import { useStoryWorkspace } from "@/app/home/use-story-workspace";
+import { useTopicWorkspace } from "@/app/home/use-topic-workspace";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,7 +69,8 @@ import {
     type SourceDefinitionState,
     type SourceFormValues,
 } from "@/components/cosmos/source-form";
-import {StatusSummary, type EventStreamState} from "@/components/cosmos/status-summary";
+import {StatusSummary} from "@/components/cosmos/status-summary";
+import {useLiveTopic, useStreamState} from "@/components/shell/live-provider";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {StoryPanel} from "@/components/cosmos/story-panel";
 import {TopicPanel} from "@/components/cosmos/topic-panel";
@@ -93,7 +94,7 @@ import {
     toBoundaryIso,
     toDateInputValue,
     toScheduleIntervalMs,
-} from "./home/page-runtime";
+} from "@/app/home/page-runtime";
 
 export default function Home() {
     const {preference, setPreference} = useTheme();
@@ -102,7 +103,8 @@ export default function Home() {
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [eventStreamState, setEventStreamState] = useState<EventStreamState>("connecting");
+    /** 连接状态由外壳级 live-provider 持有，页面不再自建 EventSource。 */
+    const eventStreamState = useStreamState();
 
     /**
      * 工作区上下文必须**身份稳定**：各域 hook 把它放进 effect／callback 的依赖里，
@@ -322,37 +324,21 @@ export default function Home() {
 
     useEffect(() => {
         void refreshRef.current();
-        const closeEvents = client.openEventStream({
-            onEvent: (event) => {
-                setEventStreamState("connected");
-                if (event.type === "snapshot_required") {
-                    setNotice("服务要求重新读取快照，正在刷新 Feed。");
-                }
-                // 只监听存储层实际发出的事件类型：Job 成功没有独立事件
-                // （Run 终态覆盖它），Job 重试等待以 run.retry_wait.v1 表达。
-                if (
-                    event.type === "feed.updated.v1"
-                    || event.type === "run.queued.v1"
-                    || event.type === "run.succeeded.v1"
-                    || event.type === "run.failed.v1"
-                    || event.type === "run.retry_wait.v1"
-                    || event.type === "job.failed_terminal.v1"
-                ) {
-                    void refreshRef.current();
-                    // 计划行显示的是"最近一次运行的时间与错误"，所以运行事件也必须重读计划列表：
-                    // 否则失败提示让用户"在计划行内查看错误信息"，行里却一直什么都没有。
-                    void loadPlansRef.current();
-                }
-                if (event.type === "run.failed.v1") {
-                    setNotice("一次录入运行失败，已刷新“采集计划”；请在计划行内查看错误信息。");
-                }
-            },
-            onError: () => {
-                setEventStreamState("unavailable");
-            },
-        });
-        return closeEvents;
     }, []);
+
+    /**
+     * 事件订阅来自外壳级 live-provider（全程一条 EventSource）。首页同时关心
+     * feed 与运行事件：计划行显示的是「最近一次运行的时间与错误」，所以运行事件
+     * 也必须重读计划列表，否则失败提示让用户去计划行看，行里却什么都没有。
+     */
+    useLiveTopic("library", () => {
+        void refreshRef.current();
+        void loadPlansRef.current();
+    });
+    useLiveTopic("automation", () => {
+        void refreshRef.current();
+        void loadPlansRef.current();
+    });
 
     /**
      * 看板配置低频变化：只首载一次；ensureDefaultBoard 幂等 seed 保证默认

@@ -2,8 +2,7 @@ export type LabUrlState = {
     component: string;
     scene: string;
     viewport: string;
-    theme: string;
-    colorway: string;
+    appearance: string;
 };
 
 export type LabUrlContext = {
@@ -11,8 +10,7 @@ export type LabUrlContext = {
     scenesByComponent: Readonly<Record<string, readonly string[]>>;
     defaultSceneByComponent: Readonly<Record<string, string>>;
     viewportIds: readonly string[];
-    themeIds: readonly string[];
-    colorwayIds: readonly string[];
+    appearanceIds: readonly string[];
     defaults: LabUrlState;
 };
 
@@ -50,12 +48,11 @@ export function normalizeLabQuery(query: LabQuery, context: LabUrlContext): LabU
             context.viewportIds,
             context.defaults.viewport,
         ),
-        theme: supportedValue(query, "theme", context.themeIds, context.defaults.theme),
-        colorway: supportedValue(
+        appearance: supportedValue(
             query,
-            "colorway",
-            context.colorwayIds,
-            context.defaults.colorway,
+            "appearance",
+            context.appearanceIds,
+            context.defaults.appearance,
         ),
     };
 }
@@ -65,7 +62,6 @@ export function serializeLabUrlState(state: LabUrlState): URLSearchParams {
         ["component", state.component],
         ["scene", state.scene],
         ["viewport", state.viewport],
-        ["theme", state.theme],
-        ["colorway", state.colorway],
+        ["appearance", state.appearance],
     ]);
 }

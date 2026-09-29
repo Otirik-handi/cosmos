@@ -9,8 +9,8 @@ const THEME_OPTIONS: readonly {
     icon: typeof Monitor;
 }[] = [
     {value: "system", label: "跟随系统", icon: Monitor},
-    {value: "macos-light", label: "macOS Light", icon: Sun},
-    {value: "macos-night", label: "macOS Night", icon: Moon},
+    {value: "light", label: "亮色", icon: Sun},
+    {value: "dark", label: "暗色", icon: Moon},
 ];
 
 type ThemeSwitcherProps = {

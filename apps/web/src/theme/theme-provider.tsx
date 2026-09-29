@@ -11,20 +11,20 @@ import type {ReactNode} from "react";
 import {
     COSMOS_THEME_STORAGE_KEY,
     parseThemePreference,
-    resolveThemeColorway,
+    resolveAppearance,
     themeAttributesFor,
-    type CosmosColorwayId,
+    type CosmosAppearance,
     type CosmosThemePreference,
 } from "./theme";
 
 type ThemeSnapshot = {
     preference: CosmosThemePreference;
-    colorway: CosmosColorwayId;
+    appearance: CosmosAppearance;
 };
 
 const SERVER_SNAPSHOT: ThemeSnapshot = Object.freeze({
     preference: "system",
-    colorway: "macos-light",
+    appearance: "light",
 });
 
 let cachedSnapshot: ThemeSnapshot | null = null;
@@ -35,7 +35,7 @@ function systemPrefersDark(): boolean | null {
     try {
         return window.matchMedia("(prefers-color-scheme: dark)").matches;
     } catch {
-        // null 表示媒体查询不可用；按合同首屏强制回退 macos-light。
+        // null 表示媒体查询不可用；按合同首屏强制回退亮色。
         return null;
     }
 }
@@ -54,15 +54,15 @@ function readStoredPreference(): CosmosThemePreference | "unavailable" {
 
 function computeSnapshot(): ThemeSnapshot {
     const systemDark = systemPrefersDark();
-    // 合同：matchMedia 异常时首屏回退 macos-light（含已存储的显式偏好）。
+    // 合同：matchMedia 异常时首屏回退亮色（含已存储的显式偏好）。
     if (systemDark === null) {
-        return {preference: "macos-light", colorway: "macos-light"};
+        return {preference: "light", appearance: "light"};
     }
     const stored = readStoredPreference();
     if (stored === "unavailable") {
-        return {preference: "macos-light", colorway: "macos-light"};
+        return {preference: "light", appearance: "light"};
     }
-    return {preference: stored, colorway: resolveThemeColorway(stored, systemDark)};
+    return {preference: stored, appearance: resolveAppearance(stored, systemDark)};
 }
 
 function emitChange(): void {
@@ -70,7 +70,7 @@ function emitChange(): void {
     if (
         cachedSnapshot
         && cachedSnapshot.preference === next.preference
-        && cachedSnapshot.colorway === next.colorway
+        && cachedSnapshot.appearance === next.appearance
     ) {
         return;
     }
@@ -133,10 +133,9 @@ function getServerSnapshot(): ThemeSnapshot {
 }
 
 export function applyDocumentTheme(snapshot: ThemeSnapshot): void {
-    const attributes = themeAttributesFor(snapshot.colorway);
+    const attributes = themeAttributesFor(snapshot.appearance);
     const root = document.documentElement;
-    root.setAttribute("data-cosmos-theme", attributes.theme);
-    root.setAttribute("data-cosmos-colorway", attributes.colorway);
+    root.setAttribute("data-cosmos-appearance", attributes.appearance);
     root.classList.toggle("dark", attributes.dark);
     root.style.colorScheme = attributes.colorScheme;
 }
@@ -153,7 +152,7 @@ function setPreference(preference: CosmosThemePreference): void {
     }
     cachedSnapshot = {
         preference,
-        colorway: resolveThemeColorway(preference, systemPrefersDark() ?? false),
+        appearance: resolveAppearance(preference, systemPrefersDark() ?? false),
     };
     applyDocumentTheme(cachedSnapshot);
     for (const listener of [...listeners]) {
