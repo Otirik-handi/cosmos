@@ -2,6 +2,7 @@ import {useEffect, useRef} from "react";
 import type {ReactNode} from "react";
 
 import {Toast as ToastPrimitive} from "@base-ui/react/toast";
+import type {FeedItem} from "@cosmos/contracts";
 
 import {AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger} from "@/components/ui/alert-dialog";
 import {Button} from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger} from "@/compone
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {ToastHost, ToastProvider} from "@/components/ui/toast";
+import {SystemOutputBlock} from "@/components/cosmos/system-output-block";
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip";
 
 import type {LabControlDefinition, LabProps} from "./types";
@@ -105,6 +107,10 @@ export const comboboxControls = [
 export const tooltipControls = [
     control("open", "Initially open", "boolean", false),
     control("text", "Text", "text", "依据 3 条 · 置信度 0.72"),
+] as const satisfies readonly LabControlDefinition[];
+
+export const systemOutputControls = [
+    control("state", "State", "select", "machine", ["machine", "mixed", "empty"]),
 ] as const satisfies readonly LabControlDefinition[];
 
 /* ------------------------------------------------------------------ */
@@ -298,5 +304,65 @@ export function renderTooltip(props: LabProps): ReactNode {
                 <TooltipContent>{textProp(props, "text", "依据 3 条 · 置信度 0.72")}</TooltipContent>
             </Tooltip>
         </TooltipProvider>
+    );
+}
+
+const SYSTEM_OUTPUT_BASE: FeedItem[] = [
+    {
+        storyId: "story-system",
+        storyKind: "document",
+        title: "某开源项目 0.9 版本更新说明",
+        summary: null,
+        entryId: "entry-system",
+        sourceId: "source-a",
+        sourceName: "GitHub Releases",
+        sourceKind: "rss",
+        revisionId: "rev-system",
+        publishedAt: "2026-09-22T00:00:00.000Z",
+        producer: "system",
+        assets: [],
+    },
+    {
+        storyId: "story-agent",
+        storyKind: "event",
+        title: "Qwen 3.8 Max 发布：官方公告汇总",
+        summary: null,
+        entryId: "entry-agent",
+        sourceId: "source-b",
+        sourceName: "AI HOT",
+        sourceKind: "rss",
+        revisionId: "rev-agent",
+        publishedAt: "2026-09-24T00:00:00.000Z",
+        producer: "agent",
+        assets: [],
+    },
+    {
+        storyId: "story-human",
+        storyKind: "document",
+        title: "人工改过标题的一条内容",
+        summary: null,
+        entryId: "entry-human",
+        sourceId: "source-a",
+        sourceName: "少数派",
+        sourceKind: "rss",
+        revisionId: "rev-human",
+        publishedAt: "2026-09-21T00:00:00.000Z",
+        producer: "human",
+        assets: [],
+    },
+];
+
+/** 系统产出区块的三种可观察状态：全部机器产出 / 混合 / 空。 */
+export function renderSystemOutput(props: LabProps): ReactNode {
+    const state = optionProp(props, "state", "machine", ["machine", "mixed", "empty"] as const);
+    const items = state === "empty"
+        ? []
+        : state === "mixed"
+            ? SYSTEM_OUTPUT_BASE
+            : SYSTEM_OUTPUT_BASE.filter((item) => item.producer !== "human");
+    return (
+        <div className="w-full max-w-2xl rounded-[var(--radius-card)] border border-border bg-card p-4">
+            <SystemOutputBlock items={items} loading={false} onOpenStory={() => {}} />
+        </div>
     );
 }

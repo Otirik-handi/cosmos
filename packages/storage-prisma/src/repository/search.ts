@@ -136,6 +136,7 @@ export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
             sourceKind: string;
             revisionId: string;
             publishedAt: string | null;
+            producer: string | null;
             rank: number;
         }>>(
             `
@@ -150,11 +151,13 @@ export class PrismaCosmosRepositorySearch extends PrismaCosmosRepositoryMedia {
                     s.kind AS sourceKind,
                     r.id AS revisionId,
                     r.sourcePublishedAt AS publishedAt,
+                    storyRevision.producer AS producer,
                     ${rankSelect} AS rank
                 ${fromClause}
                 JOIN EntryRevision r ON r.id = e.currentRevisionId
                 JOIN SourceInstance s ON s.id = e.sourceInstanceId
                 JOIN Story story ON story.id = e.storyId
+                LEFT JOIN StoryRevision storyRevision ON storyRevision.id = story.currentRevisionId
                 ${whereClause}
                 ${orderClause}
                 LIMIT ? OFFSET ?

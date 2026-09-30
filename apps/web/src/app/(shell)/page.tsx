@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
     Plus,
-    RefreshCcw,
     X,
 } from "lucide-react";
 import {
@@ -16,36 +15,9 @@ import {
 import { useForm } from "react-hook-form";
 
 import {
-    createSourceCommandSchema,
-    type Annotation,
-    type BoardDetail,
-    type BoardSummary,
-    type CollectionList,
-    type EntityDetail,
-    type EntityRelationType,
-    type EntitySummary,
-    type EntityType,
-    type EntryListItem,
-    type EntryStoryRelationType,
-    type FeedItem,
-    type HealthResponse,
-    type LabelList,
-    type MediaCleanupReport,
-    type SavedView,
     type SearchQuery,
-    type SourceMediaPolicy,
     type SourceSnapshot,
-    type SplitStoryCommand,
-    type StoryDetail,
-    type StorySubtype,
-    type TopicDetail,
-    type TopicMemberRole,
-    type TopicSummary,
-    type UpdateEntityCommand,
-    type UpdateStoryRevisionCommand,
-    type UpdateTopicCommand,
 } from "@cosmos/contracts";
-import { CosmosTransportError } from "@cosmos/transport-http";
 
 import { useBoardWorkspace } from "@/app/home/use-board-workspace";
 import { useEntityWorkspace } from "@/app/home/use-entity-workspace";
@@ -54,57 +26,34 @@ import { useSourceWorkspace } from "@/app/home/use-source-workspace";
 import { useStoryWorkspace } from "@/app/home/use-story-workspace";
 import { useTopicWorkspace } from "@/app/home/use-topic-workspace";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BoardView, type BoardCommands } from "@/components/cosmos/board-view";
-import {ConnectionPanel} from "@/components/cosmos/connection-panel";
-import {RunHistory} from "@/components/cosmos/run-history";
-import {StoragePanel} from "@/components/cosmos/storage-panel";
+import { BoardView } from "@/components/cosmos/board-view";
 import {CollectionPlanList} from "@/components/cosmos/collection-plan-list";
 import {
     SourceForm,
     sourceFormSchema,
-    type ProbeState,
-    type SourceDefinitionState,
     type SourceFormValues,
 } from "@/components/cosmos/source-form";
-import {StatusSummary} from "@/components/cosmos/status-summary";
-import {useLiveTopic, useStreamState} from "@/components/shell/live-provider";
-import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
+import {useLiveTopic} from "@/components/shell/live-provider";
+import {searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {StoryPanel} from "@/components/cosmos/story-panel";
+import {SystemOutputBlock} from "@/components/cosmos/system-output-block";
 import {TopicPanel} from "@/components/cosmos/topic-panel";
 import {EntityPanel} from "@/components/cosmos/entity-panel";
-import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
-import {useTheme} from "@/theme/theme-provider";
-import {
-    loadRelatedStories,
-    type RelatedStory,
-    type RelatedStoryPorts,
-} from "@/lib/related-stories";
 import {
     client,
-    RELATED_STORY_PORTS,
-    RSS_SOURCE_DEFINITION_REF,
-    RSS_OPERATION_ID,
-    PROBE_POLL_INTERVAL_MS,
-    PROBE_POLL_TIMEOUT_MS,
-    delay,
     readError,
     toBoundaryIso,
-    toDateInputValue,
     toScheduleIntervalMs,
 } from "@/app/home/page-runtime";
 
 export default function Home() {
-    const {preference, setPreference} = useTheme();
     const [loading, setLoading] = useState(true);
     /** 来源列表是共享读模型:整体刷新(feed)与来源操作都会写它。 */
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    /** 连接状态由外壳级 live-provider 持有，页面不再自建 EventSource。 */
-    const eventStreamState = useStreamState();
 
     /**
      * 工作区上下文必须**身份稳定**：各域 hook 把它放进 effect／callback 的依赖里，
@@ -253,6 +202,16 @@ export default function Home() {
         setNextCursor,
         setSavedViewName,
     } = feedWorkspace;
+    /**
+     * 系统产出区块取的是「由系统或 Agent 产生的 Story」：机器产出的排前面，
+     * 人工编辑过的保留在后面（ADR-0028 的 producer 语义），让人能看出哪些已被人工接管。
+     */
+    const systemOutput = useMemo(() => {
+        const machine = (item: (typeof feed)[number]): boolean => {
+            return item.producer === "system" || item.producer === "agent";
+        };
+        return [...feed].sort((left, right) => Number(machine(right)) - Number(machine(left)));
+    }, [feed]);
     const sourceWorkspace = useSourceWorkspace(
         workspaceContext,
         sourceForm,
@@ -487,27 +446,6 @@ export default function Home() {
         </section>
     );
 
-    const feedBrowser = (
-        <FeedBrowser
-            activeSearch={activeSearch}
-            feed={feed}
-            loading={loading}
-            loadingMore={loadingMore}
-            nextCursor={nextCursor}
-            onClearSearch={() => void clearSearch()}
-            onLoadMore={loadMore}
-            onOpenStory={openStory}
-            onSubmit={onSearch}
-            openingStoryId={openingStoryId}
-            refreshing={loading && feed.length > 0}
-            searchExtras={savedViewsPanel}
-            searchForm={searchForm}
-            sources={sources}
-            labels={labels.items}
-            topics={topics}
-        />
-    );
-
     const planList = (
         <CollectionPlanList
             onRun={runPlan}
@@ -527,189 +465,108 @@ export default function Home() {
     );
 
     return (
-        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-10">
-            <header className="border-b pb-6">
-                <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-                    <div className="flex min-w-0 flex-col gap-2">
-                        <Badge variant="secondary" className="w-fit">
-                            Phase 1 · 本地信息库
-                        </Badge>
-                        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-                            Cosmos
-                        </h1>
-                        <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                            从 Story 入口浏览已保存的信息，并手动触发 RSS 录入。
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <ThemeSwitcher onValueChange={setPreference} value={preference} />
-                        <Button onClick={() => setShowSourceForm((value) => !value)}>
-                            {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                            {showSourceForm ? "关闭表单" : "新建计划"}
-                        </Button>
+        <div className="flex w-full flex-col gap-5">
+            {/* 首页只负责「看」：看板与系统产出。检索工作台在 /library，
+                来源与连接配置在 /automation（切片 3c），状态在顶栏。 */}
+            <div className="flex flex-wrap items-center gap-2">
+                {boards.length > 0 && (
+                    <>
+                        <label className="flex items-center gap-2 text-[13px]">
+                            <span className="text-muted-foreground">看板</span>
+                            <select
+                                aria-label="切换看板"
+                                className="h-8 rounded-[var(--radius-control)] border border-input bg-card px-2 text-[13px]"
+                                value={board?.id ?? ""}
+                                onChange={(event) => void switchBoard(event.target.value)}
+                            >
+                                {boards.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                         <Button
                             variant="outline"
-                            disabled={checkingService}
-                            onClick={() => void checkService()}
+                            onClick={() => setBoardEditing((value) => !value)}
                         >
-                            <RefreshCcw data-icon="inline-start" />
-                            检查服务
+                            {boardEditing ? "完成编辑" : "编辑看板"}
                         </Button>
-                    </div>
-                </div>
-            </header>
-
-            {error && (
-                <div
-                    role="alert"
-                    className="rounded-[var(--radius-control)] border border-destructive/30 bg-destructive/10 p-4 text-sm leading-6 text-destructive"
-                >
-                    {error}
-                </div>
-            )}
-            {notice && (
-                <div
-                    role="status"
-                    className="rounded-[var(--radius-control)] border bg-muted/40 p-4 text-sm leading-6"
-                >
-                    {notice}
-                </div>
-            )}
-
-            {boards.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 border-b pb-4">
-                    <label className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">看板</span>
-                        <select
-                            aria-label="切换看板"
-                            className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
-                            value={board?.id ?? ""}
-                            onChange={(event) => void switchBoard(event.target.value)}
-                        >
-                            {boards.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <Button
-                        variant="outline"
-                        onClick={() => setBoardEditing((value) => !value)}
-                    >
-                        {boardEditing ? "完成编辑" : "编辑看板"}
-                    </Button>
-                    {boardEditing && (
-                        <>
-                            <Input
-                                aria-label="新看板名称"
-                                className="max-w-xs"
-                                placeholder="新看板名称"
-                                value={newBoardName}
-                                onChange={(event) => setNewBoardName(event.target.value)}
-                            />
-                            <Button
-                                variant="outline"
-                                disabled={newBoardName.trim() === ""}
-                                onClick={() => {
-                                    const name = newBoardName;
-                                    setNewBoardName("");
-                                    void createBoard(name);
-                                }}
-                            >
-                                新建看板
-                            </Button>
-                        </>
-                    )}
-                </div>
-            )}
-
-            {/* 信息库与搜索是页面级入口（PRD §8.2），不再依附某个看板区块：
-                看板内的每个阅读流区块各自按绑定取数。 */}
-            <section aria-label="信息库与搜索" className="border-b pb-6">
-                {feedBrowser}
-            </section>
-
-            <div className="grid w-full flex-1 items-start gap-8 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[330px_minmax(0,1fr)]">
-                <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-8">
-                    <StatusSummary
-                        eventStreamState={eventStreamState}
-                        health={health}
-                        planSummary={planSummary}
-                    />
-                    <section aria-label="Entities" className="grid gap-2">
-                        <h2 className="font-display text-lg font-semibold">Entities</h2>
-                        {entities.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                                尚未创建 Entity；在 Story 详情里可创建并关联。
-                            </p>
-                        ) : (
-                            <ul className="grid gap-1">
-                                {entities.map((item) => (
-                                    <li key={item.id}>
-                                        <button
-                                            type="button"
-                                            data-entity-id={item.id}
-                                            disabled={openingEntityId === item.id}
-                                            onClick={() => void openEntity(item.id)}
-                                            className="flex w-full items-center justify-between gap-2 rounded-sm border bg-card px-3 py-2 text-left text-sm hover:bg-muted/40 focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none disabled:opacity-60"
-                                        >
-                                            <span className="truncate">{item.name}</span>
-                                            <Badge variant="secondary">{item.storyCount}</Badge>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                        {boardEditing && (
+                            <>
+                                <Input
+                                    aria-label="新看板名称"
+                                    className="max-w-xs"
+                                    placeholder="新看板名称"
+                                    value={newBoardName}
+                                    onChange={(event) => setNewBoardName(event.target.value)}
+                                />
+                                <Button
+                                    variant="outline"
+                                    disabled={newBoardName.trim() === ""}
+                                    onClick={() => {
+                                        const name = newBoardName;
+                                        setNewBoardName("");
+                                        void createBoard(name);
+                                    }}
+                                >
+                                    新建看板
+                                </Button>
+                            </>
                         )}
-                    </section>
-                    <section aria-label="连接" className="grid gap-2">
-                        <h2 className="font-display text-lg font-semibold">连接</h2>
-                        <ConnectionPanel client={client} onConnectionsChanged={() => void loadPlans()} />
-                    </section>
-                    <section aria-label="存储" className="grid gap-2">
-                        <h2 className="font-display text-lg font-semibold">存储</h2>
-                        <StoragePanel client={client} />
-                    </section>
-                    {showSourceForm && (
-                        <SourceForm
-                            form={sourceForm}
-                            definitionState={definitionState}
-                            selectedDefinitionRef={selectedDefinitionRef}
-                            onSelectDefinition={selectDefinition}
-                            selectedOperationId={selectedOperationId}
-                            onSelectOperation={selectOperation}
-                            onSubmit={onCreateSource}
-                            onTest={() => void onTestSourceConfig()}
-                            probeState={probeState}
-                            onRetryDefinition={() => void loadDefinitions()}
-                            connections={connections}
-                        />
-                    )}
-                </aside>
-                {board ? (
-                    <BoardView
-                        board={board}
-                        client={client}
-                        planListSlot={planList}
-                        topics={topics}
-                        openingTopicId={openingTopicId}
-                        onOpenTopic={(topicId) => void openTopic(topicId)}
-                        onOpenStory={(storyId) => void openStory(storyId)}
-                        editable={boardEditing}
-                        commands={boardCommands}
-                        savedViews={savedViews}
-                        collections={collections.items}
-                        refreshToken={boardRefreshToken}
-                    />
-                ) : null}
+                    </>
+                )}
+                <Button
+                    className="ml-auto"
+                    variant="outline"
+                    onClick={() => setShowSourceForm((value) => !value)}
+                >
+                    {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+                    {showSourceForm ? "关闭表单" : "新建计划"}
+                </Button>
             </div>
 
-            <section aria-label="运行记录" className="flex flex-col gap-3">
-                <div className="border-b pb-2">
-                    <h2 className="font-display text-xl font-semibold tracking-tight">运行记录</h2>
-                </div>
-                <RunHistory client={client} refreshToken={runRefreshToken} />
-            </section>
+            {/* 来源表单与连接面板在切片 3c 搬到 /automation；在那之前留在首页，
+                否则「来源配不了」会先于新页面出现。 */}
+            {showSourceForm && (
+                <SourceForm
+                    form={sourceForm}
+                    definitionState={definitionState}
+                    selectedDefinitionRef={selectedDefinitionRef}
+                    onSelectDefinition={selectDefinition}
+                    selectedOperationId={selectedOperationId}
+                    onSelectOperation={selectOperation}
+                    onSubmit={onCreateSource}
+                    onTest={() => void onTestSourceConfig()}
+                    probeState={probeState}
+                    onRetryDefinition={() => void loadDefinitions()}
+                    connections={connections}
+                />
+            )}
+
+            {board ? (
+                <BoardView
+                    board={board}
+                    client={client}
+                    planListSlot={planList}
+                    topics={topics}
+                    openingTopicId={openingTopicId}
+                    onOpenTopic={(topicId) => void openTopic(topicId)}
+                    onOpenStory={(storyId) => void openStory(storyId)}
+                    editable={boardEditing}
+                    commands={boardCommands}
+                    savedViews={savedViews}
+                    collections={collections.items}
+                    refreshToken={boardRefreshToken}
+                />
+            ) : null}
+
+            <SystemOutputBlock
+                items={systemOutput}
+                loading={loading}
+                onOpenStory={(storyId) => void openStory(storyId)}
+                openingStoryId={openingStoryId}
+            />
 
             {story && (
                 <StoryPanel
@@ -783,6 +640,6 @@ export default function Home() {
                     onRemoveRelation={removeRelationFromEntityPage}
                 />
             )}
-        </main>
+        </div>
     );
 }

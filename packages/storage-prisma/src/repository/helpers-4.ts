@@ -629,6 +629,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         sourceKind: string;
         revisionId: string;
         publishedAt: string | null;
+        producer: string | null;
     }): Omit<FeedItem, "assets"> {
         return {
             storyId: row.storyId,
@@ -643,6 +644,8 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             publishedAt: row.publishedAt
                 ? new Date(row.publishedAt).toISOString()
                 : null,
+            // 历史壳可能没有当前 Revision，此时 producer 按 null 投影。
+            producer: row.producer ?? null,
         };
     }
 
