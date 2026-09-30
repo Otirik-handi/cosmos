@@ -213,12 +213,16 @@ function ToastEmitFixture({
 }): ReactNode {
     const manager = ToastPrimitive.useToastManager();
     const managerRef = useRef(manager);
-    managerRef.current = manager;
     const title = textProp(props, "title", "已收藏");
     const description = textProp(props, "description", "可以在信息库顶部的筛选里找到收藏过的内容。");
 
     // manager 每次渲染都是新引用，放进依赖会让 effect 反复入队并触发
-    // 「Maximum update depth exceeded」；用 ref 持有，依赖只留影响内容的字段。
+    // 「Maximum update depth exceeded」；用 effect 同步进 ref（不在渲染期写），
+    // 入队 effect 的依赖只留影响内容的字段。
+    useEffect(() => {
+        managerRef.current = manager;
+    }, [manager]);
+
     useEffect(() => {
         managerRef.current.add({
             description,

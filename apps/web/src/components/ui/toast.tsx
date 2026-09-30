@@ -2,7 +2,7 @@
 
 import { Toast as ToastPrimitive } from "@base-ui/react/toast";
 import { X } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -95,7 +95,11 @@ export function useToast(): {
 } {
     const manager = ToastPrimitive.useToastManager();
     const managerRef = useRef(manager);
-    managerRef.current = manager;
+    // 在 effect 里同步而不是渲染期写 ref：渲染期访问 ref.current 会阻止 React 编译器
+    // 优化，也让「这次渲染读到哪一版 manager」变得不确定。
+    useEffect(() => {
+        managerRef.current = manager;
+    }, [manager]);
 
     return useMemo(() => {
         const push = (variant: ToastVariant, input: ToastInput): void => {
