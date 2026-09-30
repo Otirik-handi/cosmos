@@ -38,10 +38,7 @@ import {
 } from "@/components/cosmos/source-form";
 import {useLiveTopic} from "@/components/shell/live-provider";
 import {searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
-import {StoryPanel} from "@/components/cosmos/story-panel";
 import {SystemOutputBlock} from "@/components/cosmos/system-output-block";
-import {TopicPanel} from "@/components/cosmos/topic-panel";
-import {EntityPanel} from "@/components/cosmos/entity-panel";
 import {
     client,
     readError,
@@ -66,71 +63,22 @@ export default function Home() {
     /** 跨域钩子:各域 hook 在首次渲染时写入自己实现的回调,事件处理里按需调用。 */
     const storyWorkspace = useStoryWorkspace(workspaceContext);
     const {
-        attachLabelToStory,
-        closeStory,
         collections,
-        createStoryAnnotation,
-        deleteStoryAnnotation,
-        detachLabelFromStory,
-        entryOptions,
-        keyFactEntryOptions,
-        labels,
-        linkEntryRelation,
-        linkEntryStory,
-        loadStoryUserState,
-        mergeStory,
-        migrateStoryUserState,
-        openStory,
         openingStoryId,
         refreshRelatedStories,
-        relatedStories,
-        setStory,
         setStorySubtypes,
-        splitStory,
-        story,
-        storyAnnotations,
-        storySubtypes,
-        toggleStoryCollection,
-        toggleStoryFavorite,
-        unlinkEntryRelation,
-        unlinkEntryStory,
-        updateStoryAnnotation,
-        updateStoryRevision,
     } = storyWorkspace;
     const entityWorkspace = useEntityWorkspace(workspaceContext, storyWorkspace);
     const {
-        addEntityAliasPage,
-        createRelationFromEntityPage,
-        entities,
         entity,
-        linkEntityToStory,
         loadEntities,
-        openEntity,
-        openingEntityId,
-        removeEntityAliasPage,
-        removeRelationFromEntityPage,
-        setEntity,
-        unlinkEntityFromStory,
-        unlinkStoryFromEntityPage,
-        updateEntityPage,
     } = entityWorkspace;
     const topicWorkspace = useTopicWorkspace(workspaceContext, storyWorkspace);
     const {
-        createTopicAnnotation,
-        deleteTopicAnnotation,
-        joinTopic,
         loadTopics,
         openTopic,
         openingTopicId,
-        removeTopicMember,
-        restoreTopicMember,
-        setTopic,
-        topic,
-        topicAnnotations,
         topics,
-        updateTopic,
-        updateTopicAnnotation,
-        updateTopicMemberRole,
     } = topicWorkspace;
     const boardWorkspace = useBoardWorkspace(workspaceContext, storyWorkspace, topicWorkspace);
     const {
@@ -141,7 +89,6 @@ export default function Home() {
         boards,
         createBoard,
         newBoardName,
-        pinToBoard,
         setBoard,
         setBoardEditing,
         setBoards,
@@ -180,16 +127,11 @@ export default function Home() {
         setSources,
     );
     const {
-        activeSearch,
         applySavedView,
         beginSearch,
-        clearSearch,
         deleteSavedView,
         feed,
         isSearchWriteCurrent,
-        loadMore,
-        loadingMore,
-        nextCursor,
         refresh,
         saveCurrentSearchAsView,
         savedViewName,
@@ -228,13 +170,10 @@ export default function Home() {
     );
     const {
         activatingPlanId,
-        checkService,
-        checkingService,
         connections,
         definitionState,
         deletePlan,
         deletingPlanId,
-        health,
         loadDefinitions,
         loadPlans,
         planSummary,
@@ -576,74 +515,6 @@ export default function Home() {
                 openingStoryId={openingStoryId}
             />
 
-            {story && (
-                <StoryPanel
-                    onClose={closeStory}
-                    story={story}
-                    onUpdateStoryRevision={updateStoryRevision}
-                    onMergeStory={mergeStory}
-                    onSplitStory={splitStory}
-                    subtypeOptions={storySubtypes}
-                    topics={topics}
-                    onJoinTopic={joinTopic}
-                    entityOptions={entities}
-                    onLinkEntity={linkEntityToStory}
-                    onUnlinkEntity={unlinkEntityFromStory}
-                    labelOptions={labels.items}
-                    collections={collections.items}
-                    onToggleFavorite={toggleStoryFavorite}
-                    onAttachLabel={attachLabelToStory}
-                    onDetachLabel={detachLabelFromStory}
-                    onToggleCollection={toggleStoryCollection}
-                    annotations={storyAnnotations}
-                    onCreateAnnotation={createStoryAnnotation}
-                    onUpdateAnnotation={updateStoryAnnotation}
-                    onDeleteAnnotation={deleteStoryAnnotation}
-                    onPinToBoard={() => pinToBoard("story", story.story.id)}
-                    relatedStories={relatedStories}
-                    onOpenRelatedStory={openStory}
-                    entryOptions={entryOptions.filter((option) => {
-                        return !story.evidence.some((item) => item.entryId === option.id);
-                    })}
-                    entryCandidates={keyFactEntryOptions}
-                    onLinkEntry={linkEntryStory}
-                    onUnlinkEntry={unlinkEntryStory}
-                    onLinkEntryRelation={linkEntryRelation}
-                    onUnlinkEntryRelation={unlinkEntryRelation}
-                    onLoadStoryUserState={loadStoryUserState}
-                    onMigrateStoryUserState={migrateStoryUserState}
-                />
-            )}
-
-            {topic && (
-                <TopicPanel
-                    onClose={() => setTopic(null)}
-                    topic={topic}
-                    onUpdateTopic={updateTopic}
-                    onUpdateMemberRole={updateTopicMemberRole}
-                    onRemoveMember={removeTopicMember}
-                    onRestoreMember={restoreTopicMember}
-                    annotations={topicAnnotations}
-                    onCreateAnnotation={createTopicAnnotation}
-                    onUpdateAnnotation={updateTopicAnnotation}
-                    onDeleteAnnotation={deleteTopicAnnotation}
-                    onPinToBoard={() => pinToBoard("topic", topic.topic.id)}
-                />
-            )}
-
-            {entity && (
-                <EntityPanel
-                    onClose={() => setEntity(null)}
-                    entity={entity}
-                    entityOptions={entities}
-                    onUpdateEntity={updateEntityPage}
-                    onAddAlias={addEntityAliasPage}
-                    onRemoveAlias={removeEntityAliasPage}
-                    onUnlinkStory={unlinkStoryFromEntityPage}
-                    onCreateRelation={createRelationFromEntityPage}
-                    onRemoveRelation={removeRelationFromEntityPage}
-                />
-            )}
         </div>
     );
 }
