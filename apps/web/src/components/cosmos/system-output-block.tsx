@@ -51,7 +51,7 @@ export function SystemOutputBlock({
             {loading && items.length === 0 ? (
                 <p className="text-[13px] text-muted-foreground">正在读取…</p>
             ) : items.length === 0 ? (
-                <div className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-8 text-center">
+                <div className="rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-4 py-8 text-center">
                     <p className="text-[13px] font-medium">还没有系统产出</p>
                     <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                         采集运行产生的内容会自动出现在这里。
@@ -61,7 +61,7 @@ export function SystemOutputBlock({
                 <ul className="flex flex-col">
                     {items.map((item) => (
                         <li
-                            className="flex items-start gap-2 border-b border-border py-2.5 last:border-b-0"
+                            className="mb-1 flex items-start gap-2 rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-3 py-2.5"
                             key={item.entryId}
                         >
                             <FileText

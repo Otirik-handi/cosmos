@@ -57,7 +57,7 @@ function blockTypeLabel(type: string): string {
 
 function BlockPlaceholder({ text }: { text: string }) {
     return (
-        <div className="flex flex-col items-center gap-1 rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-center">
+        <div className="flex flex-col items-center gap-1 rounded-[var(--radius-panel)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-6 py-10 text-center">
             <p className="text-sm leading-6 text-muted-foreground">{text}</p>
         </div>
     );
@@ -126,7 +126,7 @@ export function BoardView({
                         className="flex flex-col gap-5"
                         data-section-id={section.id}
                     >
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
                             {editable && commands ? (
                                 <SectionEditor
                                     section={section}

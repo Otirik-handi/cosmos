@@ -275,7 +275,7 @@ export function CollectionPlanList({
                                     return (
                                         <li
                                             key={plan.id}
-                                            className="flex flex-col gap-2 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
+                                            className="mb-1 flex flex-col gap-2 rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-3 py-3"
                                         >
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="flex min-w-0 flex-col gap-0.5">

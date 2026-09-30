@@ -217,7 +217,7 @@ export function FeedBrowser({
 
     return (
         <section aria-label="阅读流" className="flex flex-col gap-5">
-            <div className="flex flex-col gap-4 border-b pb-5">
+            <div className="flex flex-col gap-4 pb-1">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
                     <h2 className="font-display text-2xl font-semibold tracking-tight">
                         Story Feed
@@ -372,7 +372,7 @@ export function FeedBrowser({
                     </div>
                 )}
                 {searchExtras && (
-                    <div className="border-t pt-3">{searchExtras}</div>
+                    <div>{searchExtras}</div>
                 )}
             </div>
             {loading && feed.length === 0 ? (
@@ -388,7 +388,7 @@ export function FeedBrowser({
                     ))}
                 </div>
             ) : feed.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] border border-dashed px-6 py-16 text-center">
+                <div className="flex flex-col items-center gap-2 rounded-[var(--radius-panel)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-6 py-16 text-center">
                     <p className="font-display text-lg font-semibold">今天还没有可读的内容</p>
                     <p className="max-w-sm text-sm leading-6 text-muted-foreground">
                         暂无已保存内容，请先创建来源并触发录入。
@@ -412,7 +412,7 @@ export function FeedBrowser({
                         return (
                             <article
                                 key={item.entryId}
-                                className="flex flex-col gap-2 border-b py-5 first:pt-1 last:border-b-0 last:pb-1"
+                                className="mb-1 flex flex-col gap-2 rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-4 py-4"
                             >
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                                     <Badge variant="secondary">{item.storyKind}</Badge>
