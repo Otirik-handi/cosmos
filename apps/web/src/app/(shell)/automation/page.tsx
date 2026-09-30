@@ -1,10 +1,187 @@
-﻿import { PagePlaceholder } from "@/components/shell/page-placeholder";
+"use client";
 
-export default function Page() {
-    return (
-        <PagePlaceholder
-            summary="来源、采集计划、连接与运行记录。新建来源、配置采集计划、管理连接登录态、查看每次运行的步骤与失败原因。"
-            title="自动化"
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Check, Plus, RefreshCcw, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+
+import type { SourceSnapshot } from "@cosmos/contracts";
+
+import { useSourceWorkspace } from "@/app/home/use-source-workspace";
+import { client, readError } from "@/app/home/page-runtime";
+
+import { Button } from "@/components/ui/button";
+import { CollectionPlanList } from "@/components/cosmos/collection-plan-list";
+import { ConnectionPanel } from "@/components/cosmos/connection-panel";
+import { RunHistory } from "@/components/cosmos/run-history";
+import {
+    SourceForm,
+    sourceFormSchema,
+    type SourceFormValues,
+} from "@/components/cosmos/source-form";
+import { useLiveTopic } from "@/components/shell/live-provider";
+
+/*
+ * 自动化（PRD §8.5）：来源、采集计划、连接与运行记录。
+ * 这一页从首页右栏与底部搬来，是「接一个新来源 → 试跑 → 看运行结果」的唯一入口。
+ * 它不引入 feed / story workspace：useSourceWorkspace 只用到 feed 的 refresh 一个方法。
+ */
+export default function AutomationPage() {
+    const [loading, setLoading] = useState(true);
+    const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
+    const [notice, setNotice] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [showSourceForm, setShowSourceForm] = useState(false);
+
+    const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
+
+    const sourceForm = useForm<SourceFormValues>({
+        resolver: zodResolver(sourceFormSchema),
+        defaultValues: {
+            name: "",
+            scheduleIntervalMinutes: "",
+            connectionId: "",
+            // 默认选中是 RSS，给它的必填字段一个可编辑的起始值。
+            config: { feedUrl: "https://example.com/feed.xml" },
+        },
+    });
+
+    const sourceWorkspace = useSourceWorkspace(
+        workspaceContext,
+        sourceForm,
+        { error, loading, sources, setSources },
+        // 来源变更后要让列表重读；本页没有 feed 列表，refresh 只用于满足签名。
+        { refresh: async () => {} },
+    );
+    const {
+        activatingPlanId,
+        checkService,
+        checkingService,
+        connections,
+        definitionState,
+        deletePlan,
+        deletingPlanId,
+        loadDefinitions,
+        loadPlans,
+        plans,
+        probeState,
+        revokeWebhookEntry,
+        rotateWebhookEntry,
+        runMediaCleanup,
+        runPlan,
+        runRefreshToken,
+        runningPlanId,
+        saveMediaPolicy,
+        selectDefinition,
+        selectOperation,
+        selectedDefinitionRef,
+        selectedOperationId,
+        onCreateSource,
+        onTestSourceConfig,
+        toggleActivation,
+    } = sourceWorkspace;
+
+    useEffect(() => {
+        void loadDefinitions();
+        void loadPlans().finally(() => setLoading(false));
+    }, [loadDefinitions, loadPlans]);
+
+    /** 运行事件只影响本页：重读计划与运行记录。 */
+    useLiveTopic("automation", () => {
+        void loadPlans();
+    });
+
+    const planList = (
+        <CollectionPlanList
+            activatingPlanId={activatingPlanId}
+            connections={connections}
+            deletingPlanId={deletingPlanId}
+            onConfirmMediaCleanup={() => runMediaCleanup(false)}
+            onDelete={deletePlan}
+            onPreviewMediaCleanup={() => runMediaCleanup(true)}
+            onRevokeWebhookEntry={revokeWebhookEntry}
+            onRotateWebhookEntry={rotateWebhookEntry}
+            onRun={runPlan}
+            onSaveMediaPolicy={saveMediaPolicy}
+            onToggleActivation={toggleActivation}
+            plans={plans}
         />
+    );
+
+    return (
+        <div className="flex w-full flex-col gap-5">
+            <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-[15px] font-medium">自动化</h1>
+                <span className="text-[12px] text-muted-foreground">
+                    来源、采集计划、连接与运行记录
+                </span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                        disabled={checkingService}
+                        onClick={() => void checkService()}
+                        size="sm"
+                        variant="outline"
+                    >
+                        <RefreshCcw data-icon="inline-start" />
+                        检查服务
+                    </Button>
+                    <Button onClick={() => setShowSourceForm((value) => !value)} size="sm">
+                        {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+                        {showSourceForm ? "关闭表单" : "新建来源"}
+                    </Button>
+                </div>
+            </div>
+
+            {error && (
+                <div
+                    className="rounded-[var(--radius-control)] border border-destructive/30 bg-destructive/10 p-3 text-[13px] leading-6 text-destructive"
+                    role="alert"
+                >
+                    {error}
+                </div>
+            )}
+            {notice && (
+                <div
+                    className="rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-[13px] leading-6"
+                    role="status"
+                >
+                    <span className="flex items-center gap-1.5">
+                        <Check aria-hidden className="size-3.5" strokeWidth={2} />
+                        {notice}
+                    </span>
+                </div>
+            )}
+
+            {showSourceForm && (
+                <SourceForm
+                    connections={connections}
+                    definitionState={definitionState}
+                    form={sourceForm}
+                    onRetryDefinition={() => void loadDefinitions()}
+                    onSelectDefinition={selectDefinition}
+                    onSelectOperation={selectOperation}
+                    onSubmit={onCreateSource}
+                    onTest={() => void onTestSourceConfig()}
+                    probeState={probeState}
+                    selectedDefinitionRef={selectedDefinitionRef}
+                    selectedOperationId={selectedOperationId}
+                />
+            )}
+
+            <section aria-label="采集计划" className="flex flex-col gap-3">
+                <h2 className="text-[15px] font-medium">采集计划</h2>
+                {planList}
+            </section>
+
+            <section aria-label="连接" className="flex flex-col gap-3">
+                <h2 className="text-[15px] font-medium">连接</h2>
+                <ConnectionPanel client={client} onConnectionsChanged={() => void loadPlans()} />
+            </section>
+
+            <section aria-label="运行记录" className="flex flex-col gap-3">
+                <h2 className="text-[15px] font-medium">运行记录</h2>
+                <RunHistory client={client} refreshToken={runRefreshToken} />
+            </section>
+        </div>
     );
 }

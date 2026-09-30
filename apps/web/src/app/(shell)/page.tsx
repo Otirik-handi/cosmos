@@ -68,8 +68,6 @@ export default function Home() {
         attachLabelToStory,
         closeStory,
         collections,
-        createCollectionFromPanel,
-        createLabelForStory,
         createStoryAnnotation,
         deleteStoryAnnotation,
         detachLabelFromStory,
@@ -101,7 +99,6 @@ export default function Home() {
     const entityWorkspace = useEntityWorkspace(workspaceContext, storyWorkspace);
     const {
         addEntityAliasPage,
-        createEntityLinkedToStory,
         createRelationFromEntityPage,
         entities,
         entity,
@@ -119,7 +116,6 @@ export default function Home() {
     const topicWorkspace = useTopicWorkspace(workspaceContext, storyWorkspace);
     const {
         createTopicAnnotation,
-        createTopicFromStory,
         deleteTopicAnnotation,
         joinTopic,
         loadTopics,
@@ -578,19 +574,15 @@ export default function Home() {
                     subtypeOptions={storySubtypes}
                     topics={topics}
                     onJoinTopic={joinTopic}
-                    onCreateTopic={createTopicFromStory}
                     entityOptions={entities}
                     onLinkEntity={linkEntityToStory}
-                    onCreateEntityLinked={createEntityLinkedToStory}
                     onUnlinkEntity={unlinkEntityFromStory}
                     labelOptions={labels.items}
                     collections={collections.items}
                     onToggleFavorite={toggleStoryFavorite}
                     onAttachLabel={attachLabelToStory}
                     onDetachLabel={detachLabelFromStory}
-                    onCreateLabel={createLabelForStory}
                     onToggleCollection={toggleStoryCollection}
-                    onCreateCollection={createCollectionFromPanel}
                     annotations={storyAnnotations}
                     onCreateAnnotation={createStoryAnnotation}
                     onUpdateAnnotation={updateStoryAnnotation}
