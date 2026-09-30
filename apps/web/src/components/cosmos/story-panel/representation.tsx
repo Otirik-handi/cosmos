@@ -52,7 +52,7 @@ export function StoryHumanProtectedNotice({ story }: { story: StoryDetail }) {
 export function StoryKeyFactsBlock({ entryOptions, story }: KeyFactsProps) {
     const keyFacts = story.story.keyFacts ?? [];
     return (
-        <section aria-label="关键事实" data-story-key-facts="true" className="border-t pt-4">
+        <section aria-label="关键事实" data-story-key-facts="true" className="flex flex-col gap-2">
             <h3 className="font-medium">关键事实（{keyFacts.length}）</h3>
             {keyFacts.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">还没有关键事实。</p>

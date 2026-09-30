@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import type { SourceSnapshot } from "@cosmos/contracts";
 
 import { useSourceWorkspace } from "@/app/home/use-source-workspace";
-import { client, readError } from "@/app/home/page-runtime";
+import { client } from "@/app/home/page-runtime";
 
 import { Button } from "@/components/ui/button";
 import { CollectionPlanList } from "@/components/cosmos/collection-plan-list";

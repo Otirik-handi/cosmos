@@ -22,7 +22,7 @@ type Props = {
 
 export function EvidenceSection({ busy, entryOptions = [], linkEntryId, linkRelationType, onLinkEntry, onUnlinkEntry, setLinkEntryId, setLinkRelationType, story, submitLinkEntry, submitUnlinkEntry, title }: Props) {
     return (
-            <section aria-label="证据来源" className="border-b pb-4">
+            <section aria-label="证据来源" className="flex flex-col gap-2">
                 <h3 className="font-medium">证据来源（{story.evidence.length}）</h3>
                 {story.evidence.length === 0 ? (
                     <p className="mt-2 text-sm text-muted-foreground">

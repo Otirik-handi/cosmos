@@ -53,6 +53,13 @@
     --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     --font-serif: Charter, Georgia, "Songti SC", "SimSun", serif;
     --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    /*
+     * 标题字体。`font-display` 这个类名读的是 `--font-display`，而此前只定义了
+     * `--font-serif`：类名与 token 名对不上，Tailwind 因此从未生成过这个工具类，
+     * 全站用 `font-display` 的标题实际都落在 body 的 system-ui 上（V4 的「标题用衬线」
+     * 一直没生效）。两者都指向同一套衬线栈。
+     */
+    --font-display: var(--font-serif);
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -159,6 +166,7 @@
     --font-sans: var(--font-ui);
     --font-serif: var(--font-serif);
     --font-mono: var(--font-mono);
+    --font-display: var(--font-display);
 }
 
 body {

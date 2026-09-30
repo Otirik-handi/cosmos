@@ -1,8 +1,11 @@
-import { PagePlaceholder } from "@/components/shell/page-placeholder";
+import { StoryReading } from "./story-reading";
 
 /**
- * Story 阅读页。切片 1 只建立路由与「无侧栏」版面；正文、来源成员、时间线、
- * 关键事实、引用关系、读完动作区与归并拆分在切片 3 搬迁。
+ * Story 阅读页（ADR-0029 决策 7）。`(reading)` 组是工作区里唯一的例外路由：只有顶栏
+ * 与返回入口，没有侧栏——读一条内容时宽度优先。正文与各区块在 StoryReading 里取数。
+ *
+ * `params.id` 到这一层仍是 URL 编码形态（story id 含冒号，会被编码成 %3A），所以先解码
+ * 一次再往下传：编码只由 transport 在拼请求路径时做，两处都做会变成 %253A 而 404。
  */
 export default async function StoryPage({
     params,
@@ -14,14 +17,7 @@ export default async function StoryPage({
     return (
         <div className="flex w-full justify-center">
             <div className="w-full max-w-[640px]">
-                <div className="rounded-[var(--radius-card)] border border-border bg-paper p-8 shadow-[var(--elevation-card)]">
-                    <PagePlaceholder
-                        summary="这一页只保留顶栏（带返回入口），左侧导航按设计隐藏——读一条内容的宽度优先。正文、来源成员（标出采集与人工）、时间线、关键事实、引用关系、相关内容、读完动作区与归并拆分将在切片 3 落地。"
-                        title="Story 阅读页"
-                    >
-                        <p className="font-mono text-[12px] text-muted-foreground">story id: {id}</p>
-                    </PagePlaceholder>
-                </div>
+                <StoryReading storyId={decodeURIComponent(id)} />
             </div>
         </div>
     );

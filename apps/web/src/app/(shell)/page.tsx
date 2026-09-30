@@ -5,6 +5,7 @@ import {
     Plus,
     X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
     useCallback,
     useEffect,
@@ -208,8 +209,19 @@ export default function Home() {
         };
         return [...feed].sort((left, right) => Number(machine(right)) - Number(machine(left)));
     }, [feed]);
-    const sourceWorkspace = useSourceWorkspace(
-        workspaceContext,
+    /**
+     * 打开一条 Story 走阅读页（ADR-0029 决策 7）：读是导航动作，不是打开抽屉。
+     * 抽屉是编辑面（改标题、归并、切分），不再是阅读入口。
+     */
+    const router = useRouter();
+    const openStoryPage = useCallback(
+        async (storyId: string): Promise<void> => {
+            router.push(`/stories/${encodeURIComponent(storyId)}`);
+        },
+        [router],
+    );
+
+    const sourceWorkspace = useSourceWorkspace(        workspaceContext,
         sourceForm,
         {error, loading, sources, setSources},
         feedWorkspace,
@@ -548,7 +560,7 @@ export default function Home() {
                     topics={topics}
                     openingTopicId={openingTopicId}
                     onOpenTopic={(topicId) => void openTopic(topicId)}
-                    onOpenStory={(storyId) => void openStory(storyId)}
+                    onOpenStory={openStoryPage}
                     editable={boardEditing}
                     commands={boardCommands}
                     savedViews={savedViews}
@@ -560,7 +572,7 @@ export default function Home() {
             <SystemOutputBlock
                 items={systemOutput}
                 loading={loading}
-                onOpenStory={(storyId) => void openStory(storyId)}
+                onOpenStory={openStoryPage}
                 openingStoryId={openingStoryId}
             />
 

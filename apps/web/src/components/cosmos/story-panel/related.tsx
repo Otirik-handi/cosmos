@@ -12,7 +12,7 @@ type Props = {
 
 export function RelatedSection({ busy, onOpenRelatedStory, relatedStories, story, title }: Props) {
     return (
-            <section aria-label="相关内容" className="border-b pb-4">
+            <section aria-label="相关内容" className="flex flex-col gap-2">
                 <h3 className="font-medium">相关内容（{relatedStories.length}）</h3>
                 {relatedStories.length === 0 ? (
                     <p className="mt-2 text-sm text-muted-foreground">
