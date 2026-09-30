@@ -94,3 +94,14 @@ Cosmos Web 当前只有 shadcn 中性亮暗语义 token：`apps/web/src/app/glob
 | 2026-08-22 | 用户 | 在当前分支确立默认 UI 风格：采用 nb-ui 式风格 + 主题系统，默认 NeuroBook + macOS light/macOS night；先做主题系统。 |
 | 2026-08-22 | 用户 | 交互确认：个人桌面工作台优先；只复刻 nb-ui 视觉与交互、不引入运行时；首轮覆盖全局、实验室与首页。 |
 | 2026-08-22 | 用户 | 接受本 Proposal，授权更新稳定文档并在 Task 09 追加实施切片；未授权 commit、push、PR 更新、merge、发布或部署。 |
+
+## 勘误（2026-09-24，不改写正文）
+
+本 Proposal 的**形状/颜色分层思想与「组件只消费语义 token」的约束继续有效**，但两处合同已被 [`frontend-redesign-v1`](frontend-redesign-v1.md)（accepted）与 ADR [`0029`](../adr/0029-ui-surface-layout-and-visual-direction-v1.md) 取代：
+
+| 本文原决定 | 现行决定 |
+| --- | --- |
+| 固定视觉主题 `neurobook` + 两个配色 `macos-light` / `macos-night` | 由新的视觉方向取代：暖米画布 + 墨绿强调（亮 `#2c5f4f` / 暗 `#64ab8f`），双密度（外壳 11–14 px / 阅读区 16–17 px），衬线只用于标题与导语 |
+| `theme × colorway` 两套轴（`data-cosmos-theme` + `data-cosmos-colorway`） | 收成**单一明暗轴** `data-cosmos-appearance="light\|dark"`；「未来可安装第三方主题」已在本文非目标中排除，两套轴失去预留对象 |
+
+**继续有效、未被取代的部分**：单一内部合同模块（`theme.ts` 导出常量与纯函数）、引导脚本 + Provider 双轨（首帧前写属性、`suppressHydrationWarning` 容忍差异）、CSS 分层（形状/密度/材质与颜色分开承载）、`localStorage` 单一版本化 key、`prefers-reduced-motion` 归零动效、不引入 `next-themes`、组件不引用主题私有变量。收敛后 `localStorage` 存量取值按既有 `parseThemePreference` 回退 `system`，不需要迁移代码。
