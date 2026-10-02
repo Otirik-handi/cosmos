@@ -10,6 +10,7 @@ import { client, readError } from "@/app/home/page-runtime";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { messages } from "@/copy/messages";
 
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
@@ -47,26 +48,24 @@ export function ViewsSection() {
         try {
             await client.deleteSavedView(view.id);
             await load();
-            toast.success({ title: `已删除视图「${view.name}」` });
+            toast.success({ title: messages.organize.views.removed(view.name) });
         } catch (caught) {
-            toast.error({ title: "删除视图失败", description: readError(caught) });
+            toast.error({ title: messages.organize.views.removeFailed, description: readError(caught) });
         }
     };
 
     return (
         <SectionShell
             count={loading ? null : views.length}
-            summary="存下来的一组检索条件；在信息库保存，这里用来查看与删除"
-            title="已保存视图"
+            summary={messages.organize.views.summary}
+            title={messages.organize.tabs.views}
         >
             {error ? (
                 <SectionMessage kind="error">{error}</SectionMessage>
             ) : loading ? (
-                <SectionMessage kind="loading">正在读取…</SectionMessage>
+                <SectionMessage kind="loading">{messages.common.loading}</SectionMessage>
             ) : views.length === 0 ? (
-                <SectionMessage kind="empty">
-                    还没有视图。在信息库设好筛选条件后点「保存当前条件」。
-                </SectionMessage>
+                <SectionMessage kind="empty">{messages.organize.views.empty}</SectionMessage>
             ) : (
                 <ul className="flex flex-col">
                     {views.map((view) => (
@@ -83,7 +82,7 @@ export function ViewsSection() {
                                 </span>
                             </div>
                             <Button
-                                aria-label={`删除视图 ${view.name}`}
+                                aria-label={messages.organize.views.removeLabel(view.name)}
                                 onClick={() => void remove(view)}
                                 size="icon-sm"
                                 variant="ghost"
@@ -102,22 +101,22 @@ export function ViewsSection() {
 function describeConditions(view: SavedView): string {
     const parts: string[] = [];
     if (view.text !== null && view.text !== "") {
-        parts.push(`关键词「${view.text}」`);
+        parts.push(messages.organize.views.conditionText(view.text));
     }
     if (view.sourceId !== null) {
-        parts.push("限定来源");
+        parts.push(messages.organize.views.conditionSource);
     }
     if (view.publishedAfter !== null) {
-        parts.push(`从 ${view.publishedAfter.slice(0, 10)}`);
+        parts.push(messages.organize.views.conditionFrom(view.publishedAfter.slice(0, 10)));
     }
     if (view.publishedBefore !== null) {
-        parts.push(`到 ${view.publishedBefore.slice(0, 10)}`);
+        parts.push(messages.organize.views.conditionTo(view.publishedBefore.slice(0, 10)));
     }
     if (view.labelIds.length > 0) {
-        parts.push(`${view.labelIds.length} 个标签`);
+        parts.push(messages.organize.views.conditionLabels(view.labelIds.length));
     }
     if (view.topicIds.length > 0) {
-        parts.push(`${view.topicIds.length} 个话题`);
+        parts.push(messages.organize.views.conditionTopics(view.topicIds.length));
     }
-    return parts.length === 0 ? "没有条件（等同全部内容）" : parts.join(" · ");
+    return parts.length === 0 ? messages.organize.views.noConditions : parts.join(" · ");
 }

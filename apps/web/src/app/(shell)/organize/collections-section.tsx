@@ -10,6 +10,7 @@ import { client, readError } from "@/app/home/page-runtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { messages } from "@/copy/messages";
 
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
@@ -60,7 +61,7 @@ export function CollectionsSection() {
         try {
             setDetail(await client.collection(collectionId));
         } catch (caught) {
-            toast.error({ title: "读取收藏夹失败", description: readError(caught) });
+            toast.error({ title: messages.organize.collections.readFailed, description: readError(caught) });
         } finally {
             setDetailLoading(false);
         }
@@ -76,9 +77,9 @@ export function CollectionsSection() {
             await client.createCollection({ name });
             setNewName("");
             await load();
-            toast.success({ title: `已创建收藏夹「${name}」` });
+            toast.success({ title: messages.organize.collections.created(name) });
         } catch (caught) {
-            toast.error({ title: "创建收藏夹失败", description: readError(caught) });
+            toast.error({ title: messages.organize.collections.createFailed, description: readError(caught) });
         } finally {
             setCreating(false);
         }
@@ -92,9 +93,9 @@ export function CollectionsSection() {
                 setDetail(null);
             }
             await load();
-            toast.success({ title: `已删除收藏夹「${collection.name}」` });
+            toast.success({ title: messages.organize.collections.removed(collection.name) });
         } catch (caught) {
-            toast.error({ title: "删除收藏夹失败", description: readError(caught) });
+            toast.error({ title: messages.organize.collections.removeFailed, description: readError(caught) });
         }
     };
 
@@ -107,21 +108,21 @@ export function CollectionsSection() {
             await client.removeCollectionItem(collectionId, { storyId });
             setDetail(await client.collection(collectionId));
             await load();
-            toast.success({ title: `已把「${title}」移出收藏夹` });
+            toast.success({ title: messages.organize.collections.itemRemoved(title) });
         } catch (caught) {
-            toast.error({ title: "移出收藏夹失败", description: readError(caught) });
+            toast.error({ title: messages.organize.collections.itemRemoveFailed, description: readError(caught) });
         }
     };
 
     return (
         <SectionShell
             count={loading ? null : collections.length}
-            summary="按自己的方式分组的集合；成员在 Story 页勾选，这里可以移出"
-            title="收藏夹"
+            summary={messages.organize.collections.summary}
+            title={messages.organize.tabs.collections}
         >
             <div className="flex flex-wrap items-center gap-2">
                 <Input
-                    aria-label="新收藏夹名称"
+                    aria-label={messages.organize.collections.newName}
                     className="max-w-xs"
                     onChange={(event) => setNewName(event.target.value)}
                     onKeyDown={(event) => {
@@ -129,7 +130,7 @@ export function CollectionsSection() {
                             void create();
                         }
                     }}
-                    placeholder="新收藏夹名称"
+                    placeholder={messages.organize.collections.newName}
                     value={newName}
                 />
                 <Button
@@ -138,18 +139,16 @@ export function CollectionsSection() {
                     variant="outline"
                 >
                     <Plus data-icon="inline-start" />
-                    新建收藏夹
+                    {messages.organize.collections.create}
                 </Button>
             </div>
 
             {error ? (
                 <SectionMessage kind="error">{error}</SectionMessage>
             ) : loading ? (
-                <SectionMessage kind="loading">正在读取…</SectionMessage>
+                <SectionMessage kind="loading">{messages.common.loading}</SectionMessage>
             ) : collections.length === 0 ? (
-                <SectionMessage kind="empty">
-                    还没有收藏夹。收藏夹用来把一批内容按你的目的放在一起。
-                </SectionMessage>
+                <SectionMessage kind="empty">{messages.organize.collections.empty}</SectionMessage>
             ) : (
                 <ul className="flex flex-col">
                     {collections.map((collection) => (
@@ -168,10 +167,10 @@ export function CollectionsSection() {
                                 <span className="truncate">{collection.name}</span>
                             </Button>
                             <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
-                                {collection.itemCount} 条
+                                {messages.organize.collections.itemCount(collection.itemCount)}
                             </span>
                             <Button
-                                aria-label={`删除收藏夹 ${collection.name}`}
+                                aria-label={messages.organize.collections.removeLabel(collection.name)}
                                 onClick={() => void remove(collection)}
                                 size="icon-sm"
                                 variant="ghost"
@@ -181,10 +180,12 @@ export function CollectionsSection() {
                             {expandedId === collection.id && (
                                 <div className="w-full basis-full pt-1">
                                     {detailLoading ? (
-                                        <p className="text-[12px] text-muted-foreground">正在读取…</p>
+                                        <p className="text-[12px] text-muted-foreground">
+                                            {messages.common.loading}
+                                        </p>
                                     ) : detail === null || detail.stories.length === 0 ? (
                                         <p className="text-[12px] text-muted-foreground">
-                                            这个收藏夹还是空的。成员在 Story 页勾选。
+                                            {messages.organize.collections.emptyMembers}
                                         </p>
                                     ) : (
                                         <ul className="flex flex-col gap-1">
@@ -200,7 +201,9 @@ export function CollectionsSection() {
                                                         {story.addedAt.slice(0, 10)}
                                                     </span>
                                                     <Button
-                                                        aria-label={`把 ${story.title} 移出收藏夹`}
+                                                        aria-label={messages.organize.collections.removeItem(
+                                                            story.title,
+                                                        )}
                                                         onClick={() =>
                                                             void removeMember(story.storyId, story.title)
                                                         }

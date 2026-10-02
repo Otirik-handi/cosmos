@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { RunHistory } from "@/components/cosmos/run-history";
 import { SystemOutputBlock } from "@/components/cosmos/system-output-block";
 import { useLiveTopic } from "@/components/shell/live-provider";
+import { messages } from "@/copy/messages";
 
 /*
  * 系统产出。两件事：采集与 Workflow 的运行记录，以及由系统或 Agent 产生的 Story。
@@ -54,9 +55,9 @@ export default function SystemPage() {
     return (
         <div className="flex w-full flex-col gap-6">
             <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-[15px] font-medium">系统产出</h1>
+                <h1 className="text-[15px] font-medium">{messages.pages.system.title}</h1>
                 <span className="text-[12px] text-muted-foreground">
-                    采集与 Workflow 的运行记录，以及由系统或 Agent 产生的内容
+                    {messages.pages.system.description}
                 </span>
                 <Button
                     className="ml-auto"
@@ -69,7 +70,7 @@ export default function SystemPage() {
                     variant="outline"
                 >
                     <RefreshCcw data-icon="inline-start" />
-                    刷新
+                    {messages.common.refresh}
                 </Button>
             </div>
 
@@ -88,8 +89,11 @@ export default function SystemPage() {
                 onOpenStory={(storyId) => router.push(`/stories/${encodeURIComponent(storyId)}`)}
             />
 
-            <section aria-label="运行记录" className="flex flex-col gap-3 border-t border-border pt-5">
-                <h2 className="text-[15px] font-medium">运行记录</h2>
+            <section
+                aria-label={messages.pages.system.runHistory}
+                className="flex flex-col gap-3 border-t border-border pt-5"
+            >
+                <h2 className="text-[15px] font-medium">{messages.pages.system.runHistory}</h2>
                 <RunHistory client={client} refreshToken={runRefreshToken} />
             </section>
         </div>

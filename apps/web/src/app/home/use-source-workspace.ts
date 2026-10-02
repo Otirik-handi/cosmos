@@ -39,6 +39,7 @@ import { useGuardedList } from "./list-write-guard";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { SourceFormValues } from "@/components/cosmos/source-form";
+import { messages } from "@/copy/messages";
 import type { WorkspaceContext } from "./page-bridge";
 
 /** 由 G06 切片 4 从 page.tsx 拆出的域 hook（搬运，未改行为）。 */
@@ -78,9 +79,12 @@ export function useSourceWorkspace(
     const probeConfigKeyRef = useRef<string | null>(null);
     const planSummary = useMemo(() => {
         if (plans.length === 0) {
-            return "尚未配置采集计划";
+            return messages.notices.source.noPlans;
         }
-        return `${plans.length} 个采集计划，${plans.filter((plan) => plan.enabled).length} 个启用`;
+        return messages.notices.source.planSummary(
+            plans.length,
+            plans.filter((plan) => plan.enabled).length,
+        );
     }, [plans]);
 
     /**
@@ -139,7 +143,7 @@ export function useSourceWorkspace(
             const definitions = await client.listSourceDefinitions();
             const enabled = definitions.filter((item) => item.status === "enabled");
             if (enabled.length === 0) {
-                setDefinitionState({status: "error", message: "目录里没有可用的来源定义。"});
+                setDefinitionState({status: "error", message: messages.notices.source.noDefinitions});
                 return;
             }
             setDefinitionState({status: "ready", manifests: enabled});
@@ -223,7 +227,7 @@ export function useSourceWorkspace(
             if (probeConfigKeyRef.current !== null) {
                 setProbeState({
                     status: "failed",
-                    message: snapshot.error ?? "探测任务没有返回结果。",
+                    message: snapshot.error ?? messages.notices.source.probeNoResult,
                 });
             }
         } catch (caught) {
@@ -236,7 +240,7 @@ export function useSourceWorkspace(
     const onCreateSource = sourceForm.handleSubmit(async (values) => {
         ctx.setError(null);
         if (!selectedManifest) {
-            ctx.setError("目录里没有可用的来源定义，无法保存计划。");
+            ctx.setError(messages.notices.source.noDefinitionsToSave);
             return;
         }
         // 字段级校验先跑：能从 JSON Schema 判断的规则在本地就报，不发给服务端。
@@ -246,7 +250,7 @@ export function useSourceWorkspace(
             for (const [field, message] of Object.entries(fieldErrors)) {
                 sourceForm.setError(`config.${field}` as "config", {message});
             }
-            ctx.setError("目标配置有未填写或不合法的字段，请按提示修正。");
+            ctx.setError(messages.notices.source.invalidConfig);
             return;
         }
         try {
@@ -258,7 +262,7 @@ export function useSourceWorkspace(
                 scheduleIntervalMs: toScheduleIntervalMs(values),
                 connectionId: values.connectionId === "" ? null : values.connectionId,
             }));
-            ctx.setNotice("采集计划已保存，当前为停用状态；在“采集计划”列表中启用后开始抓取。");
+            ctx.setNotice(messages.notices.source.planSaved);
             setShowSourceForm(false);
             sourceForm.reset();
             await Promise.all([feedApi.refresh(), loadPlans()]);
@@ -279,11 +283,11 @@ export function useSourceWorkspace(
                 mediaPolicy: policy,
                 baseRevisionId: plan.revisionId,
             });
-            ctx.setNotice(`已保存 ${plan.name} 的媒体策略；只影响之后的采集。`);
+            ctx.setNotice(messages.notices.source.mediaPolicySaved(plan.name));
             await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             if (caught instanceof CosmosTransportError && caught.status === 409) {
-                ctx.setError("计划配置已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                ctx.setError(messages.notices.source.planVersionConflict);
                 await Promise.all([feedApi.refresh(), loadPlans()]);
             }
             throw caught;
@@ -298,7 +302,7 @@ export function useSourceWorkspace(
         ctx.setError(null);
         try {
             const entry = await client.rotateCollectionPlanWebhookEntry(plan.id);
-            ctx.setNotice(`已为 ${plan.name} 生成 Webhook 入口；旧凭证（如果有）已立即失效。`);
+            ctx.setNotice(messages.notices.source.webhookRotated(plan.name));
             await loadPlans();
             return entry;
         } catch (caught) {
@@ -311,7 +315,7 @@ export function useSourceWorkspace(
         ctx.setError(null);
         try {
             await client.revokeCollectionPlanWebhookEntry(plan.id);
-            ctx.setNotice(`已撤销 ${plan.name} 的 Webhook 入口；需要重新生成才能再用。`);
+            ctx.setNotice(messages.notices.source.webhookRevoked(plan.name));
             await loadPlans();
         } catch (caught) {
             ctx.setError(readError(caught));
@@ -331,13 +335,13 @@ export function useSourceWorkspace(
         const deadline = Date.now() + 30_000;
         while (snapshot.status === "queued" || snapshot.status === "running") {
             if (Date.now() > deadline) {
-                throw new Error("清理任务超时，请稍后在运行记录中查看。");
+                throw new Error(messages.notices.source.cleanupTimeout);
             }
             await new Promise((resolve) => setTimeout(resolve, 1_000));
             snapshot = await client.getMediaCleanup(snapshot.runId);
         }
         if (snapshot.status !== "succeeded" || !snapshot.report) {
-            throw new Error(snapshot.error ?? "清理任务失败。");
+            throw new Error(snapshot.error ?? messages.notices.source.cleanupFailed);
         }
         return snapshot.report;
     };
@@ -352,12 +356,12 @@ export function useSourceWorkspace(
                 baseRevisionId: plan.revisionId,
             });
             ctx.setNotice(enabled
-                ? `计划 ${plan.name} 已启用；可执行手动录入，配置了定时的计划会自动抓取。`
-                : `计划 ${plan.name} 已停用，不再自动或手动抓取。`);
+                ? messages.notices.source.planEnabled(plan.name)
+                : messages.notices.source.planDisabled(plan.name));
             await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             if (caught instanceof CosmosTransportError && caught.status === 409) {
-                ctx.setError("计划状态已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                ctx.setError(messages.notices.source.planStateConflict);
                 await Promise.all([feedApi.refresh(), loadPlans()]);
             } else {
                 ctx.setError(readError(caught));
@@ -380,13 +384,13 @@ export function useSourceWorkspace(
             await client.deleteSource(plan.sourceId, {
                 baseRevisionId: plan.sourceRevisionId,
                 actor: "user",
-                reason: "用户在看板删除采集计划",
+                reason: messages.notices.source.planDeletedByBoardReason,
             }, `web-deletion:${plan.sourceId}:${plan.sourceRevisionId}`);
-            ctx.setNotice(`计划 ${plan.name} 已删除；已录入内容与来源历史保留。`);
+            ctx.setNotice(messages.notices.source.planDeleted(plan.name));
             await Promise.all([feedApi.refresh(), loadPlans()]);
         } catch (caught) {
             if (caught instanceof CosmosTransportError && caught.status === 409) {
-                ctx.setError("计划已被其它修改更新（版本冲突），列表已刷新，请重试。");
+                ctx.setError(messages.notices.source.planDeleteConflict);
                 await Promise.all([feedApi.refresh(), loadPlans()]);
             } else {
                 ctx.setError(readError(caught));
@@ -405,7 +409,7 @@ export function useSourceWorkspace(
         try {
             const result = await client.health();
             setHealth(result);
-            ctx.setNotice(`服务正常，数据层 ${result.storageStatus}。`);
+            ctx.setNotice(messages.notices.source.storageStatus(result.storageStatus));
         } catch (caught) {
             ctx.setError(readError(caught));
         } finally {
@@ -421,8 +425,8 @@ export function useSourceWorkspace(
             const result = await client.triggerSource(plan.sourceId);
             ctx.setNotice(
                 result.status === "queued" || result.status === "running"
-                    ? `录入任务已排队（Run ${result.id}），Worker 完成后 Feed 会自动刷新。`
-                    : `录入任务状态：${result.status}。`,
+                    ? messages.notices.source.runQueued(result.id)
+                    : messages.notices.source.runStatus(result.status),
             );
             setRunRefreshToken((value) => value + 1);
             await Promise.all([feedApi.refresh(), loadPlans()]);

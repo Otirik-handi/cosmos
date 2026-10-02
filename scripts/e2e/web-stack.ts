@@ -22,6 +22,10 @@ let web: ManagedProcess | null = null;
 let stopping = false;
 
 async function main(): Promise<void> {
+    // 上一轮崩溃残留的 `next start` 会满足 Playwright 的就绪探测，于是本轮测试实际打在
+    // **上一轮的构建产物与数据库**上（`reuseExistingServer: false` 挡不住这种形态）。
+    // 这里先自己确认 web 端口是空的，占用就明确失败，而不是悄悄复用别人的服务。
+    await assertPortFree(webPort);
     stack = await createIsolatedStackRoot("browser-stack");
     applyMigrations(stack.dataRoot);
     const apiPort = await findAvailablePort(4310);
@@ -40,6 +44,9 @@ async function main(): Promise<void> {
         NEXT_PUBLIC_COSMOS_API_URL: "",
         COSMOS_LOG_OUTPUT: "both",
     });
+    // 这次构建**不能跳过**：`rewrites()` 的 API 目标地址在构建时就烘焙进
+    // `routes-manifest.json`，只有带着本栈的 `COSMOS_API_URL` 重新构建，产物才会指向本栈的 API。
+    // （曾经加过「跳过构建」的开关，结果四套栈共用一份指向默认 4310 的产物，全部打到 QQ。）
     execFileSync(process.env.BUN_BINARY?.trim() || "bun", ["run", "build:web"], {
         cwd: repositoryRoot,
         env: baseEnvironment,
@@ -107,6 +114,25 @@ function readPort(raw: string): number {
         throw new Error(`Invalid browser Web port: ${raw}`);
     }
     return value;
+}
+
+/** web 端口必须空闲：占用说明有上一轮的残留服务，复用它会测到旧构建与旧数据库。 */
+async function assertPortFree(port: number): Promise<void> {
+    const { createServer } = await import("node:net");
+    await new Promise<void>((resolve, reject) => {
+        const probe = createServer();
+        probe.once("error", (error: NodeJS.ErrnoException) => {
+            reject(new Error(
+                error.code === "EADDRINUSE"
+                    ? `端口 ${port} 已被占用：先停掉残留的验收服务再跑（否则会测到上一轮的构建与数据库）`
+                    : `端口 ${port} 探测失败：${error.message}`,
+            ));
+        });
+        probe.once("listening", () => {
+            probe.close(() => resolve());
+        });
+        probe.listen(port, "127.0.0.1");
+    });
 }
 
 process.once("SIGINT", () => void stop().finally(() => process.exit(0)));

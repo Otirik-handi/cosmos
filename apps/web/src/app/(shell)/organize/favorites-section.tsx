@@ -9,6 +9,7 @@ import { client, readError } from "@/app/home/page-runtime";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { messages } from "@/copy/messages";
 
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
@@ -47,26 +48,24 @@ export function FavoritesSection() {
         try {
             await client.unsetFavorite({ targetType: item.targetType, targetId: item.targetId });
             await load();
-            toast.success({ title: "已取消收藏" });
+            toast.success({ title: messages.organize.favorites.removed });
         } catch (caught) {
-            toast.error({ title: "取消收藏失败", description: readError(caught) });
+            toast.error({ title: messages.organize.favorites.removeFailed, description: readError(caught) });
         }
     };
 
     return (
         <SectionShell
             count={loading ? null : items.length}
-            summary="标了星的内容；收藏在 Story 页随手点，这里用来回收"
-            title="收藏"
+            summary={messages.organize.favorites.summary}
+            title={messages.organize.tabs.favorites}
         >
             {error ? (
                 <SectionMessage kind="error">{error}</SectionMessage>
             ) : loading ? (
-                <SectionMessage kind="loading">正在读取…</SectionMessage>
+                <SectionMessage kind="loading">{messages.common.loading}</SectionMessage>
             ) : items.length === 0 ? (
-                <SectionMessage kind="empty">
-                    还没有收藏。读一条内容时点「收藏」，它会出现在这里。
-                </SectionMessage>
+                <SectionMessage kind="empty">{messages.organize.favorites.empty}</SectionMessage>
             ) : (
                 <ul className="flex flex-col">
                     {items.map((item) => (
@@ -78,11 +77,15 @@ export function FavoritesSection() {
                             />
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                                 <span className="truncate text-[14px]">
-                                    {item.title ?? "这条内容已经读不到了"}
+                                    {item.title ?? messages.organize.favorites.missingStory}
                                 </span>
                                 <span className="text-[11px] text-muted-foreground">
-                                    {item.targetType === "story" ? "内容" : "条目"} ·
-                                    收藏于 {item.createdAt.slice(0, 10)}
+                                    {item.targetType === "story"
+                                        ? messages.common.targetType.story
+                                        : messages.common.targetType.entry}
+                                    {" · "}
+                                    {messages.organize.favorites.favoritedAt}{" "}
+                                    {item.createdAt.slice(0, 10)}
                                 </span>
                             </div>
                             <Button
@@ -90,7 +93,7 @@ export function FavoritesSection() {
                                 size="sm"
                                 variant="outline"
                             >
-                                取消收藏
+                                {messages.organize.favorites.remove}
                             </Button>
                         </ItemBlock>
                     ))}

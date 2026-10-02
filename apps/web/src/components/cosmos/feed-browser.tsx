@@ -45,6 +45,23 @@ const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
 
 export type SearchFormValues = z.input<typeof searchSchema>;
 
+/**
+ * 空检索条件。信息库用它起手，首页也用它建一个只读的检索表单实例
+ * （`useFeedWorkspace` 需要表单实例才成立），两处必须同源，否则首页与信息库的
+ * 「全部内容」口径会分叉。
+ */
+export const EMPTY_SEARCH_VALUES: SearchFormValues = {
+    text: "",
+    sourceId: "",
+    publishedAfter: "",
+    publishedBefore: "",
+    labelIds: [],
+    topicIds: [],
+    author: "",
+    contentKind: "",
+    assetStatus: "",
+};
+
 /** 摘要摘录的最大字符数；约等于三行中文阅读宽度，超出部分以省略号收尾。 */
 const EXCERPT_MAX_LENGTH = 240;
 const EXCERPT_EMPTY_FALLBACK = "暂无摘要";
@@ -165,7 +182,7 @@ function activeFilterLabels(
     }
     for (const labelId of activeSearch.labelIds?.split(",").filter(Boolean) ?? []) {
         const label = labels.find((candidate) => candidate.id === labelId);
-        chips.push(`分类：${label ? label.name : labelId}`);
+        chips.push(`标签：${label ? label.name : labelId}`);
     }
     for (const topicId of activeSearch.topicIds?.split(",").filter(Boolean) ?? []) {
         const topic = topics.find((candidate) => candidate.id === topicId);
@@ -306,7 +323,7 @@ export function FeedBrowser({
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                             {labels.length > 0 && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">分类</span>
+                                    <span className="text-xs text-muted-foreground">标签</span>
                                     {labels.map((label) => {
                                         const active = selectedLabelIds.includes(label.id);
                                         return (
@@ -314,7 +331,7 @@ export function FeedBrowser({
                                                 key={label.id}
                                                 type="button"
                                                 aria-pressed={active}
-                                                aria-label={`按分类筛选 ${label.name}`}
+                                                aria-label={`按标签筛选 ${label.name}`}
                                                 onClick={() => {
                                                     toggleSelection("labelIds", selectedLabelIds, label.id);
                                                 }}

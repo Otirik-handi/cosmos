@@ -20,18 +20,22 @@ import {
     type SourceFormValues,
 } from "@/components/cosmos/source-form";
 import { useLiveTopic } from "@/components/shell/live-provider";
+import { messages } from "@/copy/messages";
 
 /*
  * 自动化（PRD §8.5）：来源、采集计划、连接与运行记录。
  * 这一页从首页右栏与底部搬来，是「接一个新来源 → 试跑 → 看运行结果」的唯一入口。
  * 它不引入 feed / story workspace：useSourceWorkspace 只用到 feed 的 refresh 一个方法。
+ *
+ * 「来源表单开合」的状态**由 workspace 持有**（`showSourceForm`），本页不再自己 useState：
+ * 保存成功后 workspace 会把它置回收起，两个所有者时本页那份永远不收起，会出现「回执说已保存、
+ * 表单还开着、字段已被 reset 回示例值」的错位。
  */
 export default function AutomationPage() {
     const [loading, setLoading] = useState(true);
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showSourceForm, setShowSourceForm] = useState(false);
 
     const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
 
@@ -78,6 +82,8 @@ export default function AutomationPage() {
         selectedOperationId,
         onCreateSource,
         onTestSourceConfig,
+        setShowSourceForm,
+        showSourceForm,
         toggleActivation,
     } = sourceWorkspace;
 
@@ -111,9 +117,9 @@ export default function AutomationPage() {
     return (
         <div className="flex w-full flex-col gap-5">
             <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-[15px] font-medium">自动化</h1>
+                <h1 className="text-[15px] font-medium">{messages.automation.title}</h1>
                 <span className="text-[12px] text-muted-foreground">
-                    来源、采集计划、连接与运行记录
+                    {messages.automation.description}
                 </span>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                     <Button
@@ -123,11 +129,11 @@ export default function AutomationPage() {
                         variant="outline"
                     >
                         <RefreshCcw data-icon="inline-start" />
-                        检查服务
+                        {messages.automation.checkService}
                     </Button>
                     <Button onClick={() => setShowSourceForm((value) => !value)} size="sm">
                         {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                        {showSourceForm ? "关闭表单" : "新建来源"}
+                        {showSourceForm ? messages.automation.closeForm : messages.automation.newSource}
                     </Button>
                 </div>
             </div>
@@ -168,18 +174,18 @@ export default function AutomationPage() {
                 />
             )}
 
-            <section aria-label="采集计划" className="flex flex-col gap-3">
-                <h2 className="text-[15px] font-medium">采集计划</h2>
+            <section aria-label={messages.automation.plans} className="flex flex-col gap-3">
+                <h2 className="text-[15px] font-medium">{messages.automation.plans}</h2>
                 {planList}
             </section>
 
-            <section aria-label="连接" className="flex flex-col gap-3">
-                <h2 className="text-[15px] font-medium">连接</h2>
+            <section aria-label={messages.automation.connections} className="flex flex-col gap-3">
+                <h2 className="text-[15px] font-medium">{messages.automation.connections}</h2>
                 <ConnectionPanel client={client} onConnectionsChanged={() => void loadPlans()} />
             </section>
 
-            <section aria-label="运行记录" className="flex flex-col gap-3">
-                <h2 className="text-[15px] font-medium">运行记录</h2>
+            <section aria-label={messages.automation.runHistory} className="flex flex-col gap-3">
+                <h2 className="text-[15px] font-medium">{messages.automation.runHistory}</h2>
                 <RunHistory client={client} refreshToken={runRefreshToken} />
             </section>
         </div>

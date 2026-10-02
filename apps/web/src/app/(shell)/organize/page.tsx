@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastHost, ToastProvider } from "@/components/ui/toast";
+import { messages } from "@/copy/messages";
 
 import { AnnotationsSection } from "./annotations-section";
 import { CollectionsSection } from "./collections-section";
@@ -22,11 +23,11 @@ import { ViewsSection } from "./views-section";
  */
 
 const TABS = [
-    { id: "labels", label: "标签" },
-    { id: "collections", label: "收藏夹" },
-    { id: "favorites", label: "收藏" },
-    { id: "annotations", label: "批注" },
-    { id: "views", label: "已保存视图" },
+    { id: "labels", label: messages.organize.tabs.labels },
+    { id: "collections", label: messages.organize.tabs.collections },
+    { id: "favorites", label: messages.organize.tabs.favorites },
+    { id: "annotations", label: messages.organize.tabs.annotations },
+    { id: "views", label: messages.organize.tabs.views },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -50,9 +51,9 @@ function OrganizeSections() {
         <ToastProvider>
             <div className="flex w-full flex-col gap-5">
                 <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-[15px] font-medium">整理</h1>
+                    <h1 className="text-[15px] font-medium">{messages.organize.title}</h1>
                     <span className="text-[12px] text-muted-foreground">
-                        标签、收藏夹、收藏、批注与已保存视图
+                        {messages.organize.description}
                     </span>
                 </div>
 
@@ -88,7 +89,7 @@ function OrganizeSections() {
 
 export default function OrganizePage() {
     return (
-        <Suspense fallback={<p className="text-[13px] text-muted-foreground">正在读取…</p>}>
+        <Suspense fallback={<p className="text-[13px] text-muted-foreground">{messages.common.loading}</p>}>
             <OrganizeSections />
         </Suspense>
     );

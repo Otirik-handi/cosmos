@@ -13,6 +13,7 @@ import {
     client,
     readError,
 } from "./page-runtime";
+import { messages } from "@/copy/messages";
 import type { WorkspaceContext } from "./page-bridge";
 import type { useStoryWorkspace } from "./use-story-workspace";
 import type { useTopicWorkspace } from "./use-topic-workspace";
@@ -111,7 +112,7 @@ export function useBoardWorkspace(ctx: WorkspaceContext, storyApi: StoryApi, top
             setBoard(await client.createBoard({ name: trimmed }));
             await reloadBoards();
             setBoardEditing(true);
-            ctx.setNotice(`已创建看板「${trimmed}」，可在编辑模式添加分区与区块。`);
+            ctx.setNotice(messages.notices.board.created(trimmed));
         } catch (caught) {
             ctx.setError(readError(caught));
         }
@@ -123,14 +124,14 @@ export function useBoardWorkspace(ctx: WorkspaceContext, storyApi: StoryApi, top
         targetId: string,
     ): Promise<void> => {
         if (!board) {
-            ctx.setError("看板尚未加载，无法固定。");
+            ctx.setError(messages.notices.board.notLoaded);
             return;
         }
         ctx.setError(null);
         try {
             await client.pinSpotlight({ boardId: board.id, targetType, targetId });
             setBoardRefreshToken((token) => token + 1);
-            ctx.setNotice("已固定到看板热点区。");
+            ctx.setNotice(messages.notices.board.pinned);
         } catch (caught) {
             ctx.setError(readError(caught));
         }

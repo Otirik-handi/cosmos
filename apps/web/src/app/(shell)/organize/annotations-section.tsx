@@ -9,6 +9,7 @@ import { client, readError } from "@/app/home/page-runtime";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { messages } from "@/copy/messages";
 
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
@@ -46,26 +47,24 @@ export function AnnotationsSection() {
         try {
             await client.deleteAnnotation(annotation.id);
             await load();
-            toast.success({ title: "已删除批注" });
+            toast.success({ title: messages.organize.annotations.removed });
         } catch (caught) {
-            toast.error({ title: "删除批注失败", description: readError(caught) });
+            toast.error({ title: messages.organize.annotations.removeFailed, description: readError(caught) });
         }
     };
 
     return (
         <SectionShell
             count={loading ? null : items.length}
-            summary="写给内容、条目或话题的笔记；在对应对象上写，这里用来回顾"
-            title="批注"
+            summary={messages.organize.annotations.summary}
+            title={messages.organize.tabs.annotations}
         >
             {error ? (
                 <SectionMessage kind="error">{error}</SectionMessage>
             ) : loading ? (
-                <SectionMessage kind="loading">正在读取…</SectionMessage>
+                <SectionMessage kind="loading">{messages.common.loading}</SectionMessage>
             ) : items.length === 0 ? (
-                <SectionMessage kind="empty">
-                    还没有批注。读内容时写下的想法会出现在这里。
-                </SectionMessage>
+                <SectionMessage kind="empty">{messages.organize.annotations.empty}</SectionMessage>
             ) : (
                 <ul className="flex flex-col">
                     {items.map((annotation) => (
@@ -85,16 +84,17 @@ export function AnnotationsSection() {
                                     </p>
                                 )}
                                 <span className="text-[11px] text-muted-foreground">
-                                    挂在{annotation.targetType === "story"
-                                        ? "内容"
+                                    {messages.organize.annotations.attachedTo}
+                                    {annotation.targetType === "story"
+                                        ? messages.common.targetType.story
                                         : annotation.targetType === "entry"
-                                            ? "条目"
-                                            : "话题"}上 ·
-                                    {annotation.updatedAt.slice(0, 10)}
+                                            ? messages.common.targetType.entry
+                                            : messages.common.targetType.topic}
+                                    {messages.organize.annotations.attachedSuffix} ·{annotation.updatedAt.slice(0, 10)}
                                 </span>
                             </div>
                             <Button
-                                aria-label="删除这条批注"
+                                aria-label={messages.organize.annotations.removeLabel}
                                 onClick={() => void remove(annotation)}
                                 size="icon-sm"
                                 variant="ghost"

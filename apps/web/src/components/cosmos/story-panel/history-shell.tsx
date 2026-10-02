@@ -11,15 +11,15 @@ type Props = {
 export function HistoryShellSection({ busy, kind, onOpenRelatedStory, story, title }: Props) {
     return (
                 <section
-                    aria-label="历史壳"
+                    aria-label="已拆分"
                     className="border-b pb-4"
                     data-story-shell="true"
                 >
                     <h3 className="font-medium">
-                        历史壳（后继 {story.story.replacedBy.length}）
+                        已拆分为 {story.story.replacedBy.length} 条
                     </h3>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        本条 Story 已被拆分；它的成员历史、批注与审计仍然保留在这里，但不再接受归并、改标题或再次拆分。
+                        本条内容已被拆分成几条；原来的成员、批注与标记都还在这里，但不再接受归并、改标题或再次拆分。
                     </p>
                     <ul className="mt-2 grid gap-2">
                         {story.story.replacedBy.map((successor) => (

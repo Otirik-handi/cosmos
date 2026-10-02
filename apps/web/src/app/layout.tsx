@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { LiveProvider } from "@/components/shell/live-provider";
+import { messages } from "@/copy/messages";
 import { ThemeProvider } from "@/theme/theme-provider";
 import { COSMOS_THEME_BOOTSTRAP_SCRIPT } from "@/theme/theme-bootstrap";
 
@@ -9,7 +10,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
     title: "Cosmos",
-    description: "本地优先的信息聚合与个人情报工作台",
+    description: messages.pages.layout.description,
 };
 
 /*

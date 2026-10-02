@@ -16,7 +16,7 @@ export function RelatedSection({ busy, onOpenRelatedStory, relatedStories, story
                 <h3 className="font-medium">相关内容（{relatedStories.length}）</h3>
                 {relatedStories.length === 0 ? (
                     <p className="mt-2 text-sm text-muted-foreground">
-                        暂无相关但不同事件的 Story；给本条 Story 添加分类或关联 Entity 后会自动出现。
+                        暂无相关但不同事件的 Story；给本条 Story 打标签或关联 Entity 后会自动出现。
                     </p>
                 ) : (
                     <ul className="mt-2 grid gap-2" data-story-related="true">

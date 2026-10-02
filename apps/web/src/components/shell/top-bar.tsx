@@ -7,15 +7,16 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { ThemeSwitcher } from "@/components/cosmos/theme-switcher";
+import { messages } from "@/copy/messages";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/theme-provider";
 
 import { useStreamState } from "./live-provider";
 
 const STREAM_COPY: Record<string, string> = {
-    connecting: "正在连接",
-    connected: "服务正常",
-    unavailable: "服务不可用",
+    connecting: messages.shell.topBar.stream.connecting,
+    connected: messages.shell.topBar.stream.connected,
+    unavailable: messages.shell.topBar.stream.unavailable,
 };
 
 /**
@@ -44,7 +45,7 @@ export function TopBar({ showBack = false }: { showBack?: boolean }) {
                     )}
                     href="/library"
                 >
-                    ← 返回
+                    {messages.shell.topBar.back}
                 </Link>
             ) : (
                 <Link
@@ -57,7 +58,7 @@ export function TopBar({ showBack = false }: { showBack?: boolean }) {
 
             <form className="min-w-0" onSubmit={submit} role="search">
                 <label className="sr-only" htmlFor="global-search">
-                    搜索标题或正文
+                    {messages.shell.topBar.searchLabel}
                 </label>
                 <div
                     className={cn(
@@ -69,7 +70,7 @@ export function TopBar({ showBack = false }: { showBack?: boolean }) {
                         className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
                         id="global-search"
                         onChange={(event) => setQuery(event.currentTarget.value)}
-                        placeholder="搜索标题或正文"
+                        placeholder={messages.shell.topBar.searchPlaceholder}
                         value={query}
                     />
                 </div>

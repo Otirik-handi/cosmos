@@ -42,7 +42,7 @@ import {
     StatusSummary,
     type EventStreamState,
 } from "@/components/cosmos/status-summary";
-import {StoryPanel} from "@/components/cosmos/story-panel";
+import {StoryEditSurface} from "@/components/cosmos/story-edit-surface";
 import {TopicPanel} from "@/components/cosmos/topic-panel";
 import {EntityPanel} from "@/components/cosmos/entity-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
@@ -742,7 +742,7 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
     );
 }
 
-export function renderStoryPanelLab(props: LabProps) {
+export function renderStoryEditSurfaceLab(props: LabProps) {
     const state = optionProp(
         props,
         "state",
@@ -896,8 +896,7 @@ export function renderStoryPanelLab(props: LabProps) {
         }],
     };
     return (
-        <StoryPanel
-            onClose={() => undefined}
+        <StoryEditSurface
             story={story}
             onUpdateStoryRevision={async () => undefined}
             onMergeStory={async () => undefined}

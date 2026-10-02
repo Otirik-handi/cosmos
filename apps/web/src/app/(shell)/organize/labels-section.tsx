@@ -10,6 +10,7 @@ import { client, readError } from "@/app/home/page-runtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { messages } from "@/copy/messages";
 
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
@@ -60,7 +61,7 @@ export function LabelsSection() {
         try {
             setDetail(await client.label(labelId));
         } catch (caught) {
-            toast.error({ title: "读取标签内容失败", description: readError(caught) });
+            toast.error({ title: messages.organize.labels.readFailed, description: readError(caught) });
         } finally {
             setDetailLoading(false);
         }
@@ -76,9 +77,9 @@ export function LabelsSection() {
             await client.createLabel({ name });
             setNewName("");
             await load();
-            toast.success({ title: `已创建标签「${name}」` });
+            toast.success({ title: messages.organize.labels.created(name) });
         } catch (caught) {
-            toast.error({ title: "创建标签失败", description: readError(caught) });
+            toast.error({ title: messages.organize.labels.createFailed, description: readError(caught) });
         } finally {
             setCreating(false);
         }
@@ -92,21 +93,21 @@ export function LabelsSection() {
                 setDetail(null);
             }
             await load();
-            toast.success({ title: `已删除标签「${label.name}」` });
+            toast.success({ title: messages.organize.labels.removed(label.name) });
         } catch (caught) {
-            toast.error({ title: "删除标签失败", description: readError(caught) });
+            toast.error({ title: messages.organize.labels.removeFailed, description: readError(caught) });
         }
     };
 
     return (
         <SectionShell
             count={loading ? null : labels.length}
-            summary="给内容打的可复用名字；在这里新建与删除，Story 页只能挂已有标签"
-            title="标签"
+            summary={messages.organize.labels.summary}
+            title={messages.organize.tabs.labels}
         >
             <div className="flex flex-wrap items-center gap-2">
                 <Input
-                    aria-label="新标签名称"
+                    aria-label={messages.organize.labels.newName}
                     className="max-w-xs"
                     onChange={(event) => setNewName(event.target.value)}
                     onKeyDown={(event) => {
@@ -114,7 +115,7 @@ export function LabelsSection() {
                             void create();
                         }
                     }}
-                    placeholder="新标签名称"
+                    placeholder={messages.organize.labels.newName}
                     value={newName}
                 />
                 <Button
@@ -123,18 +124,16 @@ export function LabelsSection() {
                     variant="outline"
                 >
                     <Plus data-icon="inline-start" />
-                    新建标签
+                    {messages.organize.labels.create}
                 </Button>
             </div>
 
             {error ? (
                 <SectionMessage kind="error">{error}</SectionMessage>
             ) : loading ? (
-                <SectionMessage kind="loading">正在读取…</SectionMessage>
+                <SectionMessage kind="loading">{messages.common.loading}</SectionMessage>
             ) : labels.length === 0 ? (
-                <SectionMessage kind="empty">
-                    还没有标签。在内容上打标签要先在这里建一个。
-                </SectionMessage>
+                <SectionMessage kind="empty">{messages.organize.labels.empty}</SectionMessage>
             ) : (
                 <ul className="flex flex-col">
                     {labels.map((label) => (
@@ -153,10 +152,10 @@ export function LabelsSection() {
                                 <span className="truncate">{label.name}</span>
                             </Button>
                             <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
-                                {label.assignedCount} 处
+                                {messages.organize.labels.useCount(label.assignedCount)}
                             </span>
                             <Button
-                                aria-label={`删除标签 ${label.name}`}
+                                aria-label={messages.organize.labels.removeLabel(label.name)}
                                 onClick={() => void remove(label)}
                                 size="icon-sm"
                                 variant="ghost"
@@ -166,9 +165,13 @@ export function LabelsSection() {
                             {expandedId === label.id && (
                                 <div className="w-full basis-full pt-1">
                                     {detailLoading ? (
-                                        <p className="text-[12px] text-muted-foreground">正在读取…</p>
+                                        <p className="text-[12px] text-muted-foreground">
+                                            {messages.common.loading}
+                                        </p>
                                     ) : detail === null ? (
-                                        <p className="text-[12px] text-muted-foreground">没有可显示的内容。</p>
+                                        <p className="text-[12px] text-muted-foreground">
+                                            {messages.organize.labels.noContent}
+                                        </p>
                                     ) : (
                                         <LabelAssignments detail={detail} />
                                     )}
@@ -184,13 +187,17 @@ export function LabelsSection() {
 
 function LabelAssignments({ detail }: { detail: LabelDetail }) {
     const groups = [
-        { title: "内容", items: detail.assignedStories },
-        { title: "条目", items: detail.assignedEntries },
-        { title: "话题", items: detail.assignedTopics },
+        { title: messages.common.targetType.story, items: detail.assignedStories },
+        { title: messages.common.targetType.entry, items: detail.assignedEntries },
+        { title: messages.common.targetType.topic, items: detail.assignedTopics },
     ].filter((group) => group.items.length > 0);
 
     if (groups.length === 0) {
-        return <p className="text-[12px] text-muted-foreground">这个标签还没有挂到任何东西上。</p>;
+        return (
+            <p className="text-[12px] text-muted-foreground">
+                {messages.organize.labels.emptyOnTargets}
+            </p>
+        );
     }
 
     return (

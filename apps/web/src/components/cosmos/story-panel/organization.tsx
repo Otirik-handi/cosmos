@@ -4,7 +4,7 @@ import type {
     LabelRef,
     StoryDetail,
 } from "@cosmos/contracts";
-import { type Dispatch, type FormEventHandler, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction } from "react";
 import {
     X,
 } from "lucide-react";
@@ -30,12 +30,8 @@ type Props = {
     editingAnnotationQuote: string;
     newAnnotationBody: string;
     newAnnotationQuote: string;
-    newCollectionName: string;
-    newLabelName: string;
     onAttachLabel?: (labelId: string) => Promise<void>;
     onCreateAnnotation?: (input: { body: string; quote?: string | null }) => Promise<void>;
-    onCreateCollection?: (name: string) => Promise<void>;
-    onCreateLabel?: (name: string) => Promise<void>;
     onDeleteAnnotation?: (annotationId: string) => Promise<void>;
     onDetachLabel?: (labelId: string) => Promise<void>;
     onPinToBoard?: () => Promise<void>;
@@ -47,14 +43,10 @@ type Props = {
     setEditingAnnotationQuote: Dispatch<SetStateAction<string>>;
     setNewAnnotationBody: Dispatch<SetStateAction<string>>;
     setNewAnnotationQuote: Dispatch<SetStateAction<string>>;
-    setNewCollectionName: Dispatch<SetStateAction<string>>;
-    setNewLabelName: Dispatch<SetStateAction<string>>;
     startEditAnnotation: (annotation: Annotation) => void;
     story: StoryDetail;
     submitAttachLabel: () => Promise<void>;
     submitCreateAnnotation: () => Promise<void>;
-    submitCreateCollection: () => Promise<void>;
-    submitCreateLabel: () => Promise<void>;
     submitDeleteAnnotation: (annotationId: string) => Promise<void>;
     submitDetachLabel: (labelId: string) => Promise<void>;
     submitPinToBoard: () => Promise<void>;
@@ -75,12 +67,8 @@ export function StoryOrganizationSection({
     editingAnnotationQuote,
     newAnnotationBody,
     newAnnotationQuote,
-    newCollectionName,
-    newLabelName,
     onAttachLabel,
     onCreateAnnotation,
-    onCreateCollection,
-    onCreateLabel,
     onDeleteAnnotation,
     onDetachLabel,
     onPinToBoard,
@@ -92,14 +80,10 @@ export function StoryOrganizationSection({
     setEditingAnnotationQuote,
     setNewAnnotationBody,
     setNewAnnotationQuote,
-    setNewCollectionName,
-    setNewLabelName,
     startEditAnnotation,
     story,
     submitAttachLabel,
     submitCreateAnnotation,
-    submitCreateCollection,
-    submitCreateLabel,
     submitDeleteAnnotation,
     submitDetachLabel,
     submitPinToBoard,
@@ -112,9 +96,7 @@ export function StoryOrganizationSection({
             {(onToggleFavorite
                 || onAttachLabel
                 || onDetachLabel
-                || onCreateLabel
                 || onToggleCollection
-                || onCreateCollection
                 || onCreateAnnotation
                 || onUpdateAnnotation
                 || onDeleteAnnotation
@@ -136,7 +118,7 @@ export function StoryOrganizationSection({
                                 固定到看板热点区
                             </Button>
                             <span className="text-sm text-muted-foreground">
-                                在当前看板的 Spotlight 区块展示本条 Story。
+                                在当前看板的热点区展示本条内容。
                             </span>
                         </div>
                     )}
@@ -158,12 +140,12 @@ export function StoryOrganizationSection({
                             </span>
                         </div>
                     )}
-                    {(onAttachLabel || onDetachLabel || onCreateLabel) && (
+                    {(onAttachLabel || onDetachLabel) && (
                         <div className="grid gap-3">
                             <h4 className="text-sm font-medium">标签</h4>
                             {story.labels.length === 0 ? (
                                 <p className="text-sm text-muted-foreground">
-                                    本条 Story 还没有标签；可从已有标签添加或新建一个。
+                                    本条 Story 还没有标签；可从已有标签里添加一个。
                                 </p>
                             ) : (
                                 <ul className="flex flex-wrap gap-2">
@@ -215,33 +197,12 @@ export function StoryOrganizationSection({
                                     </Button>
                                 </div>
                             )}
-                            {onCreateLabel && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Input
-                                        id="cosmos-story-new-label-name"
-                                        value={newLabelName}
-                                        onChange={(event) => setNewLabelName(event.target.value)}
-                                        disabled={busy}
-                                        placeholder="新标签名称"
-                                        className="max-w-52"
-                                    />
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={busy || !newLabelName.trim()}
-                                        onClick={() => void submitCreateLabel()}
-                                    >
-                                        创建并添加
-                                    </Button>
-                                </div>
-                            )}
                         </div>
                     )}
-                    {(onToggleCollection || onCreateCollection) && (
+                    {onToggleCollection && (
                         <div className="grid gap-3">
                             <h4 className="text-sm font-medium">收藏夹</h4>
-                            {onToggleCollection && (
-                                collections && collections.length > 0
+                            {collections && collections.length > 0
                                     ? (
                                         <ul className="grid gap-2">
                                             {collections.map((collection) => {
@@ -268,30 +229,9 @@ export function StoryOrganizationSection({
                                     )
                                     : (
                                         <p className="text-sm text-muted-foreground">
-                                            还没有收藏夹；可新建一个后把本条 Story 收纳进去。
+                                            还没有收藏夹；在整理页建一个后把本条 Story 收纳进去。
                                         </p>
-                                    )
-                            )}
-                            {onCreateCollection && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Input
-                                        id="cosmos-story-new-collection-name"
-                                        value={newCollectionName}
-                                        onChange={(event) => setNewCollectionName(event.target.value)}
-                                        disabled={busy}
-                                        placeholder="新收藏夹名称"
-                                        className="max-w-52"
-                                    />
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={busy || !newCollectionName.trim()}
-                                        onClick={() => void submitCreateCollection()}
-                                    >
-                                        新建收藏夹
-                                    </Button>
-                                </div>
-                            )}
+                                    )}
                         </div>
                     )}
                     {(onCreateAnnotation

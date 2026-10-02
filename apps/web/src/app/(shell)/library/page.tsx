@@ -19,8 +19,10 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FeedBrowser, searchSchema, type SearchFormValues } from "@/components/cosmos/feed-browser";
+import { EMPTY_SEARCH_VALUES, FeedBrowser, searchSchema, type SearchFormValues } from "@/components/cosmos/feed-browser";
+import { PageBanners } from "@/components/shell/page-banners";
 import { useLiveTopic } from "@/components/shell/live-provider";
+import { messages } from "@/copy/messages";
 
 /*
  * 信息库与搜索（PRD §8.2）。整套检索工作台从首页搬到这里：关键词与组合过滤、
@@ -42,20 +44,11 @@ export default function LibraryPage() {
     const storyWorkspace = useStoryWorkspace(workspaceContext);
     const topicWorkspace = useTopicWorkspace(workspaceContext, storyWorkspace);
     const { loadTopics, topics } = topicWorkspace;
+    const { labels, loadLabels } = storyWorkspace;
 
     const searchForm = useForm<SearchFormValues>({
         resolver: zodResolver(searchSchema),
-        defaultValues: {
-            text: "",
-            sourceId: "",
-            publishedAfter: "",
-            publishedBefore: "",
-            labelIds: [],
-            topicIds: [],
-            author: "",
-            contentKind: "",
-            assetStatus: "",
-        },
+        defaultValues: EMPTY_SEARCH_VALUES,
     });
 
     const feedWorkspace = useFeedWorkspace(workspaceContext, storyWorkspace, searchForm, setSources);
@@ -86,7 +79,9 @@ export default function LibraryPage() {
 
     useEffect(() => {
         void loadTopics();
-    }, [loadTopics]);
+        // 标签目录要显式加载：不加载时 FeedBrowser 的「按标签筛选」一栏不会渲染。
+        void loadLabels();
+    }, [loadLabels, loadTopics]);
 
     /**
      * 事件订阅来自外壳级 live-provider（全程一条连接）。信息库只关心 feed 变化，
@@ -139,7 +134,7 @@ export default function LibraryPage() {
             setActiveSearch(query);
             setFeed(result.items);
             setNextCursor(result.nextCursor);
-            setNotice(`搜索到 ${result.items.length} 条结果。`);
+            setNotice(messages.library.resultNotice(result.items.length));
         } catch (caught) {
             setError(readError(caught));
         }
@@ -156,11 +151,15 @@ export default function LibraryPage() {
     }, [initialQuery]);
 
     const savedViewsPanel = (
-        <section aria-label="已保存视图" className="flex flex-col gap-2">
+        <section aria-label={messages.library.savedViews.heading} className="flex flex-col gap-2">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h3 className="text-xs font-medium text-muted-foreground">已保存视图</h3>
+                <h3 className="text-xs font-medium text-muted-foreground">
+                    {messages.library.savedViews.heading}
+                </h3>
                 <span className="text-xs text-muted-foreground">
-                    {savedViews.length === 0 ? "尚未保存视图" : `${savedViews.length} 个视图`}
+                    {savedViews.length === 0
+                        ? messages.library.savedViews.empty
+                        : messages.library.savedViews.countLabel(savedViews.length)}
                 </span>
             </div>
             {savedViews.length > 0 && (
@@ -178,13 +177,13 @@ export default function LibraryPage() {
                                 {view.name}
                             </button>
                             <Button
-                                aria-label={`删除视图 ${view.name}`}
+                                aria-label={messages.library.savedViews.removeLabel(view.name)}
                                 onClick={() => void deleteSavedView(view.id)}
                                 size="xs"
                                 variant="ghost"
                             >
                                 <X data-icon="inline-start" />
-                                删除
+                                {messages.library.savedViews.remove}
                             </Button>
                         </li>
                     ))}
@@ -192,10 +191,10 @@ export default function LibraryPage() {
             )}
             <div className="flex flex-wrap items-center gap-2">
                 <Input
-                    aria-label="视图名称"
+                    aria-label={messages.library.savedViews.nameLabel}
                     className="max-w-xs"
                     onChange={(event) => setSavedViewName(event.target.value)}
-                    placeholder="视图名称"
+                    placeholder={messages.library.savedViews.nameLabel}
                     value={savedViewName}
                 />
                 <Button
@@ -204,7 +203,7 @@ export default function LibraryPage() {
                     type="button"
                     variant="outline"
                 >
-                    保存当前条件
+                    {messages.library.savedViews.save}
                 </Button>
             </div>
         </section>
@@ -212,33 +211,18 @@ export default function LibraryPage() {
 
     return (
         <div className="flex w-full flex-col gap-4">
-            {error && (
-                <div
-                    className="rounded-[var(--radius-control)] border border-destructive/30 bg-destructive/10 p-3 text-[13px] leading-6 text-destructive"
-                    role="alert"
-                >
-                    {error}
-                </div>
-            )}
-            {notice && (
-                <div
-                    className="rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-[13px] leading-6"
-                    role="status"
-                >
-                    {notice}
-                </div>
-            )}
+            <PageBanners error={error} notice={notice} />
 
             <FeedBrowser
                 activeSearch={activeSearch}
                 feed={feed}
+                labels={labels.items}
                 loading={loading}
                 loadingMore={loadingMore}
                 nextCursor={nextCursor}
                 onClearSearch={() => void clearSearch()}
                 onLoadMore={loadMore}
                 onOpenStory={async (storyId) => {
-                    // Story 深入页在切片 3d 落地；路由已存在，先直达占位页而不是死链。
                     router.push(`/stories/${encodeURIComponent(storyId)}`);
                 }}
                 onSubmit={runSearch}

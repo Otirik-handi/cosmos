@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { messages } from "@/copy/messages";
 import { cn } from "@/lib/utils";
 
 /*
@@ -30,7 +31,7 @@ export function SectionShell({
                 <span className="text-[12px] text-muted-foreground">{summary}</span>
                 {count !== null && (
                     <span className="ml-auto font-mono text-[12px] text-muted-foreground">
-                        {count} 项
+                        {messages.organize.sectionCount(count)}
                     </span>
                 )}
             </div>

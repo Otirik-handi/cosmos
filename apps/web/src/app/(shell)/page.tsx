@@ -1,10 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-    Plus,
-    X,
-} from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
     useCallback,
@@ -16,7 +12,6 @@ import {
 import { useForm } from "react-hook-form";
 
 import {
-    type SearchQuery,
     type SourceSnapshot,
 } from "@cosmos/contracts";
 
@@ -26,24 +21,21 @@ import { useFeedWorkspace } from "@/app/home/use-feed-workspace";
 import { useSourceWorkspace } from "@/app/home/use-source-workspace";
 import { useStoryWorkspace } from "@/app/home/use-story-workspace";
 import { useTopicWorkspace } from "@/app/home/use-topic-workspace";
+import { HomeBoardToolbar } from "./home/board-toolbar";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { BoardView } from "@/components/cosmos/board-view";
 import {CollectionPlanList} from "@/components/cosmos/collection-plan-list";
+import { PageBanners } from "@/components/shell/page-banners";
 import {
-    SourceForm,
     sourceFormSchema,
+    SOURCE_FORM_DEFAULTS,
     type SourceFormValues,
 } from "@/components/cosmos/source-form";
 import {useLiveTopic} from "@/components/shell/live-provider";
-import {searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
+import {searchSchema, EMPTY_SEARCH_VALUES, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {SystemOutputBlock} from "@/components/cosmos/system-output-block";
 import {
     client,
-    readError,
-    toBoundaryIso,
-    toScheduleIntervalMs,
 } from "@/app/home/page-runtime";
 
 export default function Home() {
@@ -65,12 +57,10 @@ export default function Home() {
     const {
         collections,
         openingStoryId,
-        refreshRelatedStories,
         setStorySubtypes,
     } = storyWorkspace;
     const entityWorkspace = useEntityWorkspace(workspaceContext, storyWorkspace);
     const {
-        entity,
         loadEntities,
     } = entityWorkspace;
     const topicWorkspace = useTopicWorkspace(workspaceContext, storyWorkspace);
@@ -97,27 +87,11 @@ export default function Home() {
     } = boardWorkspace;
     const sourceForm = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
-        defaultValues: {
-            name: "Cosmos RSS",
-            scheduleIntervalMinutes: "30",
-            connectionId: "",
-            // 默认选中的是 RSS，所以给它的必填字段一个可编辑的起始值。
-            config: {feedUrl: "https://example.com/feed.xml"},
-        },
+        defaultValues: SOURCE_FORM_DEFAULTS,
     });
     const searchForm = useForm<SearchFormValues>({
         resolver: zodResolver(searchSchema),
-        defaultValues: {
-            text: "",
-            sourceId: "",
-            publishedAfter: "",
-            publishedBefore: "",
-            labelIds: [],
-            topicIds: [],
-            author: "",
-            contentKind: "",
-            assetStatus: "",
-        },
+        defaultValues: EMPTY_SEARCH_VALUES,
     });
 
     const feedWorkspace = useFeedWorkspace(
@@ -127,19 +101,9 @@ export default function Home() {
         setSources,
     );
     const {
-        applySavedView,
-        beginSearch,
-        deleteSavedView,
         feed,
-        isSearchWriteCurrent,
         refresh,
-        saveCurrentSearchAsView,
-        savedViewName,
         savedViews,
-        setActiveSearch,
-        setFeed,
-        setNextCursor,
-        setSavedViewName,
     } = feedWorkspace;
     /**
      * 系统产出区块取的是「由系统或 Agent 产生的 Story」：机器产出的排前面，
@@ -163,7 +127,7 @@ export default function Home() {
         [router],
     );
 
-    const sourceWorkspace = useSourceWorkspace(        workspaceContext,
+    const sourceWorkspace = useSourceWorkspace(workspaceContext,
         sourceForm,
         {error, loading, sources, setSources},
         feedWorkspace,
@@ -171,51 +135,19 @@ export default function Home() {
     const {
         activatingPlanId,
         connections,
-        definitionState,
         deletePlan,
         deletingPlanId,
-        loadDefinitions,
         loadPlans,
-        planSummary,
         plans,
-        probeConfigKeyRef,
-        selectDefinition,
-        selectOperation,
-        selectedDefinitionRef,
-        selectedOperationId,
-        setProbeState,
-        onCreateSource,
-        onTestSourceConfig,
-        probeState,
         revokeWebhookEntry,
         rotateWebhookEntry,
         runMediaCleanup,
-        runRefreshToken,
         runPlan,
         runningPlanId,
         saveMediaPolicy,
-        setShowSourceForm,
-        showSourceForm,
         toggleActivation,
     } = sourceWorkspace;
 
-    // 测试结果只对提交时的配置有效；字段一变立即作废，避免旧结果误导保存决定。
-    const watchedConfig = sourceForm.watch("config");
-    const watchedScheduleInterval = sourceForm.watch("scheduleIntervalMinutes");
-
-    useEffect(() => {
-        if (showSourceForm) {
-            probeConfigKeyRef.current = null;
-            setProbeState({status: "idle"});
-            void loadDefinitions();
-        }
-    }, [showSourceForm, loadDefinitions]);
-
-
-    useEffect(() => {
-        probeConfigKeyRef.current = null;
-        setProbeState({status: "idle"});
-    }, [watchedConfig, watchedScheduleInterval]);
 
     /**
      * 首次加载走全页 loading 骨架；之后（SSE、来源变更）一律后台刷新，
@@ -276,53 +208,6 @@ export default function Home() {
         };
     }, []);
 
-    const onSearch = searchForm.handleSubmit(async ({
-        text,
-        sourceId,
-        publishedAfter,
-        publishedBefore,
-        labelIds = [],
-        topicIds = [],
-        author,
-        contentKind,
-        assetStatus,
-    }) => {
-        setError(null);
-        try {
-            const query: SearchQuery = {
-                text: text || undefined,
-                sourceId: sourceId || undefined,
-                publishedAfter: toBoundaryIso(publishedAfter, false),
-                publishedBefore: toBoundaryIso(publishedBefore, true),
-                labelIds: labelIds.join(",") || undefined,
-                topicIds: topicIds.join(",") || undefined,
-                author: author || undefined,
-                contentKind: contentKind || undefined,
-                assetStatus: assetStatus || undefined,
-                limit: 20,
-            };
-            // 提交新条件即自增搜索版本：此后返回的非本次结果（包括带着旧条件发起的刷新，
-            // 例如搜索提交之后才触发的 SSE 刷新）一律丢弃，否则会出现"提示语说 0 条、
-            // 列表却残留旧内容"。
-            const generation = beginSearch(query);
-            const result = await client.search(query);
-            if (!isSearchWriteCurrent(generation)) {
-                return;
-            }
-            setActiveSearch(query);
-            setFeed(result.items);
-            setNextCursor(result.nextCursor);
-            setNotice(
-                text || sourceId || publishedAfter || publishedBefore
-                    || labelIds.length > 0 || topicIds.length > 0
-                    || author || contentKind || assetStatus
-                    ? `搜索到 ${result.items.length} 条结果。`
-                    : "已恢复 Feed。",
-            );
-        } catch (caught) {
-            setError(readError(caught));
-        }
-    });
 
     const loadStorySubtypes = useCallback(async (): Promise<void> => {
         try {
@@ -338,60 +223,6 @@ export default function Home() {
         void loadStorySubtypes();
     }, [loadTopics, loadEntities, loadStorySubtypes]);
 
-    const savedViewsPanel = (
-        <section aria-label="已保存视图" className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h3 className="text-xs font-medium text-muted-foreground">已保存视图</h3>
-                <span className="text-xs text-muted-foreground">
-                    {savedViews.length === 0 ? "尚未保存视图" : `${savedViews.length} 个视图`}
-                </span>
-            </div>
-            {savedViews.length > 0 && (
-                <ul className="flex flex-wrap gap-2">
-                    {savedViews.map((view) => (
-                        <li
-                            key={view.id}
-                            className="flex items-center gap-1 rounded-[var(--radius-control)] border bg-card pl-2"
-                        >
-                            <button
-                                type="button"
-                                onClick={() => void applySavedView(view)}
-                                className="rounded-sm py-1 text-sm hover:text-primary focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"
-                            >
-                                {view.name}
-                            </button>
-                            <Button
-                                size="xs"
-                                variant="ghost"
-                                aria-label={`删除视图 ${view.name}`}
-                                onClick={() => void deleteSavedView(view.id)}
-                            >
-                                <X data-icon="inline-start" />
-                                删除
-                            </Button>
-                        </li>
-                    ))}
-                </ul>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    aria-label="视图名称"
-                    placeholder="视图名称"
-                    className="max-w-xs"
-                    value={savedViewName}
-                    onChange={(event) => setSavedViewName(event.target.value)}
-                />
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={savedViewName.trim() === ""}
-                    onClick={() => void saveCurrentSearchAsView(savedViewName)}
-                >
-                    保存当前条件
-                </Button>
-            </div>
-        </section>
-    );
 
     const planList = (
         <CollectionPlanList
@@ -415,82 +246,18 @@ export default function Home() {
         <div className="flex w-full flex-col gap-5">
             {/* 首页只负责「看」：看板与系统产出。检索工作台在 /library，
                 来源与连接配置在 /automation（切片 3c），状态在顶栏。 */}
-            <div className="flex flex-wrap items-center gap-2">
-                {boards.length > 0 && (
-                    <>
-                        <label className="flex items-center gap-2 text-[13px]">
-                            <span className="text-muted-foreground">看板</span>
-                            <select
-                                aria-label="切换看板"
-                                className="h-8 rounded-[var(--radius-control)] border border-input bg-card px-2 text-[13px]"
-                                value={board?.id ?? ""}
-                                onChange={(event) => void switchBoard(event.target.value)}
-                            >
-                                {boards.map((item) => (
-                                    <option key={item.id} value={item.id}>
-                                        {item.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <Button
-                            variant="outline"
-                            onClick={() => setBoardEditing((value) => !value)}
-                        >
-                            {boardEditing ? "完成编辑" : "编辑看板"}
-                        </Button>
-                        {boardEditing && (
-                            <>
-                                <Input
-                                    aria-label="新看板名称"
-                                    className="max-w-xs"
-                                    placeholder="新看板名称"
-                                    value={newBoardName}
-                                    onChange={(event) => setNewBoardName(event.target.value)}
-                                />
-                                <Button
-                                    variant="outline"
-                                    disabled={newBoardName.trim() === ""}
-                                    onClick={() => {
-                                        const name = newBoardName;
-                                        setNewBoardName("");
-                                        void createBoard(name);
-                                    }}
-                                >
-                                    新建看板
-                                </Button>
-                            </>
-                        )}
-                    </>
-                )}
-                <Button
-                    className="ml-auto"
-                    variant="outline"
-                    onClick={() => setShowSourceForm((value) => !value)}
-                >
-                    {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                    {showSourceForm ? "关闭表单" : "新建计划"}
-                </Button>
-            </div>
-
-            {/* 来源表单与连接面板在切片 3c 搬到 /automation；在那之前留在首页，
-                否则「来源配不了」会先于新页面出现。 */}
-            {showSourceForm && (
-                <SourceForm
-                    form={sourceForm}
-                    definitionState={definitionState}
-                    selectedDefinitionRef={selectedDefinitionRef}
-                    onSelectDefinition={selectDefinition}
-                    selectedOperationId={selectedOperationId}
-                    onSelectOperation={selectOperation}
-                    onSubmit={onCreateSource}
-                    onTest={() => void onTestSourceConfig()}
-                    probeState={probeState}
-                    onRetryDefinition={() => void loadDefinitions()}
-                    connections={connections}
-                />
-            )}
-
+            {/* 写入口径的回执（新建看板）与读取失败与其它页同一条规则：不静默丢弃。 */}
+            <PageBanners error={error} notice={notice} />
+            <HomeBoardToolbar
+                board={board}
+                boardEditing={boardEditing}
+                boards={boards}
+                createBoard={createBoard}
+                newBoardName={newBoardName}
+                setBoardEditing={setBoardEditing}
+                setNewBoardName={setNewBoardName}
+                switchBoard={switchBoard}
+            />
             {board ? (
                 <BoardView
                     board={board}

@@ -2,8 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 
 import { client } from "@/app/home/page-runtime";
+
+import { createTopicCoalescer } from "./live-coalesce";
 
 /**
  * 外壳级实时连接（ADR-0029 决策 7 / E2）。
@@ -42,9 +45,15 @@ type LiveContextValue = {
 const LiveContext = createContext<LiveContextValue | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
+    const pathname = usePathname();
     const [streamState, setStreamState] = useState<StreamState>("connecting");
     const handlersRef = useRef(new Map<LiveTopic, Set<() => void>>());
-    const timersRef = useRef(new Map<LiveTopic, ReturnType<typeof setTimeout>>());
+
+    /**
+     * 组件实验室（`/dev/**`）是开发期工具：它渲染固定 fixture、不连服务。在那里开连接
+     * 只会拿到非 SSE 响应并在控制台报错，把实验室的「零控制台错误」验收弄脏。
+     */
+    const connect = !pathname.startsWith("/dev/");
 
     const subscribe = useCallback((topic: LiveTopic, handler: () => void) => {
         const handlers = handlersRef.current.get(topic) ?? new Set<() => void>();
@@ -55,27 +64,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
-    const notify = useCallback((topic: LiveTopic) => {
-        const existing = timersRef.current.get(topic);
-        if (existing !== undefined) {
-            clearTimeout(existing);
+    const flush = useCallback((topic: LiveTopic) => {
+        for (const handler of handlersRef.current.get(topic) ?? []) {
+            handler();
         }
-        timersRef.current.set(topic, setTimeout(() => {
-            timersRef.current.delete(topic);
-            for (const handler of handlersRef.current.get(topic) ?? []) {
-                handler();
-            }
-        }, COALESCE_MS));
     }, []);
 
     useEffect(() => {
-        const timers = timersRef.current;
+        if (!connect) {
+            return;
+        }
+        const coalescer = createTopicCoalescer(COALESCE_MS, (topic) => flush(topic as LiveTopic));
         const closeEvents = client.openEventStream({
             onEvent: (event) => {
                 setStreamState("connected");
                 const topic = TOPIC_BY_EVENT[event.type];
                 if (topic !== undefined) {
-                    notify(topic);
+                    coalescer.notify(topic);
                 }
             },
             onError: () => {
@@ -84,12 +89,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         });
         return () => {
             closeEvents();
-            for (const timer of timers.values()) {
-                clearTimeout(timer);
-            }
-            timers.clear();
+            coalescer.dispose();
         };
-    }, [notify]);
+    }, [connect, flush]);
 
     return (
         <LiveContext.Provider value={{ streamState, subscribe }}>

@@ -48,8 +48,8 @@ export function StorySubtypeSelect({
                 onChange(event.target.value === "" ? null : event.target.value);
             }}
         >
-            <option value="">无 subtype</option>
-            {showLegacy && <option value={value}>{value}（未注册）</option>}
+            <option value="">无细分类型</option>
+            {showLegacy && <option value={value}>{value}（沿用旧值）</option>}
             {forKind.map((option) => (
                 <option key={option.id} value={option.id}>
                     {option.label}（{option.id}）{option.status === "deprecated" ? " · 已弃用" : ""}

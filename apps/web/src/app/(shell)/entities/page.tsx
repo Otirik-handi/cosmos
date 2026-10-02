@@ -8,21 +8,27 @@ import { useEntityWorkspace } from "@/app/home/use-entity-workspace";
 import { useStoryWorkspace } from "@/app/home/use-story-workspace";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ENTITY_TYPE_OPTIONS } from "@/components/cosmos/entity-panel";
 import { useLiveTopic } from "@/components/shell/live-provider";
+import { PageBanners } from "@/components/shell/page-banners";
+import { messages } from "@/copy/messages";
 
 /*
- * Entity 列表。切片 3b 只做**浏览与跳转**：新建 Entity、加删别名与关系、解除关联
- * 都在 Entity 页落地（切片 3c），与 Story 抽屉旧表单的删除同批进行。
+ * Entity 列表与新建。创建入口在**对象页**（ADR-0029 决策 1）：这里建 Entity，
+ * 与内容的关联在 Story 页做。加删别名与关系、解除关联仍在待办里（`/entities/:id` 还是占位）。
  */
 export default function EntitiesPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [newName, setNewName] = useState("");
+    const [newType, setNewType] = useState<string>(ENTITY_TYPE_OPTIONS[0]?.value ?? "person");
 
     const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
     const storyWorkspace = useStoryWorkspace(workspaceContext);
-    const { entities, loadEntities } = useEntityWorkspace(workspaceContext, storyWorkspace);
+    const { createEntity, entities, loadEntities } = useEntityWorkspace(workspaceContext, storyWorkspace);
 
     useEffect(() => {
         void loadEntities().finally(() => setLoading(false));
@@ -35,9 +41,11 @@ export default function EntitiesPage() {
     return (
         <div className="flex w-full flex-col gap-4">
             <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-[15px] font-medium">Entity</h1>
+                <h1 className="text-[15px] font-medium">{messages.pages.entities.title}</h1>
                 <span className="text-[12px] text-muted-foreground">
-                    {entities.length === 0 ? "尚未创建 Entity" : `${entities.length} 个 Entity`}
+                    {entities.length === 0
+                        ? messages.pages.entities.emptyCount
+                        : messages.pages.entities.countLabel(entities.length)}
                 </span>
                 <Button
                     className="ml-auto"
@@ -47,35 +55,56 @@ export default function EntitiesPage() {
                     variant="outline"
                 >
                     <RefreshCcw data-icon="inline-start" />
-                    刷新
+                    {messages.common.refresh}
                 </Button>
             </div>
 
-            {error && (
-                <div
-                    className="rounded-[var(--radius-control)] border border-destructive/30 bg-destructive/10 p-3 text-[13px] leading-6 text-destructive"
-                    role="alert"
+            <PageBanners error={error} notice={notice} />
+
+            <div className="flex flex-wrap items-center gap-2">
+                <Input
+                    aria-label={messages.pages.entities.newName}
+                    className="max-w-xs"
+                    onChange={(event) => setNewName(event.target.value)}
+                    placeholder={messages.pages.entities.newName}
+                    value={newName}
+                />
+                <label className="flex items-center gap-2 text-[13px]">
+                    <span className="text-muted-foreground">{messages.pages.entities.newType}</span>
+                    <select
+                        aria-label={messages.pages.entities.newType}
+                        className="h-8 rounded-[var(--radius-control)] border border-input bg-card px-2 text-[13px]"
+                        onChange={(event) => setNewType(event.target.value)}
+                        value={newType}
+                    >
+                        {ENTITY_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <Button
+                    disabled={newName.trim() === ""}
+                    onClick={() => {
+                        const name = newName.trim();
+                        setNewName("");
+                        void createEntity(name, newType);
+                    }}
+                    size="sm"
+                    variant="outline"
                 >
-                    {error}
-                </div>
-            )}
-            {notice && (
-                <div
-                    className="rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-[13px] leading-6"
-                    role="status"
-                >
-                    {notice}
-                </div>
-            )}
+                    {messages.pages.entities.create}
+                </Button>
+            </div>
 
             {loading && entities.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground">正在读取…</p>
+                <p className="text-[13px] text-muted-foreground">{messages.common.loading}</p>
             ) : entities.length === 0 ? (
                 <div className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-10 text-center">
-                    <p className="text-[13px] font-medium">还没有 Entity</p>
+                    <p className="text-[13px] font-medium">{messages.pages.entities.emptyTitle}</p>
                     <p className="mx-auto mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">
-                        Entity 是可被内容关联的实体（人物、组织、产品、项目、模型、地点），
-                        Entity 之间也可以有关系。新建入口随下一步落地。
+                        {messages.pages.entities.emptyBody}
                     </p>
                 </div>
             ) : (
@@ -101,7 +130,8 @@ export default function EntitiesPage() {
                                 <span className="text-[12px] text-muted-foreground">{entity.type}</span>
                             </div>
                             <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
-                                {entity.storyCount} 条内容 · {entity.relationCount} 个关系
+                                {messages.common.storyCount(entity.storyCount)} ·{" "}
+                                {messages.pages.entities.relationCount(entity.relationCount)}
                             </span>
                         </li>
                     ))}

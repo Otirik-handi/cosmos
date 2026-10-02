@@ -4,6 +4,7 @@ import {
 } from "@cosmos/transport-http";
 
 import type { SourceFormValues } from "@/components/cosmos/source-form";
+import { messages } from "@/copy/messages";
 import type { RelatedStoryPorts } from "@/lib/related-stories";
 
 /**
@@ -51,9 +52,9 @@ export function delay(ms: number): Promise<void> {
 
 export function readError(error: unknown): string {
     if (error instanceof CosmosTransportError) {
-        return `服务请求失败（HTTP ${error.status}）。`;
+        return messages.notices.requestFailed(error.status);
     }
-    return error instanceof Error ? error.message : "发生未知错误。";
+    return error instanceof Error ? error.message : messages.notices.unknownError;
 }
 
 export function toBoundaryIso(

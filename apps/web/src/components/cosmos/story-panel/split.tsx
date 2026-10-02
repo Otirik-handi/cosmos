@@ -69,7 +69,7 @@ export function StorySplitSection({
                 >
                     <h3 className="font-medium">拆分 Story</h3>
                     <p className="text-sm text-muted-foreground">
-                        把本条 Story 拆成多个后继；没有指定去向的成员、证据、实体与 Topic 会留在本条历史壳上。
+                        把本条 Story 拆成多个后继；没有指定去向的成员、证据、实体与 Topic 会留在本条上。
                     </p>
                     <div className="grid gap-2">
                         {splitSuccessors.map((successor, index) => (

@@ -14,28 +14,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { messages } from "@/copy/messages";
 
 /**
  * 侧栏导航的单一真相源。八项各占一层 URL，与 ADR-0029 决策 3 的
  * 「URL 层级 = 导航层级」一致；新增页面只改这里，不改路由分组。
+ * 文案取自集中文案模块，导航与页面标题不会各写一份。
  */
 export const NAV_GROUPS = [
     {
-        title: "内容",
+        title: messages.shell.nav.groups.content,
         items: [
-            { href: "/", label: "首页看板", icon: Home, exact: true },
-            { href: "/library", label: "信息库", icon: Inbox },
-            { href: "/topics", label: "话题", icon: Target },
-            { href: "/entities", label: "Entity", icon: Users },
-            { href: "/system", label: "系统产出", icon: Waypoints },
+            { href: "/", label: messages.shell.nav.items.home, icon: Home, exact: true },
+            { href: "/library", label: messages.shell.nav.items.library, icon: Inbox },
+            { href: "/topics", label: messages.shell.nav.items.topics, icon: Target },
+            { href: "/entities", label: messages.shell.nav.items.entities, icon: Users },
+            { href: "/system", label: messages.shell.nav.items.system, icon: Waypoints },
         ],
     },
     {
-        title: "管理",
+        title: messages.shell.nav.groups.management,
         items: [
-            { href: "/organize", label: "整理", icon: Tag },
-            { href: "/automation", label: "自动化", icon: RefreshCcw },
-            { href: "/settings", label: "设置", icon: Settings },
+            { href: "/organize", label: messages.shell.nav.items.organize, icon: Tag },
+            { href: "/automation", label: messages.shell.nav.items.automation, icon: RefreshCcw },
+            { href: "/settings", label: messages.shell.nav.items.settings, icon: Settings },
         ],
     },
 ] as const;
@@ -53,7 +55,7 @@ export function SideNav() {
     return (
         <aside className="w-[196px] shrink-0 self-start">
             <nav
-                aria-label="主导航"
+                aria-label={messages.shell.nav.ariaLabel}
                 className={cn(
                     "flex flex-col gap-4 rounded-[var(--radius-card)] border border-border bg-card p-2.5",
                     "shadow-[var(--elevation-card)]",
