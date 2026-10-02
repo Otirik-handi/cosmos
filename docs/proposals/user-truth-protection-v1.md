@@ -64,7 +64,7 @@
 | 事实 | 证据 |
 | --- | --- |
 | `StoryRevision` 没有写入者字段 | `schema.prisma` 第 384-400 行：只有 `fingerprint`/`actorJson`/`reason` |
-| `actorJson` 不能当判据：Web 的人工编辑**根本不传 actor** | [`use-story-workspace.ts`](../../apps/web/src/app/home/use-story-workspace.ts) 第 170 行、[`story-panel.tsx`](../../apps/web/src/components/cosmos/story-panel.tsx) 第 283-291 行都不带 `actor` |
+| `actorJson` 不能当判据：Web 的人工编辑**根本不传 actor** | [`use-story-workspace.ts`](../../apps/web/src/app/home/use-story-workspace.ts) 第 170 行、[`story-edit-surface.tsx`](../../apps/web/src/components/cosmos/story-edit-surface.tsx)（Task 35 切片 3e 之前是 `story-panel.tsx` 第 283-291 行，同一段提交代码随编辑面搬到阅读页）都不带 `actor` |
 | 于是 ingest 与人工编辑落库的 `actorJson` **都是 null** | ingest 不写 actorJson（helpers-4 第 287-297 行）；人工命令的 `actorJson` 由入参决定，Web 未传 |
 | 稳定文档只写了意图，没有合同 | [`part-02-04.md`](../architecture/0002-information-model/part-02-04.md) 第 335 行、[`part-12-14.md`](../architecture/0002-information-model/part-12-14.md) 第 94 行、[`0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md) 第 156 行、`PROJECT-STATUS.md` 第 107/110 行、[`0006-scenarios-and-conformance.md`](../api/0006-scenarios-and-conformance.md) 第 114 行（S05 验收条件之一，未实现） |
 | 全仓无实现、无测试、无 Proposal | 检索 `protect`/`override`/`humanFirst`/`人工优先`（55 处命中全是无关语义）、`candidate`（244 处全是媒体/Job/lease 候选）、`preserve`/`不覆盖`（8 处全是 merge/split 与迁移）；`docs/proposals/` 30 份无相关条目 |

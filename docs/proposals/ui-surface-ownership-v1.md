@@ -50,7 +50,7 @@
 
 结论：**这次重划在读取侧几乎是现成的**。五个对象里四个的反向查询（标签下有什么、收藏夹里有什么、收藏了什么、Topic/Entity 列表）都已经有接口甚至有解析好的标题，只是没有界面。唯一缺口是「所有批注」这一个列表（见[影响](#影响)）。
 
-「堆在一条 Story 上」也有可量化的表现：承载这些区块的 [story-panel.tsx](../../apps/web/src/components/cosmos/story-panel.tsx) 已经 777 行 / 33.7 KB，按 [`code-size-governance-v1.md`](code-size-governance-v1.md) 已进入 30 KB 警戒区、距离 800 行红线只剩 23 行，`story-panel/` 子目录另有 17 个文件。抽屉继续长下去的代价不只是用户看不懂，也包括它很快会被迫拆分——而拆分的正确时机是先把不该在这里的东西搬走。
+「堆在一条 Story 上」也有可量化的表现：承载这些区块的 `story-panel.tsx` 当时已经 777 行 / 33.7 KB，按 [`code-size-governance-v1.md`](code-size-governance-v1.md) 已进入 30 KB 警戒区、距离 800 行红线只剩 23 行，`story-panel/` 子目录另有 17 个文件。抽屉继续长下去的代价不只是用户看不懂，也包括它很快会被迫拆分——而拆分的正确时机是先把不该在这里的东西搬走。**后续**：Task 35 切片 3e 按 ADR-0029 决策 7 删除了这个抽屉（编辑面搬到 `/stories/:id`，见 [`story-edit-surface.tsx`](../../apps/web/src/components/cosmos/story-edit-surface.tsx)），因此本段的文件引用已不再指向仓库里的文件。
 
 ## 目标与非目标
 
