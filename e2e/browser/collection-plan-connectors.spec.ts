@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { planRowOf, planSectionOf } from "../support/story-flow";
+
 /**
  * 切片 3 的验收（AUT-010 / EXT-006 / EXT-007）：产品面能选连接器，并按所选来源定义的
  * manifest schema 渲染字段（含只有 `enum` 没有 `type` 的必填枚举，以及认证提示），
@@ -8,6 +10,9 @@ import { randomUUID } from "node:crypto";
  *
  * 真实来源抓取（OpenCLI 登录态 + 外网）不在浏览器用例里跑，见 Task walkthrough 的
  * 「未运行」项；这里验的是**产品面能把它建出来**，即切片 3 的产品面那一半。
+ *
+ * 连接与计划都在 `/automation` 建（ADR-0029 决策 1：创建去对象页，首页只看）。三条用例
+ * 都不启用计划，所以不用 `story-flow.ts` 的 `ingestFeed`。
  */
 test("builds two Bilibili plans under one connection from the manifest-driven form", async ({ page }) => {
     test.setTimeout(180_000);
@@ -16,8 +21,8 @@ test("builds two Bilibili plans under one connection from the manifest-driven fo
     const hotName = `热门-${suffix}`;
     const feedName = `动态-${suffix}`;
 
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
     // 连接按 Bilibili 连接器建：登录态（OpenCLI profile）归连接，表单只做提示。
     await page.getByLabel("连接名称").fill(connectionName);
@@ -42,22 +47,32 @@ test("builds two Bilibili plans under one connection from the manifest-driven fo
     });
 
     // 两个计划都在同一个连接的分组下，各自带自己的配置与频率。
-    const section = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    const group = section.locator("[data-plan-group]").filter({ hasText: connectionName });
+    const group = planSectionOf(page).locator("[data-plan-group]").filter({ hasText: connectionName });
     await expect(group.locator("li")).toHaveCount(2);
     await expect(group.locator("li").filter({ hasText: hotName })).toBeVisible();
     await expect(group.locator("li").filter({ hasText: feedName })).toBeVisible();
 
     // 服务端是唯一真相：刷新后两个计划都还在，且挂在同一个连接下。
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    const reloadedGroup = page
-        .getByRole("heading", { name: "采集计划" })
-        .locator("..").locator("..")
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    const reloadedGroup = planSectionOf(page)
         .locator("[data-plan-group]")
         .filter({ hasText: connectionName });
     await expect(reloadedGroup.locator("li")).toHaveCount(2);
 });
+
+/**
+ * 展开来源表单。
+ *
+ * `/automation` 保存成功后表单**不会**自动收起（页头按钮停在「关闭表单」），所以第二个计划
+ * 是在同一张还开着的表单上接着填。按当前态决定要不要点开，不赌它是否已经收起。
+ */
+async function openSourceForm(page: import("@playwright/test").Page): Promise<void> {
+    if (await page.getByRole("button", { name: "保存计划" }).isVisible()) {
+        return;
+    }
+    await page.getByRole("button", { name: "新建来源" }).click();
+}
 
 /** 走 manifest 驱动的表单：先选来源定义，再按它声明的字段填配置。 */
 async function createBilibiliPlan(
@@ -69,7 +84,7 @@ async function createBilibiliPlan(
         connectionName: string;
     },
 ): Promise<void> {
-    await page.getByRole("button", { name: "新建计划" }).click();
+    await openSourceForm(page);
     await page.locator("#source-definition").selectOption("source.bilibili@1");
 
     // 认证提示按 manifest 的 auth 声明展示，凭证不在表单里填。
@@ -95,9 +110,9 @@ test("builds a Bilibili search plan from the operation declared by the manifest"
     const suffix = randomUUID().slice(0, 8);
     const searchName = `搜索-${suffix}`;
 
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建计划" }).click();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "新建来源" }).click();
     await page.locator("#source-definition").selectOption("source.bilibili@1");
 
     // 两个操作：默认第一个（fetch）沿用定义级 schema，渲染定义级的 mode/limit。
@@ -120,16 +135,15 @@ test("builds a Bilibili search plan from the operation declared by the manifest"
     // 所以它在计划列表的「未绑定」分组里——按名称在列表行内定位，不用整页文本匹配
     // （来源筛选下拉里也有同名 option）。
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    const planSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    await expect(planSection.locator("li").filter({ hasText: searchName })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    await expect(planRowOf(page, searchName)).toBeVisible();
 });
 
 test("rejects a plan whose declared enum field is left at the empty option", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建计划" }).click();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "新建来源" }).click();
     await page.locator("#source-definition").selectOption("source.bilibili@1");
     await page.getByLabel("名称", { exact: true }).fill(`缺字段-${randomUUID().slice(0, 8)}`);
     // 必填枚举留空：本地就按 manifest 的 required 报错，不发请求。

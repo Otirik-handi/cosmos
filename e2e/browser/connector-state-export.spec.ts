@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 /**
- * ING-012 / ADR-0026 的产品面证据：存储面板的「导出连接器状态」产出可保存的 JSON 文件，
+ * ING-012 / ADR-0026 的产品面证据：`/settings` 存储面板的「导出连接器状态」产出可保存的 JSON 文件，
  * 并且把同一份文件导入回来是幂等的（默认只补缺失）。
  *
  * 断言分两层：浏览器层证明「点按钮 → 得到文件 + 文件名符合约定」，文件内容层证明导出件
@@ -10,8 +10,8 @@ import { readFileSync } from "node:fs";
  */
 test("存储面板导出并回导连接器状态", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "设置", exact: true })).toBeVisible();
 
     const storage = page.getByRole("region", { name: "存储" });
     const downloadPromise = page.waitForEvent("download");

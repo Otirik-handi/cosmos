@@ -23,7 +23,7 @@ export function SplitTargetSelect({
                 className="rounded-sm border bg-card px-2 py-1 text-sm"
                 onChange={(event) => onChange(Number(event.target.value))}
             >
-                <option value={-1}>留在历史壳</option>
+                <option value={-1}>留在本条</option>
                 {successors.map((successor, index) => (
                     <option key={index} value={index}>
                         {successor.title.trim() || `后继 ${index + 1}`}

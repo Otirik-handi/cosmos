@@ -53,6 +53,17 @@ export const sourceFormSchema = z.object({
 
 export type SourceFormValues = z.input<typeof sourceFormSchema>;
 
+/**
+ * 新建来源的起手值：默认来源是 RSS，所以给它的必填字段一个可编辑的起始值。
+ * 首页与自动化页共用同一份，避免两处新建表单的默认值分叉。
+ */
+export const SOURCE_FORM_DEFAULTS: SourceFormValues = {
+    name: "Cosmos RSS",
+    scheduleIntervalMinutes: "30",
+    connectionId: "",
+    config: {feedUrl: "https://example.com/feed.xml"},
+};
+
 export type ProbeState =
     | {status: "idle"}
     | {status: "running"}

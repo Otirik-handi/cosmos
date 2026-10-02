@@ -60,7 +60,7 @@ describe("loadRelatedStories", () => {
         expect(related).toEqual([{
             storyId: "story:2",
             title: "另一个开发事件",
-            reason: "共享分类：开发",
+            reason: "共享标签：开发",
         }]);
     });
 
@@ -88,7 +88,7 @@ describe("loadRelatedStories", () => {
         );
 
         expect(related.map((item) => [item.storyId, item.reason])).toEqual([
-            ["story:2", "共享分类：开发"],
+            ["story:2", "共享标签：开发"],
             ["story:3", "共享实体：Jeff Dean"],
         ]);
     });

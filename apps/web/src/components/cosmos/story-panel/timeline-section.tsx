@@ -10,7 +10,7 @@ import {
 
 export function TimelineSection({ events }: { events: readonly StoryTimelineEvent[] }) {
     return (
-        <section aria-label="时间线" className="border-b pb-4">
+        <section aria-label="时间线" className="flex flex-col gap-2">
             <h3 className="font-medium">时间线（{events.length}）</h3>
             {events.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">

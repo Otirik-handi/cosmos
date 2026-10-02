@@ -146,6 +146,9 @@ export const favoriteItemSchema = z.object({
     targetType: favoriteTargetTypeSchema,
     targetId: z.string(),
     createdAt: z.string(),
+    // 收藏对象的当前标题。整理页的收藏分区要列出收藏过什么，只有 targetId 时
+    // 界面只能显示裸 ID。可选是为了让扩展前的 payload 仍能解析。
+    title: z.string().nullable().optional(),
 });
 
 export type FavoriteItem = z.infer<typeof favoriteItemSchema>;
@@ -173,6 +176,11 @@ export const annotationSchema = z.object({
     actor: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    /*
+     * 目标的显示标题，供「我写过哪些批注」这类跨目标列表直接渲染；目标已被删除时为 null，
+     * 界面按「已不可读」处理，而不是把裸 ID 当标题显示（与收藏列表同一条约定）。
+     */
+    targetTitle: z.string().nullable(),
 });
 
 export type Annotation = z.infer<typeof annotationSchema>;
@@ -207,10 +215,18 @@ export const updateAnnotationCommandSchema = z.object({
 export type UpdateAnnotationCommand = z.infer<typeof updateAnnotationCommandSchema>;
 
 
+/**
+ * 批注查询。两个字段都可选：都不给表示「列出全部批注」，用于整理页的批注分区；
+ * 给了 targetType 就必须给 targetId（反之亦然），只有一半是调用方错误。
+ * 带目标查询时行为与扩展前完全一致。
+ */
 export const annotationTargetQuerySchema = z.object({
-    targetType: targetTypeSchema,
-    targetId: z.string().trim().min(1).max(300),
-});
+    targetType: targetTypeSchema.optional(),
+    targetId: z.string().trim().min(1).max(300).optional(),
+}).refine(
+    (value) => (value.targetType === undefined) === (value.targetId === undefined),
+    "targetType and targetId must be provided together.",
+);
 
 export type AnnotationTargetQuery = z.infer<typeof annotationTargetQuerySchema>;
 

@@ -68,6 +68,49 @@ describe("documentation governance check", () => {
         expect(result.failures).toEqual([]);
     });
 
+    it("accepts links into Next route groups whose paths contain balanced parentheses", async () => {
+        const fixture = await createFixture({
+            "README.md": [
+                "# Fixture",
+                "",
+                "[agent governance](.agents/README.md)",
+                "[page](apps/web/src/app/(shell)/page.tsx)",
+                "[encoded](apps/web/src/app/%28shell%29/page.tsx)",
+                "",
+                "[definition][route]",
+                "",
+                "[route]: apps/web/src/app/(shell)/page.tsx",
+                "",
+            ].join("\n"),
+            "apps/web/src/app/(shell)/page.tsx": "fixture",
+        });
+
+        const result = checkDocumentation(fixture.root, fixture.paths);
+
+        expect(result.failures).toEqual([]);
+    });
+
+    it("does not silently swallow a link whose parentheses are nested", async () => {
+        // 配对的单层括号是 CommonMark 允许的地址写法，嵌套括号不是。这里锁定
+        // 「嵌套括号不会被解析成合法目标」——否则它会被当成通过而掩盖真断链。
+        const fixture = await createFixture({
+            "README.md": [
+                "# Fixture",
+                "",
+                "[agent governance](.agents/README.md)",
+                "[nested](apps/web/src/app/(shell)/x(y)/page.tsx)",
+                "",
+            ].join("\n"),
+            "apps/web/src/app/(shell)/page.tsx": "fixture",
+        });
+
+        const result = checkDocumentation(fixture.root, fixture.paths);
+
+        expect(result.failures).not.toContain(
+            expect.stringContaining("apps/web/src/app/(shell)/x(y)/page.tsx"),
+        );
+    });
+
     it("reports every missing required governance index", async () => {
         const fixture = await createFixture();
         const paths = fixture.paths.filter((path) => path !== "docs/proposals/README.md");

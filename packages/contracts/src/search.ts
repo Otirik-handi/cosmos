@@ -40,6 +40,10 @@ export const feedItemSchema = z.object({
     sourceKind: sourceKindSchema,
     revisionId: z.string(),
     publishedAt: z.string().nullable(),
+    // Story 当前 Revision 的写入者（`human` / `system` / `agent`，见 ADR-0028）。
+    // 列表要能区分「系统/Agent 产生的」与「人工写的」，所以按 Story 投影到每一项。
+    // 可选是为了让扩展前的 payload 与既有调用方仍能解析。
+    producer: z.string().nullable().optional(),
     assets: publicAssetSnapshotSchema.array(),
 });
 

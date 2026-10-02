@@ -435,7 +435,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         actorJson: string | null;
         createdAt: Date;
         updatedAt: Date;
-    }): Annotation {
+    }, targetTitle: string | null = null): Annotation {
         return {
             id: row.id,
             targetType: row.targetType,
@@ -447,7 +447,59 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             actor: row.actorJson == null ? null : parseJson<string>(row.actorJson),
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
+            targetTitle,
         };
+    }
+
+    /**
+     * 批量把「目标」解析成显示标题，键是 `${targetType}:${targetId}`。
+     *
+     * 收藏列表与「我写过哪些批注」都要它，所以只留一个所有者。目标记录可能已被删除：那时标题为
+     * null，界面按「已不可读」处理，而不是把裸 ID 当标题显示。按类型各查一次，避免 N+1。
+     */
+    protected async resolveTargetTitles(
+        rows: readonly { targetType: string; targetId: string }[],
+    ): Promise<Map<string, string | null>> {
+        const idsOf = (targetType: string): string[] => [
+            ...new Set(rows.filter((row) => row.targetType === targetType).map((row) => row.targetId)),
+        ];
+        const storyIds = idsOf("story");
+        const entryIds = idsOf("entry");
+        const topicIds = idsOf("topic");
+        const [stories, entries, topics] = await Promise.all([
+            storyIds.length === 0
+                ? Promise.resolve([])
+                : this.prisma.story.findMany({
+                    where: { id: { in: storyIds } },
+                    select: { id: true, currentRevision: { select: { title: true } } },
+                }),
+            entryIds.length === 0
+                ? Promise.resolve([])
+                : this.prisma.entry.findMany({
+                    where: { id: { in: entryIds } },
+                    select: { id: true, currentRevision: { select: { title: true } } },
+                }),
+            topicIds.length === 0
+                ? Promise.resolve([])
+                : this.prisma.topic.findMany({
+                    where: { id: { in: topicIds } },
+                    select: { id: true, currentRevision: { select: { title: true } } },
+                }),
+        ]);
+        return new Map<string, string | null>([
+            ...stories.map((row): [string, string | null] => [
+                `story:${row.id}`,
+                row.currentRevision?.title ?? null,
+            ]),
+            ...entries.map((row): [string, string | null] => [
+                `entry:${row.id}`,
+                row.currentRevision?.title ?? null,
+            ]),
+            ...topics.map((row): [string, string | null] => [
+                `topic:${row.id}`,
+                row.currentRevision?.title ?? null,
+            ]),
+        ]);
     }
 
     protected async resolveTargetTargetId(
@@ -629,6 +681,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         sourceKind: string;
         revisionId: string;
         publishedAt: string | null;
+        producer: string | null;
     }): Omit<FeedItem, "assets"> {
         return {
             storyId: row.storyId,
@@ -643,6 +696,8 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             publishedAt: row.publishedAt
                 ? new Date(row.publishedAt).toISOString()
                 : null,
+            // 历史壳可能没有当前 Revision，此时 producer 按 null 投影。
+            producer: row.producer ?? null,
         };
     }
 

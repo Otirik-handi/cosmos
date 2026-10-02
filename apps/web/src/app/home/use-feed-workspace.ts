@@ -15,6 +15,7 @@ import {
     toBoundaryIso,
     toDateInputValue,
 } from "./page-runtime";
+import { messages } from "@/copy/messages";
 import { useGuardedList } from "./list-write-guard";
 import type { UseFormReturn } from "react-hook-form";
 
@@ -122,7 +123,7 @@ export function useFeedWorkspace(
             }
             setFeed(result.items);
             setNextCursor(result.nextCursor);
-            ctx.setNotice("已恢复 Feed。");
+            ctx.setNotice(messages.notices.feed.restored);
         } catch (caught) {
             if (isSearchWriteCurrent(generation)) {
                 ctx.setError(readError(caught));
@@ -140,13 +141,14 @@ export function useFeedWorkspace(
         ctx.setError(null);
         // SavedView 合同只有关键词/来源/时间/分类/Topic（LIB-005 的「状态」等条件属 Phase 4），
         // 带了存不下的条件就拒绝保存，而不是让条件被静默丢掉。
-        const unsupported = [
-            values.author?.trim() ? "作者" : null,
-            values.contentKind ? "媒体类型" : null,
-            values.assetStatus ? "录入状态" : null,
-        ].filter((label): label is string => label !== null);
-        if (unsupported.length > 0) {
-            ctx.setError(`保存视图暂不支持这些条件：${unsupported.join("、")}（属 LIB-005，Phase 4）。`);
+        const unsupported: (string | null)[] = [
+            values.author?.trim() ? messages.notices.feed.fieldLabels.author : null,
+            values.contentKind ? messages.notices.feed.fieldLabels.contentKind : null,
+            values.assetStatus ? messages.notices.feed.fieldLabels.assetStatus : null,
+        ];
+        const unsupportedLabels = unsupported.filter((label): label is string => label !== null);
+        if (unsupportedLabels.length > 0) {
+            ctx.setError(messages.notices.feed.viewUnsupported(unsupportedLabels.join("、")));
             return;
         }
         try {
@@ -163,7 +165,7 @@ export function useFeedWorkspace(
             });
             setSavedViewName("");
             savedViewList.writeLocal((await client.listSavedViews()).items);
-            ctx.setNotice(`已保存视图「${trimmedName}」。`);
+            ctx.setNotice(messages.notices.feed.viewSaved(trimmedName));
         } catch (caught) {
             ctx.setError(readError(caught));
         }
@@ -203,7 +205,7 @@ export function useFeedWorkspace(
             setActiveSearch(query);
             setFeed(result.items);
             setNextCursor(result.nextCursor);
-            ctx.setNotice(`已套用视图「${view.name}」，共 ${result.items.length} 条结果。`);
+            ctx.setNotice(messages.notices.feed.viewApplied(view.name, result.items.length));
         } catch (caught) {
             ctx.setError(readError(caught));
         }
@@ -214,7 +216,7 @@ export function useFeedWorkspace(
         try {
             await client.deleteSavedView(viewId);
             savedViewList.writeLocal((await client.listSavedViews()).items);
-            ctx.setNotice("已删除保存的视图。");
+            ctx.setNotice(messages.notices.feed.viewDeleted);
         } catch (caught) {
             ctx.setError(readError(caught));
         }

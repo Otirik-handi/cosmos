@@ -150,10 +150,12 @@ describe("user organization contracts", () => {
                 actor: "user",
                 createdAt: "2026-09-08T00:00:00.000Z",
                 updatedAt: "2026-09-08T00:00:00.000Z",
+                targetTitle: "某条 Story",
             }],
         });
         expect(list.items[0].targetType).toBe("future-target");
         expect(list.items[0].targetRevisionId).toBe("rev-s-1");
+        expect(list.items[0].targetTitle).toBe("某条 Story");
     });
 
     it("parses saved view commands and extends search with label/topic filters", () => {

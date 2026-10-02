@@ -224,7 +224,7 @@ EventSource factory error 不会被包成 `CosmosTransportError`，会以原始�
 - Client、CosmosTransportError、EventSource port 和所有方法：[`packages/transport-http/src/index.ts`](../../../packages/transport-http/src/index.ts)。
 - URL、health schema、connector catalog、SSE parse/close 测试：[`packages/transport-http/src/client-platform.test.ts`](../../../packages/transport-http/src/client-platform.test.ts)。
 - DTO/Zod owner：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)、[`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)。
-- 当前调用方与 error display：[`apps/web/src/app/page.tsx`](../../../apps/web/src/app/page.tsx)。
+- 当前调用方与 error display：[`apps/web/src/app/(shell)/page.tsx`](../../../apps/web/src/app/%28shell%29/page.tsx)（2026-09-24 Task 35 切片 1 由 `apps/web/src/app/page.tsx` 移入路由组 `(shell)`）。
 - 同源 rewrite：[`apps/web/next.config.ts`](../../../apps/web/next.config.ts)。
 
 ## 非目标/边界

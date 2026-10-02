@@ -433,6 +433,8 @@ export class PrismaCosmosRepositoryHelpers3 extends PrismaCosmosRepositoryHelper
             sourceKind: sourceKindSchema.parse(entry.sourceInstance.kind),
             revisionId: entry.currentRevision.id,
             publishedAt: entry.currentRevision.sourcePublishedAt?.toISOString() ?? null,
+            // Story 当前 Revision 的写入者，与 search 路径同义（ADR-0028）。
+            producer: entry.story.currentRevision.producer,
             assets: entry.currentRevision.assets.map((asset) => this.toAssetSnapshot(asset)),
         };
     }

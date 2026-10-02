@@ -2,420 +2,237 @@
 
 本文件是 Task 35 的**唯一过程记录**：每轮的切片、RED/GREEN、实际命令与结果、范围偏差、未运行项、五轴 review finding 都追加在这里，不回改历史记录。当前摘要、范围与门禁在 [`README.md`](README.md)。
 
-## Round 0 · Task 建立（2026-09-24）
+> 2026-09-24 按文档大小治理拆出封口分册：Round 0–3 的逐轮记录移入
+> [`walkthrough/slices-0-3.md`](walkthrough/slices-0-3.md)（只搬位置、不改写条目）。
+> 主文档保留当前状态、门禁与最近几轮。
 
-**本轮性质**：任务建立，**未开始任何实现切片**。
 
-### 已完成
+> 2026-10-01 按文档大小治理再拆一次：Round 4–6 的逐轮记录移入
+> [`walkthrough/rounds-4-6.md`](walkthrough/rounds-4-6.md)（只搬位置、不改写条目）。
+> 主文档保留当前状态、门禁与最近一轮。
+> 2026-10-01 按文档大小治理再拆：Round 7 的逐轮记录移入
+> [`walkthrough/rounds-7.md`](walkthrough/rounds-7.md)（只搬位置、不改写条目）。
+> 2026-10-01 按文档大小治理再拆：Round 8（旧浏览器套件重写）的逐轮记录移入
+> [`walkthrough/rounds-8.md`](walkthrough/rounds-8.md)（只搬位置、不改写条目）。
 
-| 事项 | 结果 |
-| --- | --- |
-| Proposal `frontend-redesign-v1` 转 `accepted` | 维护者 2026-09-24 接受；授权更新稳定文档与创建本 Task |
-| 新增 ADR [`0029`](../../../docs/adr/0029-ui-surface-layout-and-visual-direction-v1.md) | 沉淀三层分工、版面骨架、路由层级、视觉方向、token 轴收敛、断点、外壳级单条 SSE |
-| ADR 索引登记 | `docs/adr/README.md` 追加 0029 条目 |
-| `ui-surface-ownership-v1` 勘误节 | 注记「Story 抽屉」措辞、`/library` 独立页面、标签/收藏夹新建对称化；信息架构决定继续有效 |
-| `neurobook-theme-system` 勘误节 | 注记主题与配色合同被取代、两套轴收敛为单一明暗轴；分层思想与 token 约束继续有效 |
-| 原始需求追加 | `docs/requirements/0001-original-requirements.md` 追加 2026-09-24 条目，含维护者原话要点表与 Agent 的反对/保留 |
-| 本 Task 建立 | 编号 35（维护者分配，不复用 25）；一个 Task 内分四个切片 |
+## Round 9 · 切片 4 行为门禁（2026-10-01）
 
-### 未做
+**授权**：维护者「先提交所有改动，然后继续切片任务」。本轮做切片 4 唯一未做的验收项
+（ADR-0029 决策 7 的刷新边界），也是人工验收第 1 层与第 3 层之间的最后一块门禁缺口。
 
-- **未写任何实现代码**（硬闸门：三层设计已获批，但本 Task 尚未进入实现授权）。
-- **未建 worktree、未建分支、未 commit、未 push**。
-- 未更新 PRD §8 与架构 §11.4 的注记（见下方偏差）。
-- 未更新 `docs/spec/interfaces/0005-web-client.md`（行为未落地，spec 记录当前事实）。
-- 未更新 `PROJECT-STATUS.md`（状态改变时更新）。
+### 判据与实现
 
-### 偏差与说明
+判据原文：「列表页与未在编辑的详情页静默后台重读（保留滚动位置与筛选条件）；**详情页正在编辑时
+不覆盖**，显示『有新变化，重新读取？』由用户决定。」
 
-1. **PRD 与架构的注记未在本轮执行**。Proposal 的「对稳定文档的预期改动」列出了 PRD §8.1–8.3/8.5/8.6 与架构 §11.4 的注记；本轮只改了 Proposal 状态、ADR、两份旧 Proposal 的勘误与原始需求。理由：这两处注记描述的是**落地形态**，而落地形态在切片 3 才产生；现在写会变成对未实现状态的承诺。切片 3 完成时同批更新。
-2. **文档大小**：`docs/requirements/0001-original-requirements.md` 为 51.8 KB，已在红线区且属只增不改的需求真相源，按治理规则允许继续追加；本轮追加为单次事件记录，未拆分该文件。
-3. **Agent 就设计提出的反对意见已留档**：侧栏高度由内容撑开的代价（维护者维持原选择）、i18n 框架的反对（维护者采纳）、「B 会丢上下文」表述过重（已更正）。三条都写在原始需求条目与本 Task 的 Decisions 节。
+- 阅读页订阅 `stories` topic（`useLiveTopic` 通过 ref 转发回调，回调里读到的是最新的编辑状态）。
+- **未在编辑**：静默 `openStory(storyId)`，滚动位置与展开状态都不动。
+- **正在编辑**：只置 `stale`，页面渲染「这条内容在别处有了新变化。你正在编辑的内容没有被改动。」
+  + 「重新读取」按钮；用户点它才重读。
+- 「正在编辑」的判定在编辑面内：以**上次同步时的服务端状态**为基准，比较五份草稿
+  （标题 / 类型 / 细分类型 / 时间范围 / 关键事实）。**基准不能是当前的 `story`**——后台静默重读会
+  换掉它，那样用户什么都没动也会立刻被算成「正在编辑」，从此再也收不到静默重读。
+- 用户确认重读时，阅读页换编辑面的 `key` 让它重挂载：草稿与基准一起重新初始化。这比在编辑面里写
+  「prop 变了就 setState」的 effect 干净——后者会级联渲染，也被本仓库的 React Compiler 规则拦下
+  （本轮先写成 effect，lint 报 `Calling setState synchronously within an effect` 与
+  `Cannot access refs during render` 两条 error，改成换 key 后归零）。
 
-### 验证
+### 门禁
 
-| 命令 / 检查 | 结果 |
-| --- | --- |
-| 新增/修改文档的相对链接解析 | 全部 OK（按各文件自身目录为基准） |
-| `python scripts/size-governance.py --check --baseline docs/doc-governance/docs-baseline.json` | 新增的 `docs/proposals/frontend-redesign*` 文件**未触发**任何门禁；整体 FAIL 的 6 项红线均为既有 Web 文件（`page.tsx` / `story-panel.tsx` / `board-view.tsx` / `product-fixtures.tsx` 等），正是本 Task 切片 3 要重做的对象 |
-| `typecheck` / `bun run test` / 浏览器验收 / `docs:check` 全量 | **未运行**——本轮只改文档，未改代码 |
+`e2e/browser/story-live-refresh.spec.ts`（1 条，5.0s）：① 无未保存编辑时外部改标题 → 标题主体跟着变、
+**不出现提示**；② 编辑标题后外部再改 → 提示出现、**输入框仍是用户那一版**、页面主体也没被换掉；
+③ 点「重新读取」→ 读到新内容、提示消失、编辑面草稿对齐到新内容；全程零控制台错误。
+外部改动走界面同一个命令（`POST /api/v1/stories/:id/revisions`），所以事件是真的。
 
-### 下一步
-
-等待维护者授权进入**切片 1（地基）**。进入实现前需要：① 实现授权；② worktree 与分支授权（AGENTS.md 要求建 worktree 前获批准）。
-
-## Round 1 · 切片 1 地基（2026-09-24）
-
-**授权**：维护者 2026-09-24 授权切片 1 + worktree。
-
-**环境**：worktree `.worktree/t35-foundation`，分支 `feat/t35-frontend-redesign-foundation`，base SHA `da147a5`（与 `origin/master` 同点）。可写文件集合：`apps/web/src/**`。未 commit、未 push。
-
-### 已完成
-
-| 子切片 | 内容 |
-| --- | --- |
-| 1a token 换装 | `globals.css` 重写为 V4 的 token 三层（语义映射 + `--marker`/`--marker-soft`/`--paper` + 形状密度动效，两档圆角，`--elevation-*` 三档阴影）；`theme.ts` / `theme-bootstrap.ts` / `theme-provider.tsx` 收敛为单一 `data-cosmos-appearance`；`theme-switcher` 三选项改为跟随系统/亮色/暗色；`component-lab` 的 `LabThemeId`+`LabColorwayId` 合并为 `LabAppearanceId`，URL 维度由 `theme`+`colorway` 改为 `appearance` |
-| 1a 附带 | 移除 `next/font` 的 Geist 引入——V4 字族合同是系统栈，留着会让中英文出现两种字形 |
-| 1b AppShell | `components/shell/`：`top-bar.tsx`（品牌、全局搜索跳 `/library?q=`、连接状态、明暗切换）、`side-nav.tsx`（内容/管理两组八项，`aria-current` 标记当前项）、`page-placeholder.tsx` |
-| 1c 路由骨架 | 路由组 `(shell)`（顶栏 + 悬浮侧栏）与 `(reading)`（仅顶栏 + 返回）；首页由 `app/page.tsx` 移入 `app/(shell)/page.tsx`，其 7 条 `./home/*` 相对导入改为 `@/app/home/*`；另建 8 个路由（library / topics / entities / system / organize / automation / settings / stories/:id） |
-| 1d live-provider | `components/shell/live-provider.tsx`：单条 `EventSource`、事件→topic 映射表、300 ms 合并、`useLiveTopic` / `useStreamState`；首页移除自建连接，改为订阅 `library` 与 `automation` |
-
-### 过程中发现并修正的三个问题
-
-1. **`LiveProvider` 放错层级会导致切组重连**。第一版放进两个路由组 layout，实测 9 次页面加载产生 9 条 SSE 请求。改为挂在**根布局**：`ThemeProvider > LiveProvider > children`，事件订阅 hooks 经 context 跨路由组存活，与「顶栏/侧栏常驻」的架构一致。
-2. **worktree 需要自己的 Prisma client 与包构建**。首次 `bun run test` 有 50 个文件失败（`Cannot find module '.prisma/client/default'`），`bun run dev:web` 报 `Cannot resolve '@cosmos/logging'`。在 worktree 内执行 `bun run db:generate` 与 `bun run build:packages` 后恢复。
-3. **验证脚本的口径错误（自查发现）**。此前用 `page.goto()` 逐页测 SSE 计数，得出「9 次加载 9 条连接」——但 `goto` 是整页重载，每次重载本就应该新建连接，那不是回归。改为「首载一次 + 其余全部用侧栏链接做 SPA 导航」后，7 次切页新增连接为 **0**。
-
-**一次误判（记录以免重犯）**：截图里画布看起来是白的，一度怀疑 token 没生效；实测 `body` 背景是 `rgb(244,243,238)`（`#f4f3ee`），卡片是 `rgb(255,254,251)`（`#fffefb`），两者只差约 4% 亮度，是设计上有意为之的克制，在缩放后的图片预览里看不出来。**结论来自实测，不来自看图。**
+用例里断言顺序有意为之：先等标题主体换掉再重新展开编辑面——先展开会拿到重挂载前那个还带草稿的输入框
+（第一次跑就是这条假红，注释已写明）。
 
 ### 验证
 
-| 命令 / 检查 | 结果 |
+| 命令 | 结果 |
 | --- | --- |
-| `bun run --cwd apps/web tsc --noEmit` | **0 错误** |
-| `bun run test`（worktree 内） | **134 文件 / 767 用例全部通过**；基线（PROJECT-STATUS 记录 2026-09-23）为 124 文件 / 726 用例，差额来自这段时间的其它切片 |
-| 亮/暗 token 实测 | 亮 `#f4f3ee`/`#1c1f1c`、暗 `#141715`/`#e4e9e3`；`data-cosmos-appearance` 与 `dark` class 同步；字体已是系统栈 |
-| 版面骨架（Playwright，1440×900） | 八个内容页 `navTop=56 / navLeft=20 / searchTop=18` 完全一致，**SPA 切页无漂移** |
-| `/stories/:id` 例外 | 侧栏不存在、返回入口存在、顶栏保留 |
-| 顶栏搜索 | 回车跳 `/library?q=测试关键词` |
-| SSE 连接 | 全过程 **2 条 = 2 次整页文档加载**（首载 + Story 直接访问）；**7 次 SPA 切页新增 0 条** |
-| 代码规模 | 新增外壳文件 12–101 行；`(shell)/page.tsx` 由 802 行降至 736 行（代码规模门禁要求入口 ≤300 行，切片 3 继续拆） |
+| `npx playwright test --config playwright.config.ts story-live-refresh` | **1 通过**，连跑三次稳定（5.0s / 5.0s / 5.1s） |
+| `npx playwright test --config playwright.config.ts`（全量 21 个 spec） | **51 通过 / 0 失败（2.7m，exit 0）** |
+| `bun run --cwd apps/web tsc --noEmit` / `lint` | 0 错误 / 0 error（18 warning，与改动前一致） |
+| 文案扫描 | 754 处 / 46 文件不变（新文案进 `copy/areas/reading.ts`） |
 
-### 未运行 / 已知边界
+## Round 10 · 3a 判据①收尾：批注列表的标题投影（2026-10-01）
 
-- **浏览器验收全量套件未运行**：`bun run test:browser` 需要先 `bun run build` 且要起 API 与 Worker；切片 1 只跑了一次性的 Playwright 版面探针（脚本已删）。
-- 首页仍带旧的页头（「Phase 1 · 本地信息库」）、右侧状态栏与 `max-w-7xl` 容器，与 V3 的版面不完全一致——属**切片 3 的范围**（首页纯看板化时同批处理），本轮未动。
-- `component-lab` 的 token 登记表（`tokens.ts`）仍是旧 token 名（背景/前景/主色/圆角），与新 token 的对应关系待切片 2 一并整理。
-- 未 commit、未 push、未创建 PR。
+**授权**：同上（继续切片）。这一项是 Q1 里「切片 3 还剩 4 件」中的第 1 件，也是 3a 判据①
+唯一没达成的部分。
 
-## Round 2 · 切片 2 组件库（2026-09-24）
+### 做了什么
 
-**授权**：维护者「继续」。仍在同一 worktree 与分支，未 commit。
-
-### 已完成
-
-| 事项 | 内容 |
-| --- | --- |
-| 8 个 primitive | `dialog` / `alert-dialog` / `menu` / `tabs` / `toast` / `select` / `combobox` / `tooltip`，全部基于 Base UI（`@base-ui/react`），对齐项目已有的 class 与 token 写法（`rounded-[var(--radius-control)]`、`shadow-[var(--elevation-*)]`、`text-[13px]` 密度） |
-| 实验室登记 | 新增 `component-lab/primitive-fixtures.tsx`；`registry.tsx` 追加 8 个定义（共 31 个）；`registry.test.ts` 的期望公共模块清单同步；`tokens.ts` 的 token 登记表改为 14 个新 token（画布底/卡片面/阅读面/正文/次要/强调/机器来源/圆角两档…） |
-| toast 组合修正 | Base UI 的 Toast 是「manager 持有队列 → Viewport 遍历渲染」，改为导出 `ToastProvider` / `ToastHost` / `useToast` 三样，`useToast` 返回稳定函数 |
-
-### 过程中发现并修正的四个问题
-
-1. **toast fixture 触发「Maximum update depth exceeded」**。`useToastManager()` 每次渲染返回新引用，把它放进 `useEffect` 依赖 → effect 反复执行 → `add()` 更新状态 → 再渲染。改为 ref 持有；`useToast` 也改用 `useMemo` 返回稳定函数，避免真实页面踩同一个坑。
-2. **弹层用受控 `open` 时实验室失去验证意义**。受控强制打开时组件没走完真实初始化路径：dialog 的 Esc 不生效（焦点不在弹层内）、menu 的内容根本没有渲染。改为非受控 `defaultOpen`，评审者可以真的点、真的用键盘。
-3. **`MenuContent` 的 children 放错层级**。挂在 `Positioner` 上导致 `Popup` 内为空——Base UI 的菜单项必须挂在 `Menu.Viewport` 下。补上 `Viewport` 后菜单项正常渲染，方向键高亮随之生效。
-4. **PowerShell 批量正则替换破坏了文件编码**。用 `Get-Content -Raw` + `-replace` 批量改一个含中文的 `.tsx`，写出后文件变成非法 UTF-8、无法读取，只能删除重写。**教训：含多字节字符的文件不能用 PowerShell 文本管道批量改，必须用编辑工具。** 已删除的损坏文件与新建文件同名，`write` 工具因状态跟踪仍指向旧 inode 而拒绝写入，最终以「写新文件名 → 移动覆盖」绕过。
+- `Annotation` 读取侧新增 `targetTitle: string | null`：目标显示标题的投影，目标已被删除时为 `null`
+  （与 `SpotlightPlacement.targetTitle`、收藏列表的 `title` 同一条约定：**不把裸 ID 当标题显示**）。
+- 批量解析抽成一个所有者：`resolveTargetTitles(rows)` 支持 story / entry / topic 三类，
+  收藏列表与批注列表都改用它（此前收藏那份内联解析只能处理 story / entry，且与批注各写一份）。
+- 整理页批注分区显示 `挂在 Story「标题」上`；目标不可读时显示「（目标已不可读）」。
+- 文档同步：`docs/spec/contracts/0001-public-contracts.md` 的 Annotation DTO 字段表补上 `targetTitle`。
 
 ### 验证
 
-| 命令 / 检查 | 结果 |
+| 命令 | 结果 |
 | --- | --- |
-| `bun run --cwd apps/web tsc --noEmit` | **0 错误** |
-| `bun run test`（worktree 内） | **134 文件 / 767 用例全部通过** |
-| `bunx vitest run apps/web/src/` | 16 文件 / 102 用例通过（含组件实验室 4 个门禁文件 / 27 用例） |
-| 注册表门禁 RED→GREEN | 加 primitive 未登记时 `registry.test.ts` 如期报红（列出 7 个未登记模块）；补登记后转绿 |
-| 8 个 primitive 浏览器渲染 | 全部 `stage=true`、**无渲染循环**；控制台只剩「API 未启动」导致的 SSE MIME 错误（预期，本轮不跑 API） |
-| 键盘路径（V4 要求） | tooltip 由 focus 触发 ✅；dialog 打开与 Esc 关闭 ✅；combobox 方向键高亮 ✅；menu 方向键高亮 ✅ |
-| **对比度实测**（V4 要求必须量） | 亮/暗各 7 组，**14 组全部 ≥ 4.5:1**；最低为亮色 `次要文字/画布` 4.97:1 与 `机器来源/机器来源底色` 4.95:1 |
-| 新增文件规模 | 46–136 行（`primitive-fixtures.tsx` 266 行），均在 400 行舒适区 |
+| `bun run vitest run packages/storage-prisma/src/read-title-projection.test.ts …` | **15 通过**（含新增：三类目标各解析出标题、目标删除后投影为 `null`） |
+| `bun run test` | **784 通过 / 137 文件**（新字段让两处 fixture 缺字段而失败，已按新合同补齐） |
+| `bun run typecheck` / `lint` / 文案扫描 / `docs:check` | 0 错误 / 0 error（18 warning）/ 754 处不变 / 927 文件 0 失败 |
 
-### 未运行 / 已知边界
+## Round 11 · 3c 遗留：收藏夹改名 + 两处偶发（2026-10-01）
 
-- **三档断点（1024 / 1280 / 1440）未出图验证**：E5 定义的三档断点属版面规则，切片 1 只在 1440 px 测过导航位置；断点本身的验证并入切片 4 的门禁断言。
-- **`prefers-reduced-motion` 未在浏览器里实测**：token 已归零（`globals.css` 的媒体查询），但没有断言证明动效确实停止。
-- `test:browser:component-lab` 未运行（需要 build）。
-- 首页旧页头与右侧状态栏仍在，属切片 3 范围。
-- 未 commit、未 push、未创建 PR。
+### 收藏夹改名与改描述
 
-## Round 2b · 维护者验收发现的两个缺陷（2026-09-24）
+命令链（合同 / 传输 / API 路由 / 仓库）本来就有 `updateCollection`，缺的只是界面：展开收藏夹后
+只有成员列表与移除，没有改名入口——而分区顶部的注释还写着「新建、改描述、删除与增删成员都在这里」，
+与实际不符（已改）。现在展开区里有「改名或改描述」→ 名称 + 描述两个字段 → 保存/取消，
+保存后回执、重读详情并刷新列表。
 
-维护者在实验室里实际点击后报告：**「Dialog 组件点击后没有对话框弹出」**。复查确认是两个真实缺陷，且**都是我自己先前的验证方法掩盖掉的**。
+**「收藏夹不能加成员」不再是缺口**：按 ADR-0029 §3「关联就地」，把某条 Story 放进收藏夹是那条
+Story 上的动作（Story 页勾选），对象页只负责对象的字段。分区注释已按这条改写，不再把它记成待办。
 
-### 缺陷 1：Dialog / AlertDialog 的触发器从未接上
+**标签改名仍缺**：`updateLabel` 这条命令在合同、应用端口、仓库、API 里**都不存在**，要实现得补一整条
+竖切（合同 + 命令 + 事件 + 路由 + 界面 + 测试），不是纯界面工作。留在 Follow-ups。
 
-`primitive-fixtures.tsx` 里把 `<Button>` 直接放在 `<Dialog>` 内，**没有用 `DialogTrigger` 包裹**。Base UI 的触发器要靠 `Trigger` 组件接收 ref 并合并 props（`render={<Button />}`），直接放普通按钮只会得到一个普通按钮。
+### 全量跑里的两处偶发（一处已修）
 
-证据：点击前触发器按钮的 `data-slot` 是 `button` 而不是 `dialog-trigger`，`aria-haspopup` 为 `null`；点击后弹层与遮罩数量均为 0，且控制台无报错。
+第 4 次全量跑起，两次全量各挂了一条**不同的**用例，且都在单跑时通过：
 
-**为什么先前没发现**：上一轮的验证用 `defaultOpen`（自动打开）判断「组件能渲染」，而受控/初始打开恰好绕过了触发路径。**教训：验证交互组件必须走真实的交互路径（点击、键盘），不能用初始状态代替。**
+1. `phase2-organization.spec.ts` 的 feed 区块用例（1 次）：未见失败现场（被后续运行覆盖），
+   单跑与随后两次全量都通过。**未定性**。
+2. `layout-and-budget.spec.ts` 的「断言有效性自证」（1 次，**已修**）：对照组在首屏某一帧量到的
+   盒子不满足版面断言，于是这条本该确定性的自证变成随机假红。修法与 1024px 那条同源——
+   先 `expect.poll` 到版面稳定，再拿稳定的盒子做实验组。连跑三次通过。
 
-修复：两个 fixture 改用 `DialogTrigger` / `AlertDialogTrigger` 的 `render` 属性包裹按钮。
+修完后的全量为 **51 通过 / 0 失败**。
 
-### 缺陷 2：Combobox 的输入过滤没有生效
-
-我按「自己过滤数组再 map」的方式实现，输入「定价」后 4 条仍全部显示。Base UI 的 Combobox 是**由 `Combobox.List` 的函数子节点接收组件已过滤的条目**；调用方不应自己过滤。
-
-修复：`ComboboxList` 改为要求函数子节点（`children: (item, index) => ReactNode`），不要 `map` 一个外部数组；fixture 同步改为函数子节点写法。**这个 primitive 的合同本身就是交付物**——如果保持错误用法，切片 3 的每个选择器都会重犯。
-
-### 修复后的完整验证（真实点击路径）
-
-| 组件 | 结果 |
+| 命令 | 结果 |
 | --- | --- |
-| dialog | 点击打开 ✅ · Esc 关闭 ✅ · 关闭后焦点回到触发元素 ✅ |
-| alert-dialog | 点击打开 ✅ · 取消关闭 ✅ · 确认键为 destructive ✅ |
-| menu | 点击打开 ✅ · 4 个菜单项 ✅ · 方向键高亮 ✅ · Esc 关闭 ✅ |
-| select | 点击打开 ✅ · 4 个选项 ✅ |
-| combobox | 点击展开 ✅ · 输入「定价」过滤为 **1** 条 ✅ · 无匹配时显示空态 ✅ |
-| tooltip | 键盘 focus 触发 ✅ |
+| `npx playwright test --config playwright.config.ts phase2-organization --grep "organizes a Story"` | 1 通过（含新增的改名断言：界面改名 + 服务端 `name`/`description` 都变） |
+| `npx playwright test --config playwright.config.ts`（全量） | **51 通过 / 0 失败（2.6m）** |
+| `typecheck` / `lint` / 文案扫描 | 0 错误 / 0 error（18 warning）/ 754 处不变 |
 
-`failures: 0`。同轮 `bun run test` 仍为 **134 文件 / 767 用例全部通过**，`tsc --noEmit` 0 错误。
+## Round 12 · 切片 3/4 收尾审计：把三处「未验证」全部验证掉（2026-10-01）
+
+维护者要求确认切片 3/4 除已移交给新 task 的两项外没有别的未完成。逐条复查后，此前标「未验证／
+无法回溯」的三处都能验证，已全部补上证据。
+
+### ① 切片 4 预算门禁的「首屏 JS 增量 ≤ 30 KB gzip」（此前记「无法回溯测量」）
+
+回到切片 1 之前的提交 `da147a5` 重新构建，与当前版在**同一探针、同一 API、同一时点**下量：
+
+| 版本 | `load` 时点（首屏 JS） | 之后 3 秒（含路由预取） |
+| --- | --- | --- |
+| 基线 `da147a5`（旧单页） | 298.1 KB / 7 个脚本 | 298.1 KB / 7（当时没有外壳，无预取） |
+| 当前（新 IA 首页） | **289.7 KB / 14 个脚本** | 363.2 KB / 21 个脚本 |
+
+**增量 = −8.4 KB，在预算内**，判据达成。两点值得记：
+
+- **口径**：E7 量的是**首屏** JS，即到 `load` 事件为止加载的脚本（`encodedBodySize`，gzip 传输体）。
+  新外壳的导航链接会被 Next 预取，`load` 之后还会再拉 7 个脚本（+73.5 KB）——那不属于首屏，
+  但**任何「等 3 秒再量」的做法都会把它算进去**，得出「新首页比旧页重 65 KB」的错误结论。
+  我第一遍就是这么量的，差一点写出一条假的预算违规。
+- **计量步骤**：`git checkout da147a5` → 清 `apps/web/.next`（**必须先清**：dev server 在当前分支留下的
+  `.next/dev/types/validator.ts` 会让基线构建因找不到新路由而失败）→ 带 `COSMOS_API_URL` 跑
+  `bun run build` → `next start` → 探针量 → 切回分支重建。
+
+### ② 切片 4 的 V6 复审清单收口（此前只核了一半）
+
+原文两条：`feed-browser.tsx` 界面上的「分类」与裸 `Topic`；首页徽标「Phase 1 · 本地信息库」与副标题已过时。
+
+- 「分类」与裸 `Topic`：用户可见文案已改为「标签」「话题」（`copy/areas/common.ts` 的 `topic: "话题"`、
+  `organize.labels: "标签"`，检索区是「按标签筛选」）；`feed-browser.tsx` 里剩下的 `分类`/`Topic`
+  只在**代码注释与标识符**里，不是界面文案。
+- 「Phase 1 · 本地信息库」徽标与副标题：`apps/web/src` 已无这两个字符串——切片 3b 删页头时一并去掉。
+
+### ③ 切片 3a 判据③「写入合同 diff 为零」
+
+查那四个只读查询的落地提交 `1c4e0aa`：改动集中在 docs、读取侧合同（`entity`/`topic`/`user-organization`）、
+仓库读取实现、传输客户端与一个新的读取投影测试；**`*CommandSchema` 的行一行未动**，也没有 prisma schema
+或 migration 改动；`repository-port.ts` 的唯一改动是把批注查询的目标参数改成可选（只读参数）。
 
 ### 结论
 
-维护者的一次实际点击，暴露了两个被「看起来能跑」掩盖的接线错误。**这两个缺陷都不在类型系统或单元测试的覆盖范围内**——它们只在真实交互中显现。后续切片必须保留「真实点击路径」的验证方式，不能退回初始状态检查。
+切片 3 与切片 4 除已移交新 task 的两项（`/topics/:id`、`/entities/:id` 详情页；标签改名）外，
+**没有其它未完成项**：3a①-③、3b①-③、3c①-②、3d①-③、3e①-③ 与切片 4 的全部五项均已达成并有证据。
 
-## Round 2c · 维护者验收与 FeedBrowser 顺手修改（2026-09-24）
+## Round 13 · 独立五轴审查与四条 Required 的修复（2026-10-01）
 
-### 验收结果
+**授权**：维护者「检查 Task 35 是否可以闭合」。仓库唯一完成定义第 5 条要求
+「所有 Critical 和 Required review finding 已解决」，而本 Task **此前没有任何 review 记录**——
+这是闭合前的真缺口。于是派了一个**只读**的独立审查者（不共享本会话上下文），按仓库生命周期
+第 6 阶段审 `612bc87..HEAD`（179 文件、+12773/−5238），先读测试再读实现。
 
-维护者 2026-09-24：**「这样刚好，看起来不错，组件这部分切片验收通过。」** 切片 2（8 个 primitive + 实验室登记 + 键盘/对比度验证）验收通过。
+### 审查结论
 
-### 同轮顺手修改：FeedBrowser 搜索区排布
-
-维护者在验收过程中另提了三条布局要求，直接落在 `components/cosmos/feed-browser.tsx`（**该文件不属于切片 2 的交付范围**，见下）：
-
-| 维护者要求 | 实现 | 实测 |
-| --- | --- | --- |
-| 关键词框视觉占比最大 | 主搜索行独占一行，字号 13→15px、高度 36→45px（筛选控件保持 32px） | 宽 512px，同行最宽 |
-| 两个时间框同一行，`<from> - <to>` 形式 | 同一行并排，中间「至」；随后按维护者要求**去掉「从」**以使左边界对齐 | 两框 `top` 相同；三档宽度下左边界与搜索框一致 |
-| 搜索按钮与关键词框在一起 | 紧贴其右侧同排 | 按钮 `left` = 搜索框右边界 |
-| 关键词框与下方距离 +12px | 行距 10 → 22px | 实测 22px |
-
-顺带把三个 `<select>` 的 `rounded-lg` 改为 `rounded-[var(--radius-control)]`，对齐 V4 的两档圆角。**无障碍标签（「开始日期」「结束日期」「搜索已保存内容」）全部保留**，浏览器验收里按标签定位的断言不受影响。
-
-验证：`tsc --noEmit` 0 错误；`bunx vitest run apps/web/src/` 16 文件 / 102 用例通过；1440 / 1280 / 1024 三档均无横向溢出；`feed-browser.tsx` 现 447 行。
-
-### 待维护者决定：这次改动的归属
-
-FeedBrowser 是**过渡组件**——按 ADR-0029 决策 3，检索工作台在切片 3 会整体搬到 `/library`，届时它的布局与主题还会再统一一次。因此这次修改有两种处理方式：
-
-维护者 2026-09-24 裁定：**保留**。改动随本分支进入切片 3，在其基础上继续调整。
-
-## Round 2d · 提交切片 1 与 2（2026-09-24）
-
-维护者授权：**commit 切片 1+2**（未授权 push、PR、merge）。
-
-| commit | 内容 | 范围 |
-| --- | --- | --- |
-| `a00597e` | `feat(web): give the UI one appearance axis, a floating shell and a single event stream` | 切片 1：token 换装、单一明暗轴、AppShell、路由组、外壳级单条 SSE。27 文件 |
-| `374c6d6` | `feat(web): add the eight primitives the new pages need, with lab scenes` | 切片 2：8 个 primitive + 实验室登记 + token 登记表 + FeedBrowser 排布。15 文件 |
-
-**提交前检查**：暂存区逐项核对，`git diff --cached --name-status` 确认只含该切片文件；未用 `git add -A`。切片 1 提交时 Git 自动把 `app/page.tsx → app/(shell)/page.tsx` 识别为 `R093` 重命名。
-
-**提交后复核**：
-- `git diff --stat master..HEAD`：**42 文件，2317 插入 / 385 删除**；
-- 全部改动都在 `apps/web/` 内，无跨模块污染；
-- `tsc --noEmit` 0 错误；`bun run test` **134 文件 / 767 用例通过**；
-- 工作树 `git status` 干净；临时 commit message 文件建在仓库外并已删除。
-
-**未做**：未 push、未创建 PR、未 merge。分支 `feat/t35-frontend-redesign-foundation` 仍只存在本地 worktree。
-
-### 下一步
-
-切片 3（四个只读查询 + 十个页面搬迁 + 首页纯看板化 + 抽屉表单同批删除）尚未开始，等待授权。
-
-## Round 3 · 切片 3 拆法与 3a 四个只读查询（2026-09-24）
-
-### 拆法复核（维护者 2026-09-24 确认）
-
-维护者要求先看拆法。**结论：切片 3 不宜作为一次交付**——10 个页面 + 4 个接口 + 3 个超线文件混在一起时，验收无法判断哪块坏了。拆成 5 个子切片，**每片完成后停下验收**：
-
-```text
-3a 四个只读查询 ──┬─→ 3b 内容组 5 页
-                  ├─→ 3c 管理组 3 页
-                  └─→ 3d Story 阅读页 ──→ 3e 规模与门禁收口
-```
-
-拆法依据之一：现有 5 个 workspace hook（约 1,600 行）**已按域分开**，每页只需挂载自己那几个，搬迁的机械难度低于文件体量给人的印象。维护者同时裁定**集中文案模块放在 3e**（页面搬完文案才稳定）。
-
-### 3a 已完成（commit `1c4e0aa`）
-
-| 落点 | 扩展 |
+| 轴 | 结论 |
 | --- | --- |
-| `TopicDetail.members` | 补成员 Story 的当前标题 |
-| `EntityDetail.stories` | 补关联 Story 的当前标题 |
-| `FavoriteItem` | 补收藏对象标题（Story 与 Entry 两条解析路径） |
-| `GET /annotations` | 目标改为可选；不给表示「列出全部批注」；两者必须成对 |
+| 正确性 | 无 Critical、无数据损坏类缺陷；1 条 Required（占位页显示裸 ID） |
+| 简单性 | 无 Required；2 条 Nit |
+| 架构 | 2 条 Required（同一页两个收藏写入口；禁用词门禁不覆盖 `copy/**`） |
+| 安全 | **未发现问题**（唯一 `dangerouslySetInnerHTML` 是静态常量；外部内容全部走 React 文本子节点；图片只从同源 `/api/v1/assets/:id`；媒体 URL 限 http/https 且有 `ftp://` 拒绝用例） |
+| 性能 | 1 条 Required（预算门禁量的是 400 KB 绝对值，不是 E7 的增量） |
 
-三处标题都按**批量查询**解析（对齐既有 `label(id)` 的做法），不退化为 N+1；目标没有当前 Revision 或已被删除时投影 `null`。**写入合同 diff 为零**（`*CommandSchema` 未动）。
+另有 10 条 Optional、3 条 Nit、11 处「测试没真正覆盖的合同」。
 
-### 过程中发现并修正的三个问题
+### 四条 Required 的修复
 
-1. **仓库门禁缺陷：链接正则不支持配对括号**。`scripts/check-documentation.ts` 用 `[^\s)]+` 匹配链接目标，遇到 `(` 就在那里截断；而 `apps/web/src/app/(shell)/` 是**仓库第一个含括号的目录**，于是 8 处指向路由组的链接全被误报成断链。改成支持配对括号（命名捕获组，避免 `<...>` 与裸地址两种写法共享编号），补两个用例锁定「单层配对括号通过」与「嵌套括号不被误解析成合法目标」两侧行为；受影响链接同时编码为 `%28`/`%29`。
-2. **切片 1 打断了 8 处文档链接，当时未察觉**。`page.tsx` 移入路由组后，5 个文档里的 8 处引用失效——**这正是 AGENTS.md 警告的「引用被移动文件的文档要与移动同批修正」，我在切片 1 漏做了**。已同批修正路径，并在两份 Proposal 的勘误节与 spec 里标明：**行号已随移动失效**（例如原 `:500` 现在是 `onSaveMediaPolicy`），保留行号仅为止损取证，引用前须按内容重新定位。
-3. **落地注记不能追加到已超标的文档**。`docs/api/0002-product-service-api.md` 已超健康区 8.5 KB，治理目标是「登记值与条目只减不增」，而初版把它加到 43.5 KB。改为新建分册 `docs/api/0002-product-service-api/landing-notes.md`（2.6 KB），主文档只留三行指针，**净减 1.2 KB**。
+1. **禁用词门禁完全不覆盖 `copy/**`**（`scan.ts` 的 `SKIPPED_DIRECTORIES` 含 `copy`，而
+   `messages.test.ts` 只读内联扫描的结果）——**迁移得越彻底，门禁越空**，与「命中即失败」相反。
+   修法：`messages.test.ts` 新增一条直接遍历 `messages` 的断言（字符串值 + 用占位实参求值带参文案，
+   求不出值的显式记成问题而不是静默跳过），且**不过中文字面量过滤**，所以 `Revision` 这类纯拉丁词
+   也能抓到。首跑覆盖 212 条字符串值、**零命中**；`scan.ts` 的注释写明「跳过 `copy` 是为了量内联残留，
+   禁用词由那条测试负责」。
+2. **`/stories/:id` 同一页两个收藏写入口**（动作区按钮与编辑面的 `story-favorite-toggle` 调同一条命令，
+   违反 ADR-0029 决策 1，也是 3c 验收 ② 要清的形态）。修法：删掉编辑面那一块及其 prop 链
+   （`organization.tsx` → `organization-editor.tsx` → `story-edit-surface.tsx` → 阅读页），
+   动作区保留唯一入口；两条 spec 断言同批改，并新增「整页只有 1 个收藏按钮、编辑面里 0 个」。
+3. **两个占位详情页把内部 ID 显示给用户**（我自己 Round 8 加的 `<p className="font-mono">`）。
+   判据 R3 与「不把裸 ID 当标题显示」是同一条规矩，本 Task 还为此删过阅读页的调试页脚。
+   修法：删掉那两行，页面连 `params` 都不再需要（顺带去掉 `decodeURIComponent` 在畸形转义下的
+   500 风险）。**同类还有一处**：看板 Spotlight 区块的 `targetTitle ?? targetId` 回退（搬迁前就有，
+   本 Task 未登记）→ 改成「（目标已不可读）」，与收藏/批注分区一致。
+4. **预算门禁没量它声称的东西**：断言写的是 400 KB 绝对值，等于给 +110 KB 的回归开绿灯。
+   修法：上限改成**基线 + 预算**（298.1 KB + 30 KB，注释写明基线的来源是 Round 12 对 `da147a5`
+   的实测），并把取样点移到 **`load` 事件那一刻**（`addInitScript` 在 load 时快照脚本体积）——
+   新外壳的导航预取发生在 `load` 之后（实测 +73.5 KB），等几秒再量会得出错误的「重了 65 KB」。
 
-### 一次误判（记录以免重犯）
+### 顺手修掉的 Optional 与门禁盲区
 
-用 PowerShell 的 `Get-Content | Measure-Object -Line` 读中文文档时报出「109 行」并显示乱码，一度判定文件被损坏。实际 `LF=222`、`ReadAllText` 验证为**合法 UTF-8**——是 PowerShell 控制台编码问题。**中文文件的读取与核对要用 read/grep 工具，不要用 PowerShell 文本管道**（此前用 PowerShell 批量正则改文件已真实损坏过一个 `.tsx`，两条教训同源）。
+- **O4** 看板区块回退显示裸 ID（见上）。
+- **O6** `live-provider.tsx` 的注释说「Job 成功没有独立事件」与事实不符（`job.succeeded.v1` 存在），
+  已改成准确表述并列出未映射的三个事件类型及理由。
+- **O7** 整理页批注分区的注释还写着「没有标题投影」，而它正在用 `targetTitle`。
+- **O9** 1024px 那条的注释声称「整组不渲染」，实现是 `max-[1023px]:hidden`（DOM 与 JS 仍在）——
+  注释改成只声称「不可见」。
+- **覆盖缺口 #8**：`story-reading.spec.ts` 的正文 16px/1.8 断言被 `if (count > 0)` 包着，
+  元素消失时用例照样绿 → 改成先断言正文块可见，并补上「阅读列 ≤ 544px」。
+- **覆盖缺口 #9**：取数次数门禁统计了整个用例会话的请求 → 改成进入阅读页时清零计数器。
+- **覆盖缺口 #3**：「写入口唯一性」只按 4 个创建按钮名做黑名单 → 新增收藏入口的唯一性断言。
+
+### 顺带查清一处反复出现的偶发
+
+`phase2-organization.spec.ts` 的 feed 区块用例在两次全量/整文件跑里挂过、单跑必过。查清后发现
+**断言用错了标记**：看板区块渲染成 `listitem`/`button`（页面级阅读流才是 `article`），
+`toContainText(sourceName)` 在区块尚未取到数时假红。改成「先等区块有 listitem，再断言含本用例来源、
+且不是空视图提示」。整文件连跑两次 8/8 通过。
+
+
+### 未修、已登记的审查发现
+
+Optional/Nit 里剩下的：O1 纯拉丁禁用词对内联文案仍不可达（`copy/**` 已覆盖）、O2 另两条「移除」动作
+各有两处入口（取消收藏、删除视图）、O3 实验室登记门禁不扫 `components/shell/**`、
+O5 合并窗口是去抖而非节流（无 maxWait）、O8 点「重新读取」会连带把编辑面收回折叠态、
+O10 路由切换预算余量只有 2.7×、N1 `listAnnotations` 在只给 `targetType` 时静默降级成列出全部、
+N2 40+ prop 压成一行、N3 context value 未 memo。覆盖缺口里剩下的 6 条（增量之外的四条草稿分支无门禁、
+SSE 未覆盖阅读页例外路由、entry 标题投影的空断言、纯文本渲染无载荷 fixture、断言自证只证纯函数、
+`e2e/` 不在 typecheck 覆盖内）一并进 Follow-ups。
 
 ### 验证
 
-| 命令 / 检查 | 结果 |
+| 命令 | 结果 |
 | --- | --- |
-| `bun run typecheck` | **0 错误** |
-| `bun run test` | **135 文件 / 774 用例通过**（较切片 2 的 767 增加 7：3a 新增 5 个行为测试 + 检查器新增 2 个） |
-| `bun run docs:check` | **871 文件 0 失败**（修复前 8 处断链） |
-| 新行为测试 | 锁定三处标题解析、收藏目标消失时标题为 `null`、不带目标返回全部而带目标仍过滤 |
-| 写入合同 diff | **为空**（`*CommandSchema` 未动） |
-
-### 未运行 / 已知边界
-
-- **浏览器验收与真人验收未运行**：3a 只加读取侧投影，**无界面变化**，界面验收属 3b/3c 的范围。
-- `docs/spec/interfaces/0005-web-client.md` 只改了引用路径；其内容更新仍待切片 3 行为落地。
-- 主工作区仍有会话开始前就存在的未提交改动（`Phase-2-UNDO.md` 半移动、`docs/Phase-1-2-AUDIT.md` 链接写成 `docs/xxx`），导致在主工作区跑 `docs:check` 会红（61 处，**与本分支无关**）。属维护者资产，未处理。
-- **2026-09-29 更正：上条已失效**——那批改动已收口：`Phase-2-UNDO.md` 连分册目录 `Phase-2-UNDO/` 一并搬入 `docs/`（分册正文链接按新目录深度修正）、`docs/Phase-1-2-AUDIT.md` 的内部链接改按 `docs/` 出发；主工作区 `bun run docs:check` 现为 **865 文件 0 失败**。
-
-## Round 4 · 切片 3b 内容组五页（2026-09-24）
-
-**授权**：维护者「继续」。分两次提交：`976147c`（中期检查点：producer 字段 + 首页拆分）与 `7a35663`（四页建成）。
-
-### 已完成
-
-| 页 | 内容 |
-| --- | --- |
-| `/` 首页看板 | 纯看板 + 系统产出区块；删掉页头、错误/通知横幅、右侧状态栏（Entities/连接/存储）、整套检索区、运行记录。736 → 598 行 |
-| `/library` | 整套检索工作台（关键词 + 七个筛选维度 + 已保存视图 + 结果分页）；顶栏 `?q=` 挂载时执行一次 |
-| `/topics` | 只读列表 + 跳转（新建与编辑留 3c） |
-| `/entities` | 只读列表 + 跳转（同上） |
-| `/system` | 运行记录（从首页搬入）+ 系统产出列表 |
-
-**新增组件** `SystemOutputBlock`：列出由系统或 Agent 产生的 Story，用 marker 语义色标记机器产出、另标注人工编辑过的；已登记组件实验室（三场景：机器产出 / 混合 / 空）。
-
-**读取侧扩展**：列表读端点（`search` / `feed`）新增可选 `producer` 字段。
-
-### 过程中发现并修正的问题
-
-1. **`producer` 有两条映射路径，第一版只改了一条**。`search` 走原始 SQL 拼 select、`feed` 走 Prisma 查询与 `toFeedItem` —— 两个独立实现。行为测试直接报出 `producer: undefined`，两处都改完才通过。这是「同一语义两个实现」的典型案例，测试抓住了它。
-2. **三个 React 编译器报错：渲染期写 ref**。`useToast`、toast fixture 及相关代码里的 `managerRef.current = manager` 是上一轮为规避无限重渲染加的，但**渲染期访问 ref.current 会阻止编译器优化**，也让「这次渲染读到哪一版」不确定。改为在 effect 里同步；修完 `lint` 从 3 error 降到 **0 error**。
-
-### 一次纪律问题（同类第三次，必须记录）
-
-**用 PowerShell 文本管道改含中文的源文件，再一次把文件写坏**（`read-title-projection.test.ts` 的中文断言与注释丢失，只能删除重写）。本会话同类事故共三次（另两次是 `primitive-fixtures.tsx` 与对 `ui-surface-ownership-v1.md` 的误判）。
-
-**根因与纪律**：`Get-Content -Raw` + `-replace` + `Set-Content` 会改变编码与行尾，含多字节字符的文件必坏。**只读用 read/grep 工具，写入一律用编辑/写入工具；PowerShell 只用于 git、测试、文件计数等不触碰文件内容的操作。**
-
-### 验证
-
-| 命令 / 检查 | 结果 |
-| --- | --- |
-| `bun run typecheck` | **0 错误** |
-| `bun run lint`（apps/web） | **0 error**；52 个 warning 为拆页后残留的失效声明，属切片 3e 清理范围 |
-| `bun run test` | **135 文件 / 775 用例通过** |
-| `bun run docs:check` | **872 文件 0 失败** |
-| 组件实验室门禁 | 通过（31 个定义，新增 `system-output-block`） |
-| 浏览器（Playwright，1440×1000） | 五页均渲染；导航位置一致（`navTop=56`）；无横向溢出；**占位文案已全部消失**；首页探针确认检索区与 Entities 面板不存在 |
-
-### 未运行 / 已知边界
-
-- **真人验收与真实数据验收未运行**：本机未起 API，页面级 500 属预期。
-- `/topics`、`/entities` 目前**只读**：新建与编辑入口属 3c。
-- 来源表单、连接面板与采集计划列表**暂留首页**（属 `/automation`）：现在搬走会先出现「来源配不了」的空窗期，3c 与旧表单删除同批处理。
-- `/topics/:id`、`/entities/:id` 详情页与 `/stories/:id` 阅读页仍是占位。
-
-## Round 5 · 切片 3c 管理组三页（2026-09-24）
-
-**授权**：维护者「完成下一个切片」。提交 `a998c7c`。
-
-### 已完成
-
-| 页 | 内容 |
-| --- | --- |
-| `/organize` | 标签 / 收藏夹 / 收藏 / 批注 / 已保存视图 五分区，`?tab=` 与 URL 同步 |
-| `/automation` | 来源表单 + 采集计划 + 连接 + 运行记录（从首页整体搬入） |
-| `/settings` | 存储与数据管理 |
-| Story 抽屉 | **删除四个创建表单**（新建话题/Entity/标签/收藏夹），保留下沉到抽屉的关联与标记动作 |
-
-**「创建只去对象页」第一次真正成立**：做法是在页面层不再传 `onCreateTopic` / `onCreateEntityLinked` / `onCreateLabel` / `onCreateCollection`，组件里的 `onCreateX &&` 守卫让表单自然消失。**没有删组件代码**——那四个 prop 本来就是可选的；这样 Story 抽屉仍能挂到已有话题/Entity、打已有标签、勾选已有收藏夹，也就是「关联就地、创建去对象页」。
-
-首页随拆随瘦：**736 → 590 行**。`/organize` 按分区拆文件（77–202 行/个），没有再制造超线文件。
-
-### 过程中发现并修正的问题
-
-**我自己引入的 5 个 lint error**：五个分区都用「`useCallback` 载入 + `useEffect` 调用」的写法，`react-hooks/set-state-in-effect` 报「在 effect 里同步调用 setState 可能引发级联渲染」。与 `/system` 同一条规则、同一处理：加说明性豁免（load 内部先 `await` 再 setState，不是同步触发）。修完 lint 回到 **0 error**。
-
-### 已知缺口（本切片范围内无法补齐，已记入）
-
-1. **标签与收藏夹都没有改名命令**，只能删了重建；已保存视图同样。
-2. **收藏夹不能在这里加成员**：加入需要 Story 选择器，属切片 3d。
-3. **批注没有标题投影**（只有 `targetType`/`targetId`），列表里只能显示正文与它挂在什么类型上；要跳回被批注的内容需要另一次查询。
-4. 首页仍留着来源表单与采集计划（现已可从 `/automation` 使用）；首页那两份属切片 3e 的清理与 `board-view.tsx` 拆分。
-
-### 验证
-
-| 命令 / 检查 | 结果 |
-| --- | --- |
-| `bun run typecheck` | **0 错误** |
-| `bun run lint`（apps/web） | **0 error**（54 warning，均为拆页后残留的失效声明，属 3e） |
-| `bun run test` | **135 文件 / 775 用例通过** |
-| 浏览器 | 三页均渲染、无占位文案、无横向溢出；五个分区逐个切换成功且 URL 同步正确（`?tab=collections/favorites/annotations/views`）；无页面级错误 |
-| 创建表单不可达 | 代码层确认：四处 `onCreateX &&` 守卫仍在，页面不再传回调 |
-
-### 未运行
-
-- API 未启动，页面级 500 属预期；未做真实数据的增删改验收（属维护者真人验收）。
-- Story 抽屉的视觉验收未做：`/stories/:id` 仍是占位，抽屉在首页打开；本机未起 API 无法取到 Story。
-
-## Round 6 · 切片 3d Story 阅读页（2026-09-24）
-
-**授权**：维护者「直接进 3d」。提交 `f4b67ea`。
-
-### 已完成
-
-`/stories/:id` 从占位变成真的阅读页，是工作区里唯一的 `(reading)` 路由（只有顶栏与返回入口、无侧栏）。
-
-版面按 V4 排版规格落地，**逐项实测**而不是只写类名：
-
-| 规格 | 实测值 |
-| --- | --- |
-| 正文卡片宽 | **640px** |
-| 标题字体 | **Charter**（衬线） |
-| 正文 | **16px / 行高 28.8px = 1.8** |
-| 阅读列 | **544px = 34em** |
-
-- **正文取主成员当前 Revision 的 contentText**：产品里第一次显示条目正文。
-- **复用 story-panel 的只读块**（关键事实、时间线、证据来源、相关内容、来源成员）。理由不只是省事：浏览器验收依赖它们的 `data-story-*` 锚点（实测 e2e 用到 `data-story-key-facts` 2 次、`data-story-related`/`data-story-timeline`/`data-story-event-time` 等），重写会让既有验收失效。
-- **来源成员行补上来源标记**：系统/Agent → 「系统创建 / Agent 产生」，人工 → 「人工编辑过」（ADR-0028）。同时**删掉行内显示的裸 Story id**——此前每行末尾缀着 `story:xxx`，判据 R3 明令禁止要求用户认内部标识符。
-- **首页的 Story 入口改为导航到阅读页**（看板区块、信息流、系统产出三处）：读是导航动作，不再是打开抽屉。
-- **分隔统一**：关键事实/时间线/证据来源/相关内容此前还留着 `border-b`/`border-t` 细线（Round 4 只改了 feed 与 board 两处），本次补齐为色块语言。
-- 摘要与正文完全相同时不重复渲染：采集侧有时把来源描述同时写进 `summary` 与 `contentText`。
-
-### 修掉一个影响全站的字体 bug（本切片的意外收获）
-
-`--font-display` 在应用级**从未定义**——第 54 行定义的是 `--font-serif`，而类名用的是 `font-display`。**token 名与类名对不上，Tailwind 从未生成这个工具类**，全站 10 余处用 `font-display` 的标题（`board-view`、`feed-browser`、各 panel、阅读页）**实际全都落在 system-ui 上**，V4 的「标题用衬线」自 Round 1 起一直没生效。补上 `--font-display` 并在 `@theme inline` 映射后，实测为 Charter。
-
-**同一段里 `--radius-control: var(--radius-control)` / `--radius-card: var(--radius-card)` 是自引用**，同样不生成 `rounded-control` / `rounded-card` 工具类；但所有调用方都写 `rounded-[var(--radius-card)]` 走原始变量，视觉上未受影响，故未在本次改动。
-
-### 一处纪律问题（第四次同源事故）
-
-**我又在本会话里用想当然的方式处理编码**：阅读页的 `storyId` 我照首页旧代码加了 `encodeURIComponent`，而 transport 的 `story()` 内部**已经编码过一次**，于是 id 里的冒号变成 `%253A`，接口 404。第一次修（去掉我加的那次）**没有解决**，因为我假设「Next 交给服务端组件的 `params.id` 已解码」——实测（把 `params.id` 渲染进 DOM 再读）证明**它仍是 `story%3A...` 的编码形态**。正确做法是在路由边界 `decodeURIComponent` 一次，编码只由 transport 做。
-
-**教训与 Round 4 的 PowerShell 事故同源：不要基于假设改编码相关代码，先把真实值打印出来看清楚。** 本次我把中间值渲染进 DOM 才定位到，这条诊断手法写在这里备查。
-
-### 已知遗留
-
-- **首页渲染的 `StoryPanel` 抽屉已成死代码**：没有任何入口打开它（三处入口都改成导航），它的编辑标题/时间范围/关键事实、归并、切分能力因此**暂时不可达**。整体删除会牵出 `useStoryWorkspace` 一半的出口，按本会话既有做法（同 `feedBrowser` 那笔账）留到切片 3e 与拆页同批处理。
-- `/topics/:id`、`/entities/:id` 详情页仍是占位。
-- 阅读页目前**只读** + 收藏；标签、收藏夹、批注的挂载仍在抽屉里（随抽屉一起待办）。
-
-### 验证
-
-| 命令 / 检查 | 结果 |
-| --- | --- |
-| `bun run typecheck` | **0 错误** |
-| `bun run lint`（apps/web） | **0 error**（53 warning，均为拆页后残留的失效声明，属 3e） |
-| `bun run test` | **135 文件 / 775 用例通过** |
-| 浏览器（真实 fixture 数据，从首页点入） | 侧栏隐藏 ✓；卡片 640px；标题 Charter；正文 16px/1.8；阅读列 544px；`data-story-key-facts`/`member-id`/`timeline` 锚点均在；来源标记「系统创建」出现；裸 id 不再可见；无页面级错误 |
-
-### 未运行
-
-- **真人验收未做**。
-- `/stories/:id` 的**键盘路径**（Tab 到收藏、Esc、焦点返回）未逐项实测。
-- 三档断点（1024/1280/1440）未在阅读页复测；`prefers-reduced-motion` 与 E7 预算仍未测。
-
-
-
-
-
-
+| `bun run vitest run apps/web/src/copy/messages.test.ts` | **5 通过**（含新增的文案模块禁用词断言） |
+| `npx playwright test --config playwright.config.ts phase2-organization` | **8/8 连跑两次**（feed 区块偶发已修） |
+| `npx playwright test --config playwright.config.ts`（全量） | **51 通过 / 0 失败（2.6m）** |
+| `bun run test` / `typecheck` / `lint` | **785 通过** / 0 错误 / 0 error（18 warning） |
+| 文案扫描 | 内联 **751** 处（删掉重复收藏块后由 754 下降，基线已同步下调） |

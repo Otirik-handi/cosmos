@@ -52,13 +52,13 @@
 | 类型 | 例子（引文，含文件位置） | 用户看到什么 | 改法 |
 | --- | --- | --- | --- |
 | **要求用户读内部标识** | 「并入本 Story 的 Story ID」（[story-actions.tsx:135](../../apps/web/src/components/cosmos/story-panel/story-actions.tsx#L135)） | 手输一串 ID 才能归并两条内容 | 改成可搜索、可选择的列表（要动界面，不只是改字） |
-| **暴露内部概念名** | 「固定到看板热点区」「在当前看板的 Spotlight 区块展示本条 Story」（[organization.tsx:139](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L139)）；「历史壳：成员已全部拆分到后继 Story」（[story-panel.tsx:689](../../apps/web/src/components/cosmos/story-panel.tsx#L689)）；「本条 Story 已被拆分；它的成员历史、批注与审计仍然保留在这里」（[history-shell.tsx:22](../../apps/web/src/components/cosmos/story-panel/history-shell.tsx#L22)）；`${subtype}（未注册）`（[story-panel.tsx:216](../../apps/web/src/components/cosmos/story-panel.tsx#L216)）；「后继 1 subtype」（[split.tsx:113](../../apps/web/src/components/cosmos/story-panel/split.tsx#L113)） | 「Spotlight」「历史壳」「审计」「未注册」「subtype」都要先学 | 换成用户词（已有权威依据，见上）；内部状态不出现在面向用户的句子里 |
+| **暴露内部概念名** | 「固定到看板热点区」「在当前看板的 Spotlight 区块展示本条 Story」（[organization.tsx:139](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L139)）；「历史壳：成员已全部拆分到后继 Story」（原 `story-panel.tsx:689`，Task 35 切片 3e 已改为「已拆分为 N 条」，见 [`history-shell.tsx`](../../apps/web/src/components/cosmos/story-panel/history-shell.tsx)）；「本条 Story 已被拆分；它的成员历史、批注与审计仍然保留在这里」（[history-shell.tsx:22](../../apps/web/src/components/cosmos/story-panel/history-shell.tsx#L22)）；`${subtype}（未注册）`（原 `story-panel.tsx:216`，已改为「（沿用旧值）」，见 [`story-subtype-select.tsx`](../../apps/web/src/components/cosmos/story-panel/story-subtype-select.tsx)）；「后继 1 subtype」（[split.tsx:113](../../apps/web/src/components/cosmos/story-panel/split.tsx#L113)） | 「Spotlight」「历史壳」「审计」「未注册」「subtype」都要先学 | 换成用户词（已有权威依据，见上）；内部状态不出现在面向用户的句子里 |
 | **专业近义词** | 「引文（可选）」（[organization.tsx:323](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L323)、[404](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L404)）；「证据关系」「选择证据条目」（[evidence.tsx](../../apps/web/src/components/cosmos/story-panel/evidence.tsx)）；「暂无相关但不同事件的 Story；给本条 Story 添加分类或关联 Entity 后会自动出现」（[related.tsx:19](../../apps/web/src/components/cosmos/story-panel/related.tsx#L19)） | 词都对，但要先懂行业用法 | 换成日常说法；拿不准的先问你 |
-| **承诺与界面不符 ／ 信息过时** | 「收藏后可在收藏列表快速找回本条 Story」（[organization.tsx:157](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L157)，**收藏列表这个界面不存在**）；首页徽标「Phase 1 · 本地信息库」与副标题「从 Story 入口浏览已保存的信息，并手动触发 RSS 录入。」（[page.tsx:500](../../apps/web/src/app/page.tsx#L500)、[506](../../apps/web/src/app/page.tsx#L506)，Phase 2 已收口、首页现在以看板为主） | 界面承诺了做不到的事；界面说的事情已经不是现在的事 | 要么补上界面，要么删掉承诺；过时描述随界面现状更新 |
+| **承诺与界面不符 ／ 信息过时** | 「收藏后可在收藏列表快速找回本条 Story」（[organization.tsx:157](../../apps/web/src/components/cosmos/story-panel/organization.tsx#L157)，**收藏列表这个界面不存在**）；首页徽标「Phase 1 · 本地信息库」与副标题「从 Story 入口浏览已保存的信息，并手动触发 RSS 录入。」（[page.tsx:500](../../apps/web/src/app/%28shell%29/page.tsx#L500)、[506](../../apps/web/src/app/%28shell%29/page.tsx#L506)，Phase 2 已收口、首页现在以看板为主） | 界面承诺了做不到的事；界面说的事情已经不是现在的事 | 要么补上界面，要么删掉承诺；过时描述随界面现状更新 |
 
 另外两处结构性问题（属于界面骨架，归另一份 Proposal，但**必须和文案一起改**否则前后矛盾）：
 
-- 侧栏分区标题中英混用：`Entities`、`Topics` 是英文，旁边的「连接」「存储」是中文（[page.tsx:606](../../apps/web/src/app/page.tsx#L606)）。
+- 侧栏分区标题中英混用：`Entities`、`Topics` 是英文，旁边的「连接」「存储」是中文（[page.tsx:606](../../apps/web/src/app/%28shell%29/page.tsx#L606)）。
 - 「分类」这个词在界面上已经出现（相关内容空态文案），但仓库里「『分类』是稳定导航分区、自由标签，还是二者的上位概念」仍是 [PROJECT-STATUS.md](../../PROJECT-STATUS.md)「后置决定」里**尚未决定**的一项。界面先用了这个还没定的词——维护者已裁定在它被定义前界面只用「标签」和「已保存视图」（见[表 E](#e-分类已裁定按建议处理)）。
 
 ## 目标与非目标
@@ -236,6 +236,14 @@ R0 的实际作用是把「改成什么」从口味问题变成可判定问题�
 - `docs/spec/`：行为落地后更新 interfaces 相关页面规格；文案本身不进 spec（spec 记录行为，不记录措辞）。
 - [`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md)：术语表 B/C/E 三组只改界面展示名、不改概念，因此 PRD 无需改动；只有表 E（「分类」）的裁定结果需要写入 §8.2/§8.6 注记。
 - 治理任务登记在 `.agents/tasks/governance/G{NN}-{slug}`（编号由维护者分配）；本 Proposal 维持 `reviewing` 期间不改代码、不建 worktree。
+
+## 勘误（2026-09-24，不改写正文）
+
+**本文所有指向 `apps/web/src/app/page.tsx` 的引用已随文件移动改到新路径 `apps/web/src/app/(shell)/page.tsx`**（Task 35 切片 1 把首页移入 Next 路由组 `(shell)`，以便由布局提供顶栏与悬浮侧栏；文件内容与行为未变，仅 7 条相对导入改为别名导入）。
+
+**但行号已随该次移动失效**：正文里的 `page.tsx:500`、`:506`、`:606` 等行号指向的是**移动前**的版本，现在同样的行号落在别处（例如原 `:500` 现在是 `onSaveMediaPolicy` 一行）。保留行号是为了让当时的取证可追溯，**引用前请按cite的内容在新文件里重新定位**，不要按行号读。后续若再做整页搬迁，本文的历史行号会进一步失效。
+
+（本文不重写正文：那些行号记录的是 2026-09-15 判定当时的事实，改写会让取证失真。）
 
 ## 决策记录
 

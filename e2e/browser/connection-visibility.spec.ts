@@ -2,15 +2,15 @@ import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 /**
- * AUT-009 的产品面证据：连接的授权范围与失效原因真的能被用户看到与记录。
+ * AUT-009 的产品面证据：`/automation` 连接面板里的授权范围与失效原因真的能被用户看到与记录。
  *
  * 断言分三层：建连接时记录的授权范围按可读形式回显；标记失效后状态徽标与原因一起变；
  * 恢复可用后原因被清空。结束前删掉用例创建的连接，避免污染共享栈。
  */
 test("连接面板显示并记录授权范围与失效原因", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
     const connectionName = `连接可见性-${randomUUID().slice(0, 8)}`;
     const connections = page.getByRole("region", { name: "连接" });
@@ -55,7 +55,7 @@ test("连接面板显示并记录授权范围与失效原因", async ({ page }) 
 
 /**
  * 切片 4b 的产品面证据：登录状态由**系统探测**写入，而不是用户手填（Proposal
- * connection-login-lifecycle-v1 决定 2）。
+ * connection-login-lifecycle-v1 决定 2）。入口在 `/automation` 的连接面板。
  *
  * 探测结论与运行环境有关（本机有可用 OpenCLI 时是「登录状态正常」，没有时是一句可读的失败
  * 原因），所以这里只断言与结论无关的事实：入口按 manifest 声明出现，探测跑完后「上次检查」
@@ -64,8 +64,8 @@ test("连接面板显示并记录授权范围与失效原因", async ({ page }) 
 test("连接面板能发起登录探测并记录检查时间", async ({ page }) => {
     // 连接器的子进程超时是 120s，探测又必须等 Worker 跑完，所以给足余量。
     test.setTimeout(240_000);
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
     const connectionName = `登录探测-${randomUUID().slice(0, 8)}`;
     const connections = page.getByRole("region", { name: "连接" });

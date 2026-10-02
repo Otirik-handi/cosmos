@@ -13,6 +13,7 @@ import {
     client,
     readError,
 } from "./page-runtime";
+import { messages } from "@/copy/messages";
 import { useGuardedList } from "./list-write-guard";
 import type { WorkspaceContext } from "./page-bridge";
 import type { useStoryWorkspace } from "./use-story-workspace";
@@ -127,7 +128,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
             body: input.body,
             quote: input.quote ?? null,
         });
-        ctx.setNotice("已添加批注。");
+        ctx.setNotice(messages.notices.topic.annotationCreated);
         await refreshTopicAnnotations();
     };
 
@@ -142,7 +143,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
             body: input.body,
             quote: input.quote ?? null,
         });
-        ctx.setNotice("已更新批注。");
+        ctx.setNotice(messages.notices.topic.annotationUpdated);
         await refreshTopicAnnotations();
     };
 
@@ -151,7 +152,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
             return;
         }
         await client.deleteAnnotation(annotationId);
-        ctx.setNotice("已删除批注。");
+        ctx.setNotice(messages.notices.topic.annotationDeleted);
         await refreshTopicAnnotations();
     };
 
@@ -166,23 +167,21 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
         await loadTopics();
     };
 
-    const createTopicFromStory = async (title: string, purpose: string): Promise<void> => {
-        if (!storyApi.story) {
-            return;
-        }
-        await client.createTopic({
-            title,
-            purpose,
-            seedStoryId: storyApi.story.story.id,
-        });
-        ctx.setNotice(`已创建 Topic「${title}」并把当前 Story 加入为核心成员。`);
+    /**
+     * 对象页（`/topics`）建话题：成员随后从 Story 页加入。
+     * 这里**没有**「建话题并带上当前 Story」的变体——ADR-0029 决策 1 把创建放在对象页、
+     * 把关联留在 Story 页；两个入口合并成一个，就不会再长出第二条创建路径。
+     */
+    const createTopic = async (title: string, purpose: string): Promise<void> => {
+        await client.createTopic({ title, purpose });
+        ctx.setNotice(messages.notices.topic.created(title));
         await loadTopics();
     };
 
 
     return {
+        createTopic,
         createTopicAnnotation,
-        createTopicFromStory,
         deleteTopicAnnotation,
         joinTopic,
         loadTopics,

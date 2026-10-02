@@ -194,15 +194,21 @@ export class OrganizationClient extends ContentClient {
         });
     }
 
-    async listAnnotations(input: {
-        targetType: string;
-        targetId: string;
+    /**
+     * 批注查询。目标可选：不给表示「我的全部批注」（整理页的批注分区需要它）。
+     * 给了目标时必须成对，与 API 侧的校验一致。
+     */
+    async listAnnotations(input?: {
+        targetType?: string;
+        targetId?: string;
     }): Promise<AnnotationList> {
-        const params = new URLSearchParams({
-            targetType: input.targetType,
-            targetId: input.targetId,
-        });
-        return this.request(`/api/v1/annotations?${params.toString()}`, {
+        const params = new URLSearchParams();
+        if (input?.targetType !== undefined && input.targetId !== undefined) {
+            params.set("targetType", input.targetType);
+            params.set("targetId", input.targetId);
+        }
+        const query = params.toString();
+        return this.request(`/api/v1/annotations${query === "" ? "" : `?${query}`}`, {
             schema: annotationListSchema,
         });
     }

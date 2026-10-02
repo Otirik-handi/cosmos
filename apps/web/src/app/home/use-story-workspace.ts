@@ -28,6 +28,7 @@ import {
     readError,
     RELATED_STORY_PORTS,
 } from "./page-runtime";
+import { messages } from "@/copy/messages";
 import type { WorkspaceContext } from "./page-bridge";
 
 /** 由 G06 切片 4 从 page.tsx 拆出的域 hook（搬运，未改行为）。 */
@@ -60,7 +61,14 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         }
     }, []);
 
-    const openStory = async (storyId: string): Promise<void> => {
+    /**
+     * 打开一条 Story 并把它相关的读模型一起取回。
+     *
+     * **必须身份稳定**：阅读页把它放进挂载 effect 的依赖里。写成普通 async 函数时每次渲染
+     * 都是新身份，effect 每渲染重跑一次 → `setStory` → 再渲染，形成自激取数循环
+     * （实测 3 秒内对同一条 Story 发了 349 次请求，页内跳转与提交后的重读都被拖住）。
+     */
+    const openStory = useCallback(async (storyId: string): Promise<void> => {
         setOpeningStoryId(storyId);
         ctx.setError(null);
         try {
@@ -102,7 +110,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         } finally {
             setOpeningStoryId(null);
         }
-    };
+    }, [collectionList, ctx, refreshRelatedStories]);
 
     const closeStory = useCallback((): void => {
         openStoryIdRef.current = null;
@@ -246,14 +254,28 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         const moved = counts.reduce((sum, count) => sum + count.moved, 0);
         const deduped = counts.reduce((sum, count) => sum + count.deduped, 0);
         ctx.setNotice(deduped > 0
-            ? `已迁移 ${moved} 项标记；${deduped} 项因去向已有相同标记而跳过。`
-            : `已迁移 ${moved} 项标记。`);
+            ? messages.notices.story.userStateMigratedWithSkipped(moved, deduped)
+            : messages.notices.story.userStateMigrated(moved));
         if (story) {
             setStory(await client.story(story.story.id));
             await refreshStoryCollections();
             await refreshStoryAnnotations();
         }
     };
+
+    /**
+     * 读标签目录。阅读页与信息库都挂载这个 hook，但都不走首页那条「feed 顺带读标签」的路径，
+     * 所以必须各自显式加载：不加载时 `labels.items` 恒为空，打标签的下拉与按标签筛选的 chip
+     * 都**不会渲染**（实测：Story 页无法打标签、信息库没有标签筛选）。
+     */
+    const loadLabels = useCallback(async (): Promise<void> => {
+        const read = labelList.beginRead();
+        try {
+            labelList.writeFromRead(await client.listLabels(), read);
+        } catch {
+            // 标签目录读取失败不阻断页面；打标签下拉退化为空。
+        }
+    }, [labelList]);
 
     /** 标签/收藏变更后重读打开的 Story，并把标签列表刷到最新指派计数。 */
     const refreshStoryWithLabels = async (): Promise<void> => {
@@ -283,10 +305,10 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         }
         if (favorited) {
             await client.setFavorite({ targetType: "story", targetId: story.story.id });
-            ctx.setNotice("已收藏当前 Story。");
+            ctx.setNotice(messages.notices.story.favorited);
         } else {
             await client.unsetFavorite({ targetType: "story", targetId: story.story.id });
-            ctx.setNotice("已取消收藏当前 Story。");
+            ctx.setNotice(messages.notices.story.unfavorited);
         }
         setStory(await client.story(story.story.id));
     };
@@ -315,24 +337,6 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         await refreshStoryWithLabels();
     };
 
-    /**
-     * 面板“新建标签”控件只传名称、拿不到新标签 id，所以创建后直接打上当前
-     * Story：一次交互完成“建标签 + 添加”两件事。
-     */
-    const createLabelForStory = async (name: string): Promise<void> => {
-        if (!story) {
-            return;
-        }
-        const created = await client.createLabel({ name });
-        await client.attachLabel({
-            labelId: created.id,
-            targetType: "story",
-            targetId: story.story.id,
-        });
-        ctx.setNotice(`已创建标签「${name}」并添加到当前 Story。`);
-        await refreshStoryWithLabels();
-    };
-
     const toggleStoryCollection = async (
         collectionId: string,
         member: boolean,
@@ -342,20 +346,11 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         }
         if (member) {
             await client.removeCollectionItem(collectionId, { storyId: story.story.id });
-            ctx.setNotice("已把当前 Story 移出该收藏夹。");
+            ctx.setNotice(messages.notices.story.collectionRemoved);
         } else {
             await client.addCollectionItem(collectionId, { storyId: story.story.id });
-            ctx.setNotice("已把当前 Story 加入该收藏夹。");
+            ctx.setNotice(messages.notices.story.collectionAdded);
         }
-        await refreshStoryCollections();
-    };
-
-    const createCollectionFromPanel = async (name: string): Promise<void> => {
-        if (!story) {
-            return;
-        }
-        const created = await client.createCollection({ name });
-        ctx.setNotice(`已创建收藏夹「${created.name}」。`);
         await refreshStoryCollections();
     };
 
@@ -383,7 +378,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
             body: input.body,
             quote: input.quote ?? null,
         });
-        ctx.setNotice("已添加批注。");
+        ctx.setNotice(messages.notices.story.annotationCreated);
         await refreshStoryAnnotations();
     };
 
@@ -398,7 +393,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
             body: input.body,
             quote: input.quote ?? null,
         });
-        ctx.setNotice("已更新批注。");
+        ctx.setNotice(messages.notices.story.annotationUpdated);
         await refreshStoryAnnotations();
     };
 
@@ -407,7 +402,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
             return;
         }
         await client.deleteAnnotation(annotationId);
-        ctx.setNotice("已删除批注。");
+        ctx.setNotice(messages.notices.story.annotationDeleted);
         await refreshStoryAnnotations();
     };
 
@@ -417,8 +412,6 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         closeStory,
         collections,
         collectionList,
-        createCollectionFromPanel,
-        createLabelForStory,
         createStoryAnnotation,
         deleteStoryAnnotation,
         detachLabelFromStory,
@@ -428,6 +421,7 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         labelList,
         linkEntryRelation,
         linkEntryStory,
+        loadLabels,
         loadStoryUserState,
         mergeStory,
         migrateStoryUserState,

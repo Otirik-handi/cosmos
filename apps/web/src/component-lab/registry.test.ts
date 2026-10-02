@@ -10,14 +10,22 @@ import {
 } from "./registry";
 
 const expectedPublicModules = [
+    "components/ui/alert-dialog.tsx",
     "components/ui/badge.tsx",
     "components/ui/button.tsx",
     "components/ui/card.tsx",
+    "components/ui/combobox.tsx",
+    "components/ui/dialog.tsx",
     "components/ui/field.tsx",
     "components/ui/input.tsx",
     "components/ui/label.tsx",
+    "components/ui/menu.tsx",
+    "components/ui/select.tsx",
     "components/ui/separator.tsx",
+    "components/ui/tabs.tsx",
     "components/ui/textarea.tsx",
+    "components/ui/toast.tsx",
+    "components/ui/tooltip.tsx",
     "components/cosmos/connection-panel.tsx",
     "components/cosmos/feed-browser.tsx",
     "components/cosmos/run-control.tsx",
@@ -26,12 +34,13 @@ const expectedPublicModules = [
     "components/cosmos/source-form.tsx",
     "components/cosmos/status-summary.tsx",
     "components/cosmos/storage-panel.tsx",
-    "components/cosmos/story-panel.tsx",
+    "components/cosmos/story-edit-surface.tsx",
     "components/cosmos/theme-switcher.tsx",
     "components/cosmos/topic-panel.tsx",
     "components/cosmos/entity-panel.tsx",
     "components/cosmos/board-view.tsx",
     "components/cosmos/board-sortable-blocks.tsx",
+    "components/cosmos/system-output-block.tsx",
 ] as const;
 
 describe("component lab registry", () => {

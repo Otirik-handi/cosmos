@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { EntryRelation, EntryRelationType, StoryDetail } from "@cosmos/contracts";
@@ -17,9 +18,33 @@ import {
 
 import { relationTypeLabel } from "./labels";
 
+/** 分隔用色块而不是细线，与全站的分隔语言一致。 */
+const SECTION_CLASS = "flex flex-col gap-3";
+
+/** 成员行的来源标记；没有 producer 信息时不显示，不猜。 */
+function producerMarker(producer: string | null | undefined): ReactNode {
+    if (producer === "system" || producer === "agent") {
+        return (
+            <span className="inline-flex items-center gap-1 rounded-[4px] bg-marker-soft px-1.5 py-px text-[11px] leading-4 text-marker">
+                <span aria-hidden className="size-1.5 rounded-full bg-marker" />
+                {producer === "agent" ? "Agent 产生" : "系统创建"}
+            </span>
+        );
+    }
+    if (producer === "human") {
+        return <span className="text-[11px] text-muted-foreground">人工编辑过</span>;
+    }
+    return null;
+}
+
 type Props = {
     story: StoryDetail;
     busy: boolean;
+    /**
+     * 每条成员条目所属 Story 的当前 Revision 写入者，按 entryId 索引。
+     * 阅读页用它区分「系统抓来的」与「人工写过的」（ADR-0028）；来源面板不传就不显示标记。
+     */
+    producers?: Readonly<Record<string, string | null>>;
     /** 可作对端的已加载条目；同 Story 的成员也是合法对端（ADR-0022 决定 4）。 */
     candidates?: readonly EntryRelationCandidate[];
     onLinkEntryRelation?: (input: {
@@ -40,6 +65,7 @@ type Props = {
 export function SourceMembersSection({
     story,
     busy,
+    producers,
     candidates = [],
     onLinkEntryRelation,
     onUnlinkEntryRelation,
@@ -92,22 +118,26 @@ export function SourceMembersSection({
     };
 
     return (
-            <section aria-label="来源成员" className="border-b pb-4">
+            <section aria-label="来源成员" className={SECTION_CLASS}>
                 <h3 className="font-medium">
                     来源成员（{story.entries.length}）
                 </h3>
                 {story.entries.length > 0 && (
-                    <ul className="mt-2 flex flex-col gap-2 text-sm text-muted-foreground">
+                    <ul className="mt-2 flex flex-col gap-1.5 text-sm text-muted-foreground">
                         {story.entries.map((member) => (
                             <li
                                 key={member.id}
                                 data-story-member-id={member.id}
-                                className="flex flex-col"
+                                className="flex flex-col rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-3 py-2"
                             >
-                                <span className="truncate">
-                                    {member.sourceName} ·{" "}
-                                    {member.revisions[0]?.title ?? "无标题"} ·{" "}
-                                    {member.id}
+                                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span className="font-medium text-foreground">
+                                        {member.revisions[0]?.title ?? "无标题"}
+                                    </span>
+                                    <span className="text-xs">{member.sourceName}</span>
+                                    {/* 来源标记（ADR-0028）：系统/Agent 抓来的与人工写过的分开，
+                                        否则读的人分不清这条内容还会不会被自动更新覆盖。 */}
+                                    {producerMarker(producers?.[member.id])}
                                 </span>
                                 {member.relatedStories.length > 0 && (
                                     <span

@@ -326,6 +326,19 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
         if (!topic || !topic.currentRevision) {
             return null;
         }
+        // 批量取成员 Story 的当前标题：话题页要直接列出成员，逐个查询会变成 N+1。
+        const memberStoryIds = topic.memberships
+            .filter((membership) => membership.currentRevision !== null)
+            .map((membership) => membership.storyId);
+        const memberStories = memberStoryIds.length === 0
+            ? []
+            : await this.prisma.story.findMany({
+                where: { id: { in: memberStoryIds } },
+                select: { id: true, currentRevision: { select: { title: true } } },
+            });
+        const titleByStoryId = new Map(
+            memberStories.map((story) => [story.id, story.currentRevision?.title ?? null]),
+        );
         const members = topic.memberships
             .filter((membership) => membership.currentRevision !== null)
             .map((membership) => ({
@@ -337,6 +350,8 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                     : parseJson<string>(membership.currentRevision!.actorJson),
                 revision: membership.currentRevision!.revision,
                 removed: membership.currentRevision!.tombstone,
+                // 历史壳可能没有当前 Revision，此时标题按 null 投影而不是省略字段。
+                title: titleByStoryId.get(membership.storyId) ?? null,
             }));
         return {
             topic: {

@@ -1,28 +1,42 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
-const FEED_URL = "http://127.0.0.1:4380/feed.xml";
+import {
+    expandEditSurface,
+    ingestFeed,
+    openStory,
+    waitForStoryIds,
+} from "../support/story-flow";
 
-/** 每个场景自建来源并触发录入，不依赖其它 spec 留下的数据。 */
-async function ingestFeed(page: import("@playwright/test").Page, prefix: string): Promise<string> {
-    const sourceName = `${prefix}-${randomUUID().slice(0, 8)}`;
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建计划" }).click();
-    await page.getByLabel("名称", { exact: true }).fill(sourceName);
-    await page.getByLabel("Feed URL").fill(FEED_URL);
-    await page.getByRole("button", { name: "保存计划" }).click();
-    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
+/**
+ * 条目↔条目重复/转载关系的浏览器验收（ADR-0022 决定 3/4/6/7）。
+ *
+ * 切片 3 之前这条用例在首页 Feed + Story 抽屉上跑；ADR-0029 之后：
+ * - 双成员 Story 仍然只能由「归并」造出来（录入按 entry 投影 Story，不跨来源归并），
+ *   归并入口搬到了 `/stories/:id` 的「编辑与关联」里（默认收起，先点「展开」）；
+ * - 成员行与两个方向的措辞在阅读页的只读区，不用展开就在页面上；
+ * - Feed 卡片与搜索在 `/library`。
+ * 领域断言逐条保留：两侧措辞相反、刷新后仍在、只标记不折叠、解除后两侧都消失、
+ * 4xx 写入拒绝。
+ */
 
-    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    await healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true }).click();
-    await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
-    await healthSection.getByRole("button", { name: sourceName, exact: true }).click();
-    await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
-    await expect(
-        page.locator("article").filter({ hasText: sourceName }).first(),
-    ).toBeVisible({ timeout: 180_000 });
-    return sourceName;
+/** 读一条 Story 的标题与成员条目：归并与成员行断言都用它。 */
+async function readStory(page: Page, storyId: string): Promise<{
+    id: string;
+    title: string;
+    memberIds: string[];
+}> {
+    const response = await page.request.get(`/api/v1/stories/${encodeURIComponent(storyId)}`);
+    expect(response.ok(), `读取 Story 失败：${storyId}`).toBe(true);
+    const body = await response.json() as {
+        story: { id: string; title: string };
+        entries: Array<{ id: string }>;
+    };
+    return {
+        id: body.story.id,
+        title: body.story.title,
+        memberIds: body.entries.map((entry) => entry.id),
+    };
 }
 
 test("marks a syndication between two Story members and shows both directions", async ({ page }) => {
@@ -33,102 +47,76 @@ test("marks a syndication between two Story members and shows both directions", 
     });
 
     const sourceName = await ingestFeed(page, "重复关系验收来源");
+    // fixture 有三条内容，本来源至少落两条 Story；取前两条做归并素材。
+    const [canonicalId, obsoleteId] = await waitForStoryIds(page, sourceName, 2);
+    const canonical = await readStory(page, canonicalId);
+    expect(canonical.title.length).toBeGreaterThan(0);
 
     // 归并两条单成员 Story，得到一条双成员 Story：同一 Story 内的两条重复条目
     // 是合法且常见的场景（ADR-0022 决定 4），两个方向也就能在同一屏里看到。
-    const readPair = async (name: string) => page.evaluate(async (sourceName) => {
-        const sourceResponse = await fetch("/api/v1/sources");
-        const sources = await sourceResponse.json() as Array<{ id: string; name: string }>;
-        const sourceId = sources.find((source) => source.name === sourceName)?.id;
-        if (!sourceId) {
-            return null;
-        }
-        const entriesResponse = await fetch(`/api/v1/entries?sourceId=${encodeURIComponent(sourceId)}&limit=20`);
-        const entries = await entriesResponse.json() as { items: Array<{ storyId: string | null }> };
-        const storyIds = [...new Set(entries.items.map((item) => item.storyId).filter((id): id is string => id !== null))];
-        if (storyIds.length < 2) {
-            return null;
-        }
-        return Promise.all(storyIds.slice(0, 2).map(async (storyId) => {
-            const response = await fetch(`/api/v1/stories/${encodeURIComponent(storyId)}`);
-            const body = await response.json() as { story: { id: string; title: string } };
-            return body.story;
-        }));
-    }, name);
-    let pair: Array<{ id: string; title: string }> | null = null;
-    await expect.poll(async () => {
-        pair = await readPair(sourceName);
-        return pair?.length ?? 0;
-    }, { timeout: 120_000 }).toBeGreaterThanOrEqual(2);
-    const [canonical, obsolete] = pair!;
+    await openStory(page, canonicalId);
+    const editSection = await expandEditSurface(page);
+    await editSection.getByLabel("并入本 Story 的 Story ID").fill(obsoleteId);
+    await editSection.getByRole("button", { name: "归并", exact: true }).click();
+    await expect(page.getByText("来源成员（2）")).toBeVisible();
 
-    await page
-        .locator("article")
-        .filter({ hasText: sourceName })
-        .filter({ hasText: canonical.title })
-        .getByRole("button", { name: "打开 Story" })
-        .first()
-        .click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await dialog.getByLabel("并入本 Story 的 Story ID").fill(obsolete.id);
-    await dialog.getByRole("button", { name: "归并" }).click();
-    await expect(dialog.getByText("来源成员（2）")).toBeVisible();
-
-    const memberIds = await dialog.locator("[data-story-member-id]").evaluateAll(
+    const memberIds = await page.locator("[data-story-member-id]").evaluateAll(
         (nodes) => nodes.map((node) => node.getAttribute("data-story-member-id")!),
     );
     expect(memberIds).toHaveLength(2);
     const [reprintId, originalId] = memberIds;
-    const memberTitle = async (entryId: string): Promise<string> => (await dialog
+    const memberTitle = async (entryId: string): Promise<string> => (await page
         .locator(`[data-story-member-id="${entryId}"] span`)
         .first()
-        .innerText()).split(" · ")[1]!.trim();
+        .locator("span")
+        .first()
+        .innerText()).trim();
 
-    // 标记前后 Feed 顺序与搜索结果必须逐字节不变（ADR-0022 决定 6）。
-    const readFeedOrder = async (): Promise<string[]> => page.evaluate(async () => {
-        const response = await fetch("/api/v1/feed?limit=20");
-        const body = await response.json() as { items: Array<{ entryId: string }> };
-        return body.items.map((item) => item.entryId);
-    });
-    const readSearchOrder = async (term: string): Promise<string[]> => page.evaluate(async (text) => {
-        const response = await fetch(`/api/v1/search?text=${encodeURIComponent(text)}&limit=20`);
-        const body = await response.json() as { items: Array<{ entryId: string }> };
-        return body.items.map((item) => item.entryId);
-    }, term);
+    // 标记前后 Feed 顺序与搜索结果必须逐字节不变（ADR-0022 决定 6）。按本用例自己的
+    // 来源名限定：同一栈会话内数据库跨 spec 持久化，其它来源的新条目会让全量顺序变化。
+    const readFeedOrder = async (): Promise<string[]> => page.evaluate(async (name) => {
+        const response = await fetch("/api/v1/feed?limit=100");
+        const body = await response.json() as {
+            items: Array<{ entryId: string; sourceName: string }>;
+        };
+        return body.items.filter((item) => item.sourceName === name).map((item) => item.entryId);
+    }, sourceName);
+    const readSearchOrder = async (term: string): Promise<string[]> => page.evaluate(
+        async (input: { text: string; name: string }) => {
+            const response = await fetch(`/api/v1/search?text=${encodeURIComponent(input.text)}&limit=100`);
+            const body = await response.json() as {
+                items: Array<{ entryId: string; sourceName: string }>;
+            };
+            return body.items
+                .filter((item) => item.sourceName === input.name)
+                .map((item) => item.entryId);
+        },
+        { text: term, name: sourceName },
+    );
     const feedBefore = await readFeedOrder();
     expect(feedBefore.length).toBeGreaterThan(0);
     const searchBefore = await readSearchOrder("fixture");
     expect(searchBefore.length).toBeGreaterThan(0);
 
     // 在转载方那一行标记「转载自」原发方。
-    await dialog.locator(`[data-entry-relation-open="${reprintId}"]`).click();
-    const form = dialog.locator(`[data-entry-relation-form="${reprintId}"]`);
-    await form.getByLabel("选择对端条目").selectOption(originalId);
-    await form.getByLabel("重复关系类型").selectOption("syndicated_from");
-    await form.locator(`[data-entry-relation-submit="${reprintId}"]`).click();
+    await page.locator(`[data-entry-relation-open="${reprintId}"]`).click();
+    const relationForm = page.locator(`[data-entry-relation-form="${reprintId}"]`);
+    await relationForm.getByLabel("选择对端条目").selectOption(originalId);
+    await relationForm.getByLabel("重复关系类型").selectOption("syndicated_from");
+    await relationForm.locator(`[data-entry-relation-submit="${reprintId}"]`).click();
 
     // 两侧都看得到，方向相反（ADR-0022 决定 3/7）。
     const originalTitle = await memberTitle(originalId);
     const reprintTitle = await memberTitle(reprintId);
-    await expect(dialog.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`))
+    await expect(page.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`))
         .toHaveText(`转载自 ${originalTitle}`);
-    await expect(dialog.locator(`[data-entry-relation-badge="${originalId}:${reprintId}"]`))
+    await expect(page.locator(`[data-entry-relation-badge="${originalId}:${reprintId}"]`))
         .toHaveText(`被 ${reprintTitle} 转载`);
 
-    // 刷新后关系仍在：它挂在条目内容身份上，不随面板关闭而消失。
+    // 刷新后关系仍在：它挂在条目内容身份上，不随页面重开而消失。
     await page.reload();
-    await page
-        .locator("article")
-        .filter({ hasText: sourceName })
-        .filter({ hasText: canonical.title })
-        .getByRole("button", { name: "打开 Story" })
-        // 归并后同一 Story 在 Feed 里有两个成员卡片，任一张都打开同一条 Story。
-        .first()
-        .click();
-    const reopened = page.getByRole("dialog");
-    await expect(reopened).toBeVisible();
-    await expect(reopened.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`))
+    await expect(page.locator("[data-story-id]")).toBeVisible();
+    await expect(page.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`))
         .toHaveText(`转载自 ${originalTitle}`);
 
     // 只标记与展示：Feed 顺序与搜索结果不变（ADR-0022 决定 6）。
@@ -165,17 +153,21 @@ test("marks a syndication between two Story members and shows both directions", 
     });
 
     // 解除后两侧都消失。
-    await reopened.locator(`[data-entry-relation-remove="${reprintId}:${originalId}"]`).click();
-    await expect(reopened.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`)).toHaveCount(0);
-    await expect(reopened.locator(`[data-entry-relation-badge="${originalId}:${reprintId}"]`)).toHaveCount(0);
+    await page.locator(`[data-entry-relation-remove="${reprintId}:${originalId}"]`).click();
+    await expect(page.locator(`[data-entry-relation-badge="${reprintId}:${originalId}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-entry-relation-badge="${originalId}:${reprintId}"]`)).toHaveCount(0);
 
-    // 归并后的 Story 在 Feed 里有两张成员卡片：同一个 storyId、两个不同 entryId。
+    // 归并后的 Story 在信息库里有两张成员卡片：同一个 storyId、两个不同 entryId。
     // 列表 key 用 storyId 会重复，React 只认其中一张，另一张的 DOM 节点不再受它管理，
     // 列表被整体替换（例如搜索无结果）后仍旧残留，看起来就是「提示语说 0 条、还留着一张卡」。
-    await page.keyboard.press("Escape");
+    await page.goto("/library");
+    const searchRegion = page.locator('section[aria-label="阅读流"]');
+    await expect(searchRegion).toBeVisible();
+    await expect(
+        page.locator("article").filter({ hasText: sourceName }).first(),
+    ).toBeVisible();
     const memberCards = await page.locator("article").filter({ hasText: sourceName }).count();
     expect(memberCards, "归并后同一 Story 在 Feed 里至少有两张成员卡片").toBeGreaterThanOrEqual(2);
-    const searchRegion = page.getByRole("region", { name: "信息库与搜索" });
     await searchRegion.getByLabel("搜索已保存内容").fill(`绝不匹配-${randomUUID().slice(0, 8)}`);
     await searchRegion.getByRole("button", { name: "搜索", exact: true }).click();
     await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();

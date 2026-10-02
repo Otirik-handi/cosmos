@@ -277,11 +277,14 @@ export class PrismaCosmosRepositoryCollections extends PrismaCosmosRepositoryLab
         const rows = await this.prisma.favorite.findMany({
             orderBy: { createdAt: "desc" },
         });
+        // 批量解析标题：整理页的收藏分区要直接列出收藏了什么。
+        const titleByTarget = await this.resolveTargetTitles(rows);
         return {
             items: rows.map((favorite) => ({
                 targetType: favorite.targetType as "story" | "entry",
                 targetId: favorite.targetId,
                 createdAt: favorite.createdAt.toISOString(),
+                title: titleByTarget.get(`${favorite.targetType}:${favorite.targetId}`) ?? null,
             })),
         };
     }

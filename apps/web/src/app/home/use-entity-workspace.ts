@@ -13,6 +13,7 @@ import {
     client,
     readError,
 } from "./page-runtime";
+import { messages } from "@/copy/messages";
 import { useGuardedList } from "./list-write-guard";
 import type { WorkspaceContext } from "./page-bridge";
 import type { useStoryWorkspace } from "./use-story-workspace";
@@ -143,23 +144,14 @@ export function useEntityWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
         await refreshStoryAfterEntityChange();
     };
 
-    const createEntityLinkedToStory = async (
-        name: string,
-        type: string,
-    ): Promise<void> => {
-        if (!storyApi.story) {
-            return;
-        }
-        const created = await client.createEntity({
-            name,
-            type: type as EntityType,
-        });
-        await client.linkStoryEntity({
-            storyId: storyApi.story.story.id,
-            entityId: created.entity.id,
-        });
-        ctx.setNotice(`已创建 Entity「${name}」并关联当前 Story。`);
-        await refreshStoryAfterEntityChange();
+    /**
+     * 对象页（`/entities`）建 Entity：不绑定任何 Story，关联在 Story 页做。
+     * 同样**没有**「建 Entity 并关联当前 Story」的变体，理由见 `use-topic-workspace` 的 `createTopic`。
+     */
+    const createEntity = async (name: string, type: string): Promise<void> => {
+        await client.createEntity({ name, type: type as EntityType });
+        ctx.setNotice(messages.notices.entity.created(name));
+        await loadEntities();
     };
 
     const unlinkEntityFromStory = async (entityId: string): Promise<void> => {
@@ -176,7 +168,7 @@ export function useEntityWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
 
     return {
         addEntityAliasPage,
-        createEntityLinkedToStory,
+        createEntity,
         createRelationFromEntityPage,
         entities,
         entity,

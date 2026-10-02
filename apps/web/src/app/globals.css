@@ -2,86 +2,99 @@
 @import "tw-animate-css";
 
 /*
- * 兼容回退：仅在缺少 data-cosmos-* 属性的环境（如 SSR 片段、测试快照）下提供
- * 中性亮暗。真实浏览器始终由首帧引导脚本写入属性，下方两套 colorway 块会覆盖这里。
+ * Cosmos 设计 token 三层（ADR-0029 决策 5）。
+ * 第 1 层 shadcn 语义 token：现有 primitive 与产品组件只消费这一层，换主题不需要改 class。
+ * 第 2 层 Cosmos 扩展语义：现有语义无法表达的三个概念（机器来源、阅读面、悬浮卡片阴影）。
+ * 第 3 层 形状 / 密度 / 动效：字体栈、字阶、控件高度、圆角、动效、阴影。
+ *
+ * 明暗由单一属性 data-cosmos-appearance 切换；引导脚本在首帧前写入，避免错误配色闪烁。
+ * 所有值定义在 :root 与 .dark 两组块里，没有嵌套依赖，块顺序不影响结果。
  */
+
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --radius: 0.625rem;
-}
+    color-scheme: light;
 
-.dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-}
+    /* 第 1 层 · 语义色（亮色） */
+    --background: #f4f3ee;
+    --foreground: #1c1f1c;
+    --card: #fffefb;
+    --card-foreground: #1c1f1c;
+    --popover: #fffefb;
+    --popover-foreground: #1c1f1c;
+    --primary: #2c5f4f;
+    --primary-foreground: #ffffff;
+    --secondary: #eae8e1;
+    --secondary-foreground: #1c1f1c;
+    --muted: #eae8e1;
+    --muted-foreground: #666a62;
+    --accent: #eae8e1;
+    --accent-foreground: #1c1f1c;
+    --destructive: #9d3529;
+    --destructive-foreground: #ffffff;
+    --border: #e6e4dc;
+    --input: #d8d5cb;
+    --ring: #2c5f4f;
 
-/*
- * NeuroBook theme 层：字体、密度、圆角、动效与表面角色。
- * 与配色无关；颜色一律来自下方 colorway 块映射出的 shadcn 语义 token，
- * 派生角色通过 var() 在计算值时解析，因此块顺序不影响结果。
- */
-[data-cosmos-theme="neurobook"] {
-    --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-    /* 编辑部标题字体：拉丁沿用 Geist，中文回退到系统衬线以拉开与正文的层级 */
-    --cosmos-font-display: var(--font-geist-sans, system-ui), ui-serif, Georgia, "Songti SC", "STSong", "SimSun", serif;
-    --tracking-ui: 0em;
-    --control-h-sm: 26px;
+    /* 第 2 层 · Cosmos 扩展语义（亮色） */
+    --marker: #8d5a20;
+    --marker-soft: #f5ecdc;
+    --paper: #fcfbf6;
+
+    /* 第 3 层 · 形状 / 密度 / 动效 */
+    --radius-control: 6px;
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    /* Tailwind 圆角工具类用的阶梯；控件走 --radius-control，卡片走 --radius-card */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-panel: var(--radius-card);
+    --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-serif: Charter, Georgia, "Songti SC", "SimSun", serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    /*
+     * 标题字体。`font-display` 这个类名读的是 `--font-display`，而此前只定义了
+     * `--font-serif`：类名与 token 名对不上，Tailwind 因此从未生成过这个工具类，
+     * 全站用 `font-display` 的标题实际都落在 body 的 system-ui 上（V4 的「标题用衬线」
+     * 一直没生效）。两者都指向同一套衬线栈。
+     */
+    --font-display: var(--font-serif);
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
+    --control-h-sm: 24px;
     --control-h-md: 32px;
     --control-h-lg: 40px;
-    --control-px: 12px;
-    --radius-control: 10px;
-    --radius-panel: 18px;
-    --radius-pill: 999px;
     --motion-fast: 90ms;
     --motion-base: 140ms;
-    --motion-enter: 180ms;
     --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --cosmos-shadow: #18140e;
 
-    /* 表面角色：控件从所在面上抬起，面板保持实心卡片层级 */
+    /*
+     * 控件表面与焦点：控件从所在面上抬起，焦点统一走三段 focus-ring。
+     * 这三组是现有 primitive 已经在消费的合同名，改名会波及全部组件，
+     * 因此保留名称、只把取值对齐新的形状与颜色 token。
+     */
     --surface-control: color-mix(in srgb, var(--foreground) 7%, transparent);
-    --outline-control: color-mix(in srgb, var(--foreground) 16%, transparent);
-
-    /* 面板实心卡片，工具条为次级混合面；焦点统一走三段 focus-ring */
     --surface-panel: var(--card);
-    --surface-toolbar: color-mix(in srgb, var(--secondary) 60%, transparent);
+    --outline-control: color-mix(in srgb, var(--foreground) 16%, transparent);
     --focus-ring:
         0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent),
         0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent),
         0 1px 6px color-mix(in srgb, var(--ring) 22%, transparent);
+
+    /* 第 2 层 · 悬浮物阴影；内容面不用阴影，靠 --border 细线分隔 */
+    --elevation-card:
+        0 1px 2px color-mix(in srgb, var(--cosmos-shadow) 4%, transparent),
+        0 8px 24px -12px color-mix(in srgb, var(--cosmos-shadow) 12%, transparent);
     --elevation-raised:
-        inset 0 1px 0 rgb(255 255 255 / 0.28),
+        inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
         0 1px 2px color-mix(in srgb, var(--cosmos-shadow) 20%, transparent);
     --elevation-popover:
         0 2px 6px color-mix(in srgb, var(--cosmos-shadow) 18%, transparent),
@@ -91,51 +104,35 @@
         0 40px 88px color-mix(in srgb, var(--cosmos-shadow) 38%, transparent);
 }
 
-/* macOS Light 配色 → 现有 shadcn 语义 token */
-[data-cosmos-colorway="macos-light"] {
-    --background: #f6f8fa;
-    --foreground: #111827;
-    --card: #ffffff;
-    --card-foreground: #111827;
-    --popover: #ffffff;
-    --popover-foreground: #111827;
-    --primary: #007aff;
-    --primary-foreground: #ffffff;
-    --secondary: #f0f2f5;
-    --secondary-foreground: #111827;
-    --muted: #f0f2f5;
-    --muted-foreground: #4b5563;
-    --accent: #e6e8ec;
-    --accent-foreground: #111827;
-    --destructive: #dc2626;
-    --border: #e5e7eb;
-    --input: #d1d5db;
-    --ring: #007aff;
-    --radius: 10px;
-    --cosmos-shadow: #0f172a;
-}
+.dark {
+    color-scheme: dark;
 
-/* macOS Night 配色 → 同一组语义 token 的深色取值 */
-[data-cosmos-colorway="macos-night"] {
-    --background: #1c1c1e;
-    --foreground: #fafafa;
-    --card: #2c2c2e;
-    --card-foreground: #fafafa;
-    --popover: #2c2c2e;
-    --popover-foreground: #fafafa;
-    --primary: #0a84ff;
-    --primary-foreground: #ffffff;
-    --secondary: #232325;
-    --secondary-foreground: #fafafa;
-    --muted: #232325;
-    --muted-foreground: #a1a1aa;
-    --accent: #3a3a3c;
-    --accent-foreground: #fafafa;
-    --destructive: #ff453a;
-    --border: #3a3a3c;
-    --input: #48484a;
-    --ring: #0a84ff;
-    --radius: 10px;
+    /* 第 1 层 · 语义色（暗色） */
+    --background: #141715;
+    --foreground: #e4e9e3;
+    --card: #1c201d;
+    --card-foreground: #e4e9e3;
+    --popover: #1c201d;
+    --popover-foreground: #e4e9e3;
+    --primary: #64ab8f;
+    --primary-foreground: #101713;
+    --secondary: #232724;
+    --secondary-foreground: #e4e9e3;
+    --muted: #232724;
+    --muted-foreground: #939b92;
+    --accent: #232724;
+    --accent-foreground: #e4e9e3;
+    --destructive: #df7a6c;
+    --destructive-foreground: #101713;
+    --border: #292e2a;
+    --input: #333834;
+    --ring: #64ab8f;
+
+    /* 第 2 层 · Cosmos 扩展语义（暗色） */
+    --marker: #d0a054;
+    --marker-soft: #2d2718;
+    --paper: #191d1a;
+
     --cosmos-shadow: #000000;
 }
 
@@ -155,29 +152,32 @@
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
     --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
-    --radius-sm: calc(var(--radius) - 4px);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) + 4px);
-    --font-sans: var(--font-geist-sans);
-    --font-display: var(--cosmos-font-display);
-    --font-mono: var(--font-geist-mono);
+    --color-marker: var(--marker);
+    --color-marker-soft: var(--marker-soft);
+    --color-paper: var(--paper);
+
+    --radius-control: var(--radius-control);
+    --radius-card: var(--radius-card);
+
+    --font-sans: var(--font-ui);
+    --font-serif: var(--font-serif);
+    --font-mono: var(--font-mono);
+    --font-display: var(--font-display);
 }
 
 body {
     background: var(--background);
     color: var(--foreground);
-    font-family: var(--font-ui, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
-    letter-spacing: var(--tracking-ui, 0);
+    font-family: var(--font-ui);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    [data-cosmos-theme="neurobook"] {
+    :root {
         --motion-fast: 0ms !important;
         --motion-base: 0ms !important;
-        --motion-enter: 0ms !important;
     }
 }

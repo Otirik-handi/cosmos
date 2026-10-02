@@ -588,9 +588,10 @@ export interface CosmosRepository {
         actor?: string | null;
     }): Promise<Annotation | null>;
     deleteAnnotation(annotationId: string): Promise<void>;
+    /** 目标可选：不给表示「我的全部批注」，整理页的批注分区需要它。 */
     listAnnotations(input: {
-        targetType: TargetType;
-        targetId: string;
+        targetType?: TargetType;
+        targetId?: string;
     }): Promise<AnnotationList>;
     createSavedView(input: {
         name: string;

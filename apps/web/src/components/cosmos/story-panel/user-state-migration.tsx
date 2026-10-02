@@ -48,7 +48,7 @@ type Props = {
 export function StoryUserStateMigrationSection({ busy, onLoadSource, onMigrate, story }: Props) {
     const shell = story.story;
     const family = [
-        { storyId: shell.id, title: `${shell.title}（本历史壳）` },
+        { storyId: shell.id, title: `${shell.title}（本条）` },
         ...shell.replacedBy.map((successor) => ({
             storyId: successor.storyId,
             title: successor.title,
@@ -151,8 +151,8 @@ export function StoryUserStateMigrationSection({ busy, onLoadSource, onMigrate, 
         >
             <h3 className="font-medium">迁移用户状态</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-                拆分时收藏、标签、收藏夹、批注与看板固定都留在本条历史壳上。在这里把它们搬到该去的后继；
-                把后继上的标记迁回本壳，就是撤销这次迁移。
+                拆分时收藏、标签、收藏夹、批注与看板固定都留在本条上。在这里把它们搬到该去的后继；
+                把后继上的标记迁回本条，就是撤销这次迁移。
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm">

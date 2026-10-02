@@ -125,6 +125,7 @@ describe("HttpCosmosClient 用户组织", () => {
             actor: "user",
             createdAt: "2026-09-08T00:00:00.000Z",
             updatedAt: "2026-09-08T00:00:00.000Z",
+            targetTitle: "Story a",
         };
         const client = new HttpCosmosClient({
             baseUrl: "http://localhost:4310",

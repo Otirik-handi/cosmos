@@ -3,11 +3,8 @@
   "generated": "2026-09-24",
   "note": "存量超标登记：条目只允许移除、登记值只允许下调（治理目标）；基线内文件增长只报 warning，不阻塞 CI",
   "files": {
-    "apps/web/src/app/page.tsx": 31143,
     "apps/web/src/component-lab/product-fixtures.tsx": 43966,
-    "apps/web/src/components/cosmos/board-view.tsx": 36711,
     "apps/web/src/components/cosmos/collection-plan-list.tsx": 41708,
-    "apps/web/src/components/cosmos/story-panel.tsx": 37869,
     "e2e/browser/phase2-organization.spec.ts": 33431,
     "packages/logging/src/index.ts": 19935,
     "packages/storage-prisma/src/repository/sources.ts": 31120,

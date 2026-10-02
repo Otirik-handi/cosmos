@@ -89,7 +89,7 @@ Non-goals：
 ## Implementation Walkthrough
 
 1. **搜索表单**（[`feed-browser.tsx`](../../../apps/web/src/components/cosmos/feed-browser.tsx)）：`searchSchema` 增加 `labelIds`/`topicIds` 数组；新增 `labels`/`topics` props 渲染两组多选 chip（`按分类筛选 <名称>`/`按 Topic 筛选 <标题>`），点选经 `searchForm.setValue` 写入；`activeFilterLabels` 增加分类与 Topic 的回显 chip。
-2. **页面接线**（[`page.tsx`](../../../apps/web/src/app/page.tsx)）：表单默认值与 `reset` 带上两个数组；`onSearch` 拼成逗号串提交；`saveCurrentSearchAsView` 保存全部条件；`applySavedView` 回填多选；`FeedBrowser` 传入 `labels.items` 与 `topics`。
+2. **页面接线**（[`page.tsx`](../../../apps/web/src/app/%28shell%29/page.tsx)，2026-09-24 由 `apps/web/src/app/page.tsx` 移入路由组）：表单默认值与 `reset` 带上两个数组；`onSearch` 拼成逗号串提交；`saveCurrentSearchAsView` 保存全部条件；`applySavedView` 回填多选；`FeedBrowser` 传入 `labels.items` 与 `topics`。
 3. **时间线**（[`lib/story-timeline.ts`](../../../apps/web/src/lib/story-timeline.ts)）：把每个成员的 Revision 与 Observation 展平成事件（TemporalValue 取 `exact`，退化为 `fallback.lowerBound`，都没有则用 `createdAt`），按时间倒序、上限 50 条；`StoryPanel` 新增时间线区块。
 4. **相关内容**（[`lib/related-stories.ts`](../../../apps/web/src/lib/related-stories.ts)）：先按共享分类走一次 `search`（1 次请求、带标题），再取最多 2 个关联 Entity 的关联 Story（每个最多 2 条）并逐条取标题；去重、排除当前 Story、上限 5 条、单信号失败只丢该信号；`StoryPanel` 新增相关内容区块，条目可点击切换到该 Story。
 5. **测试与文档**：新增两个 lib 的 unit 测试与浏览器 E2E `phase2-organization.spec.ts`（2 例）；更新组件实验室 fixture、`docs/spec/interfaces/0005-web-client.md`、`docs/testing/README.md` 与 `PROJECT-STATUS.md`。

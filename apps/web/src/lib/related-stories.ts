@@ -36,7 +36,7 @@ export async function loadRelatedStories(
     };
 
     if (detail.labels.length > 0) {
-        const reason = `共享分类：${detail.labels.map((label) => label.name).join("、")}`;
+        const reason = `共享标签：${detail.labels.map((label) => label.name).join("、")}`;
         try {
             const items = await ports.searchByLabelIds(
                 detail.labels.map((label) => label.id).join(","),

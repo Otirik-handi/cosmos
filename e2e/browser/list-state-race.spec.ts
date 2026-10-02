@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { planRowOf } from "../support/story-flow";
+
 const FEED_URL = "http://127.0.0.1:4380/feed.xml";
 
 /**
@@ -13,6 +15,9 @@ const FEED_URL = "http://127.0.0.1:4380/feed.xml";
  * ② `page.tsx` 每次渲染新建的 workspace context 让 `use-source-workspace` 的挂载
  *    effect 每次渲染都重跑：实测一个页面会话对 `/collection-plans` 与 `/connections`
  *    各发了 300+ 次读取，整套验收被拖慢数倍，也是台账里"整轮明显变慢"的来源。
+ *
+ * ①的建计划动作在 `/automation`（ADR-0029 决策 1）；②盯的是首页那次挂载——首页仍在
+ * 挂 `useSourceWorkspace`（看板的采集计划区块），所以留在 `/` 上量同一件事。
  */
 
 /** 扣住某路径的**第一次**读取：请求立刻发出（快照就是那一刻的），延迟 N 毫秒才交付。 */
@@ -35,16 +40,15 @@ test("先发起的计划列表读取晚落地时不得抹掉刚建的计划", as
     await holdFirstRead(page, /\/api\/v1\/collection-plans(\?|$)/, 6_000);
 
     const planName = `陈旧读取-${randomUUID().slice(0, 8)}`;
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建计划" }).click();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "新建来源" }).click();
     await page.getByLabel("名称", { exact: true }).fill(planName);
     await page.getByLabel("Feed URL").fill(FEED_URL);
     await page.getByRole("button", { name: "保存计划" }).click();
     await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 
-    const section = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    const row = section.locator("li").filter({ hasText: planName });
+    const row = planRowOf(page, planName);
     await expect(row).toBeVisible();
 
     // 越过延迟窗口：此时"建计划之前"抓到的那次读取已经返回并写过状态。
@@ -65,7 +69,8 @@ test("首屏之后不得反复重读计划与连接列表", async ({ page }) => 
     });
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    // 首页不再有页面级标题（顶栏属外壳）；用主导航作为首屏锚点。
+    await expect(page.getByRole("navigation", { name: "主导航" })).toBeVisible();
     await page.waitForTimeout(3_000);
     const initialReads = reads.length;
     // 3 秒的静置期里，页面只该有首屏那一次读取（各一条）；渲染循环会把它推到几百条。
