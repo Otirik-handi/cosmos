@@ -163,11 +163,18 @@ test.describe("版面门禁：框架常驻与唯一例外", () => {
     test("断言有效性自证：把导航移到内容下方必须失败", async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto("/");
-        const { nav, content } = await shellBoxes(page);
         const viewport = { width: 1440, height: 900 };
 
-        // 对照组：真实版面必须通过。
-        expect(assertShellLayout({ nav, content, viewport, expectNav: true })).toEqual([]);
+        /*
+         * 对照组：真实版面必须通过。首屏的某一帧还没排完时量到的盒子不满足断言（全量跑里偶发，
+         * 单跑必过），所以轮询到稳定为止再拿它做实验组——否则这条自证会变成随机的假红。
+         */
+        let boxes = await shellBoxes(page);
+        await expect.poll(async () => {
+            boxes = await shellBoxes(page);
+            return assertShellLayout({ nav: boxes.nav, content: boxes.content, viewport, expectNav: true });
+        }).toEqual([]);
+        const { nav, content } = boxes;
 
         // 实验组：把导航搬到内容下方（上次失败的形状），断言必须报错。
         const moved = { ...nav, y: content.y + content.height + 40, x: content.x };

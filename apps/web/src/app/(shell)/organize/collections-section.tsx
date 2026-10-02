@@ -15,14 +15,13 @@ import { messages } from "@/copy/messages";
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
 /*
- * 收藏夹分区。新建、改描述、删除与增删成员都在这里（ADR-0029 决策 1）；
+ * 收藏夹分区：新建、改名与改描述、删除、查看成员并移除，都在这里（ADR-0029 决策 1）。
  * Story 页只能勾选已有收藏夹。
  *
- * 已知缺口：没有从收藏夹里搜索并加入某条 Story 的选择器——成员是在 Story 页勾选的，
- * 这里只做移除。要在这里加人需要先有 Story 选择器（切片 3d 的阅读页会提供）。
+ * 成员**加入**只发生在 Story 页（ADR-0029 §3「关联就地」）：对象页负责对象的字段，
+ * 把某条 Story 放进收藏夹是那条 Story 上的关联动作。所以这里只做移除。
  */
-export function CollectionsSection() {
-    const toast = useToast();
+export function CollectionsSection() {    const toast = useToast();
     const [collections, setCollections] = useState<readonly CollectionSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -31,6 +30,9 @@ export function CollectionsSection() {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<CollectionDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    /** 展开区里的改名草稿：null 表示没在改名。 */
+    const [renameDraft, setRenameDraft] = useState<{ name: string; description: string } | null>(null);
+    const [savingRename, setSavingRename] = useState(false);
 
     const load = useCallback(async (): Promise<void> => {
         try {
@@ -53,10 +55,12 @@ export function CollectionsSection() {
         if (expandedId === collectionId) {
             setExpandedId(null);
             setDetail(null);
+            setRenameDraft(null);
             return;
         }
         setExpandedId(collectionId);
         setDetail(null);
+        setRenameDraft(null);
         setDetailLoading(true);
         try {
             setDetail(await client.collection(collectionId));
@@ -111,6 +115,33 @@ export function CollectionsSection() {
             toast.success({ title: messages.organize.collections.itemRemoved(title) });
         } catch (caught) {
             toast.error({ title: messages.organize.collections.itemRemoveFailed, description: readError(caught) });
+        }
+    };
+
+    /** 改名与改描述同一个命令（`updateCollection`），所以在展开区里合成一个小表单。 */
+    const rename = async (collectionId: string, draft: { name: string; description: string }): Promise<void> => {
+        const name = draft.name.trim();
+        if (name === "" || savingRename) {
+            return;
+        }
+        const description = draft.description.trim();
+        setSavingRename(true);
+        try {
+            await client.updateCollection(collectionId, {
+                name,
+                description: description === "" ? null : description,
+            });
+            setRenameDraft(null);
+            setDetail(await client.collection(collectionId));
+            await load();
+            toast.success({ title: messages.organize.collections.renamed(name) });
+        } catch (caught) {
+            toast.error({
+                title: messages.organize.collections.renameFailed,
+                description: readError(caught),
+            });
+        } finally {
+            setSavingRename(false);
         }
     };
 
@@ -179,6 +210,27 @@ export function CollectionsSection() {
                             </Button>
                             {expandedId === collection.id && (
                                 <div className="w-full basis-full pt-1">
+                                    {renameDraft === null ? (
+                                        <Button
+                                            className="mb-1 px-0"
+                                            onClick={() => setRenameDraft({
+                                                name: collection.name,
+                                                description: detail?.description ?? "",
+                                            })}
+                                            size="sm"
+                                            variant="link"
+                                        >
+                                            {messages.organize.collections.rename}
+                                        </Button>
+                                    ) : (
+                                        <CollectionRenameForm
+                                            draft={renameDraft}
+                                            onChange={setRenameDraft}
+                                            onCancel={() => setRenameDraft(null)}
+                                            onSubmit={() => void rename(collection.id, renameDraft)}
+                                            saving={savingRename}
+                                        />
+                                    )}
                                     {detailLoading ? (
                                         <p className="text-[12px] text-muted-foreground">
                                             {messages.common.loading}
@@ -223,5 +275,46 @@ export function CollectionsSection() {
                 </ul>
             )}
         </SectionShell>
+    );
+}
+
+/** 改名与改描述合成一个小表单：两者是同一个命令的两个字段。 */
+function CollectionRenameForm({
+    draft,
+    saving,
+    onChange,
+    onSubmit,
+    onCancel,
+}: {
+    draft: { name: string; description: string };
+    saving: boolean;
+    onChange: (draft: { name: string; description: string }) => void;
+    onSubmit: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="mb-2 grid gap-2">
+            <Input
+                aria-label={messages.organize.collections.renameName}
+                className="max-w-xs"
+                onChange={(event) => onChange({ ...draft, name: event.target.value })}
+                value={draft.name}
+            />
+            <Input
+                aria-label={messages.organize.collections.renameDescription}
+                className="max-w-md"
+                onChange={(event) => onChange({ ...draft, description: event.target.value })}
+                placeholder={messages.organize.collections.renameDescription}
+                value={draft.description}
+            />
+            <div className="flex gap-2">
+                <Button disabled={saving || draft.name.trim() === ""} onClick={onSubmit} size="sm">
+                    {messages.organize.collections.renameSubmit}
+                </Button>
+                <Button onClick={onCancel} size="sm" variant="ghost">
+                    {messages.organize.collections.renameCancel}
+                </Button>
+            </div>
+        </div>
     );
 }

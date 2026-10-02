@@ -44,6 +44,13 @@ export const organize = {
         emptyMembers: "这个收藏夹还是空的。成员在 Story 页勾选。",
         removeItem: (title: string) => `把 ${title} 移出收藏夹`,
         itemRemoved: (title: string) => `已把「${title}」移出收藏夹`,
+        rename: "改名或改描述",
+        renameName: "收藏夹名称",
+        renameDescription: "收藏夹描述（可留空）",
+        renameSubmit: "保存",
+        renameCancel: "取消",
+        renamed: (name: string) => `已保存收藏夹「${name}」`,
+        renameFailed: "保存收藏夹失败",
         itemRemoveFailed: "移出收藏夹失败",
     },
     favorites: {

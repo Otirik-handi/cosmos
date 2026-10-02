@@ -310,3 +310,36 @@ Worker（轮询 50 ms）+ Web dev(3000)；用真实 UI 路径种入 2 个来源 
 | `bun run vitest run packages/storage-prisma/src/read-title-projection.test.ts …` | **15 通过**（含新增：三类目标各解析出标题、目标删除后投影为 `null`） |
 | `bun run test` | **784 通过 / 137 文件**（新字段让两处 fixture 缺字段而失败，已按新合同补齐） |
 | `bun run typecheck` / `lint` / 文案扫描 / `docs:check` | 0 错误 / 0 error（18 warning）/ 754 处不变 / 927 文件 0 失败 |
+
+## Round 11 · 3c 遗留：收藏夹改名 + 两处偶发（2026-10-01）
+
+### 收藏夹改名与改描述
+
+命令链（合同 / 传输 / API 路由 / 仓库）本来就有 `updateCollection`，缺的只是界面：展开收藏夹后
+只有成员列表与移除，没有改名入口——而分区顶部的注释还写着「新建、改描述、删除与增删成员都在这里」，
+与实际不符（已改）。现在展开区里有「改名或改描述」→ 名称 + 描述两个字段 → 保存/取消，
+保存后回执、重读详情并刷新列表。
+
+**「收藏夹不能加成员」不再是缺口**：按 ADR-0029 §3「关联就地」，把某条 Story 放进收藏夹是那条
+Story 上的动作（Story 页勾选），对象页只负责对象的字段。分区注释已按这条改写，不再把它记成待办。
+
+**标签改名仍缺**：`updateLabel` 这条命令在合同、应用端口、仓库、API 里**都不存在**，要实现得补一整条
+竖切（合同 + 命令 + 事件 + 路由 + 界面 + 测试），不是纯界面工作。留在 Follow-ups。
+
+### 全量跑里的两处偶发（一处已修）
+
+第 4 次全量跑起，两次全量各挂了一条**不同的**用例，且都在单跑时通过：
+
+1. `phase2-organization.spec.ts` 的 feed 区块用例（1 次）：未见失败现场（被后续运行覆盖），
+   单跑与随后两次全量都通过。**未定性**。
+2. `layout-and-budget.spec.ts` 的「断言有效性自证」（1 次，**已修**）：对照组在首屏某一帧量到的
+   盒子不满足版面断言，于是这条本该确定性的自证变成随机假红。修法与 1024px 那条同源——
+   先 `expect.poll` 到版面稳定，再拿稳定的盒子做实验组。连跑三次通过。
+
+修完后的全量为 **51 通过 / 0 失败**。
+
+| 命令 | 结果 |
+| --- | --- |
+| `npx playwright test --config playwright.config.ts phase2-organization --grep "organizes a Story"` | 1 通过（含新增的改名断言：界面改名 + 服务端 `name`/`description` 都变） |
+| `npx playwright test --config playwright.config.ts`（全量） | **51 通过 / 0 失败（2.6m）** |
+| `typecheck` / `lint` / 文案扫描 | 0 错误 / 0 error（18 warning）/ 754 处不变 |

@@ -468,6 +468,22 @@ test("organizes a Story with Topic, Entity, favorite, collection, and annotation
     await expect(page.getByText(`已创建收藏夹「${collectionName}」`)).toBeVisible();
     const collectionId = await idOf(page, "/api/v1/collections", collectionName);
 
+    /*
+     * 改名与改描述就地做（ADR-0029 决策 1：对象页负责对象的字段）。这条同时锁住
+     * 「展开区里的小表单用的是当前展开项」——草稿进 handler 而不是直接读组件状态。
+     */
+    const renamedCollection = `${collectionName}-改名`;
+    await page.getByRole("button", { name: collectionName, exact: false }).first().click();
+    await page.getByRole("button", { name: "改名或改描述", exact: true }).click();
+    await page.getByLabel("收藏夹名称", { exact: true }).fill(renamedCollection);
+    await page.getByLabel("收藏夹描述（可留空）", { exact: true }).fill("按验收目的分组");
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByText(`已保存收藏夹「${renamedCollection}」`)).toBeVisible();
+    const renamed = await (await page.request.get(
+        `/api/v1/collections/${encodeURIComponent(collectionId)}`,
+    )).json() as { name: string; description: string | null };
+    expect(renamed).toMatchObject({ name: renamedCollection, description: "按验收目的分组" });
+
     const labelName = `验收标签-${randomUUID().slice(0, 6)}`;
     const labelId = await createLabel(page, labelName);
     await assignLabel(page, labelId, storyId);
