@@ -2,21 +2,25 @@
 
 ## 状态
 
-当前实现规格；后续代码变化应同步更新本文。本文记录当前 Next.js Web 页面（Phase 1 采集
-链路与 Phase 2 组织/看板浏览）、开发态 React 组件实验室及其与 Product API 的边界。实验室
-浏览器/生产验收结果只在本轮 Task 与 `PROJECT-STATUS.md` 记录，不把 Docker、真实来源或
-Windows smoke 写成已验证能力。
+当前实现规格；后续代码变化应同步更新本文。本文记录当前 Next.js Web 应用（外壳 + 十个路由，
+Task 35 的前端重做；含 Phase 1 采集链路与 Phase 2 组织/看板浏览）、开发态 React 组件实验室
+及其与 Product API 的边界。实验室浏览器/生产验收结果只在本轮 Task 与 `PROJECT-STATUS.md`
+记录，不把 Docker、真实来源或 Windows smoke 写成已验证能力。
 
 ## 最后更新
 
-2026-09-16。
+2026-10-01（Task 35：信息架构、单一明暗轴、外壳级 SSE、集中文案与门禁）。
 
 ## 组件定位
 
-Web Client 是 `apps/web/src/app/page.tsx` 的一个 client-side Next App Router 页面，
-使用 `HttpCosmosClient` 读取 Feed/Source/Health 与来源定义 Catalog、以未保存配置 Probe
-测试 RSS 配置、创建默认停用的 Source、在来源列表行内启用/停用、手动触发已启用 Source
-的 Run、搜索分页、展开 Story，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
+Web Client 是 `apps/web/src/app/` 下的一个 client-side Next App Router 应用，由**外壳 + 十个路由**
+组成（Task 35 的信息架构，ADR-0029）：外壳是顶栏 + 悬浮侧栏（`(shell)/layout.tsx`）与唯一例外
+`(reading)/stories/[id]`（只留顶栏与返回入口）；十个路由是 `/`（看板）、`/library`（信息库与检索）、
+`/topics`、`/entities`、`/organize`（标签/收藏夹/收藏/批注/已保存视图）、`/automation`
+（来源/采集计划/连接/运行记录）、`/settings`、`/system`、`/stories/:id`（读一条内容）与 `/dev/components`
+（组件实验室）。各页只挂载自己那几个域 hook，使用 `HttpCosmosClient` 读取 Feed/Source/Health 与来源定义
+Catalog、以未保存配置 Probe 测试 RSS 配置、创建默认停用的 Source、在来源列表行内启用/停用、手动触发
+已启用 Source 的 Run、搜索分页，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
 metadata 和全局样式；`components/ui/*` 是 UI primitive，`lib/utils.ts` 只提供
 Tailwind class 合并。`instrumentation.ts` 是 Next server instrumentation：Node runtime
 按需创建并缓存一个 `cosmos-web` logger，`register()` 写一次 `web.started`，
@@ -35,13 +39,13 @@ AttemptSnapshot/AttemptPage 与 Asset download 虽由 API 提供，但当前 `Ht
 它提供 Feed/Source/Health、搜索、Story 展开、手动 Source Run 和 SSE 刷新等可见交互，同时把数据库、Blob 和 API 细节留在服务端/transport。
 
 ### 使用方式
-浏览器加载 `page.tsx` 后由 client component 调用 `HttpCosmosClient`；需要刷新时监听 SSE，
+浏览器加载外壳后由 client component 调用 `HttpCosmosClient`；需要刷新时监听 SSE，
 配置来源（catalog 读取、未保存配置 Probe、保存停用、行内启用/停用）或触发 Run 也通过
 已有 client 方法和 API 路由完成，不直接访问 Prisma。
 
 ### 典型情景
 本地浏览内容、检查 Source/Health，验证一次未保存配置的探测结果，保存并启用来源后
-观察手动/定时 ingest 的页面刷新，验证搜索分页或展开 Story；Catalog、Attempt 或
+观察手动/定时 ingest 的页面刷新，验证搜索分页或打开一条 Story；Catalog、Attempt 或
 Asset download 中未被 client 封装的部分不由它承担。
 
 ## 概念与定义
@@ -211,9 +215,10 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     `addTopicMember`）与“创建 Topic 并加入本 Story”（标题 + 目的，`createTopic` 以当前
     Story 为 seed，seed 恒为 `core` 角色）；成员添加入口从 Story 侧发起，不在 Topic 面板
     里做 Story 搜索选择器（ADR-0007 决策 4）。
-13. **Entity 入口与详情**：侧栏“Entities”列表由 `client.listEntities` 加载，每行显示名称与
-    关联 Story 数，点击“打开”调用 `client.entity(entityId)` 打开 EntityPanel。EntityPanel
-    展示规范名/类型/别名与关联 Story、双向类型化关系，支持改名/改类型（`updateEntity`，
+13. **Entity 入口与详情**：`/entities` 页的列表由 `client.listEntities` 加载，每行显示名称与
+    关联 Story 数，点击行进入 `/entities/:id`（Task 35 后该页仍是占位页，改名/别名/关系/解除关联
+    尚无归属页面，见 Task 35 的 Follow-ups）。EntityPanel 展示规范名/类型/别名与关联 Story、
+    双向类型化关系，支持改名/改类型（`updateEntity`，
     携带 `baseRevisionId`）、别名增删（`addEntityAlias`/`removeEntityAlias`）、解除 Story
     关联（`unlinkStoryEntity`）、添加/移除 Entity↔Entity 关系（`createEntityRelation`/
     `removeEntityRelation`，关系目标从已有 Entity 列表选择）。
@@ -267,7 +272,7 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    使「预览 → 结果」之间不再插入旧顺序或浮层回弹。拖拽只改展示配置，不触碰底层内容
    （ADR-0010 决定 1），且**只限分区内**：分区是「用户的一个关注方面」的语义容器、区块是分区内的
    内容细分，跨分区搬区块不做（ADR-0010 决定 7）。上移/下移按钮与拖拽并存，键盘与按钮路径不回退。
-22. **存储面板（OPS-003/004）**：侧栏“存储”区的 `StoragePanel` 挂载时并行 `client.storageStats()`、
+22. **存储面板（OPS-003/004）**：`/settings` 页“存储”区的 `StoragePanel` 挂载时并行 `client.storageStats()`、
     `client.listBackups()` 与 `client.listConnectorStateNamespaces()`，展示数据库/Blob/缓存/可清理媒体的
     占用与备份数量；“新建备份”调 `client.createBackup()`，“恢复”调 `client.restoreBackup(backupId)`
     并提示需重启 API/Worker 才生效。“导出用户数据”调 `client.exportUserData()`，把返回的 `UserDataExport`
@@ -280,7 +285,7 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
     读用户选择的文件、先用 `connectorStateExportSchema` 在本地解析（选错文件时给出「不是导出件」而不是
     服务端 400），再调 `client.importConnectorState({mode, targetNamespace?, export})` 并显示新增／覆盖／
     跳过的条数；模式默认「只补缺失」，「覆盖本地」需用户显式选择。
-23. **连接面板（AUT-009）**：侧栏“连接”区的 `ConnectionPanel` 挂载时调 `client.listConnections()`。
+23. **连接面板（AUT-009）**：`/automation` 页“连接”区的 `ConnectionPanel` 挂载时调 `client.listConnections()`。
     新建连接调 `client.createConnection({name, connectorId, configJson?, scopeJson?})`：`connectorId`
     为空时回退 `generic`，两个 JSON 字段为空时不发送该字段。**适配器配置**（`configJson`）是连接的
     非秘密适配器配置，Bilibili 的 OpenCLI profile 就填在这里（Proposal connection-login-lifecycle-v1）；
@@ -353,14 +358,15 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
   状态（“Webhook 入口：已配置/未生成”）；行内按钮打开入口面板，面板给出入口地址（与页面同源，
   Next 把 `/hooks/*` 透传给 API）、凭证状态、生成/轮换与撤销按钮，生成或轮换成功后在同一面板
   显示**唯一一次**的明文凭证与 curl 调用示例（ADR-0024）。
-- 连接面板（AUT-009）：侧栏“连接”区列出可复用连接；每行显示状态徽标、名称、账号，以及
+- 连接面板（AUT-009）：`/automation` 页“连接”区列出可复用连接；每行显示状态徽标、名称、账号，以及
   **授权范围**与**失效原因**两行——空值显示“未记录”，授权范围按 `键: 值` 渲染顶层标量对象、
   其它形状回退紧凑 JSON、解析不了的值原样显示。行内动作按状态二选一（“标记失效”或“恢复可用”），
   删除始终可用；新建连接提供名称、Connector 与可选的授权范围输入。
 - Source form：loading 显示“正在读取来源定义…”；catalog 不可用时显示错误与“重试读取”；ready 时先显示来源定义选择器，再按所选 manifest 渲染字段（含 `enum` 选择框与认证提示），
   测试结果区显示 running/成功统计/失败原因/超时四态。
 - Feed：loading 时显示“正在读取本地 Feed…”；非 loading 且为空显示暂无内容；有 items
-  时展示 Story kind、sourceName、title、summary、打开 Story；有 nextCursor 显示加载更多；
+  时展示 Story kind、sourceName、title、summary、打开 Story（导航到 `/stories/:id`，Task 35 起
+  不再是抽屉）；有 nextCursor 显示加载更多；
   搜索表单在存在 Label/Topic 时渲染多选筛选 chip，命中条件回显为筛选 chip。
 - Story panel：展示 title、source、revision 数、来源成员（含反向证据关联）、证据来源、
   时间线（时间/事件类型/来源/标题）、相关内容（标题 + 相关原因）、最新 revision contentText、
@@ -372,13 +378,17 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 ## 状态与持久化
 
-页面业务状态均为 React 内存 state，不写 URL query 或 IndexedDB：
+页面业务状态均为 React 内存 state，不写 URL query 或 IndexedDB；Task 35 之后它们按页与域分开，
+不再集中在单一页面：
 
-- `feed`、`nextCursor`、`activeSearch`、`sources`、`story`、`health`；
-- `notice`、`error`、`loading`、`showSourceForm`；
+- 每个页面自己的 `notice`/`error`/`loading`，以及它挂载的域 hook 持有的读模型
+  （`feed`/`nextCursor`/`activeSearch`/`sources`/`story`/`plans`/`topics`/`entities`）；
+- 编辑面的草稿（标题、类型、细分类型、时间范围、关键事实）留在 `StoryEditSurface` 内部，
+  「有没有未保存的编辑」以**上次同步时的服务端状态**为基准，供 ADR-0029 决策 7 的刷新边界判断；
 - `definitionState`（来源定义 loading/ready/error）、`probeState`（idle/running/
   succeeded/failed/timeout）、`activatingSourceId`（进行中的启用/停用行）；
-- `eventStreamState`（connecting/connected/unavailable）。
+- `streamState`（connecting/connected/unavailable），由外壳的 `LiveProvider` 持有并下发给顶栏与
+  「窗口过窄」提示。
 
 唯一的产品 localStorage 持久化是外观主题偏好 `cosmos.theme.preference.v1`
 （见下方“外观主题”）；刷新页面会重新加载 API snapshots 并恢复主题偏好，SSE
@@ -387,23 +397,24 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 ## 外观主题
 
-Web 默认使用 NeuroBook 视觉主题（`data-cosmos-theme="neurobook"`）配 macOS Light /
-macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚举
-`system | macos-light | macos-night`：
+Web 使用**单一明暗轴** `data-cosmos-appearance="light|dark"`（ADR-0029 决策 5：Task 35 删除了
+原先 `data-cosmos-theme="neurobook"` × `data-cosmos-colorway="macos-*"` 两套轴，不是改名）。
+产品偏好是三值枚举 `system | light | dark`：
 
 - `<head>` 内的静态引导脚本在首帧前读取 `cosmos.theme.preference.v1` 与
-  `prefers-color-scheme`，把最终 theme/colorway 属性、`dark` class 和
+  `prefers-color-scheme`，把最终 `data-cosmos-appearance`、`dark` class 和
   `style.colorScheme` 写到 `<html>`；脚本只含仓库常量，解析或存储异常回退浅色；
+  无法识别的存量取值（含旧的 `macos-*`）落回 `system`；
 - `ThemeProvider` 用模块级 store 作为唯一浏览器真相：订阅 matchMedia（仅 system
   生效）与 storage 跨标签同步，并把同一属性幂等写回 `<html>`；服务端快照固定
   system → 浅色；
-- 首页头部与实验室 header 的 `ThemeSwitcher` 提供键盘可达的三态切换；
+- 顶栏“外观主题”分组的 `ThemeSwitcher` 提供键盘可达的三态切换；
   “跟随系统”删除存储 key，显式选择写入；写入失败仅影响当前标签页且 UI 不声称已持久化；
-- 实验室 URL 的 `theme=neurobook&colorway=macos-*` 只控制预览画布根节点
+- 实验室 URL 的 `appearance=light|dark` 只控制预览画布根节点
   （含局部 `dark` class），与全局 chrome 偏好互不覆盖；token override 仍是预览内最高优先级。
 
-`globals.css` 以 `[data-cosmos-theme]` 承载字体/密度/圆角/动效/表面角色，
-以 `[data-cosmos-colorway]` 把两套 macOS 取值映射到现有 shadcn 语义 token；
+`globals.css` 以 `[data-cosmos-appearance]` 承载明暗两套取值，
+并把它们映射到现有 shadcn 语义 token；
 `prefers-reduced-motion` 将主题动效时长归零。生产构建下 `/dev/components`
 仍返回 404，主题能力不改变 Product API、SSE 或表单语义。
 
@@ -415,9 +426,11 @@ macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚�
 3. `loading → error`：任一初始 promise reject，写 error；finally 仍将 loading=false。
 4. `connecting → connected`：收到合法 SSE message；`connecting → unavailable`：
    EventSource error 或 malformed event（transport onError）。
-5. `connected/unavailable → refreshing`：只在匹配 feed/run/job event 时重新读取当前 query；
+5. `connected/unavailable → refreshing`：只在匹配本页 topic 的事件上重新读取当前 query；
    `run.failed.v1` 同时写失败 notice；`snapshot_required` 仅写 notice “服务要求重新读取快照，
-   正在刷新 Feed。”，不会自动 refresh。
+   正在刷新 Feed。”，不会自动 refresh。**详情页编辑中不覆盖**（ADR-0029 决策 7）：
+   `/stories/:id` 订阅 `stories` topic，有未保存编辑时只显示“这条内容在别处有了新变化。
+   你正在编辑的内容没有被改动。”与“重新读取”，由用户决定何时重读；没有未保存编辑则静默重读。
 6. `source-form-open → loading → ready/error`：打开表单读取 catalog；error 可重试并回到
    loading；ready 前不渲染表单字段。
 7. `probe idle → running → succeeded/failed/timeout`：测试配置提交后进入 running；
@@ -429,9 +442,10 @@ macOS Night 两种配色（`data-cosmos-colorway`）。产品偏好是三值枚�
    成功后 refresh；409 conflict 提示版本冲突并 refresh。
 10. `feed/search → paginating`：存在 nextCursor 时追加 page.items；失败保留已有 items
    并显示 error。
-11. `feed-card → story-open`：Story API 成功写 StoryDetail；失败不打开并显示 error；
-   close 清除 story。`story-revision-update`：提交新标题后以返回 StoryDetail 刷新面板；
-   `story-merge`：归并成功后来源成员数增加，旧 Story id 的后续打开重定向到 canonical。
+11. `feed-card → story-open`：点卡片导航到 `/stories/:id`（Task 35 起是独立页面，不再是抽屉）；
+    Story API 成功写 StoryDetail；失败不打开并显示 error。`story-revision-update`：提交新标题后
+    以返回 StoryDetail 刷新编辑面；`story-merge`：归并成功后来源成员数增加，旧 Story id 的后续
+    打开重定向到 canonical。
    `story-split`：提交后以返回的历史壳刷新面板（成员清空、后继列表可见、写操作区消失），
    点击后继按钮打开该后继的普通 Story 视图。
 12. 页面卸载 → SSE closed：effect cleanup 调用 transport close。
@@ -535,12 +549,22 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 8. 刷新浏览器或卸载页面，观察所有 React/SSE 状态重新初始化，且除主题偏好外没有
    localStorage/IndexedDB/URL 持久 cursor；Next rewrite 将 `/api/*` 转到配置 API host。
 9. 清空 `cosmos.theme.preference.v1` 后分别以系统浅色/深色加载首页，观察 `<html>`
-   首帧即为对应 neurobook 配色；点击“macOS Night”后 storage 写入并在刷新与系统
+   首帧即为对应明暗外观；点击“暗色”后 storage 写入并在刷新与系统
    变化下保持；切回“跟随系统”后 key 删除并即时跟随系统。
 
 ## 实现与测试锚点
 
-- 页面状态、调用、SSE、表单、搜索、Story 和渲染：[`apps/web/src/app/(shell)/page.tsx`](../../../apps/web/src/app/%28shell%29/page.tsx)（2026-09-24 Task 35 切片 1 由 `apps/web/src/app/page.tsx` 移入路由组 `(shell)`；文件名中的括号是 Next 路由组的常规写法。链接目标里的括号按 URL 规则编码为 `%28`/`%29`，解码后即上面的路径）。
+- 外壳（顶栏 + 悬浮侧栏）、路由组与十个页面：[`apps/web/src/app/(shell)/layout.tsx`](../../../apps/web/src/app/%28shell%29/layout.tsx)、
+  [`(reading)/layout.tsx`](../../../apps/web/src/app/%28reading%29/layout.tsx) 与各路由目录；首页看板是
+  [`(shell)/page.tsx`](../../../apps/web/src/app/%28shell%29/page.tsx)，信息库与检索是
+  [`(shell)/library/page.tsx`](../../../apps/web/src/app/%28shell%29/library/page.tsx)，读一条内容是
+  [`(reading)/stories/[id]/story-reading.tsx`](../../../apps/web/src/app/%28reading%29/stories/%5Bid%5D/story-reading.tsx)。
+- 外壳级单条 SSE、事件→topic 映射与 300 ms 合并：[`components/shell/live-provider.tsx`](../../../apps/web/src/components/shell/live-provider.tsx) 与
+  [`live-coalesce.ts`](../../../apps/web/src/components/shell/live-coalesce.ts)。
+- 集中文案与禁用词门禁：[`apps/web/src/copy/messages.ts`](../../../apps/web/src/copy/messages.ts)、
+  [`copy/scan.ts`](../../../apps/web/src/copy/scan.ts) 与 [`copy/messages.test.ts`](../../../apps/web/src/copy/messages.test.ts)。
+- 版面与预算门禁：[`e2e/browser/layout-and-budget.spec.ts`](../../../e2e/browser/layout-and-budget.spec.ts)；
+  详情页编辑中不被覆盖：[`e2e/browser/story-live-refresh.spec.ts`](../../../e2e/browser/story-live-refresh.spec.ts)。
 - 文档 metadata、lang、字体、主题引导与 Provider：[`apps/web/src/app/layout.tsx`](../../../apps/web/src/app/layout.tsx)。
 - 外观主题合同/Provider/引导脚本：[`apps/web/src/theme/theme.ts`](../../../apps/web/src/theme/theme.ts)、
   [`theme-provider.tsx`](../../../apps/web/src/theme/theme-provider.tsx)、
@@ -582,12 +606,15 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 注册表，拒绝缺失、重复、无默认场景、缺控件值或未登记 token；当前登记 8 个 UI primitive 和
 6 个 Cosmos 展示组件。
 
-实验室全局 chrome 使用持久化外观偏好（`ThemeSwitcher`）；URL `theme=neurobook&colorway=macos-*`
-只控制预览根节点，缺省确定性 `macos-light`。
+实验室全局 chrome 使用持久化外观偏好（`ThemeSwitcher`）；URL `appearance=light|dark`
+只控制预览根节点，缺省确定性 `light`。
 
-首页 `page.tsx` 是数据请求容器：它独占 `HttpCosmosClient`、SSE、React Hook Form 的
-`handleSubmit`、搜索/分页/Story 状态和错误处理。无副作用展示组件只接收共享 DTO、展示状态和
-回调：首页与实验室复用同一实现，实验室使用固定 synthetic fixture，不复制演示组件。
+Task 35 之后**没有单一的数据请求容器**：`HttpCosmosClient` 与 SSE 在各自的边界上——client 由
+`app/page-runtime.ts` 暴露，SSE 只在外壳的 `LiveProvider` 里开一条；数据状态按域分在
+`app/home/use-*-workspace.ts` 五个 hook 里，每个页面只挂载自己那几个（`use-story-workspace`、
+`use-feed-workspace`、`use-source-workspace`、`use-topic-workspace`、`use-entity-workspace`），
+表单状态留在页面自己的 React Hook Form 实例里。无副作用展示组件只接收共享 DTO、展示状态和
+回调：页面与实验室复用同一实现，实验室使用固定 synthetic fixture，不复制演示组件。
 
 当前产品展示组件边界：
 
@@ -605,9 +632,9 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
   回调，展示 revision/observation 元数据与来源成员/操作区；回调由宿主注入（真实页
   面调用 transport client，组件实验室用 stub，不发 Product API 请求）。
 
-首页首载调用 `ensureDefaultBoard` 幂等 seed 默认看板并按 Board 树渲染；看板加载失败时主区回退为完整阅读流，不阻断阅读。侧栏保留服务状态、Entities 列表与新建计划表单；采集计划与 Topic 列表迁入对应 Block（区块 type 键仍为 `source-health`，显示标签为「采集计划」）。
+首页（`/`）首载调用 `ensureDefaultBoard` 幂等 seed 默认看板并按 Board 树渲染；看板加载失败时主区回退为完整阅读流，不阻断阅读。Task 35 之后首页**只剩看板与系统产出**：页头、右状态栏、检索区与来源表单都已移除，检索整套搬到 `/library`，来源与采集计划的创建只在 `/automation`（ADR-0029 决策 1）；侧栏只有分组导航，不再承载服务状态、Entities 列表或表单。采集计划与 Topic 列表在对应 Block 内（区块 type 键仍为 `source-health`，显示标签为「采集计划」）。
 
-实验室 URL 只保存 `component`、`scene`、`viewport`、`theme`、`colorway`；非法值归一化并以
+实验室 URL 只保存 `component`、`scene`、`viewport`、`appearance`；非法值归一化并以
 `replace` 修正，用户操作以 `push` 保留浏览器前进/后退。已登记 token 的临时输入在失焦时校验，
 版本化快照写入 `localStorage`，JSON 导入整份原子校验；覆盖只写预览根节点的 inline custom
 properties，不写 `:root`，因此实验室 chrome 与产品页面不受污染。

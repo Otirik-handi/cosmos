@@ -37,21 +37,12 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 当前下一步
 
+**前端界面从 0 重新设计已落地（Task [`35`](.agents/tasks/35-frontend-redesign/README.md)，2026-10-01）**：外壳（顶栏 + 悬浮侧栏）+ 十个路由取代「单页 + Story 抽屉」，单一明暗轴 `data-cosmos-appearance` 取代 `theme × colorway` 两套轴，SSE 提升到外壳层且全程恰好一条，用户可见文案集中到 `apps/web/src/copy/` 并有禁用词与内联文案只减不增门禁；版面/预算/行为三类门禁落在 `e2e/browser/layout-and-budget.spec.ts` 与 `story-live-refresh.spec.ts`。**真人验收只做了 6 条关键任务中的 3 条**（看板、配置来源并录入、按标签筛选通过；读一条内容、归并/拆分、打标签/批注/关联因 Story 页排版问题难以测试，已延后）。**移交新 Task 的四项**：Story 页排版（正文与图片分开、内容区过窄、操作面板太靠下）、归并改成可选目标而不是粘贴内部 Story ID、`/topics/:id` 与 `/entities/:id` 详情页、标签改名（需补一整条竖切）。已登记不随本 Task 修的还有：`/automation` 的三条交互诉求（新建计划与创建连接改模态框、原连接表单位置改连接列表含空态、计划行操作按钮加 tooltip）与组件级文案迁移 772 处。
+
 **2026-09-18 复核与决定（文档口径、公开投影安全项、Phase 1 缺口收口）**：完整记录移入 [`PROJECT-STATUS/history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)；仍然有效的结论是 PRD §7／§12 表内无未闭合项、两项修复均已推送。
-
-**Phase 2 收口与尾巴的完成记录（2026-09-15/16）**：完整记录已移入 [`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；本文只保留仍然有效的当前状态与决定。
-
-**真人验收产生的新方向（有效决定；细节在 Proposal）**：
-
-- **界面职责重划**：Proposal [`docs/proposals/ui-surface-ownership-v1.md`](docs/proposals/ui-surface-ownership-v1.md) 已 **accepted**（维护者 2026-09-15 裁定六项）：三层分工冻结为「首页看 / 独立页面管 / Story 抽屉读」，新页面为 Topic 页、Entity 页、用户组织页，不含 Artifact/Workspace（Phase 3 另议）；接受时未冻结的细节（新建标签 / 新建收藏夹的不对称处理）与 2026-09-15 实现尝试作废的经过分别在 Proposal 的「已裁定（六项）」与 [`attempt-and-void-2026-09-15.md`](docs/proposals/ui-surface-ownership/attempt-and-void-2026-09-15.md)。PRD §8 / 架构 §11.4 / 新 ADR 与 Task 的更新在 `master` 上**尚未执行**。
-- **UI 文案审查**：Proposal [`docs/proposals/ui-copy-review-v1.md`](docs/proposals/ui-copy-review-v1.md) 维持 `reviewing`。判据 R0（展示名必须忠实反映概念的实际意义）已确立，术语对照表 v1（A–E 组；B 组只保留 `Story` 和 `Entity`）已由维护者逐行裁定、可直接执行，E 组等「分类」概念定义；仍未接受的是判据 R1–R5 本身、术语表落点与实施归属。改动需与 5 个浏览器 spec 里 205 处按文案定位的断言同批修改。**推论（未获维护者确认）**：UI 整体重做在前，逐屏文案批次应同批后置。
-
-**Phase 2 尾巴遗留状态（2026-09-16 起）**：
-
-- **ING-006 与需求表改标（2026-09-16/17）**：ING-006 已合并并推送（`c308733`，维护者手动验收通过，ADR [`0022`](docs/adr/0022-entry-duplicate-relations-v1.md)）；改标明细在 PRD 勘误台账 [`ERRATA.md`](docs/requirements/0002-product-requirements/ERRATA.md)。合并与清理的完整记录移入 [`history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)。
-- **Phase 2 尾巴已清空（2026-09-23/24）**：ING-012（`1b5cabc`）、EXT-006（`da5ae84`）、AUT-009（`2cfe379`）、AUT-010／EXT-007（`4ef3636`）、LIB-008／OPS-004（`d7af0cc`）与 P2-1（§12 第 4 条 ＋ LIB-003，ADR [`0028`](docs/adr/0028-user-truth-protection-v1.md)）全部收口；**Phase 2 只剩 LIB-004**（正文片段字符级锚点，已改标 Phase 3）。逐条证据在勘误台账与 [`Phase-2-UNDO.md`](Phase-2-UNDO.md)，第四条验收的细节见 Task [`04`](.agents/tasks/04-workflow-runtime/walkthrough.md) 的 Round 109。
-- **Phase 2 第四条验收条件已可判定（2026-09-24）**：Phase 2 **已有**自动写入路径——ingest 的 Entry→Story 投影会覆盖人工编辑过的 Story 表示，此前既无判据也无测试；已由 ADR [`0028`](docs/adr/0028-user-truth-protection-v1.md) 落地保护与回归测试，细节见 Task [`04`](.agents/tasks/04-workflow-runtime/walkthrough.md) 的 Round 109。
-- **真人验收暴露的三条界面方向**（维护者 2026-09-15，尚未排期）：Topic/Entity/用户组织缺独立操作面板、看板需要拖拽、文案过于专业化。前两条对应已 accepted 的 [`ui-surface-ownership-v1`](docs/proposals/ui-surface-ownership-v1.md)（PRD §8 / 架构 §11.4 / 新 ADR 与 Task 在 `master` 上尚未执行）；第三条对应仍 `reviewing` 的 [`ui-copy-review-v1`](docs/proposals/ui-copy-review-v1.md)。
+**Phase 2 收口与尾巴的完成记录（2026-09-15/16/23/24）**：完整记录已移入
+[`PROJECT-STATUS/history-2026-09-4.md`](PROJECT-STATUS/history-2026-09-4.md)；
+仍然有效的是下面「本次未纳入、仍开着的项」与「Phase 3 入口条件」。
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
@@ -176,6 +167,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
 
+- **最近一次全量证据（2026-10-01，Task 35 的 worktree，HEAD `a81ae8a`）**：`typecheck` 0 错误、`lint` 0 error（18 warning）、`bun run test` **137 文件 / 784 用例全绿**、`docs:check` **929 文件 0 失败**、代码与 docs 两条 size 门禁 PASS、文案扫描 754 处内联（禁用词 1 处为登记例外）、组件实验室 **21 passed**、浏览器整套 **51 passed / 0 failed**（21 个 spec，含版面三档断点、SSE 恰好一条、reduced-motion 归零、首屏可交互 158 ms、路由切换 111 ms、首屏 JS 289.7 KB）、Node 进程 E2E 12 例。首屏 JS **增量 −8.4 KB**（回基线 `da147a5` 实测量出 298.1 KB；口径是量到 `load` 事件为止，导航预取不计入）。**未运行**：Docker、发布部署、真实 Agent 验收；真人验收见「当前下一步」。
 - 最近一次全量证据（2026-09-23，主工作区，HEAD `da5ae84`，EXT-006 合并后）：`typecheck` 0、`bun run test` **124 文件 / 726 用例全绿**、`docs:check` **768 文件 0 失败**、size 门禁 PASS、路由表守卫 3/3、`git diff --check` 干净；同片在 worktree 内另跑 Node 进程 E2E 11 例、组件实验室 19 passed、浏览器整套一次 **33 passed**（另一次 31/33 为在册抖动）、真实来源验收四条全绿（含新增的 `test:real:bilibili-search`）。**schema 变更合并后必须先 `bun run db:generate`**。未运行：Docker（首次实跑失败，见上）、`test:real:aihot`、Windows smoke、发布部署；本机 e2e 需 `BUN_BINARY`。逐条数字在 Task 22／23 与勘误台账。
 - **公开 Asset 投影的内部 Blob key 已剥离**（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，合入 `3ded765`；完整记录见 [`history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)）。
 - **浏览器产品 E2E 仍有间歇失败**（`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 根因已修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；2026-09-23 又确认 `webhook-entry.spec.ts` 那次**不是抖动而是确定性布局缺陷**（侧栏溢出，已修）；其余（含 `ingest.spec.ts:119` 的 `toBeFocused`）仍未归因。症状与观察次数只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
