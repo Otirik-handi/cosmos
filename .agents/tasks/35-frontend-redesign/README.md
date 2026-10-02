@@ -281,6 +281,9 @@ Non-goals：
 - **全量跑的偶发**：`phase2-organization` 的 feed 区块用例曾在一次全量里单独挂过（单跑与随后两次全量
   都通过，未定性）；`layout-and-budget` 的「断言有效性自证」同类偶发已用 `expect.poll` 修掉（Round 11）。
   门禁里还有未定性的偶发这件事本身值得盯着。
+- **`docs/spec/interfaces/0005-web-client.md` 已同步到当前行为（2026-10-01），但已 59.5 KB**：它在
+  `docs-baseline.json` 里是存量登记债，本轮为同步新 IA 又增了约 3 KB。建议按文档治理拆成
+  「外壳与路由 / 各页行为 / 主题与实验室」三册；拆分前它的增长只报 warning。
 - **实验室夹具仍超线**：`component-lab/product-fixtures.tsx` 42.9 KB / 1192 行在基线里（存量债）。
 - **E7 的「增量 ≤ 30 KB gzip」已在 Round 12 实测**：回基线提交 `da147a5` 构建后与当前版同口径对比，
   首屏 JS 由 298.1 KB 降到 **289.7 KB（−8.4 KB，在预算内）**。**口径提醒**：必须量到 `load` 事件为止；
