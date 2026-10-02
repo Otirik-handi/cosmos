@@ -91,7 +91,6 @@ type StoryEditSurfaceProps = {
     onUnlinkEntity?: (entityId: string) => Promise<void>;
     labelOptions?: readonly LabelRef[];
     collections?: readonly Pick<CollectionSummary, "id" | "name" | "containsStory">[];
-    onToggleFavorite?: (favorited: boolean) => Promise<void>;
     onAttachLabel?: (labelId: string) => Promise<void>;
     onDetachLabel?: (labelId: string) => Promise<void>;
     onToggleCollection?: (collectionId: string, member: boolean) => Promise<void>;
@@ -156,7 +155,6 @@ export function StoryEditSurface({
     onUnlinkEntity,
     labelOptions,
     collections,
-    onToggleFavorite,
     onAttachLabel,
     onDetachLabel,
     onToggleCollection,
@@ -481,7 +479,6 @@ export function StoryEditSurface({
                         onLinkEntity={onLinkEntity}
                         onPinToBoard={onPinToBoard}
                         onToggleCollection={onToggleCollection}
-                        onToggleFavorite={onToggleFavorite}
                         onUnlinkEntity={onUnlinkEntity}
                         onUpdateAnnotation={onUpdateAnnotation}
                         setActionError={setActionError}

@@ -92,7 +92,11 @@ test("reads a Story at its own URL and reaches the edit surface there", async ({
      * （`useStoryWorkspace` 里必须 `useCallback`），effect 会每渲染重跑 → `setStory` → 再渲染，
      * 形成自激取数循环。实测过：3 秒内对同一条 Story 发了 349 次请求，页内跳转与提交后的重读
      * 全被拖住。这里把「一条 Story 只读几次」变成断言，防止再犯。
+     * 计数从**进入阅读页那一刻**开始（上面那些请求属于录入前置，不该算进来）。
      */
+    storyRequests.length = 0;
+    await page.goto(`/stories/${encodeURIComponent(storyId)}`);
+    await expect(title).toBeVisible();
     const storyReads = storyRequests.filter((url) => url.includes("/api/v1/stories/"));
     expect(storyReads.length, `阅读页对同一条 Story 取了 ${storyReads.length} 次`).toBeLessThanOrEqual(8);
 
@@ -102,19 +106,21 @@ test("reads a Story at its own URL and reaches the edit surface there", async ({
     expect(Math.round(cardWidth)).toBe(640);
     const titleFont = await title.evaluate((element) => getComputedStyle(element).fontFamily);
     expect(titleFont.toLowerCase()).toContain("charter");
+    // 正文块必须存在：取不到就断言失败，而不是把这一段整块跳过（曾经用 `if (count > 0)` 包着，
+    // 元素消失时用例照样绿）。
     const body = article.locator("div.whitespace-pre-wrap").first();
-    if (await body.count() > 0) {
-        const metrics = await body.evaluate((element) => {
-            const style = getComputedStyle(element);
-            return {
-                fontSize: style.fontSize,
-                lineHeight: style.lineHeight,
-                width: element.getBoundingClientRect().width,
-            };
-        });
-        expect(metrics.fontSize).toBe("16px");
-        expect(Number.parseFloat(metrics.lineHeight) / Number.parseFloat(metrics.fontSize)).toBeCloseTo(1.8, 1);
-    }
+    await expect(body).toBeVisible();
+    const metrics = await body.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+            fontSize: style.fontSize,
+            lineHeight: style.lineHeight,
+            width: element.getBoundingClientRect().width,
+        };
+    });
+    expect(metrics.fontSize).toBe("16px");
+    expect(Number.parseFloat(metrics.lineHeight) / Number.parseFloat(metrics.fontSize)).toBeCloseTo(1.8, 1);
+    expect(metrics.width).toBeLessThanOrEqual(544);
 
     // 只读区块的锚点是既有浏览器验收依赖的合同，删页时不能顺手丢掉。
     await expect(page.locator('[data-story-key-facts="true"]')).toBeVisible();
@@ -149,6 +155,13 @@ test("reads a Story at its own URL and reaches the edit surface there", async ({
     await expect(editSection.getByRole("button", { name: "加入", exact: true })).toBeVisible();
     await expect(editSection.getByText("关联已有 Entity", { exact: true })).toBeVisible();
     await expect(editSection.getByRole("button", { name: "关联", exact: true })).toBeVisible();
+
+    /*
+     * 「同一件事只有一个可写入口」：收藏的唯一入口是动作区那个按钮，编辑面里不该再有第二个。
+     * 这条抓的正是 Round 13 修掉的重复收藏入口——上面按按钮名做黑名单抓不到它。
+     */
+    await expect(page.getByRole("button", { name: "收藏", exact: true })).toHaveCount(1);
+    await expect(editSection.getByRole("button", { name: /收藏/u })).toHaveCount(0);
 
     /*
      * 拆分表单不在这一条里：它要求 Story 至少有 2 个成员（`split.tsx` 的 `entries.length >= 2`），

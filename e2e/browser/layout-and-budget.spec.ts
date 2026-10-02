@@ -22,8 +22,18 @@ const TOP_BAR_HEIGHT_PX = 56;
 const FIRST_INTERACTIVE_BUDGET_MS = 2_000;
 /** E7：同会话内切导航项 ≤ 300 ms。 */
 const NAVIGATION_BUDGET_MS = 300;
-/** E7：单个列表页首屏数据 20 条；首屏 JS 增量预算的绝对值记录见 walkthrough。 */
-const FIRST_LOAD_JS_BUDGET_BYTES = 400 * 1024;
+/** E7：单个列表页首屏数据 20 条。 */
+const LIST_PAGE_PAGE_SIZE = 20;
+/**
+ * E7 的首屏 JS 预算：**增量 ≤ 30 KB gzip**。
+ *
+ * 门禁守的是增量，所以上限由实测基线推出：前端重做之前的提交 `da147a5` 在同样口径下是
+ * 298.1 KB（Round 12 回该提交构建后实测）。写死绝对值的风险是给大回归开绿灯——400 KB 这种
+ * 松上限等于不设防，所以这里用「基线 + 预算」。
+ */
+const FIRST_LOAD_JS_BASELINE_BYTES = Math.round(298.1 * 1024);
+const FIRST_LOAD_JS_INCREMENT_BUDGET_BYTES = 30 * 1024;
+const FIRST_LOAD_JS_BUDGET_BYTES = FIRST_LOAD_JS_BASELINE_BYTES + FIRST_LOAD_JS_INCREMENT_BUDGET_BYTES;
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -118,7 +128,8 @@ test.describe("版面门禁：框架常驻与唯一例外", () => {
         const notice = page.locator("[data-narrow-window-notice]");
         await expect(notice).toBeVisible();
         await expect(notice).toContainText("窗口过窄");
-        // 外壳整组不渲染：既没有导航，也没有内容区（不是「藏起来但还在」）。
+        // 外壳整组对用户不可见：导航与内容区都取不到可见盒子。实现是 `max-[1023px]:hidden`
+        // （CSS 隐藏、DOM 仍在，JS 也照跑），所以断言只证明「不可见」，不声称「不渲染」。
         await expect(page.getByRole("navigation", { name: "主导航" })).toBeHidden();
         await expect(page.locator("main").first()).toBeHidden();
 
@@ -228,22 +239,37 @@ test.describe("预算门禁：动效与首屏", () => {
 
     test("首屏可交互与路由切换在预算内，并记录首屏 JS 体积", async ({ page }) => {
         await page.setViewportSize({ width: 1440, height: 900 });
+        /*
+         * 在 `load` 事件那一刻取样，而不是等页面安静下来再取：新外壳的导航链接会被 Next 预取，
+         * `load` 之后还会再拉一批 chunk（实测 +73.5 KB），那不属于首屏。等几秒再量会得出
+         * 「首页比旧页重 65 KB」的错误结论（Round 12 的第一遍就是这么量的）。
+         */
+        await page.addInitScript(() => {
+            window.addEventListener("load", () => {
+                const entries = performance.getEntriesByType("resource")
+                    .filter((entry) => (entry as PerformanceResourceTiming).initiatorType === "script");
+                (window as unknown as Record<string, unknown>).__firstLoadScripts = entries.map(
+                    (entry) => ({
+                        name: entry.name,
+                        bytes: (entry as PerformanceResourceTiming).encodedBodySize,
+                    }),
+                );
+            });
+        });
         const started = Date.now();
         await page.goto("/");
         await expect(page.getByRole("navigation", { name: "主导航" })).toBeVisible();
         const interactiveMs = Date.now() - started;
 
         const scripts = await page.evaluate(() =>
-            performance.getEntriesByType("resource")
-                .filter((entry) => (entry as PerformanceResourceTiming).initiatorType === "script")
-                .map((entry) => {
-                    const timing = entry as PerformanceResourceTiming;
-                    return { name: timing.name, bytes: timing.encodedBodySize };
-                }));
+            (window as unknown as Record<string, { name: string; bytes: number }[]>)
+                .__firstLoadScripts ?? []);
         const firstLoadBytes = scripts.reduce((sum, script) => sum + script.bytes, 0);
-        console.log(`[budget] 首屏可交互 ${interactiveMs}ms；首屏 JS ${(firstLoadBytes / 1024).toFixed(1)}KB（${scripts.length} 个脚本）`);
+        console.log(`[budget] 首屏可交互 ${interactiveMs}ms；首屏 JS ${(firstLoadBytes / 1024).toFixed(1)}KB（${scripts.length} 个脚本，量到 load 为止）`);
 
+        expect(scripts.length).toBeGreaterThan(0);
         expect(interactiveMs).toBeLessThanOrEqual(FIRST_INTERACTIVE_BUDGET_MS);
+        // 基线 298.1 KB + 增量预算 30 KB（E7）。超出即说明这次改动把首屏拉大了。
         expect(firstLoadBytes).toBeLessThanOrEqual(FIRST_LOAD_JS_BUDGET_BYTES);
 
         const navStarted = Date.now();

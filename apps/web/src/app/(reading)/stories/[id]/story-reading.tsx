@@ -306,7 +306,6 @@ export function StoryReading({ storyId }: { storyId: string }) {
                     onPinToBoard={pinStoryToBoard}
                     onSplitStory={storyWorkspace.splitStory}
                     onToggleCollection={storyWorkspace.toggleStoryCollection}
-                    onToggleFavorite={toggleStoryFavorite}
                     onUnlinkEntity={unlinkEntityFromStory}
                     onUnlinkEntry={storyWorkspace.unlinkEntryStory}
                     onUnlinkEntryRelation={storyWorkspace.unlinkEntryRelation}

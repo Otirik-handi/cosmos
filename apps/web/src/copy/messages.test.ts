@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import baseline from "./inline-copy-baseline.json";
 import { messages } from "./messages";
-import { BANNED_UI_TERMS, scanInlineCopy } from "./scan";
+import { BANNED_UI_TERMS, findBannedTerms, scanInlineCopy } from "./scan";
 
 /**
  * 集中文案模块的两条门禁（E6）：
@@ -59,6 +59,48 @@ describe("集中文案模块", () => {
                 `例外已不存在，请从 BANNED_TERM_EXCEPTIONS 移除：${exception.file} / ${exception.term}`,
             ).toBe(true);
         }
+    });
+
+    it("集中文案本身也要过禁用词（迁移越多，越不能只靠内联扫描）", () => {
+        /*
+         * `scanInlineCopy` 跳过 `copy/`（那里正是迁移的**目的地**），所以它的禁用词结果永远
+         * 覆盖不到已迁移的文案——迁移得越彻底，门禁越空。这里直接遍历 `messages` 的字符串值：
+         * 不经过中文字面量前置过滤，因此纯拉丁词（`Revision` 等）也能被抓到。
+         */
+        const problems: string[] = [];
+        let checked = 0;
+        const visit = (value: unknown, path: string): void => {
+            if (typeof value === "string") {
+                checked += 1;
+                for (const term of findBannedTerms(value)) {
+                    problems.push(`${path} 出现「${term}」— ${value}`);
+                }
+                return;
+            }
+            if (typeof value === "function") {
+                // 带参数的文案（计数、名称插值）用占位实参求值；抛错就记下来，不静默跳过。
+                try {
+                    visit((value as (...args: unknown[]) => unknown)(0, "示例", "示例", 0), path);
+                } catch {
+                    problems.push(`${path} 无法求值，禁用词未检查`);
+                }
+                return;
+            }
+            if (Array.isArray(value)) {
+                value.forEach((item, index) => visit(item, `${path}[${index}]`));
+                return;
+            }
+            if (value !== null && typeof value === "object") {
+                for (const [key, item] of Object.entries(value)) {
+                    visit(item, path === "" ? key : `${path}.${key}`);
+                }
+            }
+        };
+        visit(messages, "");
+
+        expect(problems).toEqual([]);
+        // 覆盖面的下限：低于这个数说明遍历漏了分支（当前约 212 条字符串值）。
+        expect(checked).toBeGreaterThan(180);
     });
 
     it("内联文案只减不增", () => {

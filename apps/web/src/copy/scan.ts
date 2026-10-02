@@ -17,7 +17,13 @@ import ts from "typescript";
 /** 产品源码根；相对本文件位置解析，测试与命令行两种入口都能用。 */
 export const SOURCE_ROOT = path.resolve(import.meta.dirname, "..");
 
-/** 组件实验室是开发期工具，用固定 fixture；它的夹具文案不进产品文案治理。 */
+/**
+ * 组件实验室是开发期工具，用固定 fixture；它的夹具文案不进产品文案治理。
+ *
+ * `copy/` 也在这里跳过，因为它是迁移的**目的地**——「内联文案只减不增」量的是还没迁走的部分。
+ * 代价是它的禁用词也扫不到，所以 `messages.test.ts` 另有一条直接遍历 `messages` 的禁用词断言
+ * （且不过中文字面量过滤，纯拉丁词也能抓到）。**新增文案分册时不必改这里，改那条测试。**
+ */
 const SKIPPED_DIRECTORIES = new Set(["copy", "component-lab"]);
 
 /** 这些属性名不是面向用户的文案。 */

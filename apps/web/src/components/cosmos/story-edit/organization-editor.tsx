@@ -28,7 +28,6 @@ type StoryOrganizationEditorProps = {
     annotations?: readonly Annotation[];
     entityOptions?: readonly EntitySummary[];
     topics?: readonly TopicSummary[];
-    onToggleFavorite?: (favorited: boolean) => Promise<void>;
     onAttachLabel?: (labelId: string) => Promise<void>;
     onDetachLabel?: (labelId: string) => Promise<void>;
     onToggleCollection?: (collectionId: string, member: boolean) => Promise<void>;
@@ -54,7 +53,6 @@ export function StoryOrganizationEditor({
     annotations,
     entityOptions,
     topics,
-    onToggleFavorite,
     onAttachLabel,
     onDetachLabel,
     onToggleCollection,
@@ -117,21 +115,6 @@ export function StoryOrganizationEditor({
             await onUnlinkEntity(entityId);
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "解除 Entity 关联失败。");
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const submitToggleFavorite = async (): Promise<void> => {
-        if (!onToggleFavorite) {
-            return;
-        }
-        setBusy(true);
-        setActionError(null);
-        try {
-            await onToggleFavorite(!story.favorited);
-        } catch (error) {
-            setActionError(error instanceof Error ? error.message : "更新收藏失败。");
         } finally {
             setBusy(false);
         }
@@ -284,7 +267,7 @@ export function StoryOrganizationEditor({
 
     return (
         <div className="flex flex-col gap-6">
-                    <StoryOrganizationSection annotations={annotations} attachLabelId={attachLabelId} attachableLabels={attachableLabels} busy={busy} cancelEditAnnotation={cancelEditAnnotation} collections={collections} editingAnnotationBody={editingAnnotationBody} editingAnnotationId={editingAnnotationId} editingAnnotationQuote={editingAnnotationQuote} newAnnotationBody={newAnnotationBody} newAnnotationQuote={newAnnotationQuote} onAttachLabel={onAttachLabel} onCreateAnnotation={onCreateAnnotation} onDeleteAnnotation={onDeleteAnnotation} onDetachLabel={onDetachLabel} onPinToBoard={onPinToBoard} onToggleCollection={onToggleCollection} onToggleFavorite={onToggleFavorite} onUpdateAnnotation={onUpdateAnnotation} setAttachLabelId={setAttachLabelId} setEditingAnnotationBody={setEditingAnnotationBody} setEditingAnnotationQuote={setEditingAnnotationQuote} setNewAnnotationBody={setNewAnnotationBody} setNewAnnotationQuote={setNewAnnotationQuote} startEditAnnotation={startEditAnnotation} story={story} submitAttachLabel={submitAttachLabel} submitCreateAnnotation={submitCreateAnnotation} submitDeleteAnnotation={submitDeleteAnnotation} submitDetachLabel={submitDetachLabel} submitPinToBoard={submitPinToBoard} submitToggleCollection={submitToggleCollection} submitToggleFavorite={submitToggleFavorite} submitUpdateAnnotation={submitUpdateAnnotation} />
+                    <StoryOrganizationSection annotations={annotations} attachLabelId={attachLabelId} attachableLabels={attachableLabels} busy={busy} cancelEditAnnotation={cancelEditAnnotation} collections={collections} editingAnnotationBody={editingAnnotationBody} editingAnnotationId={editingAnnotationId} editingAnnotationQuote={editingAnnotationQuote} newAnnotationBody={newAnnotationBody} newAnnotationQuote={newAnnotationQuote} onAttachLabel={onAttachLabel} onCreateAnnotation={onCreateAnnotation} onDeleteAnnotation={onDeleteAnnotation} onDetachLabel={onDetachLabel} onPinToBoard={onPinToBoard} onToggleCollection={onToggleCollection} onUpdateAnnotation={onUpdateAnnotation} setAttachLabelId={setAttachLabelId} setEditingAnnotationBody={setEditingAnnotationBody} setEditingAnnotationQuote={setEditingAnnotationQuote} setNewAnnotationBody={setNewAnnotationBody} setNewAnnotationQuote={setNewAnnotationQuote} startEditAnnotation={startEditAnnotation} story={story} submitAttachLabel={submitAttachLabel} submitCreateAnnotation={submitCreateAnnotation} submitDeleteAnnotation={submitDeleteAnnotation} submitDetachLabel={submitDetachLabel} submitPinToBoard={submitPinToBoard} submitToggleCollection={submitToggleCollection} submitUpdateAnnotation={submitUpdateAnnotation} />
                     <StoryLinkEntitySection busy={busy} entityOptions={entityOptions} linkEntityId={linkEntityId} setLinkEntityId={setLinkEntityId} story={story} submitLinkEntity={submitLinkEntity} submitUnlinkEntity={submitUnlinkEntity} />
                     <StoryTopicSection busy={busy} joinRole={joinRole} joinTopicId={joinTopicId} setJoinRole={setJoinRole} setJoinTopicId={setJoinTopicId} submitJoinTopic={submitJoinTopic} topics={topics} />
         </div>

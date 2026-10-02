@@ -363,12 +363,12 @@ function BoardSpotlightBlock({
                         <Badge variant="secondary" className="mr-2">
                             {placement.targetType === "story" ? "Story" : "Topic"}
                         </Badge>
-                        {placement.targetTitle ?? placement.targetId}
+                        {placement.targetTitle ?? "（目标已不可读）"}
                     </button>
                     <Button
                         size="xs"
                         variant="ghost"
-                        aria-label={`解除固定 ${placement.targetTitle ?? placement.targetId}`}
+                        aria-label={`解除固定 ${placement.targetTitle ?? "这条内容"}`}
                         onClick={() => {
                             void client.unpinSpotlight(placement.id).then(() => {
                                 load();

@@ -270,9 +270,9 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
     const labelId = await createLabel(page, labelName);
     await assignLabel(page, labelId, canonicalId);
     await openStory(page, canonicalId);
-    const userSection = await expandEditSurface(page);
-    await userSection.getByTestId("story-favorite-toggle").click();
-    await expect(userSection.getByText("★ 取消收藏")).toBeVisible();
+    // 收藏的唯一入口是阅读页动作区的按钮（ADR-0029 决策 1；编辑面里那个重复入口已在 Round 13 删除）。
+    await page.getByRole("button", { name: "收藏", exact: true }).click();
+    await expect(page.getByRole("button", { name: "已收藏", exact: true })).toBeVisible();
     // 两次写入都必须是服务端已确认的，否则后面的拆分与状态断言会在竞态下读到尚未
     // 落库的中间态（2026-09-15 观察到过一次这种失败）。
     await expect.poll(async () => {
@@ -281,6 +281,7 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
     }, { timeout: 30_000 }).toBe(`true:${labelName}`);
 
     // 显式把两个成员各分给一个后继；未列出的关系留在历史壳。
+    const userSection = await expandEditSurface(page);
     const splitForm = userSection.locator('form[aria-label="拆分 Story"]');
     await expect(splitForm).toBeVisible();
     const targets = splitForm.locator('select[aria-label$="的拆分去向"]');
@@ -523,8 +524,10 @@ test("organizes a Story with Topic, Entity, favorite, collection, and annotation
     await editSection.getByRole("button", { name: "添加批注", exact: true }).click();
     await expect(editSection.getByText(annotationBody, { exact: true })).toBeVisible();
 
-    await editSection.getByTestId("story-favorite-toggle").click();
-    await expect(editSection.getByText("★ 取消收藏")).toBeVisible();
+    // 收藏走动作区那个唯一入口（编辑面里的重复入口已删）；编辑面里不该再出现第二个。
+    await expect(editSection.getByRole("button", { name: /收藏/u })).toHaveCount(0);
+    await page.getByRole("button", { name: "收藏", exact: true }).click();
+    await expect(page.getByRole("button", { name: "已收藏", exact: true })).toBeVisible();
 
     // 全部落库：重读 Story 与批注列表，确认不是页面内的临时回显。
     const organized = await readStory(page, storyId);
@@ -577,10 +580,13 @@ test("gives each feed block its own stream and keeps an unbound one on the lates
     await expect(section.locator('[data-block-type="feed"]')).toHaveCount(2);
     await page.getByRole("button", { name: "完成编辑", exact: true }).click();
 
-    // 两个阅读流区块各自取数：未绑定的按最新内容（本用例刚录入的来源），绑定的按视图为空。
+    // 两个阅读流区块各自取数：未绑定的按最新内容，绑定的按视图取数（该视图为空）。
     const blocks = page.getByRole("region", { name: sectionTitle }).locator('[data-block-type="feed"]');
     await expect(blocks).toHaveCount(2);
+    // 看板区块渲染成 listitem/button（页面级阅读流才是 article），断言按它的真实标记写。
+    await expect(blocks.nth(0).locator("li").first()).toBeVisible();
     await expect(blocks.nth(0)).toContainText(sourceName);
+    await expect(blocks.nth(0)).not.toContainText(`视图「${viewName}」没有匹配的内容。`);
     await expect(blocks.nth(1)).toContainText(`视图「${viewName}」没有匹配的内容。`);
 
     // 页面级检索在 /library，与看板区块各走各的取数：那边搜不到，这边区块照旧。

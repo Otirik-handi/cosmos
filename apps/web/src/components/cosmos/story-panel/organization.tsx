@@ -36,7 +36,6 @@ type Props = {
     onDetachLabel?: (labelId: string) => Promise<void>;
     onPinToBoard?: () => Promise<void>;
     onToggleCollection?: (collectionId: string, member: boolean) => Promise<void>;
-    onToggleFavorite?: (favorited: boolean) => Promise<void>;
     onUpdateAnnotation?: (annotationId: string, input: { body: string; quote?: string | null }) => Promise<void>;
     setAttachLabelId: Dispatch<SetStateAction<string>>;
     setEditingAnnotationBody: Dispatch<SetStateAction<string>>;
@@ -51,7 +50,6 @@ type Props = {
     submitDetachLabel: (labelId: string) => Promise<void>;
     submitPinToBoard: () => Promise<void>;
     submitToggleCollection: (collectionId: string, member: boolean) => Promise<void>;
-    submitToggleFavorite: () => Promise<void>;
     submitUpdateAnnotation: (annotationId: string) => Promise<void>;
 };
 
@@ -73,7 +71,6 @@ export function StoryOrganizationSection({
     onDetachLabel,
     onPinToBoard,
     onToggleCollection,
-    onToggleFavorite,
     onUpdateAnnotation,
     setAttachLabelId,
     setEditingAnnotationBody,
@@ -88,13 +85,11 @@ export function StoryOrganizationSection({
     submitDetachLabel,
     submitPinToBoard,
     submitToggleCollection,
-    submitToggleFavorite,
     submitUpdateAnnotation,
 }: Props) {
     return (
         <>
-            {(onToggleFavorite
-                || onAttachLabel
+            {(onAttachLabel
                 || onDetachLabel
                 || onToggleCollection
                 || onCreateAnnotation
@@ -122,24 +117,10 @@ export function StoryOrganizationSection({
                             </span>
                         </div>
                     )}
-                    {onToggleFavorite && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={busy}
-                                data-testid="story-favorite-toggle"
-                                onClick={() => void submitToggleFavorite()}
-                            >
-                                {story.favorited ? "★ 取消收藏" : "☆ 收藏"}
-                            </Button>
-                            <span className="text-sm text-muted-foreground">
-                                {story.favorited
-                                    ? "已收藏本条 Story，可在收藏列表快速找回。"
-                                    : "收藏后可在收藏列表快速找回本条 Story。"}
-                            </span>
-                        </div>
-                    )}
+                    {/*
+                     * 收藏**不在这里**：它是阅读页动作区的按钮（ADR-0029 决策 1「同一件事只保留一个
+                     * 可写入口」）。这里曾经也放了一个同命令的按钮，形成双写，Round 13 删除。
+                     */}
                     {(onAttachLabel || onDetachLabel) && (
                         <div className="grid gap-3">
                             <h4 className="text-sm font-medium">标签</h4>

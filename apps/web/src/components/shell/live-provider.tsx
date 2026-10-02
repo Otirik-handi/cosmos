@@ -25,7 +25,12 @@ export type LiveTopic = "library" | "automation" | "stories";
 
 const COALESCE_MS = 300;
 
-/** 事件类型 → 需要重读的 topic。存储层实际发出的事件类型，Job 成功没有独立事件。 */
+/**
+ * 事件类型 → 需要重读的 topic。**只映射本仓库确实发出的类型**：Job 终态有独立事件
+ * （`job.succeeded.v1`/`job.failed_terminal.v1`，见 `job-claims.ts`），Run 的
+ * `run.started.v1`/`run.cancelled.v1` 与 `media.cleanup.completed.v1` 暂未映射——它们不影响
+ * 页面已经显示的内容（取消与清理都有本页重读兜底）。未映射的事件只更新连接状态。
+ */
 const TOPIC_BY_EVENT: Readonly<Record<string, LiveTopic>> = {
     "feed.updated.v1": "library",
     "run.queued.v1": "automation",

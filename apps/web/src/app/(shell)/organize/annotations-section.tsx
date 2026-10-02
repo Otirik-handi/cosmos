@@ -17,8 +17,9 @@ import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
  * 批注分区。不带目标查询列出全部批注——这条读取路径是切片 3a 新开的：扩展前
  * listAnnotations 必须带 targetType + targetId，因此无法回答「我写过哪些批注」。
  *
- * 批注对象只带 targetType/targetId，没有标题投影，所以这里只能显示批注正文与它挂在
- * 什么类型上；要跳回被批注的内容需要另一次查询。
+ * 批注对象带服务端投影的 `targetTitle`（Round 10 补），所以这里能显示挂在什么上；
+ * 目标已删除时投影为 null，界面说「（目标已不可读）」而不是显示裸 ID。要跳回被批注的
+ * 内容仍需要另一次查询。
  */
 export function AnnotationsSection() {
     const toast = useToast();

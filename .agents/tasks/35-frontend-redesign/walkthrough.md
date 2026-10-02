@@ -154,3 +154,84 @@ Story 上的动作（Story 页勾选），对象页只负责对象的字段。�
 
 切片 3 与切片 4 除已移交新 task 的两项（`/topics/:id`、`/entities/:id` 详情页；标签改名）外，
 **没有其它未完成项**：3a①-③、3b①-③、3c①-②、3d①-③、3e①-③ 与切片 4 的全部五项均已达成并有证据。
+
+## Round 13 · 独立五轴审查与四条 Required 的修复（2026-10-01）
+
+**授权**：维护者「检查 Task 35 是否可以闭合」。仓库唯一完成定义第 5 条要求
+「所有 Critical 和 Required review finding 已解决」，而本 Task **此前没有任何 review 记录**——
+这是闭合前的真缺口。于是派了一个**只读**的独立审查者（不共享本会话上下文），按仓库生命周期
+第 6 阶段审 `612bc87..HEAD`（179 文件、+12773/−5238），先读测试再读实现。
+
+### 审查结论
+
+| 轴 | 结论 |
+| --- | --- |
+| 正确性 | 无 Critical、无数据损坏类缺陷；1 条 Required（占位页显示裸 ID） |
+| 简单性 | 无 Required；2 条 Nit |
+| 架构 | 2 条 Required（同一页两个收藏写入口；禁用词门禁不覆盖 `copy/**`） |
+| 安全 | **未发现问题**（唯一 `dangerouslySetInnerHTML` 是静态常量；外部内容全部走 React 文本子节点；图片只从同源 `/api/v1/assets/:id`；媒体 URL 限 http/https 且有 `ftp://` 拒绝用例） |
+| 性能 | 1 条 Required（预算门禁量的是 400 KB 绝对值，不是 E7 的增量） |
+
+另有 10 条 Optional、3 条 Nit、11 处「测试没真正覆盖的合同」。
+
+### 四条 Required 的修复
+
+1. **禁用词门禁完全不覆盖 `copy/**`**（`scan.ts` 的 `SKIPPED_DIRECTORIES` 含 `copy`，而
+   `messages.test.ts` 只读内联扫描的结果）——**迁移得越彻底，门禁越空**，与「命中即失败」相反。
+   修法：`messages.test.ts` 新增一条直接遍历 `messages` 的断言（字符串值 + 用占位实参求值带参文案，
+   求不出值的显式记成问题而不是静默跳过），且**不过中文字面量过滤**，所以 `Revision` 这类纯拉丁词
+   也能抓到。首跑覆盖 212 条字符串值、**零命中**；`scan.ts` 的注释写明「跳过 `copy` 是为了量内联残留，
+   禁用词由那条测试负责」。
+2. **`/stories/:id` 同一页两个收藏写入口**（动作区按钮与编辑面的 `story-favorite-toggle` 调同一条命令，
+   违反 ADR-0029 决策 1，也是 3c 验收 ② 要清的形态）。修法：删掉编辑面那一块及其 prop 链
+   （`organization.tsx` → `organization-editor.tsx` → `story-edit-surface.tsx` → 阅读页），
+   动作区保留唯一入口；两条 spec 断言同批改，并新增「整页只有 1 个收藏按钮、编辑面里 0 个」。
+3. **两个占位详情页把内部 ID 显示给用户**（我自己 Round 8 加的 `<p className="font-mono">`）。
+   判据 R3 与「不把裸 ID 当标题显示」是同一条规矩，本 Task 还为此删过阅读页的调试页脚。
+   修法：删掉那两行，页面连 `params` 都不再需要（顺带去掉 `decodeURIComponent` 在畸形转义下的
+   500 风险）。**同类还有一处**：看板 Spotlight 区块的 `targetTitle ?? targetId` 回退（搬迁前就有，
+   本 Task 未登记）→ 改成「（目标已不可读）」，与收藏/批注分区一致。
+4. **预算门禁没量它声称的东西**：断言写的是 400 KB 绝对值，等于给 +110 KB 的回归开绿灯。
+   修法：上限改成**基线 + 预算**（298.1 KB + 30 KB，注释写明基线的来源是 Round 12 对 `da147a5`
+   的实测），并把取样点移到 **`load` 事件那一刻**（`addInitScript` 在 load 时快照脚本体积）——
+   新外壳的导航预取发生在 `load` 之后（实测 +73.5 KB），等几秒再量会得出错误的「重了 65 KB」。
+
+### 顺手修掉的 Optional 与门禁盲区
+
+- **O4** 看板区块回退显示裸 ID（见上）。
+- **O6** `live-provider.tsx` 的注释说「Job 成功没有独立事件」与事实不符（`job.succeeded.v1` 存在），
+  已改成准确表述并列出未映射的三个事件类型及理由。
+- **O7** 整理页批注分区的注释还写着「没有标题投影」，而它正在用 `targetTitle`。
+- **O9** 1024px 那条的注释声称「整组不渲染」，实现是 `max-[1023px]:hidden`（DOM 与 JS 仍在）——
+  注释改成只声称「不可见」。
+- **覆盖缺口 #8**：`story-reading.spec.ts` 的正文 16px/1.8 断言被 `if (count > 0)` 包着，
+  元素消失时用例照样绿 → 改成先断言正文块可见，并补上「阅读列 ≤ 544px」。
+- **覆盖缺口 #9**：取数次数门禁统计了整个用例会话的请求 → 改成进入阅读页时清零计数器。
+- **覆盖缺口 #3**：「写入口唯一性」只按 4 个创建按钮名做黑名单 → 新增收藏入口的唯一性断言。
+
+### 顺带查清一处反复出现的偶发
+
+`phase2-organization.spec.ts` 的 feed 区块用例在两次全量/整文件跑里挂过、单跑必过。查清后发现
+**断言用错了标记**：看板区块渲染成 `listitem`/`button`（页面级阅读流才是 `article`），
+`toContainText(sourceName)` 在区块尚未取到数时假红。改成「先等区块有 listitem，再断言含本用例来源、
+且不是空视图提示」。整文件连跑两次 8/8 通过。
+
+### 未修、已登记的审查发现
+
+Optional/Nit 里剩下的：O1 纯拉丁禁用词对内联文案仍不可达（`copy/**` 已覆盖）、O2 另两条「移除」动作
+各有两处入口（取消收藏、删除视图）、O3 实验室登记门禁不扫 `components/shell/**`、
+O5 合并窗口是去抖而非节流（无 maxWait）、O8 点「重新读取」会连带把编辑面收回折叠态、
+O10 路由切换预算余量只有 2.7×、N1 `listAnnotations` 在只给 `targetType` 时静默降级成列出全部、
+N2 40+ prop 压成一行、N3 context value 未 memo。覆盖缺口里剩下的 6 条（增量之外的四条草稿分支无门禁、
+SSE 未覆盖阅读页例外路由、entry 标题投影的空断言、纯文本渲染无载荷 fixture、断言自证只证纯函数、
+`e2e/` 不在 typecheck 覆盖内）一并进 Follow-ups。
+
+### 验证
+
+| 命令 | 结果 |
+| --- | --- |
+| `bun run vitest run apps/web/src/copy/messages.test.ts` | **5 通过**（含新增的文案模块禁用词断言） |
+| `npx playwright test --config playwright.config.ts phase2-organization` | **8/8 连跑两次**（feed 区块偶发已修） |
+| `npx playwright test --config playwright.config.ts`（全量） | **51 通过 / 0 失败（2.6m）** |
+| `bun run test` / `typecheck` / `lint` | **785 通过** / 0 错误 / 0 error（18 warning） |
+| 文案扫描 | 内联 **751** 处（删掉重复收藏块后由 754 下降，基线已同步下调） |
