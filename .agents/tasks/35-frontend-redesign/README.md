@@ -56,7 +56,16 @@ Non-goals：
 
 ## Current State
 
-评审当时的现状（完整证据见第 0 层分册）：
+**Task 35 之后（2026-10-01）**：`apps/web/src/app/` 是外壳 + 十个路由——顶栏 + 悬浮侧栏
+（`(shell)/layout.tsx`）与唯一例外 `(reading)/stories/[id]`；页面为 `/`（纯看板 + 系统产出）、
+`/library`（信息库与检索工作台）、`/topics`、`/entities`、`/organize`、`/automation`、`/settings`、
+`/system`、`/stories/:id`、`/dev/components`（实验室）。Story 抽屉已删除，阅读页是 Story 的唯一可写
+入口；创建只在对象页、关联就地（ADR-0029 决策 1）。主题是单一 `data-cosmos-appearance`；SSE 在外壳层
+且全程恰好一条；用户可见文案集中在 `src/copy/` 并有禁用词与内联文案门禁。三个原超线文件已回线内
+（`board-view.tsx` 194 行桶文件 + 4 分片、`(shell)/page.tsx` 287 行、`story-panel.tsx` 删除、
+实验室 registry 15 行）。未完成项与移交清单见 Follow-ups。
+
+**评审当时的现状（Task 35 开始前，完整证据见第 0 层分册）**：
 
 - 首页 `apps/web/src/app/page.tsx`（802 行）是唯一产品页面，Story / 话题 / Entity 都以抽屉盖在其上；无路由、无全局导航。
 - 侧栏是首页正文网格的第二行，上方压着页头和搜索区——上次「导航落在页面下方、切页后侧栏消失」的结构成因。
