@@ -204,7 +204,7 @@ Non-goals：
 | 300 ms 合并 | `apps/web/src/components/shell/live-coalesce.test.ts` | 假定时器逐毫秒验证（窗口内合并、不同 topic 各自计时、卸载不触发） |
 | 详情页编辑中不被覆盖 | `e2e/browser/story-live-refresh.spec.ts` | 无编辑时静默重读且不提示；有未保存编辑时只提示、草稿与页面主体都不变；点「重新读取」后读到新内容（Round 9） |
 | `prefers-reduced-motion` | `layout-and-budget.spec.ts` | 动效时长归零 |
-| 首屏可交互 / 路由切换 / 首屏 JS | 同上 | 实测 152 ms / 111 ms / 289.7 KB，断言 2000 ms / 300 ms / 400 KB |
+| 首屏可交互 / 路由切换 / 首屏 JS | 同上 | 实测 158 ms / 111 ms / **289.7 KB**，断言 2000 ms / 300 ms / 400 KB；**增量 −8.4 KB**（Round 12 回基线 `da147a5` 实测量出：基线 298.1 KB，量到 `load` 事件为止） |
 
 **同时落地的裁定**（维护者，2026-10-01）：E5 三档表按实测修正进 ADR-0029 决策 6 并补上
 「窗口过窄」提示；首页补上写入口径的回执横幅；docs 侧两处既有超线登记进 `docs-baseline.json`。
@@ -282,8 +282,9 @@ Non-goals：
   都通过，未定性）；`layout-and-budget` 的「断言有效性自证」同类偶发已用 `expect.poll` 修掉（Round 11）。
   门禁里还有未定性的偶发这件事本身值得盯着。
 - **实验室夹具仍超线**：`component-lab/product-fixtures.tsx` 42.9 KB / 1192 行在基线里（存量债）。
-- **E7 的「增量 ≤ 30 KB gzip」无法回溯测量**：切片 2 之前的构建产物不在本 worktree 里，
-  本轮记录的是绝对值（首屏 289.7 KB）与上限；要真正量增量需在旧基线提交上另做一次构建。
+- **E7 的「增量 ≤ 30 KB gzip」已在 Round 12 实测**：回基线提交 `da147a5` 构建后与当前版同口径对比，
+  首屏 JS 由 298.1 KB 降到 **289.7 KB（−8.4 KB，在预算内）**。**口径提醒**：必须量到 `load` 事件为止；
+  新外壳的导航预取会在 `load` 之后再加 7 个脚本（+73.5 KB），等几秒再量会得出「重了 65 KB」的错误结论。
 - **docs 侧存量债**：`Phase-2-UNDO.md` 与 `docs/proposals/ui-surface-ownership-v1.md` 已登记进
   `docs-baseline.json`（越过 9k token 警戒线，本轮之前就存在）；前者是历史回滚记录，
   后者在信息架构收口后应缩回并移除登记。

@@ -110,3 +110,47 @@ Story 上的动作（Story 页勾选），对象页只负责对象的字段。�
 | `npx playwright test --config playwright.config.ts phase2-organization --grep "organizes a Story"` | 1 通过（含新增的改名断言：界面改名 + 服务端 `name`/`description` 都变） |
 | `npx playwright test --config playwright.config.ts`（全量） | **51 通过 / 0 失败（2.6m）** |
 | `typecheck` / `lint` / 文案扫描 | 0 错误 / 0 error（18 warning）/ 754 处不变 |
+
+## Round 12 · 切片 3/4 收尾审计：把三处「未验证」全部验证掉（2026-10-01）
+
+维护者要求确认切片 3/4 除已移交给新 task 的两项外没有别的未完成。逐条复查后，此前标「未验证／
+无法回溯」的三处都能验证，已全部补上证据。
+
+### ① 切片 4 预算门禁的「首屏 JS 增量 ≤ 30 KB gzip」（此前记「无法回溯测量」）
+
+回到切片 1 之前的提交 `da147a5` 重新构建，与当前版在**同一探针、同一 API、同一时点**下量：
+
+| 版本 | `load` 时点（首屏 JS） | 之后 3 秒（含路由预取） |
+| --- | --- | --- |
+| 基线 `da147a5`（旧单页） | 298.1 KB / 7 个脚本 | 298.1 KB / 7（当时没有外壳，无预取） |
+| 当前（新 IA 首页） | **289.7 KB / 14 个脚本** | 363.2 KB / 21 个脚本 |
+
+**增量 = −8.4 KB，在预算内**，判据达成。两点值得记：
+
+- **口径**：E7 量的是**首屏** JS，即到 `load` 事件为止加载的脚本（`encodedBodySize`，gzip 传输体）。
+  新外壳的导航链接会被 Next 预取，`load` 之后还会再拉 7 个脚本（+73.5 KB）——那不属于首屏，
+  但**任何「等 3 秒再量」的做法都会把它算进去**，得出「新首页比旧页重 65 KB」的错误结论。
+  我第一遍就是这么量的，差一点写出一条假的预算违规。
+- **计量步骤**：`git checkout da147a5` → 清 `apps/web/.next`（**必须先清**：dev server 在当前分支留下的
+  `.next/dev/types/validator.ts` 会让基线构建因找不到新路由而失败）→ 带 `COSMOS_API_URL` 跑
+  `bun run build` → `next start` → 探针量 → 切回分支重建。
+
+### ② 切片 4 的 V6 复审清单收口（此前只核了一半）
+
+原文两条：`feed-browser.tsx` 界面上的「分类」与裸 `Topic`；首页徽标「Phase 1 · 本地信息库」与副标题已过时。
+
+- 「分类」与裸 `Topic`：用户可见文案已改为「标签」「话题」（`copy/areas/common.ts` 的 `topic: "话题"`、
+  `organize.labels: "标签"`，检索区是「按标签筛选」）；`feed-browser.tsx` 里剩下的 `分类`/`Topic`
+  只在**代码注释与标识符**里，不是界面文案。
+- 「Phase 1 · 本地信息库」徽标与副标题：`apps/web/src` 已无这两个字符串——切片 3b 删页头时一并去掉。
+
+### ③ 切片 3a 判据③「写入合同 diff 为零」
+
+查那四个只读查询的落地提交 `1c4e0aa`：改动集中在 docs、读取侧合同（`entity`/`topic`/`user-organization`）、
+仓库读取实现、传输客户端与一个新的读取投影测试；**`*CommandSchema` 的行一行未动**，也没有 prisma schema
+或 migration 改动；`repository-port.ts` 的唯一改动是把批注查询的目标参数改成可选（只读参数）。
+
+### 结论
+
+切片 3 与切片 4 除已移交新 task 的两项（`/topics/:id`、`/entities/:id` 详情页；标签改名）外，
+**没有其它未完成项**：3a①-③、3b①-③、3c①-②、3d①-③、3e①-③ 与切片 4 的全部五项均已达成并有证据。
