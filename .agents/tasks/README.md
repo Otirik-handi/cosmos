@@ -57,6 +57,8 @@ Task 导航：
 
 治理类任务（文档/代码规模治理等）使用**独立编号体系**，位于 [`governance/`](governance/)（`G{NN}` 编号，不占用上述产品 Task 编号），章程与任务索引见 [`governance/README.md`](governance/README.md)。
 
+- [`36-reading-layout-and-object-details/`](36-reading-layout-and-object-details/)：Story 阅读页两栏版面与对象详情页补完——阅读页改成「左内容 / 右操作编辑」两栏 3:2 居中版面并拆开 `StoryEditSurface`（只读归左栏、可写归右栏、媒体移出编辑面）、归并从粘贴 Story ID 改成可搜索选择（复用 `GET /search`）、`/topics/:id` 与 `/entities/:id` 从占位变可用、标签改名补成完整竖切；编号 36 由维护者 2026-10-02 分配。
+
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 
 实现规格入口：[`../../docs/spec/README.md`](../../docs/spec/README.md)。先读 spec 索引与公共合同，再按组件读取
