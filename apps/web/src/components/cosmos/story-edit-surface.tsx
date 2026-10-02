@@ -1,4 +1,4 @@
-import { useState, type FormEventHandler } from "react";
+import { useEffect, useState, type FormEventHandler } from "react";
 
 import type {
     Annotation,
@@ -45,6 +45,36 @@ import {
 import { TimelineSection } from "./story-panel/timeline-section";
 import { RevisionAssets } from "./story-panel/revision-assets";
 import { registeredStorySubtype } from "./story-panel/story-subtype-select";
+
+/**
+ * 可编辑草稿的完整快照。
+ *
+ * 两侧都经这一个函数构造，字段集合与顺序因此一致，`JSON.stringify` 比较才是可靠的
+ * 「有没有未保存的编辑」。草稿是小而扁平的 JSON 安全结构，逐字段比较不值得。
+ */
+type StoryDraftBaseline = {
+    title: string;
+    kind: StoryDetail["story"]["kind"];
+    subtype: string | null;
+    timeRange: StoryTimeRangeDraft;
+    keyFacts: StoryKeyFactDraft[];
+};
+
+function storyDraftBaseline(
+    story: StoryDetail,
+    draft?: Omit<StoryDraftBaseline, never>,
+): StoryDraftBaseline {
+    if (draft !== undefined) {
+        return draft;
+    }
+    return {
+        title: story.story.title,
+        kind: story.story.kind,
+        subtype: story.story.subtype,
+        timeRange: storyTimeRangeToDraft(story.story.timeRange),
+        keyFacts: storyKeyFactsToDraft(story.story.keyFacts),
+    };
+}
 
 type StoryEditSurfaceProps = {
     story: StoryDetail;
@@ -100,6 +130,11 @@ type StoryEditSurfaceProps = {
         sourceStoryId: string;
         command: MigrateStoryUserStateCommand;
     }) => Promise<void>;
+    /**
+     * 上报「有没有未保存的编辑」。阅读页据此决定后台事件到达时是静默重读还是先问用户
+     * （ADR-0029 决策 7：正在编辑时不覆盖）。
+     */
+    onUnsavedChange?: (unsaved: boolean) => void;
 };
 
 /**
@@ -140,6 +175,7 @@ export function StoryEditSurface({
     onUnlinkEntryRelation,
     onLoadStoryUserState,
     onMigrateStoryUserState,
+    onUnsavedChange,
 }: StoryEditSurfaceProps) {
     const [title, setTitle] = useState(story.story.title);
     const [kind, setKind] = useState<StoryDetail["story"]["kind"]>(story.story.kind);
@@ -170,6 +206,25 @@ export function StoryEditSurface({
     const [splitEntityTargets, setSplitEntityTargets] = useState<Record<string, number>>({});
     const [splitTopicTargets, setSplitTopicTargets] = useState<Record<string, number>>({});
     const [editing, setEditing] = useState(false);
+
+    /*
+     * 「有没有未保存的编辑」以**上次同步时的服务端状态**为基准，而不是当前的 `story`：
+     * 阅读页会在事件到达时后台静默重读，`story` 因此会变；拿它当基准的话，用户什么都没动
+     * 也会立刻被算成「正在编辑」，于是从此再也收不到静默重读。
+     * 用户确认「重新读取」时由阅读页换 `key` 重挂载本组件，草稿与基准一起重新初始化。
+     */
+    const [baseline, setBaseline] = useState<StoryDraftBaseline>(() => storyDraftBaseline(story));
+    const unsaved = JSON.stringify(storyDraftBaseline(story, {
+        title,
+        kind,
+        subtype,
+        timeRange: timeRangeDraft,
+        keyFacts: keyFactsDraft,
+    })) !== JSON.stringify(baseline);
+
+    useEffect(() => {
+        onUnsavedChange?.(unsaved);
+    }, [onUnsavedChange, unsaved]);
 
     const currentRevision = story.entry?.revisions[0];
     const timeline = buildStoryTimeline(story);
@@ -215,9 +270,17 @@ export function StoryEditSurface({
                 timeRange: timeRange.timeRange,
                 keyFacts,
             });
-            // 保存后把表单对齐到刚落库的值：清掉「点了删除但没保存」这类未提交编辑。
+            // 保存后把表单对齐到刚落库的值：清掉「点了删除但没保存」这类未提交编辑，
+            // 并把「未保存」的基准前移到刚落库的这一版。
             setTimeRangeDraft(storyTimeRangeToDraft(timeRange.timeRange));
             setKeyFactsDraft(storyKeyFactsToDraft(keyFacts));
+            setBaseline(storyDraftBaseline(story, {
+                title: normalized,
+                kind,
+                subtype,
+                timeRange: storyTimeRangeToDraft(timeRange.timeRange),
+                keyFacts: storyKeyFactsToDraft(keyFacts),
+            }));
         } catch (error) {
             setActionError(error instanceof Error ? error.message : "Story 操作失败。");
         } finally {

@@ -16,4 +16,7 @@ export const reading = {
     favorite: "收藏",
     favorited: "已收藏",
     pinnedNotice: "已固定到看板热点区。",
+    /** ADR-0029 决策 7：正在编辑时不覆盖，让用户决定什么时候读新内容。 */
+    staleStory: "这条内容在别处有了新变化。你正在编辑的内容没有被改动。",
+    reloadStory: "重新读取",
 } as const;

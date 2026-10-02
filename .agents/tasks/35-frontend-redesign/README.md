@@ -208,7 +208,7 @@ Non-goals：
 - 行为门禁：正在编辑的详情页收到事件时表单内容不变且出现提示。
 - V6 复审清单收口：`feed-browser.tsx` 的「分类」与裸 `Topic`；首页徽标与副标题。
 
-**状态：门禁与文案已落地，行为门禁（编辑中不被覆盖）与 V6 剩余项未做**（Round 7）。
+**状态：已完成**（Round 7 落地门禁与文案；**Round 9 补上行为门禁**）。
 
 门禁落点与口径：
 
@@ -222,6 +222,7 @@ Non-goals：
 | 写入口径回执可见 | `e2e/browser/home-board.spec.ts` | 首页新建看板后回执可见、看板进入切换器（此前首页静默丢弃通知） |
 | SSE 恰好 1 条 | 同上 | 一次会话内跨页导航后仍只有 1 条 `/api/v1/events` 请求 |
 | 300 ms 合并 | `apps/web/src/components/shell/live-coalesce.test.ts` | 假定时器逐毫秒验证（窗口内合并、不同 topic 各自计时、卸载不触发） |
+| 详情页编辑中不被覆盖 | `e2e/browser/story-live-refresh.spec.ts` | 无编辑时静默重读且不提示；有未保存编辑时只提示、草稿与页面主体都不变；点「重新读取」后读到新内容（Round 9） |
 | `prefers-reduced-motion` | `layout-and-budget.spec.ts` | 动效时长归零 |
 | 首屏可交互 / 路由切换 / 首屏 JS | 同上 | 实测 152 ms / 111 ms / 289.7 KB，断言 2000 ms / 300 ms / 400 KB |
 
@@ -230,8 +231,8 @@ Non-goals：
 
 **验收**：① 三档断点版面断言全过且「故意错位必须失败」✓；
 ② 禁用词扫描抓到已知违规 ✓（15 处）；
-③ **编辑中的详情页不被事件覆盖：未做**——阅读页目前不订阅事件 topic，
-因此不存在覆盖路径，但也没有「有新变化，重新读取？」的提示；记入 Follow-ups。
+③ **编辑中的详情页不被事件覆盖 ✓**（Round 9）：阅读页订阅 `stories` topic，未编辑时静默重读、
+编辑中只提示「有新变化，重新读取？」且不覆盖草稿，门禁在 `story-live-refresh.spec.ts`。
 
 **依赖**：切片 3。**预计核心文件**：`src/copy/**`、`e2e/browser/**`、`docs/testing/README.md`。
 
@@ -279,8 +280,8 @@ Non-goals：
 - **文案组件级 772 处未迁**：`copy/inline-copy-baseline.json` 只减不增，新增内联文案已被门禁拦住；
   剩余集中在 `components/cosmos/**`（board-view 分片、collection-plan-list、connection-panel、
   source-form、story-panel 子区块、topic/entity panel）与 `lib/**`（media-policy、story-time-range-draft 等）。
-- **编辑中的详情页不被事件覆盖（切片 4 行为门禁）未做**：阅读页不订阅事件 topic，
-  因此没有覆盖路径，也没有 ADR-0029 决策 7 要求的「有新变化，重新读取？」提示。
+- **编辑中的详情页不被事件覆盖（切片 4 行为门禁）已在 Round 9 落地**：阅读页订阅 `stories` topic，
+  未编辑时静默重读、编辑中只提示「有新变化，重新读取？」。门禁 `story-live-refresh.spec.ts`。
 - **话题与 Entity 的详情页未建**（见上）；**标签目录读取**已在 Round 8 补进阅读页与信息库
   （此前 Story 页无法打标签、信息库无法按标签筛选）。
 - **「并入本 Story 的 Story ID」是判据 R3 的违规**：要用户粘贴内部编号才能归并。

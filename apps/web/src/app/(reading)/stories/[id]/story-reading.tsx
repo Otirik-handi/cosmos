@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StoryEditSurface } from "@/components/cosmos/story-edit-surface";
 import { PageBanners } from "@/components/shell/page-banners";
+import { useLiveTopic } from "@/components/shell/live-provider";
 import { messages } from "@/copy/messages";
 import {
     StoryEventTimeLine,
@@ -35,6 +36,10 @@ export function StoryReading({ storyId }: { storyId: string }) {
     const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [togglingFavorite, setTogglingFavorite] = useState(false);
+    /** 编辑面里有未保存的编辑；事件到达时据此决定静默重读还是先问用户（ADR-0029 决策 7）。 */
+    const [unsavedEdit, setUnsavedEdit] = useState(false);
+    const [stale, setStale] = useState(false);
+    const [reloadToken, setReloadToken] = useState(0);
 
     /** 与首页同一约定：上下文对象必须身份稳定，否则各域 hook 的 effect 每次渲染都重跑。 */
     const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
@@ -76,6 +81,26 @@ export function StoryReading({ storyId }: { storyId: string }) {
         // 标签目录要显式加载：不加载时「选择要添加的标签」下拉不会渲染，Story 就无法打标签。
         void loadLabels();
     }, [loadEntities, loadLabels, loadTopics]);
+
+    /*
+     * ADR-0029 决策 7 的刷新边界：详情页**正在编辑时不覆盖**，显示「有新变化，重新读取？」
+     * 交给用户决定；没在编辑就静默后台重读（滚动位置与展开状态都不动）。
+     * `useLiveTopic` 通过 ref 转发回调，所以这里读到的是最新的 `unsavedEdit`。
+     */
+    useLiveTopic("stories", () => {
+        if (unsavedEdit) {
+            setStale(true);
+            return;
+        }
+        void openStory(storyId);
+    });
+
+    const reloadStory = async (): Promise<void> => {
+        setStale(false);
+        // 先读到新内容再递增 token：编辑面据此把草稿对齐到新内容，顺序反过来会对齐到旧内容。
+        await openStory(storyId);
+        setReloadToken((value) => value + 1);
+    };
 
     useEffect(() => {
         // 受管理 subtype 目录（ORG-013）读取失败只让下拉退化为「无 subtype」，不阻断阅读。
@@ -142,6 +167,23 @@ export function StoryReading({ storyId }: { storyId: string }) {
     return (
         <div className="flex w-full flex-col gap-8">
             <PageBanners error={error} notice={notice} />
+
+            {stale && (
+                <div
+                    className="flex flex-wrap items-center gap-3 rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-[13px] leading-6"
+                    role="status"
+                >
+                    <span>{messages.reading.staleStory}</span>
+                    <Button
+                        className="ml-auto"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void reloadStory()}
+                    >
+                        {messages.reading.reloadStory}
+                    </Button>
+                </div>
+            )}
 
             <article className="rounded-[var(--radius-card)] bg-paper p-8 shadow-[var(--elevation-card)]">
                 <header className="flex flex-col gap-3">
@@ -236,6 +278,12 @@ export function StoryReading({ storyId }: { storyId: string }) {
                     annotations={storyAnnotations}
                     collections={collections.items}
                     entityOptions={entities}
+                    /*
+                     * 「重新读取」通过换 key 重挂载编辑面：草稿与「未保存」的基准一起重新初始化，
+                     * 不必在编辑面里写「prop 变了就 setState」的 effect（那会级联渲染，也被 lint 拦）。
+                     */
+                    key={`story-edit-${storyId}-${reloadToken}`}
+                    onUnsavedChange={setUnsavedEdit}
                     entryCandidates={keyFactEntryOptions}
                     entryOptions={entryOptions.filter((option) => {
                         return !story.evidence.some((item) => item.entryId === option.id);
