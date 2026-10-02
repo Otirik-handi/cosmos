@@ -90,6 +90,10 @@ export function AnnotationsSection() {
                                         : annotation.targetType === "entry"
                                             ? messages.common.targetType.entry
                                             : messages.common.targetType.topic}
+                                    {/* 标题由服务端投影；目标已被删除时为 null，如实说「已不可读」。 */}
+                                    {annotation.targetTitle === null
+                                        ? messages.organize.annotations.targetMissing
+                                        : `「${annotation.targetTitle}」`}
                                     {messages.organize.annotations.attachedSuffix} ·{annotation.updatedAt.slice(0, 10)}
                                 </span>
                             </div>

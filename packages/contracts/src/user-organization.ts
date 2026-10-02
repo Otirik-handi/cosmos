@@ -176,6 +176,11 @@ export const annotationSchema = z.object({
     actor: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    /*
+     * 目标的显示标题，供「我写过哪些批注」这类跨目标列表直接渲染；目标已被删除时为 null，
+     * 界面按「已不可读」处理，而不是把裸 ID 当标题显示（与收藏列表同一条约定）。
+     */
+    targetTitle: z.string().nullable(),
 });
 
 export type Annotation = z.infer<typeof annotationSchema>;

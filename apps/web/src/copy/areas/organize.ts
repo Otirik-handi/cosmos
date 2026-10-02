@@ -60,6 +60,7 @@ export const organize = {
         empty: "还没有批注。读内容时写下的想法会出现在这里。",
         attachedTo: "挂在",
         attachedSuffix: "上",
+        targetMissing: "（目标已不可读）",
         removeLabel: "删除这条批注",
         removed: "已删除批注",
         removeFailed: "删除批注失败",

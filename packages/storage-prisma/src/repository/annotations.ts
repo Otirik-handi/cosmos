@@ -131,7 +131,14 @@ export class PrismaCosmosRepositoryAnnotations extends PrismaCosmosRepositoryCol
             where,
             orderBy: { createdAt: "asc" },
         });
-        return { items: rows.map((row) => this.toAnnotation(row)) };
+        // 跨目标列表要能直接渲染「挂在什么上」；只带 id 的话界面只能显示目标类型。
+        const titleByTarget = await this.resolveTargetTitles(rows);
+        return {
+            items: rows.map((row) => this.toAnnotation(
+                row,
+                titleByTarget.get(`${row.targetType}:${row.targetId}`) ?? null,
+            )),
+        };
     }
 
 }

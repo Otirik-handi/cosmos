@@ -277,35 +277,8 @@ export class PrismaCosmosRepositoryCollections extends PrismaCosmosRepositoryLab
         const rows = await this.prisma.favorite.findMany({
             orderBy: { createdAt: "desc" },
         });
-        // 批量解析标题：整理页的收藏分区要直接列出收藏了什么，逐个查询会变成 N+1。
-        const storyIds = rows.filter((row) => row.targetType === "story").map((row) => row.targetId);
-        const entryIds = rows.filter((row) => row.targetType === "entry").map((row) => row.targetId);
-        const [stories, entries] = await Promise.all([
-            storyIds.length === 0
-                ? Promise.resolve([])
-                : this.prisma.story.findMany({
-                    where: { id: { in: storyIds } },
-                    select: { id: true, currentRevision: { select: { title: true } } },
-                }),
-            entryIds.length === 0
-                ? Promise.resolve([])
-                : this.prisma.entry.findMany({
-                    where: { id: { in: entryIds } },
-                    select: { id: true, currentRevision: { select: { title: true } } },
-                }),
-        ]);
-        // 收藏指向的记录可能已被删除：此时标题为 null，界面按「已不可读」处理，
-        // 而不是把裸 ID 当成标题显示。
-        const titleByTarget = new Map<string, string | null>([
-            ...stories.map((story): [string, string | null] => [
-                `story:${story.id}`,
-                story.currentRevision?.title ?? null,
-            ]),
-            ...entries.map((entry): [string, string | null] => [
-                `entry:${entry.id}`,
-                entry.currentRevision?.title ?? null,
-            ]),
-        ]);
+        // 批量解析标题：整理页的收藏分区要直接列出收藏了什么。
+        const titleByTarget = await this.resolveTargetTitles(rows);
         return {
             items: rows.map((favorite) => ({
                 targetType: favorite.targetType as "story" | "entry",

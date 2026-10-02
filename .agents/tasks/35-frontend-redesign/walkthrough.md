@@ -288,3 +288,25 @@ Worker（轮询 50 ms）+ Web dev(3000)；用真实 UI 路径种入 2 个来源 
 | `npx playwright test --config playwright.config.ts`（全量 21 个 spec） | **51 通过 / 0 失败（2.7m，exit 0）** |
 | `bun run --cwd apps/web tsc --noEmit` / `lint` | 0 错误 / 0 error（18 warning，与改动前一致） |
 | 文案扫描 | 754 处 / 46 文件不变（新文案进 `copy/areas/reading.ts`） |
+
+## Round 10 · 3a 判据①收尾：批注列表的标题投影（2026-10-01）
+
+**授权**：同上（继续切片）。这一项是 Q1 里「切片 3 还剩 4 件」中的第 1 件，也是 3a 判据①
+唯一没达成的部分。
+
+### 做了什么
+
+- `Annotation` 读取侧新增 `targetTitle: string | null`：目标显示标题的投影，目标已被删除时为 `null`
+  （与 `SpotlightPlacement.targetTitle`、收藏列表的 `title` 同一条约定：**不把裸 ID 当标题显示**）。
+- 批量解析抽成一个所有者：`resolveTargetTitles(rows)` 支持 story / entry / topic 三类，
+  收藏列表与批注列表都改用它（此前收藏那份内联解析只能处理 story / entry，且与批注各写一份）。
+- 整理页批注分区显示 `挂在 Story「标题」上`；目标不可读时显示「（目标已不可读）」。
+- 文档同步：`docs/spec/contracts/0001-public-contracts.md` 的 Annotation DTO 字段表补上 `targetTitle`。
+
+### 验证
+
+| 命令 | 结果 |
+| --- | --- |
+| `bun run vitest run packages/storage-prisma/src/read-title-projection.test.ts …` | **15 通过**（含新增：三类目标各解析出标题、目标删除后投影为 `null`） |
+| `bun run test` | **784 通过 / 137 文件**（新字段让两处 fixture 缺字段而失败，已按新合同补齐） |
+| `bun run typecheck` / `lint` / 文案扫描 / `docs:check` | 0 错误 / 0 error（18 warning）/ 754 处不变 / 927 文件 0 失败 |

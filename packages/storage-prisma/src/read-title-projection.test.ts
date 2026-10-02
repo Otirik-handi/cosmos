@@ -125,6 +125,48 @@ describe("read-side title projection", () => {
         });
     });
 
+    it("projects the annotation's target title, and null once the target is gone", async () => {
+        await withRepository("title-annotation-targets", async (repository, prisma) => {
+            await seedStories(prisma);
+            const topic = await repository.createTopic({
+                title: "离职与后续影响",
+                purpose: "理解来龙去脉",
+                scope: null,
+                seedStoryId: "story-a",
+                actor: "user",
+                reason: "start",
+            });
+            await repository.createAnnotation({
+                targetType: "story",
+                targetId: "story-a",
+                body: "关于 A 的想法",
+            });
+            await repository.createAnnotation({
+                targetType: "entry",
+                targetId: "entry-b",
+                body: "关于 B 条目的想法",
+            });
+            await repository.createAnnotation({
+                targetType: "topic",
+                targetId: topic!.topic.id,
+                body: "关于话题的想法",
+            });
+
+            const all = await repository.listAnnotations({});
+            expect([...all.items.map((item) => item.targetTitle)].sort()).toEqual([
+                "Story a",
+                "entry-b",
+                "离职与后续影响",
+            ].sort());
+
+            // 目标被删除后按 null 投影，界面据此说「已不可读」，而不是显示裸 ID。
+            await prisma.story.delete({ where: { id: "story-a" } });
+            const afterDelete = await repository.listAnnotations({});
+            expect(afterDelete.items.find((item) => item.body === "关于 A 的想法")?.targetTitle)
+                .toBeNull();
+        });
+    });
+
     it("projects the Story revision producer onto list items", async () => {
         await withRepository("title-producer", async (repository, prisma) => {
             await seedStories(prisma);
