@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { planRowOf } from "../support/story-flow";
+
 const WORKING_FEED_URL = "http://127.0.0.1:4380/feed.xml";
 
 /**
@@ -8,24 +10,28 @@ const WORKING_FEED_URL = "http://127.0.0.1:4380/feed.xml";
  * 外部自动化用，运行记录里出现触发原因为「外部触发」的 Run。
  *
  * 入口由 API 进程提供，产品面把 `/hooks/*` 透传给 API，所以面板给出的地址与页面同源。
+ *
+ * 建计划与看运行记录都在 `/automation`（ADR-0029 决策 1）。本用例要先观察「停用的计划
+ * 拒绝入口」，所以不走 `story-flow.ts` 的 `ingestFeed`——它保存后直接启用。
  */
 test("generates a webhook entry in the plan panel and triggers a webhook Run", async ({ page }) => {
     test.setTimeout(180_000);
     const suffix = randomUUID().slice(0, 8);
     const planName = `入口计划-${suffix}`;
 
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
     // 建计划：计划默认停用，入口只对启用的计划生效。
-    await page.getByRole("button", { name: "新建计划" }).click();
+    await page.getByRole("button", { name: "新建来源" }).click();
     await page.getByLabel("名称", { exact: true }).fill(planName);
     await page.getByLabel("Feed URL").fill(WORKING_FEED_URL);
+    // 本页表单的定时默认留空；定时与 Webhook 是并存的两种触发方式，断言要用到这条定时。
     await page.locator("#source-schedule-interval").fill("30");
     await page.getByRole("button", { name: "保存计划" }).click();
     await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
 
-    const row = page.locator("li").filter({ hasText: planName }).first();
+    const row = planRowOf(page, planName);
     // 定时与 Webhook 是并存的两种触发方式（ADR-0025）：入口生成不改变这条定时。
     await expect(row.getByText("Webhook 入口：未生成")).toBeVisible();
     await expect(row.getByText("已停用，定时抓取暂停")).toBeVisible();
@@ -65,7 +71,7 @@ test("generates a webhook entry in the plan panel and triggers a webhook Run", a
 
     // 服务端是唯一真相：刷新后运行记录里能看到这次外部触发。
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
     const webhookRun = page.locator("[data-run-id]").filter({ hasText: "外部触发" });
     await expect(webhookRun.first()).toBeVisible({ timeout: 30_000 });
 });

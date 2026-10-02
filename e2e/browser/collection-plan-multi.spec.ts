@@ -6,6 +6,7 @@ import {
     installNoticeRecorder,
     resetNoticeLog,
 } from "../support/notice-log";
+import { planSectionOf } from "../support/story-flow";
 
 const WORKING_FEED_URL = "http://127.0.0.1:4380/feed.xml";
 const BROKEN_FEED_URL = "http://127.0.0.1:4380/missing.xml";
@@ -15,6 +16,9 @@ const BROKEN_FEED_URL = "http://127.0.0.1:4380/missing.xml";
  * 并看到两个计划各自的频率与最近一次失败。
  *
  * v1 计划与采集目标一对一，所以「在连接下建第二个计划」= 建第二个绑定到同一连接的目标。
+ *
+ * 连接与计划都在 `/automation` 建（ADR-0029 决策 1：创建去对象页，首页只看）。本用例
+ * 自己控制启用与试跑的先后，所以不走 `story-flow.ts` 的 `ingestFeed`。
  */
 test("creates two plans under one connection and shows each plan's own schedule and failure", async ({ page }) => {
     test.setTimeout(180_000);
@@ -24,8 +28,8 @@ test("creates two plans under one connection and shows each plan's own schedule 
     const healthyName = `动态-${suffix}`;
     const brokenName = `推荐流-${suffix}`;
 
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
     // 先有一个可复用的连接（ADR-0017）。
     await page.getByLabel("连接名称").fill(connectionName);
@@ -47,8 +51,7 @@ test("creates two plans under one connection and shows each plan's own schedule 
     });
 
     // 按连接分组：这个连接下正好两个计划，各自带自己的频率。
-    const section = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    const group = section.locator("[data-plan-group]").filter({ hasText: connectionName });
+    const group = planSectionOf(page).locator("[data-plan-group]").filter({ hasText: connectionName });
     await expect(group.getByRole("heading", { name: new RegExp(connectionName) })).toBeVisible();
     await expect(group.locator("li")).toHaveCount(2);
 
@@ -83,10 +86,8 @@ test("creates two plans under one connection and shows each plan's own schedule 
 
     // 服务端是唯一真相：刷新后分组、频率与失败都还在。
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    const reloadedGroup = page
-        .getByRole("heading", { name: "采集计划" })
-        .locator("..").locator("..")
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    const reloadedGroup = planSectionOf(page)
         .locator("[data-plan-group]")
         .filter({ hasText: connectionName });
     await expect(reloadedGroup.locator("li")).toHaveCount(2);
@@ -98,14 +99,28 @@ test("creates two plans under one connection and shows each plan's own schedule 
         .toBeVisible();
 });
 
-/** 走「新建计划」表单：目标配置 + 频率 + 连接一次填完（创建与绑定同一步）。 */
+/**
+ * 展开来源表单。
+ *
+ * `/automation` 保存成功后表单**不会**自动收起（页头按钮停在「关闭表单」），所以第二个计划
+ * 是在同一张还开着的表单上接着填。按当前态决定要不要点开，不赌它是否已经收起。
+ */
+async function openSourceForm(page: import("@playwright/test").Page): Promise<void> {
+    if (await page.getByRole("button", { name: "保存计划" }).isVisible()) {
+        return;
+    }
+    await page.getByRole("button", { name: "新建来源" }).click();
+}
+
+/** 走「新建来源」表单：目标配置 + 频率 + 连接一次填完（创建与绑定同一步）。 */
 async function createPlan(
     page: import("@playwright/test").Page,
     input: { name: string; feedUrl: string; intervalMinutes: string; connectionName: string },
 ): Promise<void> {
-    await page.getByRole("button", { name: "新建计划" }).click();
+    await openSourceForm(page);
     await page.getByLabel("名称", { exact: true }).fill(input.name);
     await page.getByLabel("Feed URL").fill(input.feedUrl);
+    // `/automation` 的表单定时默认留空（留空 = 不自动抓取），本用例要断言各自频率，必须显式填。
     await page.locator("#source-schedule-interval").fill(input.intervalMinutes);
     await page.locator("#source-connection").selectOption({ label: `${input.connectionName}（fixture-rss）` });
     await page.getByRole("button", { name: "保存计划" }).click();

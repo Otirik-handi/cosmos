@@ -1,33 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
-const FEED_URL = "http://127.0.0.1:4380/feed.xml";
-
-/** 每个场景自建来源并触发一次录入，不依赖其它 spec 留下的数据。 */
-async function ingestFeed(page: import("@playwright/test").Page, prefix: string): Promise<string> {
-    const sourceName = `${prefix}-${randomUUID().slice(0, 8)}`;
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "新建计划" }).click();
-    await page.getByLabel("名称", { exact: true }).fill(sourceName);
-    await page.getByLabel("Feed URL").fill(FEED_URL);
-    await page.getByRole("button", { name: "保存计划" }).click();
-    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
-
-    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    await healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true }).click();
-    await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
-    await healthSection.getByRole("button", { name: sourceName, exact: true }).click();
-    await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
-    await expect(
-        page.locator("article").filter({ hasText: sourceName }).first(),
-    ).toBeVisible({ timeout: 180_000 });
-    return sourceName;
-}
-
-function healthSection(page: import("@playwright/test").Page) {
-    return page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-}
+import { ingestFeed, planRowOf, planSectionOf } from "../support/story-flow";
 
 /**
  * AUT-001「删除来源」的 Web 入口：两段确认，且只删配置与定时。
@@ -35,13 +9,15 @@ function healthSection(page: import("@playwright/test").Page) {
  * 这条用例补的是产品面证据缺口（Task 32 切片 4 记录过：删除入口只有类型/组件层证据）：
  * 第一次点击只切确认态并解释后果，第二次才发命令；删除后来源从采集计划看板消失，
  * 但它已录入的 Story 仍在 Feed 里（墓碑语义，历史保留）。
+ *
+ * 录入前置与删除动作都在 `/automation`，墓碑那一半要回 `/library` 看（ADR-0029 决策 1、8：
+ * 首页只看，配置去 `/automation`，浏览与检索去 `/library`）。
  */
 test("删除来源需要两段确认，删除后保留已录入内容", async ({ page }) => {
     test.setTimeout(300_000);
     const sourceName = await ingestFeed(page, "删除来源");
 
-    const health = healthSection(page);
-    const row = health.locator("li").filter({ hasText: sourceName });
+    const row = planRowOf(page, sourceName);
     await expect(row).toBeVisible();
 
     const deleteButton = row.getByRole("button", { name: `删除 ${sourceName}`, exact: true });
@@ -54,16 +30,18 @@ test("删除来源需要两段确认，删除后保留已录入内容", async ({
     await row.getByRole("button", { name: `确认删除 ${sourceName}`, exact: true }).click();
 
     // 第二段：来源从采集计划看板消失。
-    await expect(health.locator("li").filter({ hasText: sourceName })).toHaveCount(0, {
+    await expect(planSectionOf(page).locator("li").filter({ hasText: sourceName })).toHaveCount(0, {
         timeout: 15_000,
     });
 
     // 墓碑语义：配置没了，已录入的 Story 与来源溯源都还在。
+    await page.goto("/library");
+    const feedList = page.locator('section[aria-label="阅读流"]');
     await expect(
-        page.locator("article").filter({ hasText: sourceName }).first(),
-    ).toBeVisible();
+        feedList.locator("article").filter({ hasText: sourceName }).first(),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
-        page.locator("article").filter({ hasText: "Cosmos scaffold is ready" }).first(),
+        feedList.locator("article").filter({ hasText: "Cosmos scaffold is ready" }).first(),
     ).toBeVisible();
 });
 
@@ -74,12 +52,15 @@ test("删除来源需要两段确认，删除后保留已录入内容", async ({
  * 注意搜索结果是 Entry 分页、Feed 是 Story 卡片，两者不是同一投影，不能互相计数。
  * 作者用「fixture 条目没有发布者 → 任何作者条件命中 0 条」判定，媒体类型用
  * 「RSS 条目一律是 article → 文章条件命中全部、视频条件命中 0 条」判定。
+ *
+ * 检索工作台整体在 `/library`，录入前置在 `/automation`。
  */
 test("LIB-001 的作者、媒体类型、录入状态过滤驱动查询", async ({ page }) => {
     test.setTimeout(300_000);
     const sourceName = await ingestFeed(page, "搜索过滤");
+    await page.goto("/library");
 
-    // 与页面同页大小（page.tsx 的搜索提交固定 limit: 20）：结果提示是分页条数，
+    // 与页面同页大小（library/page.tsx 的搜索提交固定 limit: 20）：结果提示是分页条数，
     // 不是全库条数，直查 API 必须用同一 limit 才可比。
     const searchCount = async (query: string): Promise<number> =>
         page.evaluate(async (search) => {

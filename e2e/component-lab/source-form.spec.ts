@@ -1,4 +1,5 @@
 import {expect, test} from "@playwright/test";
+import {expectSinglePreview} from "../support/lab";
 
 test("updates SourceForm preview when inspector props change", async ({page}) => {
     await page.goto("/dev/components?component=source-form&scene=default");
@@ -19,7 +20,7 @@ test("updates SourceForm preview when inspector props change", async ({page}) =>
 
 test("keeps SourceForm RSS submission inside the lab", async ({page}) => {
     await page.goto("/dev/components?component=source-form&scene=default");
-    await expect(page).toHaveURL(/viewport=responsive&theme=neurobook&colorway=macos-light/u);
+    await expect(page).toHaveURL(/viewport=responsive&appearance=light/u);
     const initialUrl = page.url();
     let navigationRequests = 0;
     page.on("request", (request) => {
@@ -38,13 +39,16 @@ test("keeps SourceForm RSS submission inside the lab", async ({page}) => {
 
 test("renders catalog and probe feedback states with synthetic fixtures", async ({page}) => {
     await page.goto("/dev/components?component=source-form&scene=probe-success");
-    await expect(page.getByText("测试成功")).toBeVisible();
-    await expect(page.getByText(/抓取到 3 条内容，耗时/)).toBeVisible();
-    await expect(page.getByText("Cosmos scaffold is ready")).toBeVisible();
+    // 作用域限定在预览台：整页取文本会在实验室瞬时渲染两份时命中 2 个节点（严格模式判失败）。
+    const preview = await expectSinglePreview(page);
+    await expect(preview.getByText("测试成功")).toBeVisible();
+    await expect(preview.getByText(/抓取到 3 条内容，耗时/)).toBeVisible();
+    await expect(preview.getByText("Cosmos scaffold is ready")).toBeVisible();
 
     await page.goto("/dev/components?component=source-form&scene=definition-error");
-    await expect(page.getByText(/无法读取来源定义：/)).toBeVisible();
-    await expect(page.getByRole("button", {name: "重试读取"})).toBeVisible();
+    const errorPreview = await expectSinglePreview(page);
+    await expect(errorPreview.getByText(/无法读取来源定义：/)).toBeVisible();
+    await expect(errorPreview.getByRole("button", {name: "重试读取"})).toBeVisible();
 });
 
 test("renders the config fields declared by the selected operation", async ({page}) => {
@@ -67,7 +71,7 @@ test("renders the config fields declared by the selected operation", async ({pag
 
 test("keeps FeedBrowser fixture search inside the lab", async ({page}) => {
     await page.goto("/dev/components?component=feed-browser&scene=populated");
-    await expect(page).toHaveURL(/viewport=responsive&theme=neurobook&colorway=macos-light/u);
+    await expect(page).toHaveURL(/viewport=responsive&appearance=light/u);
     const initialUrl = page.url();
     let navigationRequests = 0;
     page.on("request", (request) => {
@@ -84,14 +88,14 @@ test("keeps FeedBrowser fixture search inside the lab", async ({page}) => {
 
 test("preserves a restored token when its field blurs without editing", async ({page}) => {
     const storageKey = "cosmos.component-lab.token-draft.v1";
-    const storageValue = '{"overrides":{"--radius":"1rem"},"version":1}';
+    const storageValue = '{"overrides":{"--radius-control":"1rem"},"version":1}';
     await page.goto("/dev/components?component=button&scene=default");
     await page.evaluate(({key, value}) => {
         window.localStorage.setItem(key, value);
     }, {key: storageKey, value: storageValue});
     await page.reload();
 
-    const tokenInput = page.locator("#lab-token---radius");
+    const tokenInput = page.locator("#lab-token---radius-control");
     await expect(tokenInput).toHaveValue("1rem");
     await tokenInput.focus();
     await page.keyboard.press("Tab");
@@ -99,7 +103,7 @@ test("preserves a restored token when its field blurs without editing", async ({
     await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), storageKey))
         .toBe(storageValue);
     await page.reload();
-    await expect(page.locator("#lab-token---radius")).toHaveValue("1rem");
+    await expect(page.locator("#lab-token---radius-control")).toHaveValue("1rem");
 });
 
 test("keeps externally added body attributes free of hydration warnings", async ({page}) => {

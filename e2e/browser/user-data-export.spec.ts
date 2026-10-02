@@ -3,15 +3,15 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /**
- * LIB-008 / OPS-004 的产品面证据：存储面板的「导出用户数据」真的产出可保存的 JSON 文件。
+ * LIB-008 / OPS-004 的产品面证据：`/settings` 存储面板的「导出用户数据」真的产出可保存的 JSON 文件。
  *
  * 断言分两层：浏览器层证明「点按钮 → 得到文件 + 文件名符合约定」，文件内容层证明导出件
  * 带上了刚创建的用户真相对象，且不含连接/Secret 这类非用户数据面。
  */
 test("存储面板导出用户数据为可保存的 JSON 文件", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "设置", exact: true })).toBeVisible();
 
     const labelName = `导出标签-${randomUUID().slice(0, 8)}`;
     const labelId = await page.evaluate(async (name) => {

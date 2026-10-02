@@ -1,77 +1,51 @@
 import { expect, test } from "@playwright/test";
-import { randomUUID } from "node:crypto";
+
+import { FEED_URL, ingestFeed } from "../support/story-flow";
+
+/**
+ * 受控 RSS fixture 的 `offline.xml`：与本套件用的 `feed.xml` 同源同端口，
+ * 只换文件名。
+ */
+const OFFLINE_FEED_URL = new URL("/offline.xml", FEED_URL).toString();
+
+/** 只有这一条 fixture 带本地图片；用它认领本来源的 Story，避免误判其它 spec 的卡片。 */
+const OFFLINE_MEDIA_TITLE = "Offline saved media";
+
+/** 已保存媒体走站内 API，断网后必须仍从这里取字节（ADR-0005）。 */
+const SAVED_IMAGE_SRC = /\/api\/v1\/assets\//;
 
 test("offline: locally saved images render from the API after the network is blocked", async ({ page }) => {
     test.setTimeout(300_000);
 
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-        if (message.type() === "error") consoleErrors.push(message.text());
+    // 使用本地受控 RSS：feed 与正文图片都来自 127.0.0.1，避免真实外网决定 CI 结果。
+    const sourceName = await ingestFeed(page, "离线媒体", async (current) => {
+        await current.getByLabel("Feed URL").fill(OFFLINE_FEED_URL);
     });
 
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
+    // 从信息库的阅读流点开带图的那张卡片；新 IA 下这里导航到 `/stories/:id`。
+    await page.goto("/library");
+    const card = page
+        .locator('section[aria-label="阅读流"]')
+        .locator("article")
+        .filter({ hasText: sourceName })
+        .filter({ hasText: OFFLINE_MEDIA_TITLE })
+        .first();
+    await expect(card).toBeVisible({ timeout: 180_000 });
+    await card.getByRole("button", { name: "打开 Story" }).click();
+    await expect(page.locator("[data-story-id]")).toBeVisible();
 
-    // 使用本地受控 RSS：feed 与正文图片都来自 127.0.0.1，避免真实外网决定 CI 结果。
-    const sourceName = `离线媒体-${randomUUID().slice(0, 8)}`;
-    await page.getByRole("button", { name: "新建计划" }).click();
-    const feedUrlInput = page.getByLabel("Feed URL");
-    await expect(feedUrlInput).toBeVisible();
-    // 精确匹配：Saved View 的“视图名称”输入框也包含“名称”子串。
-    await page.getByLabel("名称", { exact: true }).fill(sourceName);
-    await feedUrlInput.fill("http://127.0.0.1:4380/offline.xml");
-    await page.getByRole("button", { name: "保存计划" }).click();
-    await expect(page.getByText("采集计划已保存，当前为停用状态")).toBeVisible();
-
-    const healthSection = page.getByRole("heading", { name: "采集计划" }).locator("..").locator("..");
-    const enableButton = healthSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true });
-    await enableButton.click();
-    await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
-
-    const runButton = healthSection.getByRole("button", { name: sourceName, exact: true });
-    await runButton.click();
-    await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
-
-    // Wait until this test's own feed items appear; earlier specs may already
-    // have produced stories, so "any Story trigger" is not a completion signal.
-    await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
-    // 同一栈内其它 spec 也可能录入同一份 fixture 标题，按来源名限定本来源的卡片。
-    await expect(
-        page
-            .locator("article")
-            .filter({ hasText: sourceName })
-            .filter({ hasText: "Offline saved media" })
-            .first(),
-    ).toBeVisible({ timeout: 180_000 });
-    const storyTriggers = page.getByRole("button", { name: "打开 Story" });
-    await expect(storyTriggers.first()).toBeVisible({ timeout: 180_000 });
-
-    // Find a Story with at least one saved image by iterating through the feed.
-    let foundSavedImage = false;
-    const storyCount = Math.min(await storyTriggers.count(), 10);
-    for (let i = 0; i < storyCount; i++) {
-        await storyTriggers.nth(i).click();
-        const dialog = page.getByRole("dialog");
-        await expect(dialog).toBeVisible();
-        const savedImage = dialog.locator("[data-asset-status=saved] img").first();
-        const hasSaved = (await savedImage.count()) > 0;
-        if (hasSaved) {
-            // Online: verify image loads from local API.
-            await expect(savedImage).toHaveAttribute("src", /\/api\/v1\/assets\//);
-            // 图是 loading="lazy" 且位于详情面板折叠线以下（约 y=900，面板高 720）。先滚进
-            // 视口再断言，否则这条断言依赖浏览器对屏外图片的预加载时机——页面并发请求一多
-            // 就会被推迟，失败与「图片是否可取」无关。
-            await savedImage.scrollIntoViewIfNeeded();
-            await expect.poll(async () => (
-                await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
-            )).toBeGreaterThan(0);
-            foundSavedImage = true;
-            break;
-        }
-        await page.keyboard.press("Escape");
-        await expect(dialog).not.toBeVisible();
-    }
-    expect(foundSavedImage, "At least one Story should have a saved image").toBe(true);
+    // Online: the saved image loads from the local API and really decodes.
+    // 图是 loading="lazy" 且位于阅读页折叠线以下：先滚进视口再断言，否则这条断言依赖浏览器
+    // 对屏外图片的预加载时机——页面并发请求一多就会被推迟，失败与「图片是否可取」无关。
+    const savedImage = page
+        .locator('section[aria-label="媒体"]')
+        .locator("[data-asset-status=saved] img")
+        .first();
+    await expect(savedImage).toHaveAttribute("src", SAVED_IMAGE_SRC);
+    await savedImage.scrollIntoViewIfNeeded();
+    await expect.poll(async () => (
+        await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
+    )).toBeGreaterThan(0);
 
     // Block all non-localhost requests to simulate offline.
     await page.route("**/*", (route) => {
@@ -82,35 +56,21 @@ test("offline: locally saved images render from the API after the network is blo
         return route.abort();
     });
 
-    // Reload and verify offline behavior.
+    // Reload the same Story and verify the bytes still come from the local API.
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Cosmos", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "打开 Story" }).first()).toBeVisible({ timeout: 30_000 });
+    const offlineImage = page
+        .locator('section[aria-label="媒体"]')
+        .locator("[data-asset-status=saved] img")
+        .first();
+    await expect(offlineImage).toBeVisible({ timeout: 30_000 });
+    await expect(offlineImage).toHaveAttribute("src", SAVED_IMAGE_SRC);
+    await offlineImage.scrollIntoViewIfNeeded();
+    await expect.poll(async () => (
+        await offlineImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
+    )).toBeGreaterThan(0);
 
-    // Offline: find the same Story with saved image and verify it still renders.
-    const offlineTriggers = page.getByRole("button", { name: "打开 Story" });
-    let offlineVerified = false;
-    const offlineCount = Math.min(await offlineTriggers.count(), 10);
-    for (let i = 0; i < offlineCount; i++) {
-        await offlineTriggers.nth(i).click();
-        const dialog = page.getByRole("dialog");
-        await expect(dialog).toBeVisible();
-        const savedImage = dialog.locator("[data-asset-status=saved] img").first();
-        if ((await savedImage.count()) > 0) {
-            await expect(savedImage).toHaveAttribute("src", /\/api\/v1\/assets\//);
-            await expect.poll(async () => (
-                await savedImage.evaluate((el) => (el as HTMLImageElement).naturalWidth)
-            )).toBeGreaterThan(0);
-            offlineVerified = true;
-            break;
-        }
-        await page.keyboard.press("Escape");
-        await expect(dialog).not.toBeVisible();
-    }
-    expect(offlineVerified, "Saved image should render offline from local API").toBe(true);
-
-    // Verify page is healthy after offline verification.
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("heading", { name: "Story Feed" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "采集计划" })).toBeVisible();
+    // Verify the app is healthy after offline verification: 自动化页仍可读。
+    await page.goto("/automation");
+    await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "采集计划", exact: true }).first()).toBeVisible();
 });
