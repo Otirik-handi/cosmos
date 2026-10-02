@@ -4,7 +4,7 @@
 
 ## User Request / Topic
 
-2026-09-20 维护者在 Phase 2 缺口复核后设定目标「按 [`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) 的缺口优先级完成第一个缺口」，第一个缺口是 P0-1 = AUT-010（一个连接下可以配置多个独立采集计划）。同日维护者审阅并确认 Proposal [`collection-plan-v1`](../../../docs/proposals/collection-plan-v1.md) 的 5 项待裁定（全部按建议），Proposal 转 `accepted`，稳定决定沉淀为 ADR [`0023`](../../../docs/adr/0023-collection-plan-v1.md)。
+2026-09-20 维护者在 Phase 2 缺口复核后设定目标「按 [`Phase-2-UNDO.md`](../../../docs/Phase-2-UNDO.md) 的缺口优先级完成第一个缺口」，第一个缺口是 P0-1 = AUT-010（一个连接下可以配置多个独立采集计划）。同日维护者审阅并确认 Proposal [`collection-plan-v1`](../../../docs/proposals/collection-plan-v1.md) 的 5 项待裁定（全部按建议），Proposal 转 `accepted`，稳定决定沉淀为 ADR [`0023`](../../../docs/adr/0023-collection-plan-v1.md)。
 
 该请求是**非公开的维护者明确请求**，按 [`repository-workflow.md` 准入决策表](../../../docs/standards/repository-workflow.md#准入决策表) 的例外条款替代公开 Issue 的记录与实现授权；它不授权 commit、push、创建 PR、合并或其它外部操作。
 
@@ -98,4 +98,4 @@ capability map（无环）：切片 1 → 切片 2 → 切片 3；切片 1 内�
 
 - 迁移第 4 步（contract）单独排期与授权。
 - 重叠策略其余值与「同一目标多个计划」按 ADR-0023 的 Revisit Gate 重新评估。
-- AUT-009 的连接可见性／绑定入口未做（计划列表按连接分组、表单可选连接已具备，但连接自身的可见性面板仍是 Phase 1 形态）；对应 [`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) 的 P1-3。
+- AUT-009 的连接可见性／绑定入口未做（计划列表按连接分组、表单可选连接已具备，但连接自身的可见性面板仍是 Phase 1 形态）；对应 [`Phase-2-UNDO.md`](../../../docs/Phase-2-UNDO.md) 的 P1-3。

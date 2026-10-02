@@ -1,6 +1,6 @@
 # 勘误：已知不稳定用例分册 0001
 
-分册 [`0001-browser-intermittent.md`](0001-browser-intermittent.md) 是 2026-09-25 之前的历史记录，封口后只读；其正文里"仍未归因"的表述已被下列更新取代（当前状态以主文档 [`../known-unstable-cases.md`](../known-unstable-cases.md) 第 1 条与 [`Phase-2-UNDO.md`](../../../Phase-2-UNDO.md) 的 P4-1 段落为准）。
+分册 [`0001-browser-intermittent.md`](0001-browser-intermittent.md) 是 2026-09-25 之前的历史记录，封口后只读；其正文里"仍未归因"的表述已被下列更新取代（当前状态以主文档 [`../known-unstable-cases.md`](../known-unstable-cases.md) 第 1 条与 [`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 的 P4-1 段落为准）。
 
 ## 勘误 1（2026-09-25）：正文第 3、7 行"仍未归因"的三点都已归因
 

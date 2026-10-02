@@ -4,7 +4,7 @@
 >
 > 日期：2026-09-24
 >
-> 关联：[`Phase-2-UNDO.md` P4-3](../../Phase-2-UNDO.md)、ADR [`0010`](../adr/0010-board-section-block-v1.md)（可配置看板 v1）、ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md)（撤销＝反向调用，不建账本）、ADR [`0019`](../adr/0019-ops-storage-v1.md)（备份与恢复）、[`board-section-block-v1`](board-section-block-v1.md)、信息模型 [`../architecture/0002-information-model/part-05-10.md`](../architecture/0002-information-model/part-05-10.md) §5.4、PRD [`part-07-3.md`](../requirements/0002-product-requirements/part-07-3.md) BRD-002
+> 关联：[`Phase-2-UNDO.md` P4-3](../Phase-2-UNDO.md)、ADR [`0010`](../adr/0010-board-section-block-v1.md)（可配置看板 v1）、ADR [`0020`](../adr/0020-story-split-user-state-migration-v1.md)（撤销＝反向调用，不建账本）、ADR [`0019`](../adr/0019-ops-storage-v1.md)（备份与恢复）、[`board-section-block-v1`](board-section-block-v1.md)、信息模型 [`../architecture/0002-information-model/part-05-10.md`](../architecture/0002-information-model/part-05-10.md) §5.4、PRD [`part-07-3.md`](../requirements/0002-product-requirements/part-07-3.md) BRD-002
 
 ## 问题
 

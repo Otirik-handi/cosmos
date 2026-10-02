@@ -4,7 +4,7 @@
 >
 > 日期：2026-09-24
 >
-> 关联：Proposal [`user-truth-protection-v1`](../proposals/user-truth-protection-v1.md)（accepted）、PRD [`§12` Phase 2 验收第 4 条](../requirements/0002-product-requirements/part-10-12.md)与 [`LIB-003`](../requirements/0002-product-requirements/part-07-1.md)、需求 [`ORG-003/004/019/021/022`](../requirements/0002-product-requirements/part-07-2.md)、信息模型 [`part-02-04.md`](../architecture/0002-information-model/part-02-04.md) §5.4 与不变量 19/22、[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 的 P2-1、Task [`04-workflow-runtime`](../../.agents/tasks/04-workflow-runtime/README.md)
+> 关联：Proposal [`user-truth-protection-v1`](../proposals/user-truth-protection-v1.md)（accepted）、PRD [`§12` Phase 2 验收第 4 条](../requirements/0002-product-requirements/part-10-12.md)与 [`LIB-003`](../requirements/0002-product-requirements/part-07-1.md)、需求 [`ORG-003/004/019/021/022`](../requirements/0002-product-requirements/part-07-2.md)、信息模型 [`part-02-04.md`](../architecture/0002-information-model/part-02-04.md) §5.4 与不变量 19/22、[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 的 P2-1、Task [`04-workflow-runtime`](../../.agents/tasks/04-workflow-runtime/README.md)
 
 ## Context
 

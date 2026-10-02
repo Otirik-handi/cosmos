@@ -11,7 +11,7 @@
 
 ## 1. `e2e/browser/phase2-organization.spec.ts` 的间歇失败
 
-**状态（2026-09-25 更新：本条三个待归因点都已归因）**：`phase2-organization.spec.ts:30`（标签丢失更新）、`:103`（证据关系反向视图）与 `collection-plan-multi.spec.ts:63`（等「录入任务已排队」）是**测试缺陷**，已修；`:417`（用户组织场景，单次 5.1 分钟）归到**产品缺陷**（先发起的列表读取晚落地，抹掉刚建的实体/Topic），已修。完整证据链见 [`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 的 P4-1 段落；历史记录（含 `:539`、`webhook-entry`、数据库线证伪）仍整段保留在分册 [`known-unstable-cases/0001-browser-intermittent.md`](known-unstable-cases/0001-browser-intermittent.md)，其中"仍未归因"的表述已被本条取代（勘误见 [`known-unstable-cases/ERRATA.md`](known-unstable-cases/ERRATA.md)）。
+**状态（2026-09-25 更新：本条三个待归因点都已归因）**：`phase2-organization.spec.ts:30`（标签丢失更新）、`:103`（证据关系反向视图）与 `collection-plan-multi.spec.ts:63`（等「录入任务已排队」）是**测试缺陷**，已修；`:417`（用户组织场景，单次 5.1 分钟）归到**产品缺陷**（先发起的列表读取晚落地，抹掉刚建的实体/Topic），已修。完整证据链见 [`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 的 P4-1 段落；历史记录（含 `:539`、`webhook-entry`、数据库线证伪）仍整段保留在分册 [`known-unstable-cases/0001-browser-intermittent.md`](known-unstable-cases/0001-browser-intermittent.md)，其中"仍未归因"的表述已被本条取代（勘误见 [`known-unstable-cases/ERRATA.md`](known-unstable-cases/ERRATA.md)）。
 
 **2026-09-25 的两条结论摘要**：
 

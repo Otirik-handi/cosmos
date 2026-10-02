@@ -10,7 +10,7 @@
 >
 > 关联既有切片：Task 22（Connection/SecretStore/StateStore v1）、Task 24（存储占用与备份/恢复 + 用户数据导出）、Task 33（采集计划 v1）
 >
-> 缺口来源：[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) P1-1
+> 缺口来源：[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) P1-1
 
 ## 1. 问题
 

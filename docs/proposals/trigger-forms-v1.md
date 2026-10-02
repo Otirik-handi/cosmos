@@ -12,7 +12,7 @@
 
 ## 1. 问题
 
-AUT-004 要求 Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发，且每次触发保存触发原因、输入、时间和对应定义版本。Task 23 只交付了 `schedule`/`manual` 两种形态并把其余形态明确后置，[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 因此把 AUT-004 列为 P0-2「完全未交付」。
+AUT-004 要求 Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发，且每次触发保存触发原因、输入、时间和对应定义版本。Task 23 只交付了 `schedule`/`manual` 两种形态并把其余形态明确后置，[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 因此把 AUT-004 列为 P0-2「完全未交付」。
 
 对现状的核查改变了这个缺口的**性质**和**依赖判断**（证据见 §3）：
 

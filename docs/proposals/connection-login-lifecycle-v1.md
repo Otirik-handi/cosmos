@@ -6,11 +6,11 @@
 >
 > 关联需求：[`EXT-006`](../requirements/0002-product-requirements/part-07-3.md)（Phase 2）、[`EXT-007`](../requirements/0002-product-requirements/part-07-3.md)（Phase 2）、[`AUT-009`](../requirements/0002-product-requirements/part-07-1.md)（Phase 2）、[`EXT-008`](../requirements/0002-product-requirements/part-07-3.md)、[`OPS-005/009`](../requirements/0002-product-requirements/part-07-3.md)（跨阶段）、[`ING-004/016`](../requirements/0002-product-requirements/part-07-1.md)（跨阶段）
 >
-> 关联文档：[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 的 P1-2、[`ERRATA.md`](../requirements/0002-product-requirements/ERRATA.md) 2026-09-20 的 EXT-006 行、ADR [`0017`](../adr/0017-connection-secret-state-v1.md)/[`0018`](../adr/0018-trigger-sdk-v1.md)/[`0023`](../adr/0023-collection-plan-v1.md)/[`0024`](../adr/0024-trigger-forms-v1.md)/[`0026`](../adr/0026-connector-state-export-v1.md)、架构 [`§4.1/§4.2`](../architecture/0001-cosmos-foundation/part-04.md)
+> 关联文档：[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 的 P1-2、[`ERRATA.md`](../requirements/0002-product-requirements/ERRATA.md) 2026-09-20 的 EXT-006 行、ADR [`0017`](../adr/0017-connection-secret-state-v1.md)/[`0018`](../adr/0018-trigger-sdk-v1.md)/[`0023`](../adr/0023-collection-plan-v1.md)/[`0024`](../adr/0024-trigger-forms-v1.md)/[`0026`](../adr/0026-connector-state-export-v1.md)、架构 [`§4.1/§4.2`](../architecture/0001-cosmos-foundation/part-04.md)
 
 ## 问题
 
-[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 的 P1-2 把 EXT-006 记为「部分交付」，缺两件事：
+[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 的 P1-2 把 EXT-006 记为「部分交付」，缺两件事：
 
 1. **manifest 多 operation 没有真实消费者**：`operationIds` 是数组、校验按 `includes`，但 `createBuiltinManifestCatalog` 的四个内置定义**都只声明 `["fetch"]`**，没有任何一个 Adapter 真的用过第二个 operation，也没有对应用例。合同先行、无人消费。
 2. **「按声明展示登录状态」没有数据可展示**：`auth.kind` 只有 `none` 与 `external` 两个真实值，而 `external` 那一个（Bilibili）的登录态**没有任何真相源**——没有任何路径会去探测登录态并写回连接。连接面板的「状态／授权范围／失效原因」是用户手填的（2026-09-23 的 AUT-009 收口注记自述「这两个字段今天没有自动写入方」）。
@@ -170,7 +170,7 @@
 
 1. **§12 的 Phase 2 范围列举要不要补「连接与认证」？**
    **建议：不改 §12 正文**，改用勘误台账记一条口径注记——§12 的范围列举本就不含平台面（Connection/Secret/State、Trigger、连接与认证），实际按 §7 逐行阶段计入 Phase 2，需求文字与验收条件不改写。
-   理由：分册封口后只读、更正记 [`ERRATA.md`](../requirements/0002-product-requirements/ERRATA.md) 是该台账的既定规则；[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md)、`PROJECT-STATUS.md` 与 2026-09-23 的 AUT-009 勘误都已按 §7 逐行阶段执行，这条注记是记录落后于既成事实，不是新增需求。反面选项（写进 §12 范围正文）要动已封口分册，且给「Phase 2 范围」留第二次改动空间。
+   理由：分册封口后只读、更正记 [`ERRATA.md`](../requirements/0002-product-requirements/ERRATA.md) 是该台账的既定规则；[`Phase-2-UNDO.md`](../Phase-2-UNDO.md)、`PROJECT-STATUS.md` 与 2026-09-23 的 AUT-009 勘误都已按 §7 逐行阶段执行，这条注记是记录落后于既成事实，不是新增需求。反面选项（写进 §12 范围正文）要动已封口分册，且给「Phase 2 范围」留第二次改动空间。
 2. **稳定决定新增 ADR，还是并入 ADR-0017 的修订？**
    **建议：新增 ADR-0027**，并在 ADR-0017 顶部标注「部分取代」、在 ADR-0018 的 Revisit Gate 标注本片命中（见「预期改动」的 ADR 一条）。
    理由：本片直接推翻 ADR-0017 决策 1，所以 0017 必须被标注；ADR-0018 顶部已有「部分取代」的机制可抄。把「登录生命周期 + 多 operation 声明」塞进一条讲「三块基础设施 v1」的 ADR 会让主题混乱。

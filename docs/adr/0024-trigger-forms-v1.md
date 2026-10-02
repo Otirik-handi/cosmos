@@ -8,7 +8,7 @@
 
 ## Context
 
-AUT-004 要求 Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发，每次触发保存触发原因、输入、时间和对应定义版本。ADR-0018 的 v1 只交付了 `schedule`／`manual` 两种形态，把其余形态明确后置；[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 因此把 AUT-004 列为 Phase 2 未闭合的最高优先项。
+AUT-004 要求 Trigger 可由 Webhook、内部事件、条件变化或上游 Workflow 结果触发，每次触发保存触发原因、输入、时间和对应定义版本。ADR-0018 的 v1 只交付了 `schedule`／`manual` 两种形态，把其余形态明确后置；[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 因此把 AUT-004 列为 Phase 2 未闭合的最高优先项。
 
 架构 §4.1 早已把七种 Trigger 类型写进「第一版合同预留」：`manual`、`schedule`、`poll`、`webhook`、`event`、`condition`、`dependency`。需求表的四种形态正是其中的 `webhook`／`event`／`condition`／`dependency`，所以本项的性质是**已冻结的架构合同未落地**，与 AUT-010 同类（ERRATA 2026-09-20 对 AUT-010 的原话），而不是新增需求。
 

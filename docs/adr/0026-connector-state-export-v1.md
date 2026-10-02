@@ -4,7 +4,7 @@
 >
 > 日期：2026-09-23
 >
-> 关联：[`connector-state-export-v1 Proposal`](../proposals/connector-state-export-v1.md)、ADR [`0017`](0017-connection-secret-state-v1.md)（ConnectorStateStore）、ADR [`0019`](0019-ops-storage-v1.md)（备份/恢复/导出）、ADR [`0023`](0023-collection-plan-v1.md)（状态命名空间按计划隔离）、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) ING-012/OPS-009、[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) P1-1
+> 关联：[`connector-state-export-v1 Proposal`](../proposals/connector-state-export-v1.md)、ADR [`0017`](0017-connection-secret-state-v1.md)（ConnectorStateStore）、ADR [`0019`](0019-ops-storage-v1.md)（备份/恢复/导出）、ADR [`0023`](0023-collection-plan-v1.md)（状态命名空间按计划隔离）、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) ING-012/OPS-009、[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) P1-1
 
 ## Context
 

@@ -4,7 +4,7 @@
 >
 > 日期：2026-09-20
 >
-> 缺口来源：[`Phase-2-UNDO.md`](../../Phase-2-UNDO.md) 的 P0-1（AUT-010）
+> 缺口来源：[`Phase-2-UNDO.md`](../Phase-2-UNDO.md) 的 P0-1（AUT-010）
 >
 > 关联需求：[PRD](../requirements/0002-product-requirements.md) AUT-010、AUT-009、EXT-007、ING-012；用户原话见 [`0001-original-requirements.md`](../requirements/0001-original-requirements.md)「2026-08-06：第一轮需求和能力」第 4 条
 >
