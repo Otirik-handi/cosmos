@@ -28,6 +28,12 @@ export const organize = {
         useCount: (count: number) => `${count} 处`,
         noContent: "没有可显示的内容。",
         emptyOnTargets: "这个标签还没有挂到任何东西上。",
+        rename: (name: string) => `重命名标签 ${name}`,
+        renameField: "标签新名称",
+        renameSubmit: "保存名称",
+        renameCancel: "取消重命名",
+        renamed: (name: string) => `标签已改名为「${name}」`,
+        renameFailed: "标签改名失败",
     },
     collections: {
         summary: "按自己的方式分组的集合；成员在 Story 页勾选，这里可以移出",

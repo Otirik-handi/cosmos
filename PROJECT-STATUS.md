@@ -1,6 +1,8 @@
 # Cosmos Project Status
 
-> 更新于 2026-09-23。代码基线 `da5ae84`（EXT-006 收口，`--no-ff` 合并；上一基线 `2cfe379`）。**`master` 与 `origin/master`、`upstream/master` 同步；任务 worktree 与分支已清理**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-10-03。代码基线 `9ce4586`（Task 36 的任务记录提交；上一基线 `613435e` 合并前端重做）。**`master` 与 `origin/master`、`upstream/master` 同步**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+>
+> **Task [`36`](.agents/tasks/36-reading-layout-and-object-details/README.md)（Story 阅读页版面与对象详情页补完）代码与文档已落地，但仍在未合并的分支 `feat/t36-reading-layout-and-object-details` 上**（worktree `.worktree/t36-reading-layout-and-object-details`）。它的五项 Scope 与四条顺手修已完成并通过全部自动化门禁；**未完成的是真人验收与切片 C/D/E 的专属浏览器验收**，见「当前下一步」。
 
 ## 历史分册索引
 
@@ -21,7 +23,7 @@
 
 ## 一句话结论
 
-Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中前三条（按来源/分类/时间/全文/Topic 浏览、多来源 Story 的时间线与相关内容、可调整看板且删除 Block 不删除底层信息）已有实现、浏览器自动化与真人验收三层证据，第三条的专问由维护者明确回答「完好」。第四条「重分析不覆盖用户批注和人工关系修正」仍只靠「Phase 2 尚无自动重分析写入路径」在结构上成立、未被真正考验，Phase 3 的 Knowledge Workflow 落地后需重新回归。真人验收同时暴露三条界面方向（Topic/Entity/用户组织缺独立面板、看板需要拖拽、文案过于专业化），已登记为待 Proposal 的新方向。ORG-021 已改标 Phase 3。本轮验证数字与未运行项见「验证边界」。
+Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中前三条（按来源/分类/时间/全文/Topic 浏览、多来源 Story 的时间线与相关内容、可调整看板且删除 Block 不删除底层信息）已有实现、浏览器自动化与真人验收三层证据，第三条的专问由维护者明确回答「完好」。第四条「重分析不覆盖用户批注和人工关系修正」仍只靠「Phase 2 尚无自动重分析写入路径」在结构上成立、未被真正考验，Phase 3 的 Knowledge Workflow 落地后需重新回归。ORG-021 已改标 Phase 3。本轮验证数字与未运行项见「验证边界」。
 
 > 本条原为 2026-08-24 的 Source 身份/revision clean cutover 快照；留存注记见 [history-2026-09-5.md](PROJECT-STATUS/history-2026-09-5.md)。
 
@@ -33,11 +35,16 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
 - 远端 `master` 当前**没有分支保护或 ruleset**（2026-09-17 用 GitHub API 核实，`branches/master/protection` 返回 404、rulesets 为空）：CI 只是事后信号，不阻止直接推送或合并；是否启用 required checks 待维护者决定。
 - 产品当前 **PC 优先、不做移动端适配**（维护者 2026-09-17：移动端等 PC 端做好后再适配）：390px 页面级横向溢出检查**暂停执行**，PC/平板宽度（768/1024/1440px）继续断言；恢复条件写在 `e2e/support/viewports.ts`，恢复前先给两处溢出断言补失败现场打印（见已知不稳定用例表第 2、3 条）。
-- 工具链与依赖源已固定（2026-09-17，Task 29）：bun 版本 **1.4.2** 在 `package.json` 的 `packageManager`、CI 的 `BUN_VERSION`、`docker/Dockerfile` 基础镜像三处一致；依赖源显式写在 `bunfig.toml`（npmmirror，与 `bun.lock` 里 1,026 条地址一致，实测已有条目不会被改写、配置只决定新解析条目写哪个地址）；锁文件仅补回 `configVersion` 一行，依赖解析零变化。Docker 基础镜像的版本切换**未做容器实跑**（本机无 Docker CLI，tag 存在性已用 API 核实）。
+- 工具链与依赖源已固定（2026-09-17，Task 29）：bun 版本 **1.4.2** 在 `package.json` 的 `packageManager`、CI 的 `BUN_VERSION`、`docker/Dockerfile` 基础镜像三处一致；依赖源显式写在 `bunfig.toml`（npmmirror，与 `bun.lock` 里 1,026 条地址一致，实测已有条目不会被改写、配置只决定新解析条目写哪个地址）；锁文件仅补回 `configVersion` 一行，依赖解析零变化。Docker 基础镜像的版本切换**未做容器实跑**（本机无 Docker CLI，tag 存在性已用 API 核实）。## 当前下一步
 
-## 当前下一步
+**Task 36（阅读页版面、对象详情页与外壳 UI）已落地、待收口**（2026-10-03）：阅读页两栏（**视口 80% 居中、左右 3:1、正文撑满左栏**，34em 行宽合同废止）、右栏按 C→B→A→D 分段**且四段各有段标题**、分隔线全仓统一、**全站回执改 toast**；归并改可搜索目标、两个对象详情页可用、标签改名完整竖切；外壳 UI 随后续需求改（顶栏 64 px + 2.5em 间隔 + 暖纸灰底色；侧栏等比 **1.25 倍**并跟随滚动）。**第一轮真人验收反馈已修完**：首页看板拖拽排序恢复（根因是每个分区各包一层 `DndContext`、分区之间互不可见；现由 `BoardDndProvider` 罩住整个看板，跨分区拖拽一并可用），右栏加 240 px 最小宽度。逐轮证据见其 walkthrough 与四册归档，勘误见 [`frontend-redesign-v1`](docs/proposals/frontend-redesign-v1.md)。
 
-**前端界面从 0 重新设计已落地（Task [`35`](.agents/tasks/35-frontend-redesign/README.md)，2026-10-01）**：外壳（顶栏 + 悬浮侧栏）+ 十个路由取代「单页 + Story 抽屉」，单一明暗轴 `data-cosmos-appearance` 取代 `theme × colorway` 两套轴，SSE 提升到外壳层且全程恰好一条，用户可见文案集中到 `apps/web/src/copy/` 并有禁用词与内联文案只减不增门禁；版面/预算/行为三类门禁落在 `e2e/browser/layout-and-budget.spec.ts` 与 `story-live-refresh.spec.ts`。**真人验收只做了 6 条关键任务中的 3 条**（看板、配置来源并录入、按标签筛选通过；读一条内容、归并/拆分、打标签/批注/关联因 Story 页排版问题难以测试，已延后）。**移交新 Task 的四项**：Story 页排版（正文与图片分开、内容区过窄、操作面板太靠下）、归并改成可选目标而不是粘贴内部 Story ID、`/topics/:id` 与 `/entities/:id` 详情页、标签改名（需补一整条竖切）。已登记不随本 Task 修的还有：`/automation` 的三条交互诉求（新建计划与创建连接改模态框、原连接表单位置改连接列表含空态、计划行操作按钮加 tooltip）与组件级文案迁移 772 处。
+- **真人验收**：Task 35 延后的 3 条关键任务（延后理由就是 Story 页排版）现已修好；第一轮反馈 A/B/C/E/F 六项已处理，**D 项（这 3 条）待维护者验收**。
+- **验收债**：切片 C/D/E 无专属 e2e（`object-pages.spec.ts` 只覆盖列表页创建）；拖拽排序已补真实指针用例。
+- **合并**：分支 `feat/t36-reading-layout-and-object-details` 未合并、未推送；分支内门禁已全绿。
+- **窄档取舍**：右栏 240 px 下限生效时整组略超视口 80%（维护者选定）；首屏 JS 余量约 7.7 KB（门禁 328.1 KB，实测 320.4 KB）。
+
+**前端界面从 0 重新设计已落地（Task [`35`](.agents/tasks/35-frontend-redesign/README.md)，2026-10-01）**：外壳（顶栏 + 悬浮侧栏）+ 十个路由取代「单页 + Story 抽屉」，单一明暗轴 `data-cosmos-appearance` 取代 `theme × colorway` 两套轴，SSE 提升到外壳层且全程恰好一条，用户可见文案集中到 `apps/web/src/copy/` 并有禁用词与内联文案只减不增门禁；版面/预算/行为三类门禁落在 `e2e/browser/layout-and-budget.spec.ts` 与 `story-live-refresh.spec.ts`。真人验收做了 6 条中的 3 条，剩余 3 条由 Task 36 承接；Task 35 移交的四项均已在 Task 36 落地。仍不随 Task 36 修的：`/automation` 三条交互诉求与组件级文案迁移 772 处。
 
 **2026-09-18 复核与决定（文档口径、公开投影安全项、Phase 1 缺口收口）**：完整记录移入 [`PROJECT-STATUS/history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)；仍然有效的结论是 PRD §7／§12 表内无未闭合项、两项修复均已推送。
 **Phase 2 收口与尾巴的完成记录（2026-09-15/16/23/24）**：完整记录已移入
@@ -48,7 +55,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 - Entity merge/dedup；批注的正文片段字符级锚点；**代码规模行数门禁已由 G08 修复**（完整口径下仍有 3 个文件超 800 行——全部是留待 UI 重做的 Web 文件，非 UI 侧已清零；另有 2 个入口超 300 行。G09–G16 已治理 `packages/domain`、`media-acquisition`、`workflow-host-runtime`、`worker-admin`、`collectors`、`workflow-backend` 与 `workflow-ingest` 测试）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）——`-` 等 FTS5 运算符会让用户输入变成畸形查询；现按维护者裁定「全当字面文本」处理（按空白切词、每段作字面短语、多词保持 AND、无词可搜时退回无文本条件）。**代价**：搜索框不再是 FTS5 查询接口。
-- **已知不稳定的测试用例**（2026-09-24 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**（根因是 Feed 卡片列表的 React key 重复，改用 `entryId`），同一次排查还修掉一个陈旧刷新覆盖搜索结果的竞态；过程见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。2026-09-23 另修掉一个**确定性**布局缺陷（`webhook-entry.spec.ts` 的点击被溢出的连接面板拦截），它不是抖动。**仍未归因且失败点漂移**：8 轮整套里 4 轮失败，落点分别在 `source-lifecycle-and-search-filters.spec.ts`（`locator.fill` 卡满 300 秒、整轮 7.2 分钟）、`collection-plan-multi.spec.ts`、`phase2-organization.spec.ts`（`:103`/`:417` 与拆分场景）——症状集中在 DOM/前端层。**Task [`34`](.agents/tasks/34-sqlite-lock-observation/README.md) 已证伪「SQLite 锁/慢操作同根因」这条候选路径**（3/4 个失败轮次慢操作总数为 0）；下一步看 Playwright 的失败 trace。两处 390px 断言随移动端适配后置**暂停执行**。症状与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
+- **已知不稳定的测试用例**（2026-09-24 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**（根因是 Feed 卡片列表的 React key 重复，改用 `entryId`），同一次排查还修掉一个陈旧刷新覆盖搜索结果的竞态；过程见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。2026-09-23 另修掉一个**确定性**布局缺陷（`webhook-entry.spec.ts` 的点击被溢出的连接面板拦截），它不是抖动。**仍未归因且失败点漂移**：8 轮整套里 4 轮失败，落点分别在 `source-lifecycle-and-search-filters.spec.ts`（`locator.fill` 卡满 300 秒、整轮 7.2 分钟）、`collection-plan-multi.spec.ts`、`phase2-organization.spec.ts`（`:103`/`:417` 与拆分场景）——症状集中在 DOM/前端层。**Task [`34`](.agents/tasks/34-sqlite-lock-observation/README.md) 已证伪「SQLite 锁/慢操作同根因」这条候选路径**（3/4 个失败轮次慢操作总数为 0）；下一步看 Playwright 的失败 trace。两处 390px 断言随移动端适配后置**暂停执行**。症状与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。**2026-10-03 追加（Task 36）**：`locator.fill` 卡满 300 秒那类症状在 `story-live-refresh.spec.ts:104` 又出现一次（整套 8.1 分钟、单跑正常），**落点继续漂移**；同轮实验室 `connection-panel.spec.ts` 也出现一次瞬时双预览的严格模式冲突。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
@@ -165,13 +172,16 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 验证边界（历史证据与当前未验证项分开）
 
-**当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006）；本节只留仍然有效的边界与缺口。
+**当前验证**：各切片的完整命令与数字在对应 Task walkthrough（Task 10 的切片 4、Task 14 拖拽排序、Task 17/20 的 split 用户状态迁移、Task 26 的 ING-006、**Task 36 的 Round 1–24 与分册**）；本节只留仍然有效的边界与缺口。**Task 36 的分支内门禁已全绿**（`test:browser` 53、实验室 21、vitest 32、tsc、lint、`docs:check`），数字与未运行项见其 walkthrough。
 
-- **最近一次全量证据（2026-10-01，Task 35 的 worktree，HEAD `157b715`）**：`typecheck` 0 错误、`lint` 0 error（18 warning）、`bun run test` **137 文件 / 785 用例全绿**、`docs:check` **930 文件 0 失败**、代码与 docs 两条 size 门禁 PASS、文案扫描 751 处内联（禁用词 1 处为登记例外）、组件实验室 **21 passed**、浏览器整套 **51 passed / 0 failed**（21 个 spec，含版面三档断点、SSE 恰好一条、reduced-motion 归零、首屏可交互 162 ms、路由切换 134 ms、首屏 JS 289.7 KB）、Node 进程 E2E 12 例。首屏 JS **增量 −8.4 KB**（回基线 `da147a5` 实测量出 298.1 KB；门禁已按「基线 + 30 KB」守这条合同，取样点是 `load` 事件，导航预取不计入）。**独立五轴审查已完成**（179 文件，无 Critical、安全轴无发现，4 条 Required 已全部修复）。**未运行**：Docker、发布部署、真实 Agent 验收；真人验收见「当前下一步」。
-- 最近一次全量证据（2026-09-23，主工作区，HEAD `da5ae84`，EXT-006 合并后）：`typecheck` 0、`bun run test` **124 文件 / 726 用例全绿**、`docs:check` **768 文件 0 失败**、size 门禁 PASS、路由表守卫 3/3、`git diff --check` 干净；同片在 worktree 内另跑 Node 进程 E2E 11 例、组件实验室 19 passed、浏览器整套一次 **33 passed**（另一次 31/33 为在册抖动）、真实来源验收四条全绿（含新增的 `test:real:bilibili-search`）。**schema 变更合并后必须先 `bun run db:generate`**。未运行：Docker（首次实跑失败，见上）、`test:real:aihot`、Windows smoke、发布部署；本机 e2e 需 `BUN_BINARY`。逐条数字在 Task 22／23 与勘误台账。
+- **更早的全量证据**（2026-09-23 主工作区、2026-10-01 Task 35 worktree）的逐条数字在 Task 22／23 与
+  Task 35 的 walkthrough，本文件为守 9k token 不再复述；仍然有效的一条：**schema 变更合并后必须先
+  `bun run db:generate`**。
 - **公开 Asset 投影的内部 Blob key 已剥离**（Task [`31`](.agents/tasks/31-public-asset-projection/README.md)，合入 `3ded765`；完整记录见 [`history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)）。
 - **浏览器产品 E2E 仍有间歇失败**（`:103`/`:186`/`:417`/`:539` 之间漂移、单跑即过）：`:539` 根因已修复（Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)）；2026-09-23 又确认 `webhook-entry.spec.ts` 那次**不是抖动而是确定性布局缺陷**（侧栏溢出，已修）；其余（含 `ingest.spec.ts:119` 的 `toBeFocused`）仍未归因。症状与观察次数只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。
-- 拖拽手势本身未自动化（指针坐标在该布局下不可靠），由维护者真人验收覆盖（Task 14 的已知边界）。
+- 拖拽手势已自动化（2026-10-03，Task 36）：`phase2-organization.spec.ts` 用真实指针拖拽并断言
+  落点与顺序。指针坐标在该布局下不可靠（拖动期间页面会滚动），用例的处理是先滚到分区顶部、
+  再按 dnd-kit 的 `over` 反推期望 position。
 - 本机未运行：Docker/Compose、发布部署、长时定时抓取与长时 Worker 重启演练；`test:property`、Node 进程 E2E、组件实验室套件已于 2026-09-20 在本机跑通，Windows Node smoke 由远端 CI 覆盖。
 
 2026-08-15 之前的历史基线与 Spike 证据（含当时的分册完成记录、Task 05/07 基线与浏览器

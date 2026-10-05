@@ -36,7 +36,7 @@ export function StoryTopicSection({
             {topics && topics.length > 0 && (
                 <section
                     aria-label="加入 Topic"
-                    className="grid gap-3 border-t pt-4"
+                    className="grid gap-3"
                 >
                     <h3 className="font-medium">加入 Topic</h3>
                     <div className="flex flex-wrap items-center gap-2">

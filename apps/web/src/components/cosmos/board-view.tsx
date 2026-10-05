@@ -11,7 +11,7 @@ import type {
 } from "@cosmos/contracts";
 import type { HttpCosmosClient } from "@cosmos/transport-http";
 
-import { BoardBlockList } from "./board-sortable-blocks";
+import { BoardBlockList, BoardDndProvider } from "./board-sortable-blocks";
 import { BoardBlockContent } from "./board-view/blocks";
 import { AddBlockForm, AddSectionForm, BlockEditor, SectionEditor } from "./board-view/editor";
 import { BlockPlaceholder, blockTypeLabel } from "./board-view/shared";
@@ -39,7 +39,7 @@ export function BoardView({
     collections = [],
     refreshToken = 0,
 }: BoardViewProps) {
-    return (
+    const sections = (
         <div className="flex flex-col gap-10">
             {board.sections.map((section, sectionIndex) => {
                 const hasVisibleBlock = section.blocks.some((block) => block.visible);
@@ -99,6 +99,17 @@ export function BoardView({
             ) : null}
         </div>
     );
+
+    // 拖拽上下文必须罩住所有分区：只包一个分区的话，其它分区的区块既不是拖拽源也不是
+    // 落点，跨分区拖拽永远解析不出目标。
+    if (editable && commands) {
+        return (
+            <BoardDndProvider board={board} onMoveBlock={commands.moveBlock}>
+                {sections}
+            </BoardDndProvider>
+        );
+    }
+    return sections;
 }
 
 /**
@@ -156,10 +167,8 @@ function BlockList({
     if (editable && commands) {
         return (
             <BoardBlockList
-                board={board}
                 sectionId={section.id}
                 blocks={section.blocks}
-                onMoveBlock={commands.moveBlock}
                 renderBlock={(block, index) => (
                     <>
                         <BlockEditor

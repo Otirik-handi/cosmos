@@ -14,6 +14,10 @@ import {
 import type { StoryTimeRangeDraft } from "@/lib/story-time-range-draft";
 import type { StoryEntryOption } from "./entry-option";
 import {
+    MergeTargetSelect,
+    type MergeTargetCandidate,
+} from "./merge-target-select";
+import {
     StoryKeyFactsForm,
     StoryTimeRangeForm,
     type StoryKeyFactDraft,
@@ -27,9 +31,12 @@ type Props = {
     busy: boolean;
     isShell: boolean;
     kind: StoryDetail["story"]["kind"];
-    mergeStoryId: string;
+    /** 当前 Story：归并目标候选要排除它，避免「并入自己」。 */
+    currentStoryId: string;
+    /** 按标题搜索归并目标（复用 GET /search）。 */
+    onSearchMergeTargets: (text: string) => Promise<readonly MergeTargetCandidate[]>;
+    onSelectMergeTarget: (candidate: MergeTargetCandidate) => void;
     setKind: Dispatch<SetStateAction<StoryDetail["story"]["kind"]>>;
-    setMergeStoryId: Dispatch<SetStateAction<string>>;
     setSubtype: Dispatch<SetStateAction<string | null>>;
     setTitle: Dispatch<SetStateAction<string>>;
     submitMerge: FormEventHandler;
@@ -49,9 +56,10 @@ export function StoryActionsSection({
     busy,
     isShell,
     kind,
-    mergeStoryId,
+    currentStoryId,
+    onSearchMergeTargets,
+    onSelectMergeTarget,
     setKind,
-    setMergeStoryId,
     setSubtype,
     setTitle,
     submitMerge,
@@ -70,17 +78,23 @@ export function StoryActionsSection({
             {!isShell && (
                 <section
                     aria-label="Story 操作"
-                    className="grid gap-4 border-t pt-4"
+                    className="flex flex-col gap-5"
                 >
                     <form
                         aria-label="编辑 Story 表示"
                         className="grid gap-4"
                         onSubmit={submitRevisionUpdate}
                     >
-                        <div className="flex flex-wrap items-center gap-2">
+                        {/*
+                         * 标题独占一行；**类型与子类型同排**（维护者 2026-10-03）——它们是同一件事的
+                         * 两个层级（分类 → 细分），放在一起读得通，合并后正好放得下右栏的宽度。
+                         * 逐字段一行、标签与控件同排，是这个宽度下稳定的形态；`shrink-0` 让标签
+                         * 不被下拉压掉。
+                         */}
+                        <div className="flex items-center gap-2">
                             <label
                                 htmlFor="cosmos-story-title-edit"
-                                className="text-sm font-medium"
+                                className="shrink-0 text-sm font-medium"
                             >
                                 标题
                             </label>
@@ -91,9 +105,11 @@ export function StoryActionsSection({
                                 disabled={busy}
                                 className="max-w-xs"
                             />
+                        </div>
+                        <div className="flex items-center gap-2">
                             <label
                                 htmlFor="cosmos-story-kind-edit"
-                                className="text-sm font-medium"
+                                className="shrink-0 text-sm font-medium"
                             >
                                 类型
                             </label>
@@ -122,13 +138,13 @@ export function StoryActionsSection({
                             </select>
                             <label
                                 htmlFor="cosmos-story-subtype-edit"
-                                className="text-sm font-medium"
+                                className="shrink-0 text-sm font-medium"
                             >
-                                subtype
+                                子类型
                             </label>
                             <StorySubtypeSelect
                                 id="cosmos-story-subtype-edit"
-                                label="Story subtype"
+                                label="Story 子类型"
                                 value={subtype}
                                 kind={kind}
                                 options={subtypeOptions}
@@ -151,25 +167,32 @@ export function StoryActionsSection({
                             保存修改
                         </Button>
                     </form>
+                    {/*
+                     * 归并与「改表示」是两个不同的锚点（面板会在两者之间插一条分隔线），
+                     * 所以本组件内部不再放任何线——内部线与面板的段间线会叠成两条
+                     * （Task 36 Round 10 修的就是这个）。
+                     */}
                     <form
-                        className="flex flex-wrap items-center gap-2"
+                        className="flex flex-col gap-2"
                         onSubmit={submitMerge}
                     >
-                        <label
-                            htmlFor="cosmos-story-merge-target"
-                            className="text-sm font-medium"
-                        >
-                            并入本 Story 的 Story ID
-                        </label>
-                        <Input
-                            id="cosmos-story-merge-target"
-                            value={mergeStoryId}
-                            onChange={(event) => setMergeStoryId(event.target.value)}
-                            disabled={busy}
-                            placeholder="story:..."
-                            className="max-w-xs"
-                        />
-                        <Button type="submit" disabled={busy} variant="outline">
+                        <span className="text-sm font-medium" id="cosmos-story-merge-label">
+                            并入本条的内容
+                        </span>
+                        {/*
+                         * 选择器而不是输入框：判据 R3 不允许要求用户粘贴内部 Story ID。
+                         * `aria-labelledby` 指向上面那行文字——Combobox 的输入框自带
+                         * aria-label（搜索框的角色说明），两者分工不同，不能互相顶掉。
+                         */}
+                        <div aria-labelledby="cosmos-story-merge-label" className="max-w-sm" role="group">
+                            <MergeTargetSelect
+                                currentStoryId={currentStoryId}
+                                disabled={busy}
+                                onSearch={onSearchMergeTargets}
+                                onSelect={onSelectMergeTarget}
+                            />
+                        </div>
+                        <Button type="submit" disabled={busy} variant="outline" className="w-fit">
                             归并
                         </Button>
                     </form>

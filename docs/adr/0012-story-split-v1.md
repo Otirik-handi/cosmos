@@ -18,6 +18,8 @@ Story merge 已可用（ADR-0006），旧 ID 通过 `StoryAlias` 永久重定向
 
 新增 `StoryReplacement`（`storyId` → `successorStoryId`，`(storyId, successorStoryId)` 唯一、按 `successorStoryId` 建索引、级联到 Story）。旧 Story 保留原 ID、原 Revision 与历史，不写 `StoryAlias`，因此旧 ID 永远解析到自己（历史壳），不会被静默重定向到单一后继。`StoryDetail.story` 新增 `status`（`active`/`split`）与 `replacedBy[]`（后继 id/标题/kind），状态由是否存在后继行派生，不新增 `Story.status` 列，避免第二个真相。
 
+**后继侧的反向边 `splitFrom`**（2026-10-05 补充）：`StoryDetail.story` 同时投影 `splitFrom`（原条 id/标题/kind，非拆分产物为 `null`），由同一张 `StoryReplacement` 按 `successorStoryId` 反查，不新增存储。理由是决策 2 允许的零成员历史壳在界面上无处可达：它没有 entry 投影，因此不出现在信息库与看板里，而决策 4 把用户状态留在壳上——没有这条回链，那些状态只能靠记住 URL 才能回去迁移。投影只读，不改变决策 6 的写边界。
+
 ### 2. `StoryDetail.entry` 可空、`entries` 可为空
 
 历史壳可能没有剩余成员，此时没有「代表成员」。`entry` 放宽为可空、`entries` 允许空数组；读取历史壳仍要求它有当前 Revision。这是读侧破坏性放宽，Web 在「历史壳且无成员」时只渲染标题/摘要/后继列表/批注。当前产品单机单用户、无外部客户端，不做双字段兼容过渡。

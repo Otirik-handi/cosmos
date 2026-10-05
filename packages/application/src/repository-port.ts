@@ -528,6 +528,11 @@ export interface CosmosRepository {
     createLabel(input: {
         name: string;
     }): Promise<LabelItem>;
+    /** 标签改名（Task 36 切片 E）：原地改写 `Label.name`，唯一约束冲突抛 LabelConflictError。 */
+    updateLabel(input: {
+        labelId: string;
+        name: string;
+    }): Promise<LabelItem>;
     listLabels(): Promise<LabelList>;
     label(labelId: string): Promise<LabelDetail | null>;
     deleteLabel(labelId: string): Promise<void>;

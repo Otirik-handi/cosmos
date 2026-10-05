@@ -13,6 +13,7 @@ import type {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 
 export const ENTITY_TYPE_OPTIONS: readonly { value: string; label: string }[] = [
@@ -210,7 +211,7 @@ export function EntityPanel({
                 className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[var(--radius-panel)] border bg-card shadow-[var(--elevation-dialog)] sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-xl sm:rounded-r-none sm:rounded-bl-[var(--radius-panel)]"
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="flex items-start justify-between gap-4 border-b px-6 py-5">
+                <div className="flex items-start justify-between gap-4 px-6 py-5">
                     <div className="flex min-w-0 flex-col gap-1">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">
                             Entity 详情
@@ -237,7 +238,7 @@ export function EntityPanel({
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     {entity.aliases.length > 0 && (
-                        <section aria-label="名称别名" className="border-b pb-4">
+                        <section aria-label="名称别名" className="flex flex-col gap-2">
                             <h3 className="font-medium">名称别名</h3>
                             <ul className="mt-2 flex flex-wrap gap-2">
                                 {entity.aliases.map((alias) => (
@@ -259,7 +260,8 @@ export function EntityPanel({
                             </ul>
                         </section>
                     )}
-                    <section aria-label="关联 Story" className="border-b pb-4">
+                    {entity.aliases.length > 0 && <Separator decorative />}
+                    <section aria-label="关联 Story" className="flex flex-col gap-2">
                         <h3 className="font-medium">
                             关联 Story（{entity.stories.length}）
                         </h3>
@@ -298,7 +300,8 @@ export function EntityPanel({
                             </p>
                         )}
                     </section>
-                    <section aria-label="类型化关系" className="border-b pb-4">
+                    <Separator decorative />
+                    <section aria-label="类型化关系" className="flex flex-col gap-2">
                         <h3 className="font-medium">
                             关系（{entity.relations.length}）
                         </h3>
@@ -319,9 +322,10 @@ export function EntityPanel({
                             </p>
                         )}
                     </section>
+                    <Separator decorative />
                     <section
                         aria-label="Entity 操作"
-                        className="grid gap-4 border-t pt-4"
+                        className="grid gap-4"
                     >
                         <form className="grid gap-3" onSubmit={submitEntityUpdate}>
                             <label

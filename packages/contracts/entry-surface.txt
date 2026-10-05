@@ -233,6 +233,7 @@ type	UpdateCollectionCommand
 type	UpdateCollectionPlanCommand
 type	UpdateConnectionCommand
 type	UpdateEntityCommand
+type	UpdateLabelCommand
 type	UpdateSavedViewCommand
 type	UpdateSectionCommand
 type	UpdateSourceCommand
@@ -452,6 +453,8 @@ value	storyDetailSchema
 value	storyEntitySummarySchema
 value	storyEvidenceSchema
 value	storyKeyFactSchema
+value	storySplitSuccessorMaxCount
+value	storySplitSuccessorMinCount
 value	storySplitSuccessorSchema
 value	storySubtypePageSchema
 value	storySubtypeQuerySchema
@@ -485,6 +488,7 @@ value	updateCollectionCommandSchema
 value	updateCollectionPlanCommandSchema
 value	updateConnectionCommandSchema
 value	updateEntityCommandSchema
+value	updateLabelCommandSchema
 value	updateSavedViewCommandSchema
 value	updateSectionCommandSchema
 value	updateSourceCommandSchema

@@ -20,6 +20,7 @@ export const sharedTokens = [
     "--destructive",
     "--radius-control",
     "--radius-card",
+    "--divider-thickness",
 ] as const;
 
 export const buttonVariants = [

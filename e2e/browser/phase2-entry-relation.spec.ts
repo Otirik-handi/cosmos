@@ -1,10 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { latestToast } from "../support/lab";
 import {
     expandEditSurface,
     ingestFeed,
     openStory,
+    pickMergeTarget,
     waitForStoryIds,
 } from "../support/story-flow";
 
@@ -50,13 +52,15 @@ test("marks a syndication between two Story members and shows both directions", 
     // fixture 有三条内容，本来源至少落两条 Story；取前两条做归并素材。
     const [canonicalId, obsoleteId] = await waitForStoryIds(page, sourceName, 2);
     const canonical = await readStory(page, canonicalId);
+    const obsolete = await readStory(page, obsoleteId);
     expect(canonical.title.length).toBeGreaterThan(0);
 
     // 归并两条单成员 Story，得到一条双成员 Story：同一 Story 内的两条重复条目
     // 是合法且常见的场景（ADR-0022 决定 4），两个方向也就能在同一屏里看到。
     await openStory(page, canonicalId);
     const editSection = await expandEditSurface(page);
-    await editSection.getByLabel("并入本 Story 的 Story ID").fill(obsoleteId);
+    // 归并目标按标题在选择器里选（Task 36 切片 B：粘贴内部 Story ID 的入口已删除）。
+    await pickMergeTarget(page, editSection, obsolete.title);
     await editSection.getByRole("button", { name: "归并", exact: true }).click();
     await expect(page.getByText("来源成员（2）")).toBeVisible();
 
@@ -170,6 +174,6 @@ test("marks a syndication between two Story members and shows both directions", 
     expect(memberCards, "归并后同一 Story 在 Feed 里至少有两张成员卡片").toBeGreaterThanOrEqual(2);
     await searchRegion.getByLabel("搜索已保存内容").fill(`绝不匹配-${randomUUID().slice(0, 8)}`);
     await searchRegion.getByRole("button", { name: "搜索", exact: true }).click();
-    await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();
+    await expect(await latestToast(page)).toHaveText("搜索到 0 条结果。");
     await expect(page.locator("article")).toHaveCount(0);
 });

@@ -52,18 +52,29 @@ function isActive(pathname: string, href: string, exact: boolean): boolean {
 export function SideNav() {
     const pathname = usePathname();
 
+    /*
+     * 侧栏所有尺寸都乘 `--nav-scale`（当前 1.25）：宽度、内边距、行高、间距、字号、图标
+     * 一起等比放大。不用「把根字号调大」是因为 Tailwind 的 rem 值按根字号算，那样会波及全站；
+     * 也不用 transform: scale()，它会连带把焦点环与阴影拉伸发虚。
+     *
+     * `sticky top-[calc(4rem+2.5em)]` 让它**跟随滚动**（维护者 2026-10-03）：顶栏 64 px
+     * （`4rem`）＋顶栏下方间隔 2.5em = 40 px，正好是侧栏在未滚动时的位置，所以贴上后不会跳。
+     * 用 `sticky` 而不是 `fixed`：sticky 仍在文档流里，窄窗口下主内容被压缩的算法不变，
+     * 也不需要给主内容补一个等宽的占位。侧栏高度仍由内容撑开（ADR-0029 决策 2 的已知代价：
+     * 导航项多到超过视口高度时底部会被裁，Revisit Gate 第 1 条已登记该情况）。
+     */
     return (
-        <aside className="w-[196px] shrink-0 self-start">
+        <aside className="sticky top-[calc(4rem+2.5em)] w-[calc(196px*var(--nav-scale))] shrink-0 self-start">
             <nav
                 aria-label={messages.shell.nav.ariaLabel}
                 className={cn(
-                    "flex flex-col gap-4 rounded-[var(--radius-card)] border border-border bg-card p-2.5",
+                    "flex flex-col gap-[calc(1rem*var(--nav-scale))] rounded-[var(--radius-card)] border border-border bg-card p-[calc(0.625rem*var(--nav-scale))]",
                     "shadow-[var(--elevation-card)]",
                 )}
             >
                 {NAV_GROUPS.map((group) => (
-                    <div className="flex flex-col gap-1" key={group.title}>
-                        <div className="px-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground">
+                    <div className="flex flex-col gap-[calc(0.25rem*var(--nav-scale))]" key={group.title}>
+                        <div className="px-[calc(0.5rem*var(--nav-scale))] pb-[calc(0.25rem*var(--nav-scale))] text-[calc(11px*var(--nav-scale))] font-medium tracking-wide text-muted-foreground">
                             {group.title}
                         </div>
                         {group.items.map((item) => {
@@ -77,7 +88,7 @@ export function SideNav() {
                                 <Link
                                     aria-current={active ? "page" : undefined}
                                     className={cn(
-                                        "flex h-7 items-center gap-2 rounded-[var(--radius-control)] px-2 text-[13px] leading-none",
+                                        "flex h-[calc(1.75rem*var(--nav-scale))] items-center gap-[calc(0.5rem*var(--nav-scale))] rounded-[var(--radius-control)] px-[calc(0.5rem*var(--nav-scale))] text-[calc(13px*var(--nav-scale))] leading-none",
                                         "transition-colors duration-[var(--motion-fast)]",
                                         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                                         active
@@ -87,7 +98,11 @@ export function SideNav() {
                                     href={item.href}
                                     key={item.href}
                                 >
-                                    <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
+                                    <Icon
+                                        aria-hidden
+                                        className="size-[calc(0.875rem*var(--nav-scale))] shrink-0"
+                                        strokeWidth={1.75}
+                                    />
                                     <span className="truncate">{item.label}</span>
                                 </Link>
                             );

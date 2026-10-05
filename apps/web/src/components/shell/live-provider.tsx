@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
@@ -98,8 +98,18 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         };
     }, [connect, flush]);
 
+    /*
+     * context value 必须 memo：`streamState` 每次连接状态变化都会换新对象，不 memo 的话
+     * 每个消费者（含只用 `useLiveTopic` 订阅 topic 的页面）都会跟着重渲染，而它们
+     * 关心的只有 `subscribe` 这一个身份稳定的函数。
+     */
+    const value = useMemo<LiveContextValue>(
+        () => ({ streamState, subscribe }),
+        [streamState, subscribe],
+    );
+
     return (
-        <LiveContext.Provider value={{ streamState, subscribe }}>
+        <LiveContext.Provider value={value}>
             {children}
         </LiveContext.Provider>
     );

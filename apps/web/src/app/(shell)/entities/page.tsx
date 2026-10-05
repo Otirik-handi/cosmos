@@ -2,9 +2,10 @@
 
 import { RefreshCcw, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useEntityWorkspace } from "@/app/home/use-entity-workspace";
+import { useNoticeToast } from "@/app/home/use-notice-toast";
 import { useStoryWorkspace } from "@/app/home/use-story-workspace";
 
 import { Button } from "@/components/ui/button";
@@ -16,17 +17,17 @@ import { messages } from "@/copy/messages";
 
 /*
  * Entity 列表与新建。创建入口在**对象页**（ADR-0029 决策 1）：这里建 Entity，
- * 与内容的关联在 Story 页做。加删别名与关系、解除关联仍在待办里（`/entities/:id` 还是占位）。
+ * 与内容的关联在 Story 页做。加删别名与关系、解除关联 Story 在详情页（`/entities/:id`）。
  */
 export default function EntitiesPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [newName, setNewName] = useState("");
     const [newType, setNewType] = useState<string>(ENTITY_TYPE_OPTIONS[0]?.value ?? "person");
 
-    const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
+    /** 写回执走 toast；`error` 仍由页面横幅显示。上下文对象身份稳定由 hook 保证。 */
+    const { context: workspaceContext } = useNoticeToast(setError, setLoading);
     const storyWorkspace = useStoryWorkspace(workspaceContext);
     const { createEntity, entities, loadEntities } = useEntityWorkspace(workspaceContext, storyWorkspace);
 
@@ -59,7 +60,7 @@ export default function EntitiesPage() {
                 </Button>
             </div>
 
-            <PageBanners error={error} notice={notice} />
+            <PageBanners error={error} />
 
             <div className="flex flex-wrap items-center gap-2">
                 <Input

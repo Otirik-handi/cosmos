@@ -16,6 +16,7 @@ import {
     updateSavedViewCommandSchema,
     userOrganizationAckSchema,
     createLabelCommandSchema,
+    updateLabelCommandSchema,
     labelAssignmentCommandSchema,
     createCollectionCommandSchema,
     updateCollectionCommandSchema,
@@ -38,6 +39,7 @@ import {
     type UpdateSavedViewCommand,
     type UserOrganizationAck,
     type CreateLabelCommand,
+    type UpdateLabelCommand,
     type LabelAssignmentCommand,
     type CreateCollectionCommand,
     type UpdateCollectionCommand,
@@ -68,6 +70,16 @@ export class OrganizationClient extends ContentClient {
         const payload = createLabelCommandSchema.parse(input);
         return this.request("/api/v1/labels", {
             method: "POST",
+            body: payload,
+            schema: labelItemSchema,
+        });
+    }
+
+    /** 标签改名（Task 36 切片 E）：回执是改名后的 LabelItem。 */
+    async updateLabel(labelId: string, input: UpdateLabelCommand): Promise<LabelItem> {
+        const payload = updateLabelCommandSchema.parse(input);
+        return this.request(`/api/v1/labels/${encodeURIComponent(labelId)}`, {
+            method: "PATCH",
             body: payload,
             schema: labelItemSchema,
         });

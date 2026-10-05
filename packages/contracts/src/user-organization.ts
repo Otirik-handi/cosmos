@@ -65,6 +65,17 @@ export const createLabelCommandSchema = z.object({
 export type CreateLabelCommand = z.infer<typeof createLabelCommandSchema>;
 
 
+/**
+ * 标签改名（Task 36 切片 E）。只有 `name` 一个字段：Label 是可变的普通行，
+ * 不是 revision 模型，所以这是原地改写而不是产生新版本。
+ */
+export const updateLabelCommandSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+});
+
+export type UpdateLabelCommand = z.infer<typeof updateLabelCommandSchema>;
+
+
 export const labelAssignmentCommandSchema = z.object({
     labelId: z.string().trim().min(1).max(300),
     targetType: targetTypeSchema,

@@ -16,16 +16,11 @@ import { BANNED_UI_TERMS, findBannedTerms, scanInlineCopy } from "./scan";
 /**
  * 已登记的禁用词例外，**只减不增**。每条都要写清归属与解除条件，
  * 否则例外会变成永久豁免。
+ *
+ * **当前为空**：唯一那条（`story-actions.tsx` 的「Story ID」）已随 Task 36 切片 B 消掉——
+ * 归并目标改成可搜索的选择列表，界面不再要求用户粘贴内部编号。
  */
-const BANNED_TERM_EXCEPTIONS = [
-    {
-        file: "components/cosmos/story-panel/story-actions.tsx",
-        term: "Story ID",
-        reason: "归并入口要用户粘贴内部编号（判据 R3）。改成可搜索的选择列表需要新增"
-            + "「可作为归并目标的 Story 列表」只读查询，ui-copy-review-v1 §7 明确不把它"
-            + "夹带进纯文案批次，留给界面职责重划的 Task。",
-    },
-] as const;
+const BANNED_TERM_EXCEPTIONS: readonly { file: string; term: string }[] = [];
 
 describe("集中文案模块", () => {
     it("按界面区域分册并向调用方暴露同一入口", () => {

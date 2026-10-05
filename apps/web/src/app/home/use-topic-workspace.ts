@@ -9,6 +9,7 @@ import {
     type TopicSummary,
     type UpdateTopicCommand,
 } from "@cosmos/contracts";
+import { CosmosTransportError } from "@cosmos/transport-http";
 import {
     client,
     readError,
@@ -19,6 +20,9 @@ import type { WorkspaceContext } from "./page-bridge";
 import type { useStoryWorkspace } from "./use-story-workspace";
 
 type StoryApi = ReturnType<typeof useStoryWorkspace>;
+
+/** 详情页的读取结果：**「读不到」是这一页的正常状态，不是错误横幅**（区别于其它失败）。 */
+export type TopicDetailOutcome = "ok" | "not_found" | "failed";
 
 /** 由 G06 切片 4 从 page.tsx 拆出的域 hook（搬运，未改行为）。 */
 export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
@@ -59,12 +63,36 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
         }
     };
 
+    /**
+     * 详情页读取（`/topics/:id`）：只读话题本身，不连带批注（那由 `openTopic` 负责）。
+     * 404 单独成一档——路由 id 失效时页面要给「读不到 + 回列表」，而不是错误横幅。
+     *
+     * 依赖写成 `ctx.setError` 而不是整个 `ctx`：调用方若每次渲染新建 context 对象，
+     * 这个回调的身份仍要稳定（页面把它放进挂载 effect 的依赖里，身份变了就会自激取数）。
+     */
+    const { setError } = ctx;
+    const loadTopicDetail = useCallback(async (topicId: string): Promise<TopicDetailOutcome> => {
+        try {
+            setTopic(await client.topic(topicId));
+            setError(null);
+            return "ok";
+        } catch (caught) {
+            if (caught instanceof CosmosTransportError && caught.status === 404) {
+                setTopic(null);
+                return "not_found";
+            }
+            setError(readError(caught));
+            return "failed";
+        }
+    }, [setError]);
+
     const updateTopic = async (command: UpdateTopicCommand): Promise<void> => {
         if (!topic) {
             return;
         }
         const updated = await client.updateTopic(topic.topic.id, command);
         setTopic(updated);
+        ctx.setNotice(messages.notices.topic.fieldsSaved);
         await loadTopics();
     };
 
@@ -80,6 +108,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
             role,
         });
         setTopic(updated);
+        ctx.setNotice(messages.notices.topic.memberRoleUpdated);
     };
 
     const removeTopicMember = async (storyId: string): Promise<void> => {
@@ -88,6 +117,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
         }
         const updated = await client.removeTopicMember(topic.topic.id, { storyId });
         setTopic(updated);
+        ctx.setNotice(messages.notices.topic.memberRemoved);
     };
 
     const restoreTopicMember = async (
@@ -102,6 +132,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
             role,
         });
         setTopic(updated);
+        ctx.setNotice(messages.notices.topic.memberRestored);
     };
 
     const refreshTopicAnnotations = async (): Promise<void> => {
@@ -184,6 +215,7 @@ export function useTopicWorkspace(ctx: WorkspaceContext, storyApi: StoryApi) {
         createTopicAnnotation,
         deleteTopicAnnotation,
         joinTopic,
+        loadTopicDetail,
         loadTopics,
         openTopic,
         openingTopicId,

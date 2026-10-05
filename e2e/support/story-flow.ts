@@ -195,13 +195,57 @@ export function collectConsoleErrors(page: Page): string[] {
  *
  * 调用前页面必须已经在**归并目标**那条 Story 的阅读页上。
  */
+/**
+ * 在归并选择器里选出目标 Story。
+ *
+ * 归并入口在 Task 36 切片 B 从「粘贴内部 Story ID」改成了可搜索的选择列表（判据 R3）。
+ * 这里**不依赖搜索**：先直接用完整标题在初始候选里选（打开就有最近 20 条），
+ * 选不到再用标题前几个字搜索兜底。理由是服务端搜索按空白拆词、每段当字面短语，
+ * 拿标题片段去搜可能一条都命中不到（实测「Message with」对不上「Message without a web URL」），
+ * 而那属于搜索语义、不是这条归并合同要验的东西。
+ */
+export async function pickMergeTarget(
+    page: Page,
+    section: Locator,
+    title: string,
+): Promise<void> {
+    const picker = section.getByPlaceholder("搜索标题…");
+    await picker.click();
+    const option = page.getByRole("option", { name: new RegExp(escapeRegExp(title), "u") }).first();
+    try {
+        await option.waitFor({ state: "visible", timeout: 5_000 });
+    } catch {
+        await picker.fill(mergeSearchTerm(title));
+    }
+    await option.click();
+    /*
+     * 选中后输入框必须回填**完整标题**，而不是留下的搜索词（维护者 D5 验收发现：
+     * 搜「派评」选中后框里还是「派评」，看不出到底选中了哪一条）。
+     * 放在这个共用入口上，是因为每一处归并都经过它。
+     */
+    await expect(picker).toHaveValue(title);
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+/** 搜索兜底词：取标题前若干字符，既能在搜索里命中，又不会长到搜不到。 */
+export function mergeSearchTerm(title: string): string {
+    return title.slice(0, 6);
+}
+
 export async function mergeStoryInto(
     page: Page,
     obsoleteStoryId: string,
     expectedMembers = 2,
 ): Promise<void> {
     const section = await expandEditSurface(page);
-    await section.getByLabel("并入本 Story 的 Story ID").fill(obsoleteStoryId);
+    // 先读出目标的真实标题：选择器按标题定位，粘贴 id 的时代已经过去。
+    const response = await page.request.get(`/api/v1/stories/${encodeURIComponent(obsoleteStoryId)}`);
+    expect(response.ok(), `读取归并目标失败：${obsoleteStoryId}`).toBe(true);
+    const body = await response.json() as { story: { title: string } };
+    await pickMergeTarget(page, section, body.story.title);
     await section.getByRole("button", { name: "归并", exact: true }).click();
     await expect(page.getByText(new RegExp(`来源成员（${expectedMembers}）`, "u")))
         .toBeVisible({ timeout: 15_000 });

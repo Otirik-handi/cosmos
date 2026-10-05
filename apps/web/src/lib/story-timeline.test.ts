@@ -32,6 +32,7 @@ function story(entries: EntryDetail[]): StoryDetail {
             producer: "system",
             status: "active",
             replacedBy: [],
+            splitFrom: null,
         },
         entry: entries[0] ?? null,
         entries,

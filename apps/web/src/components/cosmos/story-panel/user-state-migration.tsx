@@ -146,7 +146,7 @@ export function StoryUserStateMigrationSection({ busy, onLoadSource, onMigrate, 
     return (
         <section
             aria-label="迁移用户状态"
-            className="border-b pb-4"
+            className="flex flex-col gap-1"
             data-story-user-state-migration="true"
         >
             <h3 className="font-medium">迁移用户状态</h3>

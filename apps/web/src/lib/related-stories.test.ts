@@ -15,6 +15,7 @@ const baseStory: StoryDetail = {
         producer: "system",
         status: "active",
         replacedBy: [],
+        splitFrom: null,
     },
     entry: {
         id: "entry:1",

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { ingestFeed, waitForStoryId } from "../support/story-flow";
+
 /**
  * 版面与预算门禁（ADR-0029 决策 2/6、E7）。
  *
@@ -9,15 +11,21 @@ import { expect, test, type Page } from "@playwright/test";
  * 把导航盒子换成「被移到页面下方」的坐标，断言必须失败。
  *
  * 与 ADR 的偏差（E5 三档表）：实现把「侧栏 + 内容」作为整体限宽居中
- * （1120px = 196 + 20 + 880），而不是按档位改侧栏宽度、主区 1080px；
+ * （1120px = 侧栏 + 20 + 880；侧栏 196 × `--nav-scale` 1.25 = 245px，见
+ * `side-nav.tsx` 与 `globals.css` 的 `--nav-scale`），而不是按档位改侧栏宽度、主区 1080px；
  * 见 `(shell)/layout.tsx` 的说明。门禁断言实现承诺的部分，偏差本身记在
  * Task 35 的 walkthrough 里等维护者裁定。
  */
 
-const SIDEBAR_WIDTH_PX = 196;
-const SHELL_MAX_WIDTH_PX = 1120;
+const SIDEBAR_WIDTH_PX = 245;
+/**
+ * 整组限宽 = 侧栏 196×`--nav-scale` + 20 间距 + 主内容 880。
+ * `--nav-scale` 1.25 时 = 1145；它必须与 `(shell)/layout.tsx` 的 `max-w` 同步，
+ * 否则侧栏一涨就会挤窄主内容（维护者 2026-10-03 侧栏等比放大引出的联动）。
+ */
+const SHELL_MAX_WIDTH_PX = 1145;
 const CONTENT_MAX_WIDTH_PX = 880;
-const TOP_BAR_HEIGHT_PX = 56;
+const TOP_BAR_HEIGHT_PX = 64;
 /** E7：首屏可交互 ≤ 2 s（本地开发机、1440 px）。 */
 const FIRST_INTERACTIVE_BUDGET_MS = 2_000;
 /** E7：同会话内切导航项 ≤ 300 ms。 */
@@ -217,6 +225,53 @@ test.describe("预算门禁：实时连接", () => {
         await page.waitForTimeout(1_500);
 
         expect(eventStreamRequests).toHaveLength(1);
+    });
+
+    /**
+     * 唯一例外路由也要恰好一条连接。
+     *
+     * `/stories/:id` 走 `(reading)` 组（隐藏侧栏），是版面骨架的唯一例外；SSE 挂在**根布局**，
+     * 所以跨路由组切页不该新建连接——`app/layout.tsx` 的注释把这条写成了设计意图，这里把它
+     * 变成断言。上面那条只覆盖 `(shell)` 组内部的切页，例外路由没人守，而它正是最容易被
+     * 「这页没有侧栏，那给它单独开一条流」改坏的地方。
+     *
+     * 导航必须是**应用内**的（点卡片），不能用 `page.goto`：后者是整页重载，
+     * 重载后当然会有一条新连接，那测的是浏览器行为而不是这条合同。
+     * 也正因为 `page.goto("/library")` 本身就是一次重载，基线取的是**它之后**的条数，
+     * 断言衡量的是「点进 Story 这一步的增量」而不是全程总数。
+     */
+    test("阅读页这个唯一例外路由不会另开第二条连接", async ({ page }) => {
+        test.setTimeout(180_000);
+        const eventStreamRequests: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/v1/events")) {
+                eventStreamRequests.push(request.url());
+            }
+        });
+
+        // 需要一条真实 Story：阅读页要有东西可读（造数据的过程本身会整页跳转，不计入）。
+        const sourceName = await ingestFeed(page, "SSE 例外路由");
+        await waitForStoryId(page, sourceName);
+
+        // 整页重载进入信息库，并等这一轮的连接建好——之后的增量才有意义。
+        await page.goto("/library");
+        await expect(page.locator('section[aria-label="阅读流"]')).toBeVisible({ timeout: 30_000 });
+        await expect.poll(() => eventStreamRequests.length, { timeout: 15_000 })
+            .toBeGreaterThanOrEqual(1);
+        await page.waitForTimeout(500);
+        const beforeStory = eventStreamRequests.length;
+
+        // 从信息库点开 Story：应用内导航，跨到 (reading) 组。
+        const card = page.locator("article").filter({ hasText: sourceName }).first();
+        await card.getByRole("button", { name: "打开 Story" }).click();
+        await page.waitForURL(/\/stories\//u);
+        await expect(page.locator("[data-story-columns='true']")).toBeVisible({ timeout: 30_000 });
+        await page.waitForTimeout(1_500);
+
+        expect(
+            eventStreamRequests.length,
+            `跨到阅读页时新建了连接（基线 ${beforeStory}）`,
+        ).toBe(beforeStory);
     });
 });
 

@@ -12,7 +12,7 @@ export function HistoryShellSection({ busy, kind, onOpenRelatedStory, story, tit
     return (
                 <section
                     aria-label="已拆分"
-                    className="border-b pb-4"
+                    className="flex flex-col gap-1"
                     data-story-shell="true"
                 >
                     <h3 className="font-medium">
@@ -41,7 +41,7 @@ export function HistoryShellSection({ busy, kind, onOpenRelatedStory, story, tit
                                     {successor.title}
                                 </button>
                                 <span className="text-xs text-muted-foreground">
-                                    {successor.kind} · {successor.storyId}
+                                    {successor.kind}
                                 </span>
                             </li>
                         ))}

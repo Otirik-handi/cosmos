@@ -10,6 +10,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 import { BLOCK_TYPE_OPTIONS, blockLimit, blockTypeLabel, configString } from "./shared";
 import type { BoardCommands } from "./types";
@@ -326,7 +327,8 @@ export function AddBlockForm({
 export function AddSectionForm({ commands }: { commands: BoardCommands }) {
     const [title, setTitle] = useState("");
     return (
-        <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+            <Separator decorative />
             <Input
                 aria-label="新分区标题"
                 className="max-w-xs"

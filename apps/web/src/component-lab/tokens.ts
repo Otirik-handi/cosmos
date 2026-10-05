@@ -90,6 +90,13 @@ export const labTokenDefinitions = [
         kind: "length",
         defaultValue: "14px",
     },
+    {
+        name: "--divider-thickness",
+        label: "分隔线粗细",
+        kind: "length",
+        defaultValue: "0.75em",
+        description: "横向分隔线的粗细；竖向线固定 1px（同值会把竖线变成色块）。",
+    },
 ] as const satisfies readonly LabTokenDefinition[];
 
 export const labTokenNames = labTokenDefinitions.map(

@@ -10,6 +10,7 @@ import {
     collectionSummarySchema,
     createCollectionCommandSchema,
     createLabelCommandSchema,
+    updateLabelCommandSchema,
     favoriteCommandSchema,
     userOrganizationAckSchema,
     targetTypeSchema,
@@ -55,6 +56,10 @@ describe("user organization contracts", () => {
         expect(item.name).toBe("AI");
         expect(labelListSchema.parse({ items: [item] }).items).toHaveLength(1);
         expect(createLabelCommandSchema.parse({ name: " AI " }).name).toBe("AI");
+        // 改名与创建同一档：trim 后非空、最长 200；空名与超长都要在边界上被拒。
+        expect(updateLabelCommandSchema.parse({ name: " 关注 " }).name).toBe("关注");
+        expect(() => updateLabelCommandSchema.parse({ name: "   " })).toThrow();
+        expect(() => updateLabelCommandSchema.parse({ name: "x".repeat(201) })).toThrow();
 
         const detail = labelDetailSchema.parse({
             id: "label-a",

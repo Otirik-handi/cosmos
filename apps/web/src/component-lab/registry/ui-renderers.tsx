@@ -109,7 +109,21 @@ export function renderLabel(props: LabProps): ReactNode {
 
 export function renderSeparator(props: LabProps): ReactNode {
     const orientation = optionProp(props, "orientation", "horizontal", orientations);
-    return <Separator orientation={orientation} className={orientation === "vertical" ? "h-12" : "w-full max-w-md"} />;
+    if (orientation === "vertical") {
+        return <Separator orientation="vertical" className="h-12" />;
+    }
+    /*
+     * 横向线演示整宽并给上下配文字：分隔线的合同是「两块内容之间的整宽色带」，
+     * 只渲染一根短横线看不出它在真实面板里的宽度与重量（维护者 2026-10-03 反馈
+     * 「太短、看不出实际效果」，此前这里是 `max-w-md`）。
+     */
+    return (
+        <div className="flex w-full flex-col gap-3 text-sm">
+            <p className="text-muted-foreground">上一段内容的最后一行文字。</p>
+            <Separator data-lab-separator="true" />
+            <p className="text-muted-foreground">下一段内容的第一行文字。</p>
+        </div>
+    );
 }
 
 export function renderTextarea(props: LabProps): ReactNode {

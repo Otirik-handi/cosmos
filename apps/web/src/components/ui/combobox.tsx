@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * 不能用原生 select。键盘上下选择由 Base UI 提供。
  */
 
-function Combobox(props: ComboboxPrimitive.Root.Props<unknown>) {
+function Combobox<Item>(props: ComboboxPrimitive.Root.Props<Item>) {
     return <ComboboxPrimitive.Root data-slot="combobox" {...props} />;
 }
 

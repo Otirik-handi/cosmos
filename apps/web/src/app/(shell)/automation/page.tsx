@@ -1,13 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Plus, RefreshCcw, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Plus, RefreshCcw, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import type { SourceSnapshot } from "@cosmos/contracts";
 
 import { useSourceWorkspace } from "@/app/home/use-source-workspace";
+import { useNoticeToast } from "@/app/home/use-notice-toast";
 import { client } from "@/app/home/page-runtime";
 
 import { Button } from "@/components/ui/button";
@@ -34,10 +35,10 @@ import { messages } from "@/copy/messages";
 export default function AutomationPage() {
     const [loading, setLoading] = useState(true);
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
-    const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
+    /** 写回执走 toast；`error` 仍由页面横幅显示。上下文对象身份稳定由 hook 保证。 */
+    const { context: workspaceContext } = useNoticeToast(setError, setLoading);
 
     const sourceForm = useForm<SourceFormValues>({
         resolver: zodResolver(sourceFormSchema),
@@ -144,17 +145,6 @@ export default function AutomationPage() {
                     role="alert"
                 >
                     {error}
-                </div>
-            )}
-            {notice && (
-                <div
-                    className="rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-[13px] leading-6"
-                    role="status"
-                >
-                    <span className="flex items-center gap-1.5">
-                        <Check aria-hidden className="size-3.5" strokeWidth={2} />
-                        {notice}
-                    </span>
                 </div>
             )}
 

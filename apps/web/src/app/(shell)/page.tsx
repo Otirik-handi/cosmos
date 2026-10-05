@@ -37,20 +37,16 @@ import {SystemOutputBlock} from "@/components/cosmos/system-output-block";
 import {
     client,
 } from "@/app/home/page-runtime";
+import { useNoticeToast } from "@/app/home/use-notice-toast";
 
 export default function Home() {
     const [loading, setLoading] = useState(true);
     /** 来源列表是共享读模型:整体刷新(feed)与来源操作都会写它。 */
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
-    const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    /**
-     * 工作区上下文必须**身份稳定**：各域 hook 把它放进 effect／callback 的依赖里，
-     * 每次渲染新建一个对象会让这些 effect 每次渲染都重跑——实测一个页面会话因此对
-     * `/collection-plans` 与 `/connections` 各发了 300+ 次读取，整套验收被拖慢数倍。
-     */
-    const workspaceContext = useMemo(() => ({setError, setNotice, setLoading}), []);
+    /** 写回执走 toast；`error` 仍由页面横幅显示。上下文对象身份稳定由 hook 保证。 */
+    const { context: workspaceContext } = useNoticeToast(setError, setLoading);
 
     /** 跨域钩子:各域 hook 在首次渲染时写入自己实现的回调,事件处理里按需调用。 */
     const storyWorkspace = useStoryWorkspace(workspaceContext);
@@ -247,7 +243,7 @@ export default function Home() {
             {/* 首页只负责「看」：看板与系统产出。检索工作台在 /library，
                 来源与连接配置在 /automation（切片 3c），状态在顶栏。 */}
             {/* 写入口径的回执（新建看板）与读取失败与其它页同一条规则：不静默丢弃。 */}
-            <PageBanners error={error} notice={notice} />
+            <PageBanners error={error} />
             <HomeBoardToolbar
                 board={board}
                 boardEditing={boardEditing}

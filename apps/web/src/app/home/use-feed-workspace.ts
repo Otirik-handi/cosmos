@@ -205,7 +205,8 @@ export function useFeedWorkspace(
             setActiveSearch(query);
             setFeed(result.items);
             setNextCursor(result.nextCursor);
-            ctx.setNotice(messages.notices.feed.viewApplied(view.name, result.items.length));
+            // 报告套用结果（条数），不是写入回执：走 info。
+            ctx.setNotice(messages.notices.feed.viewApplied(view.name, result.items.length), "info");
         } catch (caught) {
             ctx.setError(readError(caught));
         }

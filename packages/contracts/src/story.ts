@@ -114,6 +114,12 @@ export const storyDetailSchema = z.object({
         // (ADR-0012 decision 1).
         status: z.enum(["active", "split"]),
         replacedBy: storySuccessorSchema.array(),
+        // The reverse edge of `replacedBy`: a successor points back at the shell
+        // it came from. Null for a Story that was never produced by a split.
+        // Without it a shell that kept no members is unreachable — it has no
+        // entry projection, so it never appears in a list, and the user state
+        // parked on it (ADR-0020) can only be reached by remembering its URL.
+        splitFrom: storySuccessorSchema.nullable().default(null),
     }),
     // A historical shell may have no primary member left; only a Story without
     // a current Revision is unreadable (ADR-0012 decision 2).
@@ -188,8 +194,16 @@ export const storySplitSuccessorSchema = z.object({
 export type StorySplitSuccessor = z.infer<typeof storySplitSuccessorSchema>;
 
 
+/**
+ * 拆分后继的数量边界。导出给界面用：界面必须能提前拦住「只有 1 个后继」的提交，
+ * 否则用户看到的是这条 schema 的原始报错（维护者 2026-10-05 验收遇到的就是这个）。
+ * 下限 2 的语义是「拆成一条不是拆分」。
+ */
+export const storySplitSuccessorMinCount = 2;
+export const storySplitSuccessorMaxCount = 20;
+
 export const splitStoryCommandSchema = z.object({
-    successors: z.array(storySplitSuccessorSchema).min(2).max(20),
+    successors: z.array(storySplitSuccessorSchema).min(storySplitSuccessorMinCount).max(storySplitSuccessorMaxCount),
     actor: z.string().trim().min(1).max(100).nullish(),
     reason: z.string().trim().min(1).max(1000).nullish(),
 });
