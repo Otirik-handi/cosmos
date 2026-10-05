@@ -41,6 +41,13 @@
     --paper: #fcfbf6;
 
     /* 第 3 层 · 形状 / 密度 / 动效 */
+    /*
+     * 侧栏缩放（维护者 2026-10-03：左侧导航所有内容等比放大 1.25 倍）。先试 1.5 过大，
+     * 收敛到 1.25。侧栏的每个尺寸都写成 `calc(<原值> * var(--nav-scale))`——只改 font-size
+     * 不够：Tailwind 的 rem 值按**根字号**算，而根字号（16px）是为 V4 的界面密度定的，改它
+     * 会波及全站。一个标量乘全部尺寸，才是真正「等比」，以后要调也只动这一处。
+     */
+    --nav-scale: 1.25;
     --radius-control: 6px;
     --radius-card: 14px;
     --radius-pill: 999px;
@@ -68,6 +75,11 @@
     --space-6: 24px;
     --space-8: 32px;
     --space-12: 48px;
+    /*
+     * 分隔线粗细。用 em 而不是 px：线的视觉重量跟着所在区域的字号走，
+     * 与 V4「外壳紧凑 / 阅读区舒展」两套密度一致。维护者 2026-10-03 定的 0.75em。
+     */
+    --divider-thickness: 0.75em;
     --control-h-sm: 24px;
     --control-h-md: 32px;
     --control-h-lg: 40px;
@@ -83,6 +95,14 @@
      */
     --surface-control: color-mix(in srgb, var(--foreground) 7%, transparent);
     --surface-panel: var(--card);
+    /*
+     * 顶栏面（维护者 2026-10-03 两轮裁定：先是「与页面底融为一体、区分不出来」→ 改卡片白；
+     * 再是「白色不好看」→ 改为现在的暖纸深一档）。
+     * 用 `--cosmos-shadow` 染 `--background`：这个 token 本身是主题感知的（明亮 #18140e 暖褐、
+     * 暗色 #000000），所以两套主题都能得到「比画布底深一档」的同一档关系，不必写死两组色值。
+     * 不取 `--card`（那会回到白色），也不取 `--muted`（偏冷灰，与暖纸调性不合）。
+     */
+    --surface-toolbar: color-mix(in srgb, var(--cosmos-shadow) 10%, var(--background));
     --outline-control: color-mix(in srgb, var(--foreground) 16%, transparent);
     --focus-ring:
         0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent),

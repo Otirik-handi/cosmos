@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { latestToast, toastScope } from "../support/lab";
 import { ingestFeed, planRowOf, planSectionOf } from "../support/story-flow";
 
 /**
@@ -70,13 +71,19 @@ test("LIB-001 的作者、媒体类型、录入状态过滤驱动查询", async 
         }, query);
 
     const feedList = page.locator('section[aria-label="阅读流"]');
-    const resultNotice = page.getByText(/^搜索到 \d+ 条结果。$/);
+    /*
+     * 回执是 toast（2026-10-03 起），同页可并存多条旧回执。每次断言前用 `latestToast`
+     * 按序号取最新一条，而不是猜 DOM 顺序或直接按文案取（后者会撞严格模式）。
+     */
+    const expectLatestResultNotice = async (expected: string): Promise<void> => {
+        await expect(await latestToast(page)).toHaveText(expected);
+    };
     const sourceCards = feedList.locator("article").filter({ hasText: sourceName });
 
     await page.getByLabel("搜索作者").fill(`不存在作者-${randomUUID().slice(0, 8)}`);
     await page.getByRole("button", { name: "搜索", exact: true }).click();
     await expect(page.getByText("作者：", { exact: false })).toBeVisible();
-    await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();
+    await expectLatestResultNotice("搜索到 0 条结果。");
     await expect(sourceCards).toHaveCount(0);
 
     // 换成媒体类型：RSS 条目一律是「文章」，视频条件应为空。
@@ -84,7 +91,7 @@ test("LIB-001 的作者、媒体类型、录入状态过滤驱动查询", async 
     await page.getByLabel("媒体类型").selectOption("video");
     await page.getByRole("button", { name: "搜索", exact: true }).click();
     await expect(page.getByText("媒体类型：视频", { exact: false })).toBeVisible();
-    await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();
+    await expectLatestResultNotice("搜索到 0 条结果。");
     expect(await searchCount("contentKind=video")).toBe(0);
 
     await page.getByLabel("媒体类型").selectOption("article");
@@ -92,7 +99,7 @@ test("LIB-001 的作者、媒体类型、录入状态过滤驱动查询", async 
     await expect(page.getByText("媒体类型：文章", { exact: false })).toBeVisible();
     const articleCount = await searchCount("contentKind=article");
     expect(articleCount).toBeGreaterThan(0);
-    await expect(resultNotice).toHaveText(`搜索到 ${articleCount} 条结果。`);
+    await expectLatestResultNotice(`搜索到 ${articleCount} 条结果。`);
 
     // 录入状态：同样以 API 直查条数为准，UI 只是把同一条件发出去。
     await page.getByLabel("媒体类型").selectOption("");
@@ -100,7 +107,7 @@ test("LIB-001 的作者、媒体类型、录入状态过滤驱动查询", async 
     await page.getByRole("button", { name: "搜索", exact: true }).click();
     await expect(page.getByText("录入状态：未保存", { exact: false })).toBeVisible();
     const skippedCount = await searchCount("assetStatus=skipped");
-    await expect(resultNotice).toHaveText(`搜索到 ${skippedCount} 条结果。`);
+    await expectLatestResultNotice(`搜索到 ${skippedCount} 条结果。`);
 
     // 清除筛选回到默认 Feed，条目全部回来。
     await page.getByRole("button", { name: "清除筛选" }).click();

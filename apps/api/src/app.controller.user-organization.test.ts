@@ -8,6 +8,7 @@ import { BadRequestException, ConflictException, NotFoundException } from "@nest
 import {
     StoryNotFoundError,
     LabelNotFoundError,
+    LabelConflictError,
     CollectionNotFoundError,
     AnnotationNotFoundError,
     SavedViewNotFoundError,
@@ -41,6 +42,37 @@ describe("AppController user organization orchestration", () => {
         const result = await controller.createLabel({ name: "AI" });
         expect(result).toMatchObject({ id: "label-a", name: "AI" });
         expect(repository.createLabel).toHaveBeenCalledWith({ name: "AI" });
+    });
+
+    /**
+     * 标签改名（Task 36 切片 E）：回执是改名后的 LabelItem；撞名 409、不存在 404、
+     * 空名 400 都走既有的错误漏斗，不为这条命令新造错误类型。
+     */
+    it("renames a label and maps its conflicts to the existing funnel", async () => {
+        const repository = {
+            updateLabel: vi.fn().mockResolvedValue({
+                id: "label-a",
+                name: "人工智能",
+                assignedCount: 3,
+                createdAt: "2026-09-08T00:00:00.000Z",
+                updatedAt: "2026-09-08T01:00:00.000Z",
+            }),
+        };
+        const result = await createController(repository).updateLabel("label-a", { name: " 人工智能 " });
+        expect(result).toMatchObject({ id: "label-a", name: "人工智能", assignedCount: 3 });
+        expect(repository.updateLabel).toHaveBeenCalledWith({ labelId: "label-a", name: "人工智能" });
+
+        await expect(createController({
+            updateLabel: vi.fn().mockRejectedValue(new LabelConflictError("Label already exists: AI")),
+        }).updateLabel("label-a", { name: "AI" })).rejects.toBeInstanceOf(ConflictException);
+
+        await expect(createController({
+            updateLabel: vi.fn().mockRejectedValue(new LabelNotFoundError("label-missing")),
+        }).updateLabel("label-missing", { name: "AI" })).rejects.toBeInstanceOf(NotFoundException);
+
+        await expect(createController({
+            updateLabel: vi.fn(),
+        }).updateLabel("label-a", { name: "   " })).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it("maps missing label/collection targets to 404 and conflicts through the funnel", async () => {

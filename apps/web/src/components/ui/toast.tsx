@@ -20,6 +20,19 @@ const INFINITE = 0;
 
 export type ToastVariant = "info" | "success" | "error";
 
+/**
+ * 自增序号：让「哪条回执最新」成为可断言的事实。
+ *
+ * 队列里可以同时存在多条回执，而 `manager.toasts` 的顺序是**管理器自己的顺序**——
+ * 实测按 DOM 顺序取「最后一条」会拿到旧的那条（搜索回执连着发两次时命中过）。
+ * 序号在**提交时**分配、挂在回执的 `data` 上，宿主渲染时只读；渲染期分配会被
+ * `react-hooks/refs` 判为违规（渲染必须是纯的）。
+ */
+let toastSequence = 0;
+
+/** 回执在队列里的序号；测试按它取「最新一条」（`e2e/support/lab.ts` 的 `latestToast`）。 */
+export const TOAST_SEQUENCE_KEY = "seq";
+
 function ToastProvider({ timeout = 5000, ...props }: ToastPrimitive.Provider.Props) {
     return <ToastPrimitive.Provider timeout={timeout} {...props} />;
 }
@@ -38,6 +51,7 @@ function ToastHost({ className }: { className?: string }) {
             >
                 {manager.toasts.map((toast) => {
                     const variant = (toast.type ?? "info") as ToastVariant;
+                    const sequence = toast.data?.[TOAST_SEQUENCE_KEY];
                     return (
                         <ToastPrimitive.Root
                             className={cn(
@@ -46,6 +60,7 @@ function ToastHost({ className }: { className?: string }) {
                                 variant === "error" && "border-destructive/40",
                             )}
                             data-slot="toast-root"
+                            data-toast-seq={typeof sequence === "number" ? sequence : undefined}
                             data-variant={variant}
                             key={toast.id}
                             toast={toast}
@@ -80,6 +95,12 @@ export type ToastInput = {
     title: string;
     description?: string;
     variant?: ToastVariant;
+    /**
+     * 覆盖 Provider 的默认存活时长（毫秒）。
+     * 不传就用 Provider 的 5 秒；`error` 恒为不自动消失（见 `push`）。
+     * 信息类回执需要更长时间读完时传它（`useNoticeToast` 的 `INFO_TIMEOUT_MS`）。
+     */
+    timeout?: number;
 };
 
 /**
@@ -103,10 +124,12 @@ export function useToast(): {
 
     return useMemo(() => {
         const push = (variant: ToastVariant, input: ToastInput): void => {
+            toastSequence += 1;
             managerRef.current.add({
+                data: { [TOAST_SEQUENCE_KEY]: toastSequence },
                 description: input.description,
                 title: input.title,
-                timeout: variant === "error" ? INFINITE : undefined,
+                timeout: variant === "error" ? INFINITE : input.timeout,
                 type: variant,
             });
         };

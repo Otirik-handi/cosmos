@@ -1,6 +1,8 @@
 /**
  * 列表页文案：话题、Entity、系统产出、设置。
  * 它们的结构相同（标题 + 计数 + 刷新 + 空态 + 各自的创建行），因此放在同一册。
+ * 两个详情页（`/topics/:id`、`/entities/:id`）是这一册里的非列表页：各自挂在对象之下，
+ * 文案与列表页同源（计数、返回入口），另开一册只会让同一个对象的话术分家。
  * 根布局的 `metadata.description` 同样是页面级文案，但没有别的分册可归，一并放在这里。
  */
 export const pages = {
@@ -13,10 +15,50 @@ export const pages = {
         newTitle: "新话题标题",
         newPurpose: "关注目的",
         create: "新建话题",
-        detailTitle: "话题详情",
-        detailPending: "这一页还没建好",
-        detailBody: "改标题与关注目的、维护成员（加入、改角色、移除与恢复）会在这里落地。现在可以从列表页回到话题列表。",
-        backToList: "回到话题列表",
+        detail: {
+            /** 标题未读到时占位；读到以后这一行显示话题自己的标题。 */
+            title: "话题详情",
+            backToList: "回到话题列表",
+            notFoundTitle: "这个话题读不到了",
+            notFoundBody: "它可能已经被删除，或者链接不完整。回到话题列表可以看看其它话题。",
+            memberCount: (count: number) => `${count} 位成员`,
+            emptyMemberCount: "还没有成员",
+            fieldsTitle: "标题与目的",
+            fieldsSummary: "改完保存；列表里显示的就是新标题",
+            titleLabel: "标题",
+            purposeLabel: "关注目的",
+            save: "保存",
+            saveFailed: "保存标题与目的失败：",
+            versionConflict: "话题已被其它修改更新（版本冲突），已重新读取，请重试。",
+            membersTitle: "成员",
+            membersSummary: "成员在 Story 页加入；这里改角色、移除或恢复",
+            membersEmpty: "这个话题还没有成员。",
+            membersEmptyBody: "成员在 Story 页加入：打开一条内容，在它的话题里选这个话题。",
+            membersNoneActive: "当前没有在话题里的成员。",
+            membersRemovedTitle: "已移除",
+            membersRemovedHint: "恢复后会重新计入成员。",
+            /** 成员的 Story 标题读不到时显示这句，**不显示内部编号**（判据 R3）。 */
+            memberMissingTitle: "这条内容已读不到了",
+            memberRoleLabel: (title: string) => `修改「${title}」的角色`,
+            memberRemoveLabel: (title: string) => `移除「${title}」`,
+            memberRestoreLabel: (title: string) => `恢复「${title}」`,
+            memberRemove: "移除",
+            memberRestore: "恢复",
+            /** 成员角色不在已知取值里时的显示名；同样不显示内部取值本身。 */
+            roleUnknown: "未标注角色",
+            roleChangeFailed: "更新成员角色失败：",
+            memberRemoveFailed: "移除成员失败：",
+            memberRestoreFailed: "恢复成员失败：",
+            /** 键与 `topicMemberRoleSchema` 的取值同集合：合同加一个角色，这里漏掉就编译不过。 */
+            roles: {
+                core: "核心",
+                update: "进展",
+                background: "背景",
+                analysis: "分析",
+                counterpoint: "反方",
+                tutorial: "教程",
+            },
+        },
     },
     entities: {
         title: "Entity",
@@ -29,9 +71,35 @@ export const pages = {
         create: "新建 Entity",
         relationCount: (count: number) => `${count} 个关系`,
         detailTitle: "Entity 详情",
-        detailPending: "这一页还没建好",
-        detailBody: "别名、类型化关系与「关联 Story」的解除会在这里落地。现在可以从列表页回到 Entity 列表。",
         backToList: "回到 Entity 列表",
+        detail: {
+            notFoundTitle: "没有找到这个 Entity",
+            notFoundBody: "它可能已经被删除，或者这个链接已经不指向任何 Entity。",
+            aliasTitle: "名称别名",
+            aliasCount: (count: number) => `${count} 个别名`,
+            aliasEmpty: "还没有别名。别名用来指同一个 Entity 的其它叫法。",
+            aliasNew: "新增名称别名",
+            aliasAdd: "添加别名",
+            aliasRemove: (name: string) => `移除别名「${name}」`,
+            relationTitle: "关系",
+            relationEmpty: "还没有关系。关系用来描述两个 Entity 之间是什么关系。",
+            relationTarget: "关系目标 Entity",
+            relationTargetEmpty: "选择关系目标",
+            relationType: "关系类型",
+            /** 屏幕阅读器读关系行时用：视觉上两端的名字之间只有一条箭头。 */
+            relationDirection: "指向",
+            relationCreate: "添加关系",
+            relationRemove: (name: string) => `移除与「${name}」的关系`,
+            relationRemoveAction: "移除",
+            relationNoCandidates: "工作区里还没有别的 Entity，先在 Entity 列表建一个，再回来建立关系。",
+            /** 关系合同只给对端 id，名称读不到时用这句占位，绝不显示 id 本身。 */
+            counterpartUnknown: "名称未读取到",
+            storyTitle: "关联 Story",
+            storyEmpty: "还没有关联 Story。关联在 Story 页做。",
+            storyUntitled: "未命名内容",
+            storyUnlink: (title: string) => `解除与「${title}」的关联`,
+            storyUnlinkAction: "解除关联",
+        },
     },
     system: {
         title: "系统产出",

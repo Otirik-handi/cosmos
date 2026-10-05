@@ -4,6 +4,7 @@ import type {
     TopicSummary,
 } from "@cosmos/contracts";
 import { type Dispatch, type FormEventHandler, type SetStateAction } from "react";
+import { Trash2 } from "lucide-react";
 import {
     StoryDetail,
 } from "@cosmos/contracts";
@@ -17,12 +18,15 @@ import {
     StorySubtypeSelect,
 } from "./story-subtype-select";
 import { SplitTargetSelect } from "./split-target-select";
+import { messages } from "@/copy/messages";
+import { storySplitSuccessorMinCount } from "@cosmos/contracts";
 
 type Props = {
     addSplitSuccessor: () => void;
     busy: boolean;
     isShell: boolean;
     onSplitStory?: (command: SplitStoryCommand) => Promise<void>;
+    removeSplitSuccessor: (index: number) => void;
     setSplitEntityTargets: Dispatch<SetStateAction<Record<string, number>>>;
     setSplitEntryTargets: Dispatch<SetStateAction<Record<string, number>>>;
     setSplitEvidenceTargets: Dispatch<SetStateAction<Record<string, number>>>;
@@ -44,6 +48,7 @@ export function StorySplitSection({
     busy,
     isShell,
     onSplitStory,
+    removeSplitSuccessor,
     setSplitEntityTargets,
     setSplitEntryTargets,
     setSplitEvidenceTargets,
@@ -64,7 +69,7 @@ export function StorySplitSection({
             {!isShell && onSplitStory && story.entries.length >= 2 && (
                 <form
                     aria-label="拆分 Story"
-                    className="grid gap-3 border-t pt-4"
+                    className="grid gap-3"
                     onSubmit={submitSplit}
                 >
                     <h3 className="font-medium">拆分 Story</h3>
@@ -110,7 +115,7 @@ export function StorySplitSection({
                                 </select>
                                 <StorySubtypeSelect
                                     id={`cosmos-split-subtype-${index}`}
-                                    label={`后继 ${index + 1} subtype`}
+                                    label={`后继 ${index + 1} 子类型`}
                                     value={successor.subtype}
                                     kind={successor.kind}
                                     options={subtypeOptions}
@@ -119,6 +124,24 @@ export function StorySplitSection({
                                         updateSplitSuccessor(index, { subtype: value });
                                     }}
                                 />
+                                {/*
+                                 * 下限来自合同（`storySplitSuccessorMinCount`）：拆成一条不是拆分。
+                                 * 删到 1 行会让提交必然被服务端拒绝，所以到下限就不再给删除入口。
+                                 */}
+                                {splitSuccessors.length > storySplitSuccessorMinCount && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label={`${messages.reading.storyEdit.splitRemoveSuccessor} ${index + 1}`}
+                                        disabled={busy}
+                                        onClick={() => {
+                                            removeSplitSuccessor(index);
+                                        }}
+                                    >
+                                        <Trash2 aria-hidden strokeWidth={1.75} />
+                                    </Button>
+                                )}
                             </div>
                         ))}
                         {splitSuccessors.length < 5 && (

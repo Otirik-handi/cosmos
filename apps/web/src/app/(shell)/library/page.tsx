@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { type SearchQuery, type SourceSnapshot } from "@cosmos/contracts";
@@ -16,6 +16,7 @@ import {
     readError,
     toBoundaryIso,
 } from "@/app/home/page-runtime";
+import { useNoticeToast } from "@/app/home/use-notice-toast";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,11 +36,10 @@ export default function LibraryPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [sources, setSources] = useState<readonly SourceSnapshot[]>([]);
-    const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    /** 上下文必须身份稳定：各域 hook 把它放进依赖里，每次渲染新建会让 effect 反复重跑。 */
-    const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
+    /** 写回执走 toast；`error` 仍由页面横幅显示。上下文对象身份稳定由 hook 保证。 */
+    const { context: workspaceContext, showNotice } = useNoticeToast(setError, setLoading);
 
     const storyWorkspace = useStoryWorkspace(workspaceContext);
     const topicWorkspace = useTopicWorkspace(workspaceContext, storyWorkspace);
@@ -134,7 +134,8 @@ export default function LibraryPage() {
             setActiveSearch(query);
             setFeed(result.items);
             setNextCursor(result.nextCursor);
-            setNotice(messages.library.resultNotice(result.items.length));
+            // 报告本次检索结果（条数），不是写入回执：走 info。
+            showNotice(messages.library.resultNotice(result.items.length), "info");
         } catch (caught) {
             setError(readError(caught));
         }
@@ -211,7 +212,7 @@ export default function LibraryPage() {
 
     return (
         <div className="flex w-full flex-col gap-4">
-            <PageBanners error={error} notice={notice} />
+            <PageBanners error={error} />
 
             <FeedBrowser
                 activeSearch={activeSearch}

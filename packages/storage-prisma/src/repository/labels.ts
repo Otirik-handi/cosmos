@@ -33,6 +33,55 @@ export class PrismaCosmosRepositoryLabels extends PrismaCosmosRepositoryEntryRel
         };
     }
 
+    /**
+     * 标签改名（Task 36 切片 E）。Label 是可变行而不是 revision 模型，所以这是原地改写；
+     * `name` 有唯一约束，撞名沿用 createLabel 的同一档错误（LabelConflictError → 409），
+     * 不另造一种「改名专用冲突」。
+     */
+    async updateLabel(input: { labelId: string; name: string }): Promise<LabelItem> {
+        const existing = await this.prisma.label.findUnique({
+            where: { id: input.labelId },
+            select: { id: true },
+        });
+        if (!existing) {
+            throw new LabelNotFoundError(input.labelId);
+        }
+        const name = input.name.trim();
+        await this.prisma.$transaction(async (tx) => {
+            try {
+                await tx.label.update({
+                    where: { id: input.labelId },
+                    data: { name },
+                });
+            } catch (error) {
+                if (isUniqueConstraintError(error)) {
+                    throw new LabelConflictError(`Label already exists: ${name}`);
+                }
+                throw error;
+            }
+            await appendDomainEvent(tx, {
+                type: "label.updated.v1",
+                aggregateType: "Label",
+                aggregateId: input.labelId,
+                payload: { labelId: input.labelId, name },
+            });
+        });
+        const updated = await this.prisma.label.findUnique({
+            where: { id: input.labelId },
+            include: { _count: { select: { assignments: true } } },
+        });
+        if (!updated) {
+            throw new LabelNotFoundError(input.labelId);
+        }
+        return {
+            id: updated.id,
+            name: updated.name,
+            assignedCount: updated._count.assignments,
+            createdAt: updated.createdAt.toISOString(),
+            updatedAt: updated.updatedAt.toISOString(),
+        };
+    }
+
     async listLabels(): Promise<LabelList> {
         const rows = await this.prisma.label.findMany({
             orderBy: { name: "asc" },

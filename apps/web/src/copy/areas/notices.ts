@@ -34,10 +34,19 @@ export const notices = {
         annotationUpdated: "已更新批注。",
         annotationDeleted: "已删除批注。",
         created: (title: string) => `已创建话题「${title}」。`,
+        fieldsSaved: "已保存话题的标题与目的。",
+        memberRoleUpdated: "已更新成员角色。",
+        memberRemoved: "已把成员移出话题。",
+        memberRestored: "已把成员恢复到话题。",
     },
 
     entity: {
         created: (name: string) => `已创建 Entity「${name}」。`,
+        aliasAdded: (name: string) => `已添加别名「${name}」。`,
+        aliasRemoved: (name: string) => `已移除别名「${name}」。`,
+        relationAdded: (name: string) => `已建立与「${name}」的关系。`,
+        relationRemoved: (name: string) => `已移除与「${name}」的关系。`,
+        storyUnlinked: (title: string) => `已解除与「${title}」的关联。`,
     },
 
     feed: {

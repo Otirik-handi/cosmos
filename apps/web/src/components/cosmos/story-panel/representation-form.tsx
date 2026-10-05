@@ -114,7 +114,7 @@ export function StoryTimeRangeForm({ busy, draft, onChange }: TimeRangeProps) {
         );
     };
     return (
-        <section aria-label="时间范围" className="grid gap-3 border-t pt-4">
+        <section aria-label="时间范围" className="grid gap-3">
             <div>
                 <h3 className="font-medium">时间范围</h3>
                 <p className="text-sm text-muted-foreground">
@@ -151,7 +151,7 @@ export function StoryKeyFactsForm({ busy, draft, entryOptions, onChange }: KeyFa
         onChange(next);
     };
     return (
-        <section aria-label="关键事实" className="grid gap-3 border-t pt-4">
+        <section aria-label="关键事实" className="grid gap-3">
             <div>
                 <h3 className="font-medium">关键事实</h3>
                 <p className="text-sm text-muted-foreground">

@@ -2,8 +2,9 @@
 
 import { RefreshCcw, Target } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { useNoticeToast } from "@/app/home/use-notice-toast";
 import { useStoryWorkspace } from "@/app/home/use-story-workspace";
 import { useTopicWorkspace } from "@/app/home/use-topic-workspace";
 
@@ -15,17 +16,17 @@ import { messages } from "@/copy/messages";
 
 /*
  * 话题列表与新建。创建入口在**对象页**（ADR-0029 决策 1：创建动作去对象页、关联动作就地）：
- * 这里建话题，成员从 Story 页加入。改标题与目的、移除成员仍在待办里（`/topics/:id` 还是占位）。
+ * 这里建话题，成员从 Story 页加入；改标题与目的、改角色、移除与恢复在详情页（`/topics/:id`）。
  */
 export default function TopicsPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [notice, setNotice] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [newTitle, setNewTitle] = useState("");
     const [newPurpose, setNewPurpose] = useState("");
 
-    const workspaceContext = useMemo(() => ({ setError, setNotice, setLoading }), []);
+    /** 写回执走 toast；`error` 仍由页面横幅显示。上下文对象身份稳定由 hook 保证。 */
+    const { context: workspaceContext } = useNoticeToast(setError, setLoading);
     const storyWorkspace = useStoryWorkspace(workspaceContext);
     const { createTopic, loadTopics, topics } = useTopicWorkspace(workspaceContext, storyWorkspace);
 
@@ -60,7 +61,7 @@ export default function TopicsPage() {
                 </Button>
             </div>
 
-            <PageBanners error={error} notice={notice} />
+            <PageBanners error={error} />
 
             <div className="flex flex-wrap items-center gap-2">
                 <Input

@@ -227,6 +227,18 @@
 | 2026-09-24 | Agent 按文档治理把 V3 完整规格移入第 1 层分册（主文档一度越过健康区 9k token） | Agent |
 | 2026-09-24 | **接受本 Proposal**（三层设计全部定稿）；授权更新稳定文档与创建 Task **35**（一个 Task 内部分切片）；未授权实现代码、worktree、commit、push、PR、merge、发布或部署 | 维护者 |
 
+## 勘误（2026-10-03，不改写正文与分册）
+
+| 指向 | 原文 | 现行取值 |
+| --- | --- | --- |
+| 第 1 层分册 §Type 与 §Layout（`layer-1-visual-design.md` 第 42、49 行） | 阅读区「正文列 34em 居中」「行宽 ≤ 34em」 | **废止行宽上限**：Story 阅读页正文跟着左栏撑满（维护者 2026-10-03 裁定）。其余页面的行宽判据不受影响——这条只在阅读页有消费者 |
+| 第 1 层分册 §Layout（`layer-1-visual-design.md` 第 48 行） | 外壳「顶栏 56 px」 | **顶栏 64 px**，并与下方框架留 **2.5em（40 px）** 间隔、加 `--surface-toolbar` 底色（维护者 2026-10-03：太矮、间隔小、与页面底融为一体；间隔先定 16 px、再看一轮后加大到 2.5em）。浮卡侧栏与主内容限宽见下一行 |
+| 第 1 层分册 §Layout（`layer-1-visual-design.md` 第 48 行）与第 1.5 层分册 §E5（`layer-1-5-engineering.md` 第 169–170 行） | 浮卡侧栏「196 px」 | **侧栏整体等比放大 1.5 倍 = 294 px**（维护者 2026-10-03）：宽度、内边距、行高、间距、字号、图标一起乘 `--nav-scale`（当前 1.5）。整组限宽同步 1120 → **1218 px**；**主内容区仍 880 px，行宽不随侧栏放大而变宽** |
+
+理由与代价（行宽变长、1920 视口下正文实测 1070 px，每行约 67 个汉字）见 `.agents/tasks/36-reading-layout-and-object-details/walkthrough.md` Round 3。阅读页的落实现值与可断言合同以 [`docs/spec/interfaces/0005-web-client.md`](../spec/interfaces/0005-web-client.md) 为准。
+
+理由与代价（行宽变长、1920 视口下正文实测 1070 px，每行约 67 个汉字）见 `.agents/tasks/36-reading-layout-and-object-details/walkthrough.md` Round 3。阅读页的落实现值与可断言合同以 [`docs/spec/interfaces/0005-web-client.md`](../spec/interfaces/0005-web-client.md) 为准。
+
 ## 后续追加位置
 
 第 1 层剩余步骤（V1 线框、V2 逐状态设计）与 I0–I5 的结论**追加到本文**；本文接近 20~30 KB 或 9k token 时，把更早的过程记录整段移入 `docs/proposals/frontend-redesign/` 分册，原位留一行链接，当前状态与有效决定不切出去。

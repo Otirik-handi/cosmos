@@ -22,7 +22,14 @@ export async function installNoticeRecorder(page: Page): Promise<void> {
     await page.addInitScript(() => {
         const log: NoticeRecord[] = [];
         window.__noticeLog = log;
-        const read = (): string => Array.from(document.querySelectorAll('[role="status"]'))
+        /*
+         * 两条来源：页面横幅（`[role="status"]`，错误与遗留页面）与回执 toast
+         * （`[data-slot="toast-viewport"]`，2026-10-03 起所有写回执走这里）。
+         * 只看前者会漏掉全部回执——实测 collection-plan-multi 因此假红。
+         */
+        const read = (): string => Array.from(document.querySelectorAll(
+            '[role="status"], [data-slot="toast-viewport"]',
+        ))
             .map((node) => (node.textContent ?? "").replace(/\s+/g, " ").trim())
             .filter((text) => text.length > 0)
             .join(" || ");

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import type { LabelDetail, LabelItem } from "@cosmos/contracts";
@@ -15,11 +15,12 @@ import { messages } from "@/copy/messages";
 import { ItemBlock, SectionMessage, SectionShell } from "./section-parts";
 
 /*
- * 标签分区。新建与删除只在这里发生——Story 页只能挂已有标签（ADR-0029 决策 1）。
+ * 标签分区。新建、改名与删除只在这里发生——Story 页只能挂已有标签（ADR-0029 决策 1）。
  * 点开一个标签看它挂了哪些 Story / 条目 / 话题：这份归属清单由 label(id) 直接解析好标题
  * 返回，不需要前端再查（切片 3a 的读取侧投影）。
  *
- * 已知缺口：没有改名命令，所以这里不能改名；删除是不可逆的（标签本身没有墓碑）。
+ * 改名是原地改写（`PATCH /labels/:id`，Task 36 切片 E）：标签不是 revision 模型，
+ * 所以没有版本历史可留；删除仍是不可逆的（标签本身没有墓碑）。
  */
 export function LabelsSection() {
     const toast = useToast();
@@ -31,6 +32,10 @@ export function LabelsSection() {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<LabelDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    /** 正在改名的标签与它的草稿；null 表示没有在改名。 */
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = useState("");
+    const [renaming, setRenaming] = useState(false);
 
     const load = useCallback(async (): Promise<void> => {
         try {
@@ -92,10 +97,47 @@ export function LabelsSection() {
                 setExpandedId(null);
                 setDetail(null);
             }
+            if (renamingId === label.id) {
+                setRenamingId(null);
+            }
             await load();
             toast.success({ title: messages.organize.labels.removed(label.name) });
         } catch (caught) {
             toast.error({ title: messages.organize.labels.removeFailed, description: readError(caught) });
+        }
+    };
+
+    const startRename = (label: LabelItem): void => {
+        setRenamingId(label.id);
+        setRenameDraft(label.name);
+    };
+
+    const cancelRename = (): void => {
+        setRenamingId(null);
+        setRenameDraft("");
+    };
+
+    /**
+     * 改名。回执是改名后的 LabelItem，但列表按名字排序，所以仍要重读一次才能让顺序正确；
+     * 展开区里的归属清单只带标题、与名字无关，不用重读。
+     */
+    const submitRename = async (label: LabelItem): Promise<void> => {
+        const name = renameDraft.trim();
+        if (name === "" || name === label.name) {
+            cancelRename();
+            return;
+        }
+        setRenaming(true);
+        try {
+            const updated = await client.updateLabel(label.id, { name });
+            cancelRename();
+            await load();
+            toast.success({ title: messages.organize.labels.renamed(updated.name) });
+        } catch (caught) {
+            // 撞名（409）与其它失败都留在原地显示，草稿不丢——用户改一个词就能重试。
+            toast.error({ title: messages.organize.labels.renameFailed, description: readError(caught) });
+        } finally {
+            setRenaming(false);
         }
     };
 
@@ -138,31 +180,82 @@ export function LabelsSection() {
                 <ul className="flex flex-col">
                     {labels.map((label) => (
                         <ItemBlock key={label.id}>
-                            <Button
-                                aria-expanded={expandedId === label.id}
-                                className="h-auto min-w-0 flex-1 justify-start gap-1.5 p-0 text-left text-[14px] font-normal"
-                                onClick={() => void toggleDetail(label.id)}
-                                variant="link"
-                            >
-                                {expandedId === label.id ? (
-                                    <ChevronDown aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
-                                ) : (
-                                    <ChevronRight aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
-                                )}
-                                <span className="truncate">{label.name}</span>
-                            </Button>
-                            <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
-                                {messages.organize.labels.useCount(label.assignedCount)}
-                            </span>
-                            <Button
-                                aria-label={messages.organize.labels.removeLabel(label.name)}
-                                onClick={() => void remove(label)}
-                                size="icon-sm"
-                                variant="ghost"
-                            >
-                                <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
-                            </Button>
-                            {expandedId === label.id && (
+                            {renamingId === label.id ? (
+                                /*
+                                 * 改名就地占满整行：与「新建」同一形状（一个输入框 + 保存），
+                                 * 但不占额外弹层——标签行本来就只有名字与计数。
+                                 */
+                                <div className="flex w-full flex-wrap items-center gap-2">
+                                    <Input
+                                        aria-label={messages.organize.labels.renameField}
+                                        autoFocus
+                                        className="max-w-xs"
+                                        disabled={renaming}
+                                        onChange={(event) => setRenameDraft(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter") {
+                                                void submitRename(label);
+                                            }
+                                            if (event.key === "Escape") {
+                                                cancelRename();
+                                            }
+                                        }}
+                                        value={renameDraft}
+                                    />
+                                    <Button
+                                        disabled={renaming || renameDraft.trim() === ""}
+                                        onClick={() => void submitRename(label)}
+                                        size="sm"
+                                        variant="outline"
+                                    >
+                                        {messages.organize.labels.renameSubmit}
+                                    </Button>
+                                    <Button
+                                        disabled={renaming}
+                                        onClick={cancelRename}
+                                        size="sm"
+                                        variant="ghost"
+                                    >
+                                        {messages.organize.labels.renameCancel}
+                                    </Button>
+                                </div>
+                            ) : (
+                                <>
+                                    <Button
+                                        aria-expanded={expandedId === label.id}
+                                        className="h-auto min-w-0 flex-1 justify-start gap-1.5 p-0 text-left text-[14px] font-normal"
+                                        onClick={() => void toggleDetail(label.id)}
+                                        variant="link"
+                                    >
+                                        {expandedId === label.id ? (
+                                            <ChevronDown aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
+                                        ) : (
+                                            <ChevronRight aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
+                                        )}
+                                        <span className="truncate">{label.name}</span>
+                                    </Button>
+                                    <span className="shrink-0 font-mono text-[12px] text-muted-foreground">
+                                        {messages.organize.labels.useCount(label.assignedCount)}
+                                    </span>
+                                    <Button
+                                        aria-label={messages.organize.labels.rename(label.name)}
+                                        onClick={() => startRename(label)}
+                                        size="icon-sm"
+                                        variant="ghost"
+                                    >
+                                        <Pencil aria-hidden className="size-3.5" strokeWidth={1.75} />
+                                    </Button>
+                                    <Button
+                                        aria-label={messages.organize.labels.removeLabel(label.name)}
+                                        onClick={() => void remove(label)}
+                                        size="icon-sm"
+                                        variant="ghost"
+                                    >
+                                        <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
+                                    </Button>
+                                </>
+                            )}
+                            {expandedId === label.id && renamingId !== label.id && (
                                 <div className="w-full basis-full pt-1">
                                     {detailLoading ? (
                                         <p className="text-[12px] text-muted-foreground">

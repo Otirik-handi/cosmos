@@ -100,6 +100,13 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
             where: { id: canonicalId },
             include: {
                 currentRevision: true,
+                // The reverse edge of `replacedBy`: which shell this Story came
+                // from. A successor needs it to point back at the user state
+                // parked on the shell (ADR-0020); without it a shell that kept
+                // no members is unreachable from anywhere.
+                splitFrom: {
+                    include: { story: { include: { currentRevision: { select: { title: true } } } } },
+                },
                 storyEntities: {
                     include: {
                         entity: {
@@ -268,6 +275,16 @@ export class PrismaCosmosRepositoryHelpers2 extends PrismaCosmosRepositoryHelper
                         ?? replacement.successorStoryId,
                     kind: replacement.successor.kind as "event" | "document" | "media" | "thread",
                 })),
+                // A Story is produced by at most one split, so the reverse edge
+                // is a single row (or none for a Story that was never split).
+                splitFrom: story.splitFrom.length > 0
+                    ? {
+                        storyId: story.splitFrom[0]!.storyId,
+                        title: story.splitFrom[0]!.story.currentRevision?.title
+                            ?? story.splitFrom[0]!.storyId,
+                        kind: story.splitFrom[0]!.story.kind as "event" | "document" | "media" | "thread",
+                    }
+                    : null,
             },
             entry: entries[0] ?? null,
             entries,

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { latestToast } from "../support/lab";
 import { ingestFeed, waitForStoryId } from "../support/story-flow";
 
 const FEED_LIST = 'section[aria-label="阅读流"]';
@@ -29,11 +30,13 @@ test("搜索提交后，早于搜索发起的 Feed 刷新不得覆盖搜索结�
     await page.goto("/library");
     await page.getByLabel("搜索已保存内容").fill(`绝不匹配-${randomUUID().slice(0, 8)}`);
     await page.getByRole("button", { name: "搜索", exact: true }).click();
-    await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();
+    // 回执是 toast；按序号取最新一条（同页可能挂着多条同文案的旧回执）。
+    await expect(await latestToast(page)).toHaveText("搜索到 0 条结果。");
 
     // 越过延迟窗口：此时早于搜索发起的那次 refresh 已经返回并写过状态。
     await page.waitForTimeout(5_000);
 
     await expect(page.locator(FEED_LIST).locator("article")).toHaveCount(0);
-    await expect(page.getByText("搜索到 0 条结果。")).toBeVisible();
+    // 检索回执（info）活 10 秒，越过 5 秒窗口后仍应挂着。
+    await expect(await latestToast(page)).toHaveText("搜索到 0 条结果。");
 });

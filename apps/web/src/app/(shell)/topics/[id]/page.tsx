@@ -1,30 +1,18 @@
-import Link from "next/link";
-
-import { messages } from "@/copy/messages";
+import { TopicDetail } from "./topic-detail";
 
 /**
- * 话题详情占位（`/topics/:id`）。
+ * 话题详情页（`/topics/:id`）：改标题与目的、改成员角色、移除与恢复成员。
  *
- * 列表页的每一行都链到这里，但改标题与目的、成员改角色/移除/恢复还没有归属页面——
- * **占位而不是 404**：用户点了行以后应该看到「这里还没建好」，而不是一页错误。
- * 刻意**不显示路由里的 id**：判据 R3 要求界面不出现内部标识符，占位页也不例外。
+ * `params.id` 到这一层仍是 URL 编码形态（话题 id 含冒号，会被编码成 %3A），所以先解码
+ * 一次再往下传：编码只由 transport 在拼请求路径时做，两处都做会变成 %253A 而 404
+ * （与 Story 阅读页同一处理）。路由 id 只用于取数，**不进界面**（判据 R3）。
  */
-export default function TopicDetailPage() {
-    return (
-        <div className="flex w-full flex-col gap-4">
-            <h1 className="text-[15px] font-medium">{messages.pages.topics.detailTitle}</h1>
-            <div className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-10 text-center">
-                <p className="text-[13px] font-medium">{messages.pages.topics.detailPending}</p>
-                <p className="mx-auto mt-1 max-w-md text-[12px] leading-5 text-muted-foreground">
-                    {messages.pages.topics.detailBody}
-                </p>
-                <Link
-                    className="mt-4 inline-flex h-8 items-center rounded-[var(--radius-control)] border border-border px-3 text-[13px] hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    href="/topics"
-                >
-                    {messages.pages.topics.backToList}
-                </Link>
-            </div>
-        </div>
-    );
+export default async function TopicDetailPage({
+    params,
+}: {
+    params: Promise<{ id: string }>;
+}) {
+    const { id } = await params;
+
+    return <TopicDetail topicId={decodeURIComponent(id)} />;
 }

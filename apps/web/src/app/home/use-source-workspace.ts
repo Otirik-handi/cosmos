@@ -409,7 +409,8 @@ export function useSourceWorkspace(
         try {
             const result = await client.health();
             setHealth(result);
-            ctx.setNotice(messages.notices.source.storageStatus(result.storageStatus));
+            // 报告一个状态，不是完成一次写入：走 info。
+            ctx.setNotice(messages.notices.source.storageStatus(result.storageStatus), "info");
         } catch (caught) {
             ctx.setError(readError(caught));
         } finally {
@@ -423,10 +424,13 @@ export function useSourceWorkspace(
         try {
             // v1 手动运行沿用目标域路由（计划级运行路由后置，见 API Draft §4.3）。
             const result = await client.triggerSource(plan.sourceId);
+            const queued = result.status === "queued" || result.status === "running";
+            // 「已排队」是写成功；其余是报告一个状态，走 info。
             ctx.setNotice(
-                result.status === "queued" || result.status === "running"
+                queued
                     ? messages.notices.source.runQueued(result.id)
                     : messages.notices.source.runStatus(result.status),
+                queued ? "success" : "info",
             );
             setRunRefreshToken((value) => value + 1);
             await Promise.all([feedApi.refresh(), loadPlans()]);

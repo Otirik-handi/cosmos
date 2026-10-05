@@ -12,6 +12,7 @@ import type {
 } from "@cosmos/contracts";
 
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -290,7 +291,7 @@ export function TopicPanel({
                 className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-[var(--radius-panel)] border bg-card shadow-[var(--elevation-dialog)] sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-xl sm:rounded-r-none sm:rounded-bl-[var(--radius-panel)]"
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="flex items-start justify-between gap-4 border-b px-6 py-5">
+                <div className="flex items-start justify-between gap-4 px-6 py-5">
                     <div className="flex min-w-0 flex-col gap-1">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">
                             Topic 详情
@@ -316,7 +317,7 @@ export function TopicPanel({
                     </Button>
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-                    <section aria-label="成员" className="border-b pb-4">
+                    <section aria-label="成员" className="flex flex-col gap-2">
                         <h3 className="font-medium">
                             成员（{topic.members.filter((member) => !member.removed).length}）
                         </h3>
@@ -339,6 +340,7 @@ export function TopicPanel({
                             </p>
                         )}
                     </section>
+                    <Separator decorative />
                     {topic.topic.scope && (
                         <p className="text-sm leading-6 text-muted-foreground">
                             {topic.topic.scope}
@@ -346,7 +348,7 @@ export function TopicPanel({
                     )}
                     <section
                         aria-label="Topic 操作"
-                        className="grid gap-4 border-t pt-4"
+                        className="grid gap-4"
                     >
                         <form
                             className="grid gap-3"
@@ -395,13 +397,14 @@ export function TopicPanel({
                             </p>
                         )}
                     </section>
+                    <Separator decorative />
                     {(onCreateAnnotation
                         || onUpdateAnnotation
                         || onDeleteAnnotation
                         || onPinToBoard) && (
                         <section
                             aria-label="批注"
-                            className="grid gap-3 border-t pt-4"
+                            className="grid gap-3"
                         >
                             <h3 className="font-medium">批注</h3>
                             {onPinToBoard && (

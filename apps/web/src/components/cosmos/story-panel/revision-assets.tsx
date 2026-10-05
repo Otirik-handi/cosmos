@@ -23,7 +23,7 @@ export function RevisionAssets({ assets }: { assets: readonly PublicAssetSnapsho
         return null;
     }
     return (
-        <section aria-label="媒体" className="grid gap-3 border-t pt-4">
+        <section aria-label="媒体" className="grid gap-3">
             {assets.map((asset) => {
                 const label = kindLabel(asset.kind);
                 if (asset.status === "saved") {

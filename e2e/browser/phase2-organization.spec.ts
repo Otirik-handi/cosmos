@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { latestToast } from "../support/lab";
 import {
     FIXTURE_TITLES,
     collectConsoleErrors,
@@ -286,9 +287,53 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
     await expect(splitForm).toBeVisible();
     const targets = splitForm.locator('select[aria-label$="的拆分去向"]');
     await expect(targets).toHaveCount(2);
+
+    /*
+     * 后继可以增、也必须能删（维护者 D5 验收发现：此前只能「增加后继」，删不掉）。
+     * 这里顺带守住删除时的**重编号**：成员去向存的是后继下标，删掉一行后若不重编号，
+     * 后面的分配会整体前移一位、静默指到错误的后继上——这个错误不会报错，只会拆错。
+     */
+    const successorTitles = splitForm.locator('input[id^="cosmos-split-title-"]');
+    await expect(successorTitles).toHaveCount(2);
+    /*
+     * 下限是 2（合同 `storySplitSuccessorMinCount`：拆成一条不是拆分），所以**两行时就没有
+     * 删除入口**。维护者 2026-10-05 验收时删到 1 行再提交，看到的是客户端 schema 抛出的
+     * Zod 原始报错——下限没在界面上拦住。这里同时守住「下限处不给删除入口」。
+     */
+    await expect(splitForm.getByRole("button", { name: /^删除后继/ })).toHaveCount(0);
+
+    await splitForm.getByRole("button", { name: "增加后继" }).click();
+    await expect(successorTitles).toHaveCount(3);
+    await expect(splitForm.getByRole("button", { name: /^删除后继/ })).toHaveCount(3);
+    await targets.nth(0).selectOption("2");
+    await expect(targets.nth(0)).toHaveValue("2");
+
+    // 删掉第 1 行：成员 0 的「后继 3」（下标 2）应变成「后继 2」（下标 1）。
+    await splitForm.getByRole("button", { name: "删除后继 1" }).click();
+    await expect(successorTitles).toHaveCount(2);
+    await expect(splitForm.getByRole("button", { name: /^删除后继/ })).toHaveCount(0);
+    await expect(targets.nth(0)).toHaveValue("1");
+    await expect(targets.nth(1)).toHaveValue("-1");
+
+    // 回到这一步真正要用的分配：两个成员各去一个后继。
     await targets.nth(0).selectOption("0");
     await targets.nth(1).selectOption("1");
+    /*
+     * 两个成员都分走 → 原条会变成零成员的历史壳。壳按 ADR-0012 是有意保留的，但它没有
+     * entry 投影、不再出现在信息库与看板里，所以界面必须先讲清后果再让用户确认
+     * （维护者 2026-10-05 验收提出的「空壳要管」）。
+     */
     await userSection.getByTestId("story-split-submit").click();
+    const emptyShellDialog = page.locator("[data-story-split-empty-shell]");
+    await expect(emptyShellDialog).toBeVisible();
+    await expect(emptyShellDialog).toContainText("原条会变空");
+    // 先取消：不应该发生任何拆分。
+    await emptyShellDialog.getByRole("button", { name: "返回调整" }).click();
+    await expect(emptyShellDialog).toBeHidden();
+    expect((await readStory(page, canonicalId)).story.status).toBe("active");
+
+    await userSection.getByTestId("story-split-submit").click();
+    await page.locator("[data-story-split-empty-shell]").getByRole("button", { name: "仍然拆分" }).click();
 
     // 命令返回历史壳：成员清空、后继可打开、写操作入口消失。
     const shell = page.locator('section[data-story-shell="true"]');
@@ -305,6 +350,29 @@ test("splits a Story into successors and keeps a historical shell", async ({ pag
         successors: shellStatus.story.replacedBy.length,
         entry: shellStatus.entry,
     }).toEqual({ status: "split", successors: 2, entry: null });
+
+    /*
+     * 拆分来源回链：零成员的壳不出现在任何列表里，后继必须能指回去，否则留在壳上的
+     * 批注、标签与收藏（ADR-0020）就只能靠记住 URL 才找得到。
+     */
+    const firstSuccessorId = await shell.locator("[data-story-successor-id]").first()
+        .evaluate((node) => (node as HTMLElement).dataset.storySuccessorId ?? "");
+    await page.goto(`/stories/${encodeURIComponent(firstSuccessorId)}`);
+    const origin = page.locator("[data-story-split-origin]");
+    await expect(origin).toBeVisible();
+    await expect(origin.locator("[data-story-split-origin-id]")).toHaveAttribute(
+        "data-story-split-origin-id",
+        canonicalId,
+    );
+    // 回链可点：点回原条应重新渲染壳视图。
+    await origin.locator("[data-story-split-origin-id]").click();
+    await expect(page.locator('section[data-story-shell="true"]')).toBeVisible();
+    // 再回到后继：回链仍在（用直接导航，客户端路由的 goBack 不保证重放这一跳）。
+    await page.goto(`/stories/${encodeURIComponent(firstSuccessorId)}`);
+    await expect(page.locator("[data-story-split-origin]")).toBeVisible();
+    // 回到壳继续验迁移：后面的断言都在壳页面上。
+    await page.goto(`/stories/${encodeURIComponent(canonicalId)}`);
+    await expect(page.locator('section[data-story-shell="true"]')).toBeVisible();
 
     // 迁移（ADR-0020）：标签与收藏在拆分后都留在壳上，显式搬到该去的后继。
     const migration = page.locator('section[data-story-user-state-migration="true"]');
@@ -388,7 +456,7 @@ test("classifies a Story with a managed subtype and rejects an unregistered valu
 
     // 受管理目录只注册 media.*，所以先把 Story 类型改成媒体才能选到注册项。
     await editSection.getByLabel("Story 类型").selectOption("media");
-    await editSection.getByLabel("Story subtype").selectOption("media.comic");
+    await editSection.getByLabel("Story 子类型").selectOption("media.comic");
     await editSection.getByRole("button", { name: "保存修改", exact: true }).click();
 
     // 阅读页徽章是这次写入的完成信号：提交是异步的，先读服务端会读到写之前的中间态
@@ -524,8 +592,8 @@ test("organizes a Story with Topic, Entity, favorite, collection, and annotation
     await editSection.getByRole("button", { name: "添加批注", exact: true }).click();
     await expect(editSection.getByText(annotationBody, { exact: true })).toBeVisible();
 
-    // 收藏走动作区那个唯一入口（编辑面里的重复入口已删）；编辑面里不该再出现第二个。
-    await expect(editSection.getByRole("button", { name: /收藏/u })).toHaveCount(0);
+    // 收藏只有标题行那一个入口（2026-10-03 起收藏在「编辑与关联」标题行里，编辑面内恰好 1 个）。
+    await expect(editSection.getByRole("button", { name: /收藏/u })).toHaveCount(1);
     await page.getByRole("button", { name: "收藏", exact: true }).click();
     await expect(page.getByRole("button", { name: "已收藏", exact: true })).toBeVisible();
 
@@ -624,7 +692,7 @@ test("searches a term carrying FTS5 syntax characters without failing", async ({
     // UI 路径同样不能再报错：搜索框填一个带连字符的词并提交。
     await page.getByLabel("搜索已保存内容").fill("state-of-the-art");
     await page.getByRole("button", { name: "搜索", exact: true }).click();
-    await expect(page.getByText(/搜索到 \d+ 条结果。/)).toBeVisible();
+    await expect(await latestToast(page)).toHaveText(/搜索到 \d+ 条结果。/);
     // 没有错误横幅。限定在 main 内：Next 的路由播报器本身就是一个常驻的
     // `role="alert"`（在 main 之外），不限定会把「页面永远有一个 alert」当成本用例的失败。
     await expect(page.locator('main [role="alert"]')).toHaveCount(0);
@@ -675,6 +743,13 @@ test("moves a block to the slot right below its drop target", async ({ page }) =
     }
     const [first, second, third, fourth] = await blockIds(section);
     expect(await blockIds(section)).toEqual([first, second, third, fourth]);
+    const sectionId = await section
+        .locator(`[data-block-id="${first}"]`)
+        .evaluate(
+            (element) =>
+                element.closest("[data-section-id]")?.getAttribute("data-section-id") ?? null,
+        );
+    expect(sectionId, "拖动区块必须能找到它所属的分区").not.toBeNull();
 
     // 每个区块都有独立拖动入口，且指向它自己（与上移/下移按钮并存）。
     for (const blockId of [first, second]) {
@@ -684,32 +759,55 @@ test("moves a block to the slot right below its drop target", async ({ page }) =
         );
     }
 
-    // 回归：把 A 拖到 B 下方应落在 B 与 C 之间。
+    // 真实指针拖拽：把 A 拖到 C 上应落在 C 的位置。
     // `resolveDropTarget`（board-drag.test.ts 钉住：拖到哪个区块就用它在分区内的下标）
-    // 对该场景算出 position=1；这里确认真实服务端在该 position 上得到 [B, A, C, D]。
-    // 旧口径把「全量下标」当 position 用，会得到 [B, C, A, D]——即用户报告的「插到 C 和 D 之间」。
-    const moved = await page.evaluate(async (blockId) => {
-        const response = await fetch(`/api/v1/board-blocks/${blockId}/moves`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            // 省略 sectionId 表示留在原分区，只改位置（合同里 sectionId 可选）。
-            body: JSON.stringify({ position: 1 }),
-        });
-        return { ok: response.ok, status: response.status, body: await response.json() };
-    }, first);
-    expect(moved.ok, `moves 返回 ${moved.status}`).toBe(true);
-    const tree = moved.body as { sections: { blocks: { id: string }[] }[] };
-    const reordered = tree.sections.find((entry) =>
-        entry.blocks.some((block) => block.id === first),
+    // 对该场景算出 position=2；这里确认真实服务端在该 position 上得到 [B, C, A, D]。
+    // 旧口径把「全量下标」当 position 用，会得到 [B, C, D, A]。
+    // 这一段曾经是直接 `fetch(.../moves)` 冒充拖拽，于是拖拽真正坏掉时门禁依然是绿的。
+    const source = section.locator(`[data-block-id="${first}"]`);
+    const target = section.locator(`[data-block-id="${third}"]`);
+    // 拖动把手在区块底部（编辑器行与内容之后）；按在区块顶部只是点到编辑器空白处，
+    // 拖拽根本不会激活。
+    // 先滚到分区顶部：新分区加在页面末尾，拖动期间 dnd-kit 会自动滚动，事先量好的
+    // 坐标会失效，落点就飘到别的区块上。
+    await section.scrollIntoViewIfNeeded();
+    const dragStartOrder = ((await blockIds(section)) ?? []) as string[];
+    const handleBox = (await source.locator('button[aria-label^="拖动排序"]').boundingBox())!;
+    const targetBox = (await target.boundingBox())!;
+    const moves = page.waitForRequest(
+        (request) =>
+            request.method() === "POST" && /\/board-blocks\/[^/]+\/moves$/.test(request.url()),
     );
-    expect(reordered?.blocks.map((block) => block.id)).toEqual([second, first, third, fourth]);
+    const grabX = handleBox.x + handleBox.width / 2;
+    const grabY = handleBox.y + handleBox.height / 2;
+    const destinationY = targetBox.y + targetBox.height / 2;
+    await page.mouse.move(grabX, grabY);
+    await page.mouse.down();
+    // 先纵向挪出 PointerSensor 的 4px 激活阈值，再横移到目标块的纵向中线上。
+    await page.mouse.move(grabX + 5, grabY + 20, { steps: 5 });
+    await page.mouse.move(grabX + 5, destinationY, { steps: 20 });
+    // 落点是 dnd-kit 的 `over`，不是我们量出来的坐标；拖动结束时它写在被拖区块上。
+    await page.mouse.up();
+    const moveRequest = await moves;
+    const overId = await source.getAttribute("data-drop-target");
+    // `resolveDropTarget` 的 position 是目标区块在**拖动前**分区里的下标（服务端先摘掉
+    // 被拖区块再按这个下标插入），所以这里用拖动前记录的顺序算期望值。
+    const overIndex = dragStartOrder.indexOf(overId ?? "\u0000");
+    expect(overIndex, `over=${overId} 必须落在分区内的某个区块上`).toBeGreaterThanOrEqual(0);
+    expect(overId).not.toBe(first);
+    expect(moveRequest.postDataJSON()).toEqual({ sectionId: sectionId!, position: overIndex });
+
+    const reordered = (await blockIds(section)) ?? [];
+    const withoutDragged = dragStartOrder.filter((id) => id !== first);
+    withoutDragged.splice(overIndex, 0, first!);
+    expect(reordered).toEqual(withoutDragged);
 
     // 界面读的是同一份服务端配置：刷新后顺序保持不变。
     await page.reload();
     await page.getByRole("button", { name: "编辑看板" }).click();
     await expect
         .poll(() => blockIds(page.getByRole("region", { name: sectionTitle })))
-        .toEqual([second, first, third, fourth]);
+        .toEqual(withoutDragged);
 
     // 拖拽不是唯一排序路径：上移/下移按钮仍然保留可用（按钮路径不移除）。
     await expect(

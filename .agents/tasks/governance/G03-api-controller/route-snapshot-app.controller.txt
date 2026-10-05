@@ -85,6 +85,7 @@ POST      /entity-relations/removals                   removeEntityRelation
 GET       /labels                                      listLabels
 GET       /labels/:labelId                             label
 POST      /labels                                      createLabel
+PATCH     /labels/:labelId                             updateLabel
 POST      /labels/:labelId/removals                    deleteLabel
 POST      /label-assignments                           attachLabel
 POST      /label-assignments/removals                  detachLabel

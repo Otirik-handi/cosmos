@@ -107,6 +107,7 @@ export {
     labelRefSchema, linkEntryStoryCommandSchema, mergeStoriesCommandSchema,
     migrateStoryUserStateCommandSchema, moveEntryToStoryCommandSchema, splitStoryCommandSchema,
     storyDetailSchema, storyEntitySummarySchema, storyKeyFactSchema, storySplitSuccessorSchema,
+    storySplitSuccessorMaxCount, storySplitSuccessorMinCount,
     storySuccessorSchema, storyTimeRangeSchema, storyTopicSchema,
     storyUserStateMigrationCountsSchema,
     storyUserStateMigrationResultSchema, unlinkEntryStoryCommandSchema,
@@ -154,7 +155,8 @@ export {
     favoriteItemSchema, favoriteListSchema, favoriteTargetTypeSchema,
     labelAssignmentCommandSchema, labelDetailSchema, labelItemSchema, labelListSchema,
     savedViewConditionsSchema, savedViewListSchema, savedViewSchema, targetTypeSchema,
-    updateAnnotationCommandSchema, updateCollectionCommandSchema, updateSavedViewCommandSchema,
+    updateAnnotationCommandSchema, updateCollectionCommandSchema, updateLabelCommandSchema,
+    updateSavedViewCommandSchema,
     userOrganizationAckSchema, type Annotation, type AnnotationList,
     type AnnotationTargetQuery, type CollectionDetail, type CollectionItemCommand,
     type CollectionList, type CollectionSummary, type CreateAnnotationCommand,
@@ -162,7 +164,8 @@ export {
     type FavoriteCommand, type FavoriteItem, type FavoriteList, type FavoriteTargetType,
     type LabelAssignmentCommand, type LabelDetail, type LabelItem, type LabelList,
     type SavedView, type SavedViewConditions, type SavedViewList, type TargetType,
-    type UpdateAnnotationCommand, type UpdateCollectionCommand, type UpdateSavedViewCommand,
+    type UpdateAnnotationCommand, type UpdateCollectionCommand, type UpdateLabelCommand,
+    type UpdateSavedViewCommand,
     type UserOrganizationAck,
 } from "./user-organization.js";
 export {

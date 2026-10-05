@@ -191,7 +191,8 @@
         "apps/web/src/components/cosmos/entity-panel.tsx",
         "apps/web/src/components/cosmos/feed-browser.tsx",
         "apps/web/src/components/cosmos/source-form.tsx",
-        "apps/web/src/components/cosmos/story-edit-surface.tsx",
+        "apps/web/src/components/cosmos/story-edit-panel.tsx",
+        "apps/web/src/components/cosmos/story-reading-content.tsx",
         "apps/web/src/components/cosmos/story-panel/organization.tsx",
         "apps/web/src/components/cosmos/topic-panel.tsx"
       ]

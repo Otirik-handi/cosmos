@@ -10,6 +10,7 @@ import {
 } from "@nestjs/common";
 import {
     createLabelCommandSchema,
+    updateLabelCommandSchema,
     labelAssignmentCommandSchema,
     createCollectionCommandSchema,
     updateCollectionCommandSchema,
@@ -62,6 +63,22 @@ export class AppControllerOrganization extends AppControllerContent {
         try {
             const parsed = createLabelCommandSchema.parse(body);
             return await this.repository.createLabel({ name: parsed.name });
+        } catch (error) {
+            sourceCommandError(error);
+        }
+    }
+
+    /**
+     * 标签改名（Task 36 切片 E）。与 `PATCH /collections/:collectionId` 同一形状：
+     * 回执是改名后的完整 LabelItem，客户端据此直接刷新列表而不必再读一次。
+     * 撞名由 `sourceCommandError` 映射成 409（LabelConflictError）。
+     */
+    @Patch("labels/:labelId")
+    @Bind(Param("labelId"), Body())
+    async updateLabel(labelId: string, body: unknown) {
+        try {
+            const parsed = updateLabelCommandSchema.parse(body);
+            return await this.repository.updateLabel({ labelId, name: parsed.name });
         } catch (error) {
             sourceCommandError(error);
         }

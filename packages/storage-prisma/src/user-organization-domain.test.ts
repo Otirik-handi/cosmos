@@ -44,6 +44,44 @@ describe("user organization domain commands", () => {
         });
     });
 
+    /**
+     * 标签改名（Task 36 切片 E）：原地改写而不是产生新版本；撞名与创建同一档错误；
+     * 改名的落点必须对已有挂载透明——挂载按 labelId 关联，改名不该动任何 assignment。
+     */
+    it("renames a label in place and keeps its assignments and unique-name rule", async () => {
+        await withRepository("user-organization", async (repository, prisma) => {
+            await seedStories(prisma);
+            const label = await repository.createLabel({ name: "AI" });
+            await repository.attachLabel({
+                labelId: label.id,
+                targetType: "story",
+                targetId: "story-a",
+            });
+            const other = await repository.createLabel({ name: "硬件" });
+
+            const renamed = await repository.updateLabel({ labelId: label.id, name: "  人工智能 " });
+            expect(renamed.id).toBe(label.id);
+            expect(renamed.name).toBe("人工智能");
+            // 挂载数随行读出：改名不该让计数归零（改名不是重建）。
+            expect(renamed.assignedCount).toBe(1);
+            expect((await repository.listLabels()).items
+                .find((item) => item.id === label.id)!.name).toBe("人工智能");
+
+            // 撞名：与 createLabel 同一档冲突，且失败后原名不被改写。
+            await expect(repository.updateLabel({ labelId: label.id, name: "硬件" }))
+                .rejects.toBeInstanceOf(LabelConflictError);
+            expect((await repository.listLabels()).items
+                .find((item) => item.id === label.id)!.name).toBe("人工智能");
+
+            // 改成自己现有的名字是 no-op 而不是冲突：唯一约束只挡别的行。
+            await expect(repository.updateLabel({ labelId: other.id, name: "硬件" }))
+                .resolves.toMatchObject({ name: "硬件" });
+
+            await expect(repository.updateLabel({ labelId: "label-missing", name: "任意" }))
+                .rejects.toBeInstanceOf(LabelNotFoundError);
+        });
+    });
+
     it("attaches labels to story/entry/topic targets and resolves titles on detail", async () => {
         await withRepository("user-organization", async (repository, prisma) => {
             await seedStories(prisma);

@@ -5,6 +5,7 @@ import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {Field, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
+import {Separator} from "@/components/ui/separator";
 
 import {resolveLabTokenValueOnBlur} from "./draft";
 import {serializeLabOverrideSnapshot} from "./snapshot";
@@ -115,7 +116,8 @@ export function LabInspector({
                         );
                     })}
                 </FieldGroup>
-                <section aria-labelledby="lab-token-heading" className="mt-6 border-t pt-5">
+                <section aria-labelledby="lab-token-heading" className="mt-6">
+                    <Separator decorative />
                     <div className="flex items-start justify-between gap-2">
                         <div>
                             <h3 className="text-sm font-medium" id="lab-token-heading">Token 草稿</h3>

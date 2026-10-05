@@ -36,7 +36,13 @@ export function TopBar({ showBack = false }: { showBack?: boolean }) {
     };
 
     return (
-        <header className="flex h-14 shrink-0 items-center gap-4 px-5">
+        /*
+         * 顶栏：高度 64 px（V4 规格原文 56，维护者 2026-10-03 指令加高一档）+ 底色 `--surface-toolbar`。
+         * **间隔不在这里**：底栏带内边距会让 64 px 里的内容偏上而不是居中；间距由路由组 layout 的
+         * `pt-[2.5em]` 提供（见 `(shell)/layout.tsx` 与 `(reading)/layout.tsx`）。
+         * 下边框不加：底板色已能把顶栏与内容分开，再画一条线是重复表达。
+         */
+        <header className="flex h-16 shrink-0 items-center gap-4 bg-[var(--surface-toolbar)] px-5">
             {showBack ? (
                 <Link
                     className={cn(

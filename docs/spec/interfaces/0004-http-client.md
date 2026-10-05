@@ -88,7 +88,7 @@ Phase 2 编排方法（同一 transport 形态：先 parse 命令 schema，再 P
 | `linkEntryStory` / `unlinkEntryStory` | `POST /api/v1/entry-story-links`、`/entry-story-links/removals` | `StoryDetail` |
 | `createEntityRelation` / `removeEntityRelation` | `POST /api/v1/entity-relations`、`/entity-relations/removals` | `EntityDetail` |
 | `listLabels` / `label(labelId)` | `GET /api/v1/labels`、`/labels/:encodedId` | `LabelList`、`LabelDetail` |
-| `createLabel` / `deleteLabel` | `POST /api/v1/labels`、`/labels/:encodedId/removals` | `LabelItem`、`UserOrganizationAck` |
+| `createLabel` / `updateLabel` / `deleteLabel` | `POST /api/v1/labels`、`PATCH /labels/:encodedId`、`/labels/:encodedId/removals` | `LabelItem`、`UserOrganizationAck` |
 | `attachLabel` / `detachLabel` | `POST /api/v1/label-assignments`、`/label-assignments/removals` | `UserOrganizationAck` |
 | `listCollections(query?)` / `collection(collectionId)` | `GET /api/v1/collections`、`/collections/:encodedId` | `CollectionList`、`CollectionDetail` |
 | `createCollection` / `updateCollection` / `deleteCollection` | `POST /api/v1/collections`、`PATCH /collections/:encodedId`、`POST /collections/:encodedId/removals` | `CollectionSummary`、`UserOrganizationAck` |

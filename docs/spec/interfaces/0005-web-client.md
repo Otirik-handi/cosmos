@@ -15,7 +15,12 @@ Task 35 的前端重做；含 Phase 1 采集链路与 Phase 2 组织/看板浏�
 
 Web Client 是 `apps/web/src/app/` 下的一个 client-side Next App Router 应用，由**外壳 + 十个路由**
 组成（Task 35 的信息架构，ADR-0029）：外壳是顶栏 + 悬浮侧栏（`(shell)/layout.tsx`）与唯一例外
-`(reading)/stories/[id]`（只留顶栏与返回入口）；十个路由是 `/`（看板）、`/library`（信息库与检索）、
+`(reading)/stories/[id]`（只留顶栏与返回入口）；**悬浮侧栏与整组限宽自 2026-10-03 起随
+`--nav-scale` 缩放**（当前 1.25：侧栏 196→245 px，整组 1120→1145 px；主内容区仍 880 px，
+行宽不随之变宽，见 [`side-nav.tsx`](../../../apps/web/src/components/shell/side-nav.tsx)）；
+1.5 先试用后由维护者收敛到 1.25（2026-10-03）；
+**悬浮侧栏跟随滚动**（`sticky top-[calc(4rem+2.5em)]`，2026-10-03），其高度仍由内容撑开
+（导航项超过视口高度时底部会被裁，见 ADR-0029 的 Revisit Gate 第 1 条）；十个路由是 `/`（看板）、`/library`（信息库与检索）、
 `/topics`、`/entities`、`/organize`（标签/收藏夹/收藏/批注/已保存视图）、`/automation`
 （来源/采集计划/连接/运行记录）、`/settings`、`/system`、`/stories/:id`（读一条内容）与 `/dev/components`
 （组件实验室）。各页只挂载自己那几个域 hook，使用 `HttpCosmosClient` 读取 Feed/Source/Health 与来源定义
@@ -25,6 +30,17 @@ metadata 和全局样式；`components/ui/*` 是 UI primitive，`lib/utils.ts` �
 Tailwind class 合并。`instrumentation.ts` 是 Next server instrumentation：Node runtime
 按需创建并缓存一个 `cosmos-web` logger，`register()` 写一次 `web.started`，
 `onRequestError` 只写脱敏后的请求元数据和错误对象。
+
+**顶栏的现行取值**（维护者 2026-10-03 四条裁定：太矮、与下方间隔小、与页面底融为一体、白色不好看）：
+高度 **64 px**（V4 原文 56，勘误记 [`frontend-redesign-v1`](../../proposals/frontend-redesign-v1.md) 勘误节）；
+底色走第 2 层 token **`--surface-toolbar`** = `color-mix(in srgb, var(--cosmos-shadow) 10%, var(--background))`
+（亮 `#deddd8` / 暗 `#121513`）：比画布底 `--background` 深一档的暖纸灰，用主题感知的
+`--cosmos-shadow`（亮暖褐 / 暗纯黑）染色，两套主题都得到同一档关系，不必写死两组色值；
+顶栏标题与状态文字的对比度实测亮 12.2:1、暗 14.9:1。
+**不加下边框**（底色已足够区分，再画线是重复表达）；与下方框架留 **2.5em（40 px，该层级字号 16 px）**
+间隔——间隔由两个路由组 layout 的 `pt-[2.5em]` 提供，**不放在顶栏自身的底部内边距**
+（后者会让 64 px 顶栏里的内容偏上、不再垂直居中）。
+`e2e/browser/layout-and-budget.spec.ts` 的 `TOP_BAR_HEIGHT_PX` 与它同步（该常量是「导航不被顶栏压住」的下限）。
 
 页面是本地优先的信息聚合工作台展示层，不直接依赖 Prisma、SQLite、Data Root 或 Blob
 Root。服务端路由和共享 DTO 详见 [Product API HTTP](0002-product-api-http.md)，transport
@@ -196,9 +212,17 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
 10. **Story 拆分**：成员数 ≥2 的普通 Story 显示“拆分 Story”表单——2–5 个后继（标题 +
    kind，默认继承当前 Story 的标题与 kind），每个当前成员、证据条目、关联 Entity 与
    Topic 成员各有一个“留在历史壳 / 后继 N”下拉；提交前要求每个后继至少分到一个成员，
-   然后调用 `splitStory`（ADR-0012）。成功后面板切到返回的历史壳：标题旁显示“历史壳”
+   然后调用 `splitStory`（ADR-0012）。删除入口只在行数**多于下限**时出现（下限 2 来自
+   `storySplitSuccessorMinCount`），因此界面到不了“只剩一个后继”这个必然被拒的状态；
+   提交前也按下限先拦一次，给可读文案而不是客户端 schema 的原始报错。若所有成员都被分走，
+   原条会变成零成员的历史壳，此时先弹确认（`data-story-split-empty-shell`）说明后果再提交：
+   壳不再出现在信息库与看板里，而用户状态留在壳上。成功后面板切到返回的历史壳：标题旁显示“历史壳”
    说明、`来源成员（0）`、后继列表（`data-story-shell` 内的 `data-story-successor-id`
    按钮可继续打开后继），Entry/Revision/Observation 详情与写操作区不再渲染。
+   **拆分来源回链**：后继的 `story.splitFrom` 指向它拆出的原条，阅读页左栏渲染“拆分来源”区
+   （`data-story-split-origin`，按钮带 `data-story-split-origin-id`）。这是零成员壳唯一的
+   界面入口——它没有 entry 投影，不出现在任何列表里，没有回链就只能靠记住 URL 才能回去迁移
+   用户状态（ADR-0020）。
 11. **拆分后的用户状态迁移与撤销**（ADR-0020）：历史壳上“迁移用户状态”区（`data-story-user-state-migration`）
    把收藏、标签、收藏夹、批注与看板固定从一个家族成员搬到另一个。“从”下拉列出本壳与全部后继，
    “迁到”列出除来源外的其它成员；切换来源会重新读取该成员的状态并清空勾选。读操作由
@@ -270,8 +294,10 @@ notice “服务要求重新读取快照，正在刷新 Feed。”，当前代�
    再在剩余区块之间插入」的下标，`moveBlock` 语义与该口径等价。松手时先按同一语义在本地落定
    （`applyLocalMove`）再等服务端返回覆盖，失败回滚；`DragOverlay` 关闭 `dropAnimation`，
    使「预览 → 结果」之间不再插入旧顺序或浮层回弹。拖拽只改展示配置，不触碰底层内容
-   （ADR-0010 决定 1），且**只限分区内**：分区是「用户的一个关注方面」的语义容器、区块是分区内的
-   内容细分，跨分区搬区块不做（ADR-0010 决定 7）。上移/下移按钮与拖拽并存，键盘与按钮路径不回退。
+   （ADR-0010 决定 1）。**一个看板只有一个 `DndContext`**（`BoardDndProvider`，2026-10-03 修正）：
+   原先每个分区各包一层，分区之间互不可见，拖拽永远解析不出跨分区落点；落点仍按「拖到哪个区块
+   就用它在分区内的下标」解析，因此拖到别的分区的区块上就是跨分区移动（与编辑器的「移到」下拉
+   同一条 `moveBlock` 路径，ADR-0010 决定 7）。上移/下移按钮与拖拽并存，键盘与按钮路径不回退。
 22. **存储面板（OPS-003/004）**：`/settings` 页“存储”区的 `StoragePanel` 挂载时并行 `client.storageStats()`、
     `client.listBackups()` 与 `client.listConnectorStateNamespaces()`，展示数据库/Blob/缓存/可清理媒体的
     占用与备份数量；“新建备份”调 `client.createBackup()`，“恢复”调 `client.restoreBackup(backupId)`
@@ -371,6 +397,55 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 - Story panel：展示 title、source、revision 数、来源成员（含反向证据关联）、证据来源、
   时间线（时间/事件类型/来源/标题）、相关内容（标题 + 相关原因）、最新 revision contentText、
   Entry/source 信息、Revision/Observation badges。
+- **Story 阅读页版面**（Task 36 切片 A，维护者 2026-10-02 裁定，2026-10-03 修正为现行取值）：
+  `/stories/:id` 是**两栏**——
+  左栏「内容」（标题/meta/摘要/时间线/正文/关键事实/媒体/成员/证据/相关内容），右栏「操作编辑」
+  （收藏、改表示、归并、拆分、打标签、批注、话题、Entity、收藏夹、固定到看板）。
+  **整组宽 = 视口 80%、居中**，左右两栏宽度比 **3:1**，三档断点（1024/1280/1440 px）都取同一组
+  比例、不堆叠；1024 px 以下仍只显示「窗口过窄」提示（ADR-0029 决策 6，不降级布局）。
+  右栏随页面滚动、不吸附。**宽度用 `vw` 表达**，因此窄档不需要各自的规则。
+  **正文跟着左栏撑满，不再限 34em**：V4 的「正文行宽 ≤34em」合同自 2026-10-03 起在阅读页废止，
+  代价是大屏上单行可达 ~1070 px（1920 视口实测，勘误与理由见
+  [`frontend-redesign-v1.md`](../../proposals/frontend-redesign-v1.md) 勘误节）。
+  阅读页的限宽由页面自己承担（`(reading)/stories/[id]/page.tsx` 不再包 `max-width`）；
+  外壳那条「侧栏 + 内容整体限宽 1120 px」不适用于本页（ADR-0029 决策 2 的唯一例外）。
+  媒体**只在左栏**渲染：`RevisionAssets` 不再出现在编辑面里（一个区块一个所有者）。
+  编辑面（右栏 `StoryEditPanel`）**默认展开**（2026-10-03 裁定）。标题行只有「编辑与关联 + 展开/收起」；
+  展开后按**使用频率**分四段（维护者 2026-10-03 裁定，顺序 C→B→A→D），段与段之间一条分隔线：
+
+  | 段 | 名称 | 内容 | 判据（改的是哪一层数据） |
+  | --- | --- | --- | --- |
+  | C | 我的标记 | 收藏、固定到看板、标签、收藏夹、批注 | 只写「用户 × Story」，不改内容 |
+  | B | 家族与关系 | 归并、拆分 Story；壳上另加已拆分、迁移用户状态 | 改多条 Story 的拓扑 |
+  | A | 内容与表示 | 标题/类型/子类型、时间范围、关键事实、保存修改 | 改当前 Revision（受 ADR-0028 保护） |
+  | D | 对象关联 | 关联 Entity、加入 Topic | 改关系表，两端都是已有对象 |
+
+  四段各有一个段标题（维护者 2026-10-03：「每一段要有一个 Title」），由 `StoryEditPanel`
+  统一渲染，层级夹在面板总标题（`text-lg`）与字段标题（`font-medium`）之间；段组件不再自带标题。
+  三条分割线只在段间（C|B、B|A、A|D），其中 A 段（拆分）只对多成员 Story 出现，它的线与标题
+  跟内容绑在同一个条件上，避免留下「有标题、无内容」的空段。
+  **右栏最小宽度 240 px**（维护者 2026-10-03）：按 3:1 算 1024 px 窗口下右栏只剩 199 px，
+  表单被压坏；下限只在窄档生效（1440 px 下右栏 282 px），代价是窄档整组略超 80%、由左栏让位。
+  版面合同的可断言部分：`data-story-columns` / `data-story-column="content|actions"`，
+  浏览器门禁在三档断点断言居中（±2 px）、无横向溢出，并在右栏宽于下限时断言整组宽为视口 80%
+  （±1%）与两栏比 2.9–3.2、下限生效时断言右栏 ≥240 px，另断言正文与左栏等宽（`story-reading.spec.ts`）。
+- **分隔线合同**（2026-10-03 起，右栏面板及其子区块统一）：块与块之间用
+  `components/ui/separator.tsx` 的 `<Separator decorative />`——独立元素、`bg-border`
+  （＝token `--border`，实测 `#e6e4dc`）、高度 `--divider-thickness`（**0.75em**，维护者 2026-10-03；
+  16 px 字号下 12 px）、**两头圆角**（`rounded-full`，半径被钳到高度的一半＝两端半圆帽，
+  维护者 2026-10-03）、`aria-hidden`（线表达视觉层级，不是内容语义，不给辅助技术加停顿）。
+  **竖向线固定 1 px 且不加圆角**，不复用 `--divider-thickness`——同值会把竖线变成 8 px 宽的色块。
+  **列表行（`first:` / `last:` 变体）与 `CardFooter` / `DialogFooter` / `Tabs`
+  的线仍用 `border` 写法**：前者要靠伪变体表达「第一行不要线」，后两者是容器几何而非版面分隔。
+  写 `border` 时必须显式带 `border-border`——Tailwind v4 预检让边框默认继承 `currentColor`，
+  只写 `border-t` 会得到正文墨色的深线（这个缺陷在 Task 36 Round 5 才被发现）。
+  **线的位置规则：只放在两个相邻兄弟区块之间，绝不放在区块的尾部**。尾部写法在两个区块相邻渲染时
+  （`isShell` 的「已拆分」+「迁移用户状态」）会叠出两条线；同理，子组件不自带开头的线，
+  父级负责在区块之间声明边界——否则子组件相邻渲染时也会叠线（Task 36 Round 8 修的就是这一条）。
+  条件渲染的区块要把线跟区块绑在同一个条件里，避免只剩一条孤儿线。
+  **Round 9 把这条规则收紧到全仓**：任何区块组件（`story-panel/*`、`story-edit/*`）都**不自带分隔线**，
+  线只在**父级**的相邻子元素之间放。此前 `story-actions`、`revision-assets`、`entities-editor`
+  各自带内部线，与父级的段间线叠成双线（Round 10 实测抓到），已全部撤掉。
 
 页面使用共享 DTO 的 response shape，不在 UI 重新定义 API DTO；`readError` 对
 `CosmosTransportError` 显示 `服务请求失败（HTTP <status>）。`，其它 Error 显示 message，
@@ -383,8 +458,9 @@ Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
 
 - 每个页面自己的 `notice`/`error`/`loading`，以及它挂载的域 hook 持有的读模型
   （`feed`/`nextCursor`/`activeSearch`/`sources`/`story`/`plans`/`topics`/`entities`）；
-- 编辑面的草稿（标题、类型、细分类型、时间范围、关键事实）留在 `StoryEditSurface` 内部，
+- 编辑面的草稿（标题、类型、细分类型、时间范围、关键事实）留在右栏 `StoryEditPanel` 内部，
   「有没有未保存的编辑」以**上次同步时的服务端状态**为基准，供 ADR-0029 决策 7 的刷新边界判断；
+  五份草稿都由这一个判定守着，浏览器门禁逐字段断言（`story-live-refresh.spec.ts`）；
 - `definitionState`（来源定义 loading/ready/error）、`probeState`（idle/running/
   succeeded/failed/timeout）、`activatingSourceId`（进行中的启用/停用行）；
 - `streamState`（connecting/connected/unavailable），由外壳的 `LiveProvider` 持有并下发给顶栏与
@@ -627,7 +703,7 @@ Task 35 之后**没有单一的数据请求容器**：`HttpCosmosClient` 与 SSE
   每行解释启用徽章、定时语义、上次运行与最近错误；
 - `FeedBrowser`：接收 Feed、Source、搜索表单、loading、cursor 与 Story 回调；
 - `BoardView`：接收 `BoardDetail`、transport client、页面持有的 `feedSlot`/`sourceActionsSlot`（ReactNode 插槽）与 Topic 列表/打开回调，按 Section 顺序渲染可见 Block；首个可见 `feed` Block 渲染页面传入的完整阅读流，其余 Block 按 type 分发（`spotlight` 自取本 Board 的固定列表、`source-health` 渲染来源健康插槽、`topic-list` 渲染 Topic 列表、`collection` 自取收藏夹详情并渲染成员 Story）；未知 type 与悬空 `savedViewId`/`collectionId` 降级为占位，不阻断其它 Block（ADR-0010）。`editable` 打开编辑控件：分区标题/上移/下移/删除、区块拖拽排序/上移/下移/隐藏/复制/删除/跨分区移动/条数与绑定配置、添加区块与添加分区；非编辑模式下隐藏的 Block 完全不渲染（编辑模式保留“已隐藏”占位以便恢复）；
-- `BoardBlockList`（`components/cosmos/board-sortable-blocks.tsx`）：编辑模式下包裹一个 Section 的区块列表，提供 `DndContext`/`SortableContext`、拖动按钮、拖动浮层与落点解析；落点计算在 `board-drag.ts`（纯函数，含单测）。浏览模式不经过该组件；
+- `BoardBlockList`（`components/cosmos/board-sortable-blocks.tsx`）：编辑模式下包裹一个 Section 的区块列表，只提供 `SortableContext`、拖动按钮与逐区块的 `useSortable`；拖动上下文、浮层与落点解析由罩住整个看板的 `BoardDndProvider` 提供（同一文件），落点计算在 `board-drag.ts`（纯函数，含单测）。浏览模式不经过该组件；
 - `StoryPanel`：接收 `StoryDetail`、关闭回调与 `onUpdateStoryRevision`/`onMergeStory`
   回调，展示 revision/observation 元数据与来源成员/操作区；回调由宿主注入（真实页
   面调用 transport client，组件实验室用 stub，不发 Product API 请求）。

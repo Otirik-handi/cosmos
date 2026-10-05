@@ -287,6 +287,7 @@ Detail 查询要求 id 含 `:attempt:` 且前缀作为 job id；当前存储解�
 | `GET /labels` | 无 | `LabelList`；按 name 升序，含 `assignedCount`。 |
 | `GET /labels/:labelId` | path `labelId` | `LabelDetail`（按类型分组的 `assignedStories`/`assignedEntries`/`assignedTopics`，各含解析后的标题）；不存在 404。 |
 | `POST /labels` | body `CreateLabelCommand` | `LabelItem`；Schema 失败 400，重名 409。 |
+| `PATCH /labels/:labelId` | body `UpdateLabelCommand`（只有 `name`） | `LabelItem`（改名后的行，含随行读出的 `assignedCount`）；Schema 失败 400，不存在 404，重名 409。**原地改写**：Label 不是 revision 模型，没有版本历史；写 `label.updated.v1`。 |
 | `POST /labels/:labelId/removals` | path `labelId` | `UserOrganizationAck`（`action: "label.deleted"`）；不存在 404。 |
 | `POST /label-assignments` | body `LabelAssignmentCommand` | `UserOrganizationAck`（`action: "label.assigned"`）；Schema 失败 400（未知 `targetType`），Label 缺失 404，目标 Story/Entry/Topic 缺失 404。 |
 | `POST /label-assignments/removals` | body `LabelAssignmentCommand` | `UserOrganizationAck`（`action: "label.unassigned"`）；错误同上；缺失附加为幂等 no-op。 |

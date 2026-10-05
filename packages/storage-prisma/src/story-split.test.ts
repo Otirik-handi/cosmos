@@ -128,6 +128,19 @@ describe("Story split", () => {
             expect(successorB?.story.timeRange ?? null).toBeNull();
             expect(successorB?.story.keyFacts ?? []).toEqual([]);
 
+            /*
+             * 反向边：后继指回原条。没有它，零成员的历史壳就无处可达——壳没有 entry
+             * 投影，因此不出现在任何列表里，而用户状态按 ADR-0020 留在壳上。
+             * 这里同时守住「壳自己不再指向别人，后继也不指向后继」。
+             */
+            expect(successorA?.story.splitFrom).toEqual({
+                storyId: "story-shell",
+                title: "被错误合并的 Story",
+                kind: "event",
+            });
+            expect(successorB?.story.splitFrom?.storyId).toBe("story-shell");
+            expect(split?.story.splitFrom).toBeNull();
+
             // The split is auditable and the successors got their initial Revision.
             const events = await prisma.domainEvent.findMany({
                 where: { type: "story.split.v1" },
@@ -420,6 +433,16 @@ describe("Story split", () => {
             expect(split?.entries).toEqual([]);
             expect(split?.story.replacedBy).toHaveLength(2);
             expect(await prisma.storyReplacement.count()).toBe(2);
+
+            /*
+             * 零成员壳正是回链存在的理由：它没有 entry 投影，因此不出现在信息库或看板里，
+             * 而 ADR-0020 把批注、标签、收藏留在壳上。旧库升级路径也必须能走通这条反向边，
+             * 否则升级后拆出来的后继会指向一个用户永远找不到的壳。
+             */
+            for (const successor of split!.story.replacedBy) {
+                const detail = await repository.story(successor.storyId);
+                expect(detail?.story.splitFrom?.storyId).toBe("story-shell");
+            }
         });
     });
 });

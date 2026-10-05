@@ -5,6 +5,7 @@ import {usePathname, useRouter, useSearchParams} from "next/navigation";
 
 import {Badge} from "@/components/ui/badge";
 import {Card, CardContent} from "@/components/ui/card";
+import {Separator} from "@/components/ui/separator";
 
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
 import {useTheme} from "@/theme/theme-provider";
@@ -77,7 +78,7 @@ export function ComponentLabWorkbench() {
 
     return (
         <main className="min-h-screen bg-muted/30 text-foreground">
-            <header className="border-b bg-background">
+            <header className="bg-background">
                 <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-6">
                     <div className="flex items-center gap-3">
                         <Badge variant="secondary">DEV</Badge>
@@ -92,6 +93,7 @@ export function ComponentLabWorkbench() {
                     </div>
                 </div>
             </header>
+            <Separator decorative />
             <LabSurface
                 definition={definition}
                 key={`${definition.id}:${scene.id}`}

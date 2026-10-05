@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToastHost, ToastProvider } from "@/components/ui/toast";
 import { messages } from "@/copy/messages";
 
 import { AnnotationsSection } from "./annotations-section";
@@ -47,15 +46,18 @@ function OrganizeSections() {
         router.replace(next === "labels" ? "/organize" : `/organize?tab=${next}`, { scroll: false });
     };
 
+    /*
+     * Provider 与宿主由 `(shell)/layout.tsx` 提供（全内容组共用一处），这里只负责页面。
+     * 五个分区的写回执都走 `useToast`，各自不重复挂宿主。
+     */
     return (
-        <ToastProvider>
-            <div className="flex w-full flex-col gap-5">
-                <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-[15px] font-medium">{messages.organize.title}</h1>
-                    <span className="text-[12px] text-muted-foreground">
-                        {messages.organize.description}
-                    </span>
-                </div>
+        <div className="flex w-full flex-col gap-5">
+            <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-[15px] font-medium">{messages.organize.title}</h1>
+                <span className="text-[12px] text-muted-foreground">
+                    {messages.organize.description}
+                </span>
+            </div>
 
                 <Tabs onValueChange={select} value={active}>
                     <TabsList>
@@ -81,9 +83,7 @@ function OrganizeSections() {
                         <ViewsSection />
                     </TabsContent>
                 </Tabs>
-            </div>
-            <ToastHost />
-        </ToastProvider>
+        </div>
     );
 }
 

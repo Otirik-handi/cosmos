@@ -305,10 +305,10 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         }
         if (favorited) {
             await client.setFavorite({ targetType: "story", targetId: story.story.id });
-            ctx.setNotice(messages.notices.story.favorited);
+                ctx.setNotice(messages.notices.story.favorited);
         } else {
             await client.unsetFavorite({ targetType: "story", targetId: story.story.id });
-            ctx.setNotice(messages.notices.story.unfavorited);
+                ctx.setNotice(messages.notices.story.unfavorited);
         }
         setStory(await client.story(story.story.id));
     };
@@ -346,10 +346,10 @@ export function useStoryWorkspace(ctx: WorkspaceContext) {
         }
         if (member) {
             await client.removeCollectionItem(collectionId, { storyId: story.story.id });
-            ctx.setNotice(messages.notices.story.collectionRemoved);
+                ctx.setNotice(messages.notices.story.collectionRemoved);
         } else {
             await client.addCollectionItem(collectionId, { storyId: story.story.id });
-            ctx.setNotice(messages.notices.story.collectionAdded);
+                ctx.setNotice(messages.notices.story.collectionAdded);
         }
         await refreshStoryCollections();
     };

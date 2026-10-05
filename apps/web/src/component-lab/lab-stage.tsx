@@ -39,7 +39,7 @@ export function LabStage({
     const previewStyle = Object.fromEntries(Object.entries(tokenOverrides)) as CSSProperties;
     return (
         <Card className="min-w-0 overflow-hidden">
-            <CardHeader className="gap-4 border-b bg-[color:var(--surface-toolbar,var(--card))]">
+            <CardHeader className="gap-4 bg-[color:var(--surface-toolbar,var(--card))]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -99,6 +99,7 @@ export function LabStage({
                     </label>
                 </div>
             </CardHeader>
+            <Separator decorative />
             <CardContent className="min-h-[32rem] bg-muted/30 p-4 md:p-8">
                 <div className="flex min-h-[28rem] items-center justify-center overflow-auto rounded-xl border border-dashed border-border bg-background/70 p-4 md:p-8">
                     <div className={viewport === "wide" ? "flex w-full max-w-5xl justify-center" : "flex w-full max-w-2xl justify-center"}>

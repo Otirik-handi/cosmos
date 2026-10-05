@@ -24,7 +24,7 @@ import type {
 import { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { BoardView } from "@/components/cosmos/board-view";
-import { BoardBlockList } from "@/components/cosmos/board-sortable-blocks";
+import { BoardBlockList, BoardDndProvider } from "@/components/cosmos/board-sortable-blocks";
 import {ConnectionPanel} from "@/components/cosmos/connection-panel";
 import {FeedBrowser, searchSchema, type SearchFormValues} from "@/components/cosmos/feed-browser";
 import {RunControl} from "@/components/cosmos/run-control";
@@ -42,7 +42,8 @@ import {
     StatusSummary,
     type EventStreamState,
 } from "@/components/cosmos/status-summary";
-import {StoryEditSurface} from "@/components/cosmos/story-edit-surface";
+import {StoryEditPanel} from "@/components/cosmos/story-edit-panel";
+import {StoryReadingContent} from "@/components/cosmos/story-reading-content";
 import {TopicPanel} from "@/components/cosmos/topic-panel";
 import {EntityPanel} from "@/components/cosmos/entity-panel";
 import {ThemeSwitcher} from "@/components/cosmos/theme-switcher";
@@ -742,15 +743,23 @@ function FeedBrowserLabFixture({props}: {props: LabProps}) {
     );
 }
 
-export function renderStoryEditSurfaceLab(props: LabProps) {
-    const state = optionProp(
-        props,
-        "state",
-        "revision",
-        ["revision", "empty", "split", "splittable", "legacy-subtype", "representation", "entry-relations", "human-protected"] as const,
-    );
-    const title = textProp(props, "title", "Cosmos fixture story");
-    const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
+type StoryLabState =
+    | "revision"
+    | "empty"
+    | "split"
+    | "splittable"
+    | "split-origin"
+    | "legacy-subtype"
+    | "representation"
+    | "entry-relations"
+    | "human-protected";
+
+/** 阅读页两栏共用的 Story 夹具；两个渲染函数各自只取自己那一半所需的 props。 */
+function storyLabFixture(
+    state: StoryLabState,
+    title: string,
+    contentText: string,
+): StoryDetail {
     const memberEntry: EntryDetail = {
         id: "entry-fixture",
         sourceId: "source-fixture",
@@ -870,6 +879,10 @@ export function renderStoryEditSurfaceLab(props: LabProps) {
                     { storyId: "story-successor-b", title: "Fixture successor B", kind: "document" },
                 ]
                 : [],
+            // 后继指向原条的反向边：拆分来源回链靠它渲染（维护者 2026-10-05）。
+            splitFrom: state === "split-origin"
+                ? { storyId: "story-shell", title: "Fixture 原条", kind: "event" }
+                : null,
         },
         entry: state === "split" ? null : memberEntry,
         entries: state === "split"
@@ -895,12 +908,22 @@ export function renderStoryEditSurfaceLab(props: LabProps) {
             reason: "同一事件",
         }],
     };
+    return story;
+}
+
+/** 阅读页左栏：只读内容区块（成员、证据、时间线、相关内容、媒体）。 */
+export function renderStoryReadingContentLab(props: LabProps) {
+    const state = optionProp(
+        props,
+        "state",
+        "representation",
+        ["revision", "empty", "split", "split-origin", "representation", "entry-relations", "human-protected"] as const,
+    );
+    const title = textProp(props, "title", "Cosmos fixture story");
+    const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
     return (
-        <StoryEditSurface
-            story={story}
-            onUpdateStoryRevision={async () => undefined}
-            onMergeStory={async () => undefined}
-            onSplitStory={async () => undefined}
+        <StoryReadingContent
+            busy={false}
             entryCandidates={[
                 { id: "entry-fixture", title, sourceName: "Cosmos fixture", isMember: true },
                 { id: "entry-fixture-2", title: "A second fixture member", sourceName: "Cosmos fixture source 2", isMember: true },
@@ -908,6 +931,41 @@ export function renderStoryEditSurfaceLab(props: LabProps) {
             ]}
             onLinkEntryRelation={async () => undefined}
             onUnlinkEntryRelation={async () => undefined}
+            relatedStories={[{
+                storyId: "story-related-fixture",
+                title: "A related but different fixture Story",
+                reason: "共享分类：开发",
+            }]}
+            story={storyLabFixture(state, title, contentText)}
+        />
+    );
+}
+
+/** 阅读页右栏：会改写 Story 的动作与编排。 */
+export function renderStoryEditPanelLab(props: LabProps) {
+    const state = optionProp(
+        props,
+        "state",
+        "splittable",
+        ["revision", "split", "splittable", "split-origin", "legacy-subtype", "representation"] as const,
+    );
+    const title = textProp(props, "title", "Cosmos fixture story");
+    const contentText = textProp(props, "contentText", "A synthetic Story body for component inspection.");
+    return (
+        <StoryEditPanel
+            story={storyLabFixture(state, title, contentText)}
+            onUpdateStoryRevision={async () => undefined}
+            onMergeStory={async () => undefined}
+            onSplitStory={async () => undefined}
+            onSearchMergeTargets={async () => [
+                { storyId: "story-merge-candidate", title: "A fixture Story to merge into" },
+                { storyId: "story-fixture", title },
+            ]}
+            entryCandidates={[
+                { id: "entry-fixture", title, sourceName: "Cosmos fixture", isMember: true },
+                { id: "entry-fixture-2", title: "A second fixture member", sourceName: "Cosmos fixture source 2", isMember: true },
+                { id: "entry-relation-candidate", title: "A third fixture entry", sourceName: "Cosmos fixture source 3", isMember: false },
+            ]}
             onLoadStoryUserState={async () => ({
                 favorite: true,
                 labels: [{ id: "label-fixture", name: "开发" }],
@@ -916,12 +974,8 @@ export function renderStoryEditSurfaceLab(props: LabProps) {
                 placements: [{ id: "placement-fixture", name: "board-fixture" }],
             })}
             onMigrateStoryUserState={async () => undefined}
+            onToggleFavorite={async () => undefined}
             subtypeOptions={labStorySubtypeOptions}
-            relatedStories={[{
-                storyId: "story-related-fixture",
-                title: "A related but different fixture Story",
-                reason: "共享分类：开发",
-            }]}
         />
     );
 }
@@ -1148,17 +1202,17 @@ export function renderBoardBlockListLab(props: LabProps) {
     const board = buildBoardFixture(state);
     const section = board.sections[1];
     return (
-        <BoardBlockList
-            board={board}
-            sectionId={section.id}
-            blocks={section.blocks}
-            onMoveBlock={async () => undefined}
-            renderBlock={(block) => (
-                <div className="rounded-sm border bg-card px-3 py-2 text-sm">
-                    {block.type}（合成区块内容）
-                </div>
-            )}
-        />
+        <BoardDndProvider board={board} onMoveBlock={async () => undefined}>
+            <BoardBlockList
+                sectionId={section.id}
+                blocks={section.blocks}
+                renderBlock={(block) => (
+                    <div className="rounded-sm border bg-card px-3 py-2 text-sm">
+                        {block.type}（合成区块内容）
+                    </div>
+                )}
+            />
+        </BoardDndProvider>
     );
 }
 
