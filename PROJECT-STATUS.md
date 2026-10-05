@@ -1,8 +1,8 @@
 # Cosmos Project Status
 
-> 更新于 2026-10-03。代码基线 `9ce4586`（Task 36 的任务记录提交；上一基线 `613435e` 合并前端重做）。**`master` 与 `origin/master`、`upstream/master` 同步**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-10-05。代码基线 `9fccfcb`（Task 36 的实现提交，125 文件；上一基线 `9ce4586` 是它的任务记录提交）。**`master` 与 `origin/master`、`upstream/master` 同步**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 >
-> **Task [`36`](.agents/tasks/36-reading-layout-and-object-details/README.md)（Story 阅读页版面与对象详情页补完）代码与文档已落地，但仍在未合并的分支 `feat/t36-reading-layout-and-object-details` 上**（worktree `.worktree/t36-reading-layout-and-object-details`）。它的五项 Scope 与四条顺手修已完成并通过全部自动化门禁；**未完成的是真人验收与切片 C/D/E 的专属浏览器验收**，见「当前下一步」。
+> **Task [`36`](.agents/tasks/36-reading-layout-and-object-details/README.md)（Story 阅读页版面与对象详情页补完）已完成并提交为 `9fccfcb`**，在分支 `feat/t36-reading-layout-and-object-details` 上（worktree `.worktree/t36-reading-layout-and-object-details`，保留）。五项 Scope、四条顺手修与两轮真人验收反馈均已落地，自动化门禁全绿，维护者 2026-10-05 验收通过；**未推送、未合并**，切片 C/D/E 的专属浏览器验收债未单独销账，见「当前下一步」。
 
 ## 历史分册索引
 
@@ -37,11 +37,11 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 产品当前 **PC 优先、不做移动端适配**（维护者 2026-09-17：移动端等 PC 端做好后再适配）：390px 页面级横向溢出检查**暂停执行**，PC/平板宽度（768/1024/1440px）继续断言；恢复条件写在 `e2e/support/viewports.ts`，恢复前先给两处溢出断言补失败现场打印（见已知不稳定用例表第 2、3 条）。
 - 工具链与依赖源已固定（2026-09-17，Task 29）：bun 版本 **1.4.2** 在 `package.json` 的 `packageManager`、CI 的 `BUN_VERSION`、`docker/Dockerfile` 基础镜像三处一致；依赖源显式写在 `bunfig.toml`（npmmirror，与 `bun.lock` 里 1,026 条地址一致，实测已有条目不会被改写、配置只决定新解析条目写哪个地址）；锁文件仅补回 `configVersion` 一行，依赖解析零变化。Docker 基础镜像的版本切换**未做容器实跑**（本机无 Docker CLI，tag 存在性已用 API 核实）。## 当前下一步
 
-**Task 36（阅读页版面、对象详情页与外壳 UI）已落地、待收口**（2026-10-03）：阅读页两栏（**视口 80% 居中、左右 3:1、正文撑满左栏**，34em 行宽合同废止）、右栏按 C→B→A→D 分段**且四段各有段标题**、分隔线全仓统一、**全站回执改 toast**；归并改可搜索目标、两个对象详情页可用、标签改名完整竖切；外壳 UI 随后续需求改（顶栏 64 px + 2.5em 间隔 + 暖纸灰底色；侧栏等比 **1.25 倍**并跟随滚动）。**第一轮真人验收反馈已修完**：首页看板拖拽排序恢复（根因是每个分区各包一层 `DndContext`、分区之间互不可见；现由 `BoardDndProvider` 罩住整个看板，跨分区拖拽一并可用），右栏加 240 px 最小宽度。逐轮证据见其 walkthrough 与四册归档，勘误见 [`frontend-redesign-v1`](docs/proposals/frontend-redesign-v1.md)。
+**Task 36（阅读页版面、对象详情页与外壳 UI）已完成**（2026-10-05）：阅读页两栏（**视口 80% 居中、左右 3:1、正文撑满左栏**，34em 行宽合同废止）、右栏按 C→B→A→D 分段**且四段各有段标题**、分隔线全仓统一、**全站回执改 toast**；归并改可搜索目标、两个对象详情页可用、标签改名完整竖切；外壳 UI 随后续需求改（顶栏 64 px + 2.5em 间隔 + 暖纸灰底色；侧栏等比 **1.25 倍**并跟随滚动）。**两轮真人验收反馈已修完**：首页看板拖拽排序恢复（根因是每个分区各包一层 `DndContext`、分区之间互不可见；现由 `BoardDndProvider` 罩住整个看板，跨分区拖拽一并可用），右栏加 240 px 最小宽度；D5 拆分三处缺陷（归并选中不回填标题、拆分只能增不能删后继、拆到 1 个后继抛客户端 schema 原始报错）已修并补回归用例；拆空原条会让它从信息库消失、留在其上的用户状态够不着，现补 `StoryDetail.story.splitFrom` 回链（无 migration，复用 `StoryReplacement` 反向关系）并在拆空前确认。逐轮证据见其 walkthrough 与五册归档，勘误见 [`frontend-redesign-v1`](docs/proposals/frontend-redesign-v1.md)。
 
-- **真人验收**：Task 35 延后的 3 条关键任务（延后理由就是 Story 页排版）现已修好；第一轮反馈 A/B/C/E/F 六项已处理，**D 项（这 3 条）待维护者验收**。
-- **验收债**：切片 C/D/E 无专属 e2e（`object-pages.spec.ts` 只覆盖列表页创建）；拖拽排序已补真实指针用例。
-- **合并**：分支 `feat/t36-reading-layout-and-object-details` 未合并、未推送；分支内门禁已全绿。
+- **真人验收**：Task 35 延后的 3 条关键任务与第一轮反馈 A–F 已由维护者 2026-10-05 验收通过（D4/D5/D6 无问题）。
+- **验收债**：切片 C/D/E 仍无专属 e2e（`object-pages.spec.ts` 只覆盖列表页创建）；拖拽排序已补真实指针用例。维护者以「验收完成」覆盖了本轮真人验收，但该项未单独销账。
+- **合并**：改动已提交为 `9fccfcb`（125 文件，+6648/−1832），分支 `feat/t36-reading-layout-and-object-details` **未推送、未合并**；worktree 保留。
 - **窄档取舍**：右栏 240 px 下限生效时整组略超视口 80%（维护者选定）；首屏 JS 余量约 7.7 KB（门禁 328.1 KB，实测 320.4 KB）。
 
 **前端界面从 0 重新设计已落地（Task [`35`](.agents/tasks/35-frontend-redesign/README.md)，2026-10-01）**：外壳（顶栏 + 悬浮侧栏）+ 十个路由取代「单页 + Story 抽屉」，单一明暗轴 `data-cosmos-appearance` 取代 `theme × colorway` 两套轴，SSE 提升到外壳层且全程恰好一条，用户可见文案集中到 `apps/web/src/copy/` 并有禁用词与内联文案只减不增门禁；版面/预算/行为三类门禁落在 `e2e/browser/layout-and-budget.spec.ts` 与 `story-live-refresh.spec.ts`。真人验收做了 6 条中的 3 条，剩余 3 条由 Task 36 承接；Task 35 移交的四项均已在 Task 36 落地。仍不随 Task 36 修的：`/automation` 三条交互诉求与组件级文案迁移 772 处。
