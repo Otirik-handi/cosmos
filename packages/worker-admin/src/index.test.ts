@@ -189,6 +189,36 @@ describe("WorkerAdminService", () => {
             .toThrowError(/already stopped/);
     });
 
+    // OPS-011 第三条验收条件：draining 的 Worker「进程仍 alive，但 execution readiness 为 false」。
+    // 两者必须来自不同探针，否则排空期间要么被误判为死进程、要么被继续派活。
+    it("keeps liveness alive while a draining Worker reports execution readiness false", async () => {
+        const service = new WorkerAdminService({
+            workerId: "worker-draining",
+            instanceId: "instance-draining",
+            version: "test",
+            lanes: [{ lane: "workflow" }],
+        });
+        service.markReady();
+        // 持有一次 poll，让排空停在 draining 态而不是立即完成。
+        expect(service.beginPoll("workflow")).toBe(true);
+
+        const accepted = service.requestDrain("drain-liveness", { reason: "deploy", deadlineMs: 5_000 });
+        expect(accepted.snapshot.status).toBe("accepted");
+
+        expect(service.liveness()).toMatchObject({ status: "alive", service: "cosmos-worker" });
+        const draining = await service.readiness();
+        expect(draining).toMatchObject({ ready: false, draining: true, acceptingWork: false });
+        expect(service.canAcceptWork()).toBe(false);
+
+        service.endPoll("workflow");
+        await service.waitForDrain(accepted.snapshot.id);
+        expect(service.getDrain(accepted.snapshot.id)).toMatchObject({ status: "succeeded" });
+
+        // 排空完成后进程仍在（何时退出由宿主决定），readiness 保持 false 直到进程真正停止。
+        expect(service.liveness()).toMatchObject({ status: "alive" });
+        expect((await service.readiness()).ready).toBe(false);
+    });
+
     it("times out without claiming that active attempts were closed", async () => {
         const service = new WorkerAdminService({
             workerId: "worker-1",
