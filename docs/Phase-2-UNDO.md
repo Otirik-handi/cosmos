@@ -1,12 +1,23 @@
+---
+parent: PROJECT-STATUS.md
+range: Phase 2 未完成清单（封口快照）
+sealed_at: 2026-10-08
+tags: [ledger, phase-2, sealed]
+tokens_est: 9086
+---
+
 # Phase 2 UNDO（未完成清单）
 
-> 复核日期：2026-09-20（2026-09-22 增量：P0 已清空；2026-09-23 增量：P1 已清空；2026-09-25 增量：P4-1 的待归因点已结清）｜ 代码基线：`5cbb670`（2026-09-20 复核时的基线；当前 `master` 为 `8a1b2f2`，与 [`PROJECT-STATUS.md`](../PROJECT-STATUS.md) 的最新快照同一基线）
+> **封口（2026-10-08）：已停止维护，只读。** 正文按 2026-09-25 的事实原样保留；后续结论追加到文末「封口后勘误」，不改写正文。
+>
+> **当前状态看** [`PROJECT-STATUS.md`](../PROJECT-STATUS.md)（现状与决定）、[`ERRATA.md`](requirements/0002-product-requirements/ERRATA.md)（需求表口径）、[`known-unstable-cases.md`](testing/known-unstable-cases.md)（测试抖动）。
+>
+> **封口时仍未闭合、活状态不在本文的项**：**P3-2**（Proposal [`ui-copy-review-v1.md`](proposals/ui-copy-review-v1.md) 仍 `reviewing`）；**P4-2**（代码规模门禁，见 PROJECT-STATUS）。
 >
 > 本文只回答一件事：**按 PRD 口径，Phase 2 还差什么**。按优先级从高到低排列，每条给出「需求要求什么 / 现在实际是什么 / 证据 / 建议下一步」。
 >
 > 证据等级：**【代码核实】**= 本次直接读了实现、合同或数据库模型；**【文档核实】**= 只读了仓库记录，未运行验证；**【未验证】**= 没有可考察的路径。
 >
-> 最近更新：2026-09-25（P4-1 的四个待归因点全部结清：两点测试缺陷、一点产品缺陷已修，`media-policy` 那条降级为「历史观察、当前不可复现」）
 
 ## 一句话结论
 
@@ -32,7 +43,7 @@ Phase 2 的功能主体（十四条切片 + 平台面四块）已交付，§12 �
 | P1 | P1-2 | EXT-006：manifest 多 operation 声明与登录状态展示 | **已交付并合并 `da5ae84`** | 已闭合；两条验收条件全部满足（凭证载体见下文的如实说明） |
 | P1 | P1-3 | AUT-009：连接状态／授权范围／失效原因的可见性与来源绑定入口 | **已交付并合并 `2cfe379`** | 已闭合；验收条件四条全部满足 |
 | P2 | P2-1 | §12 第 4 条「重分析不覆盖用户批注和人工关系修正」＋ LIB-003 同类验收 | **已闭合**（2026-09-24） | 唯一现存的自动写入路径（ingest 的 Entry→Story 投影）已受保护并有回归测试；「批注」与「人工关系修正」两类今天无自动写入方，属无威胁对象，其保护规则已进合同、考验随 Phase 3 写入方落地 |
-| P3 | P3-1 | 界面职责重划：Topic／Entity／用户组织独立面板 | 已 accepted 未落地 | 真人验收第一条结论未解决；PRD／架构／ADR 未同步 |
+| P3 | P3-1 | 界面职责重划：Topic／Entity／用户组织独立面板 | **部分落地**：页面与 ADR-0029 已落地；PRD §8 与架构 §11.4 两条注记仍欠 | 真人验收第一条结论已由 Task 35 的前端重做承接；剩余是记录义务 |
 | P3 | P3-2 | UI 文案专业化 | Proposal 仍 `reviewing` | 真人验收第三条结论未解决 |
 | P4 | P4-1 | Phase 2 浏览器验收的间歇失败（待归因点已结清） | 数据库线已证伪（Task 34）；前端线四个待归因点**已全部结清**：`:103`／`collection-plan-multi:63` 是测试缺陷、`:417` 是产品缺陷（均已修），`media-policy` 的来源健康行当前代码上未复现 | **已结清待归因点**（4/4 有结论；`media-policy` 降级为「历史观察、当前不可复现」） |
 | P4 | P4-2 | 代码规模红线门禁欠账 | **非 UI 侧已清零**（G08–G16） | 余 3 个 Web 文件按裁定留到 UI 重做同批 |
@@ -62,9 +73,11 @@ P2-1（§12 第 4 条「重分析不覆盖用户批注和人工关系修正」�
 ### P3-1 界面职责重划：Topic／Entity／用户组织独立面板
 
 - **来源**：2026-09-15 真人验收的第一条结论（功能全部堆在 Story 面板）；Proposal [`ui-surface-ownership-v1.md`](proposals/ui-surface-ownership-v1.md) 已 **accepted**（六项裁定），实现尝试因布局问题当日作废。
-- **现状【代码核实】**：Proposal 要求的三项稳定文档改动在 `master` 上都没有执行——PRD §8 里没有「Topic 页／Entity 页／用户组织页」的注记，架构 §11.4 没有「深入页 v1 落地范围」的注记，`docs/adr/` 里没有对应的 ADR，仓库里也没有承接实施的 Task（作废分支 `feat/t25-ui-surface-ownership` 在本地与远端均已不存在）。
-- **影响**：这不是「UI 还没重做」那么简单——**已接受的架构决定没有沉淀**。下次重做 UI 时，三层分工（首页看／独立页面管／Story 抽屉读）与「同一件事只有一个可写入口」只能从 Proposal 里重新考古，容易被重新讨论甚至推翻。
-- **建议下一步**：把「落地 UI」和「记录决定」拆开。UI 重做按维护者节奏排期；但 PRD／架构注记与 ADR 属于已 accepted 决定的记录义务，可以现在就低成本补上。
+- **现状【2026-10-08 复核，代码核实】**：**拆成两半，一半已落地、一半仍欠**。
+  - **已落地**：三层分工（首页看／独立页面管／Story 抽屉读）与「同一件事只有一个可写入口」由 Task 35 的前端重做承接，稳定决定记在 ADR [`0029`](adr/0029-ui-surface-layout-and-visual-direction-v1.md)（accepted）——决策 1 即该三层拆分与单一可写入口，决策 3 给出路由层级。页面实体已在 `master` 上：`apps/web/src/app/(shell)/topics`、`topics/[id]`、`entities`、`entities/[id]`、`organize` 五个路由目录。
+  - **仍欠**：Proposal 要求的**稳定文档注记**只补了一半——`docs/adr/` 有了 ADR-0029，但 PRD §8 里仍没有「Topic 页／Entity 页／用户组织页」的注记，架构 §11.4 仍没有「深入页 v1 落地范围」的注记。另外 Proposal 第 226 行自己记着：其措辞已被 [`frontend-redesign-v1`](proposals/frontend-redesign-v1.md) ＋ ADR-0029 取代，考古时以 ADR-0029 为准。
+- **影响**：剩下的是**记录义务**而非实现债。三层分工的权威文本已从 Proposal 迁到 ADR-0029，所以「下次重做 UI 时只能从 Proposal 考古」的风险已大幅下降；但 PRD §8 与架构 §11.4 是产品面与架构面的正式入口，读者从这两处进入时仍看不到这些页面属于哪一层、v1 落地到什么范围。
+- **建议下一步**：只补两条注记（PRD §8 与架构 §11.4），不写代码。UI 后续调整按维护者节奏排期。
 
 ### P3-2 UI 文案专业化
 
@@ -154,3 +167,14 @@ P2-1（§12 第 4 条「重分析不覆盖用户批注和人工关系修正」�
 - 未运行：真实来源验收、真实 Agent 验收、Docker／Compose、CI、发布与部署。P3-1／P3-2／P4-2／P4-3 的判定依据未重跑，证据等级仍是原复核那一份。
 - 本次改的是产品代码与测试代码（不是纯台账）：`apps/web` 的列表写入闸门与 workspace context、`e2e/browser` 的四个 spec 与新增的 `list-state-race.spec.ts`、`e2e/support/notice-log.ts`；另新增 `docs/testing/known-unstable-cases/ERRATA.md`（分册已封口，勘误走同级 ERRATA）。改动**未提交、未建分支**。
 - 证据存档：`.agent/tmp/p41/`（修前 5 轮日志与失败 trace、定向诊断、修后 3 轮日志）。
+
+---
+
+## 封口后勘误（2026-10-08，不改写正文）
+
+- **P3-1 已全部落地**：PRD [`part-08-09.md`](requirements/0002-product-requirements/part-08-09.md) §8 与架构 [`part-07-12.md`](architecture/0001-cosmos-foundation/part-07-12.md) §11.4 两条注记已于 2026-10-08 补上。
+- **P4-1 结论已迁入** [`known-unstable-cases/ERRATA.md`](testing/known-unstable-cases/ERRATA.md) 勘误 1–3；本文的逐点证据仍是原始出处。
+- **P4-2**：行数轨已由 G08 进门禁，2026-10-08 复测只剩 1 个文件超 800 行；正文的 8 文件清单是 2026-09-25 快照。
+- **正文基线** `8a1b2f2`／`5cbb670` 已过期，现行 `master` = `710c2b1`。
+- **本文引用的 `docs/Phase-1-2-AUDIT.md` 已于 2026-10-08 删除**（临时排查记录，内容已被 PROJECT-STATUS 覆盖）。
+- **仍未闭合**：P3-2（Proposal [`ui-copy-review-v1.md`](proposals/ui-copy-review-v1.md) 仍 `reviewing`）。

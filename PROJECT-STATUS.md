@@ -1,8 +1,8 @@
 # Cosmos Project Status
 
-> 更新于 2026-10-05。代码基线 `9fccfcb`（Task 36 的实现提交，125 文件；上一基线 `9ce4586` 是它的任务记录提交）。**`master` 与 `origin/master`、`upstream/master` 同步**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001「删除凭据」按维护者 2026-09-18 裁定收口）。**Phase 2 的十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）；ING-012、AUT-009 与 EXT-006 均已收口，另有一条验收条件（重分析不覆盖用户批注）尚无写入路径可考。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
+> 更新于 2026-10-08。代码基线 `710c2b1`（Task 36 两支的合并提交）。**`master` = `origin/master` = `710c2b1`；`upstream/master` 停在 `dc71f43`（2026-09-24，落后 80 提交）**。**Phase 1 表内已无未闭合项**（Gateway 三行改标 Phase 3、`EXT-008` 与 AUT-001 按 2026-09-18 裁定收口、OPS-011 于 2026-10-08 补行为测试后收口）。**Phase 2 十四条切片与平台面四块已交付，需求表仍有 1 行未闭合**：LIB-004（延后 Phase 3）。G01–G08 治理暂停，Phase 1 后置债按 2026-09-07 划线保留。
 >
-> **Task [`36`](.agents/tasks/36-reading-layout-and-object-details/README.md)（Story 阅读页版面与对象详情页补完）已完成并提交为 `9fccfcb`**，在分支 `feat/t36-reading-layout-and-object-details` 上（worktree `.worktree/t36-reading-layout-and-object-details`，保留）。五项 Scope、四条顺手修与两轮真人验收反馈均已落地，自动化门禁全绿，维护者 2026-10-05 验收通过；**未推送、未合并**，切片 C/D/E 的专属浏览器验收债未单独销账，见「当前下一步」。
+> **Task [`36`](.agents/tasks/36-reading-layout-and-object-details/README.md) 已完成并合并**：`9fccfcb`（实现）＋ `2257480`（切片 C/D/E 专属浏览器用例）以 `--no-ff` 合并为 `710c2b1` 并推送（2026-10-05），维护者验收通过。分支与 worktree 尚未清理。
 
 ## 历史分册索引
 
@@ -23,7 +23,7 @@
 
 ## 一句话结论
 
-Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中前三条（按来源/分类/时间/全文/Topic 浏览、多来源 Story 的时间线与相关内容、可调整看板且删除 Block 不删除底层信息）已有实现、浏览器自动化与真人验收三层证据，第三条的专问由维护者明确回答「完好」。第四条「重分析不覆盖用户批注和人工关系修正」仍只靠「Phase 2 尚无自动重分析写入路径」在结构上成立、未被真正考验，Phase 3 的 Knowledge Workflow 落地后需重新回归。ORG-021 已改标 Phase 3。本轮验证数字与未运行项见「验证边界」。
+Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationId + config` 创建默认停用 Source、再以 revision CAS activation command 启用」为产品路径，产品路径不提交 `kind`、`enabled` 或 `fixturePath`。Phase 2 已收口：十四条切片与平台面四块全部落地，PRD §12 Phase 2 的四条验收标准中前三条（按来源/分类/时间/全文/Topic 浏览、多来源 Story 的时间线与相关内容、可调整看板且删除 Block 不删除底层信息）已有实现、浏览器自动化与真人验收三层证据，第三条的专问由维护者明确回答「完好」。第四条「重分析不覆盖用户批注和人工关系修正」**已在 Phase 2 被真正考验**：勘误台账 2026-09-24 行裁定「重分析」包含 ingest 的 Entry→Story 确定性投影，那已是一条自动写入路径（来源修订时改写 `Story.kind` 并用 Entry 标题/摘要顶掉当前 Revision），该路径已由 ADR [`0028`](docs/adr/0028-user-truth-protection-v1.md) 纳入保护并补回归测试；Knowledge Workflow 的派生分析仍属 Phase 3，其降级规则（只能产生候选 Revision）已在同一 ADR 冻结。ORG-021 已改标 Phase 3。本轮验证数字与未运行项见「验证边界」。
 
 > 本条原为 2026-08-24 的 Source 身份/revision clean cutover 快照；留存注记见 [history-2026-09-5.md](PROJECT-STATUS/history-2026-09-5.md)。
 
@@ -35,13 +35,15 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
 - 远端 `master` 当前**没有分支保护或 ruleset**（2026-09-17 用 GitHub API 核实，`branches/master/protection` 返回 404、rulesets 为空）：CI 只是事后信号，不阻止直接推送或合并；是否启用 required checks 待维护者决定。
 - 产品当前 **PC 优先、不做移动端适配**（维护者 2026-09-17：移动端等 PC 端做好后再适配）：390px 页面级横向溢出检查**暂停执行**，PC/平板宽度（768/1024/1440px）继续断言；恢复条件写在 `e2e/support/viewports.ts`，恢复前先给两处溢出断言补失败现场打印（见已知不稳定用例表第 2、3 条）。
-- 工具链与依赖源已固定（2026-09-17，Task 29）：bun 版本 **1.4.2** 在 `package.json` 的 `packageManager`、CI 的 `BUN_VERSION`、`docker/Dockerfile` 基础镜像三处一致；依赖源显式写在 `bunfig.toml`（npmmirror，与 `bun.lock` 里 1,026 条地址一致，实测已有条目不会被改写、配置只决定新解析条目写哪个地址）；锁文件仅补回 `configVersion` 一行，依赖解析零变化。Docker 基础镜像的版本切换**未做容器实跑**（本机无 Docker CLI，tag 存在性已用 API 核实）。## 当前下一步
+- 工具链与依赖源已固定（2026-09-17，Task 29）：bun 版本 **1.4.2** 在 `package.json` 的 `packageManager`、CI 的 `BUN_VERSION`、`docker/Dockerfile` 基础镜像三处一致；依赖源显式写在 `bunfig.toml`（npmmirror，与 `bun.lock` 里 1,026 条地址一致，实测已有条目不会被改写、配置只决定新解析条目写哪个地址）；锁文件仅补回 `configVersion` 一行，依赖解析零变化。Docker 基础镜像的版本切换**未做容器实跑**（本机无 Docker CLI，tag 存在性已用 API 核实）。
+
+## 当前下一步
 
 **Task 36（阅读页版面、对象详情页与外壳 UI）已完成**（2026-10-05）：阅读页两栏（**视口 80% 居中、左右 3:1、正文撑满左栏**，34em 行宽合同废止）、右栏按 C→B→A→D 分段**且四段各有段标题**、分隔线全仓统一、**全站回执改 toast**；归并改可搜索目标、两个对象详情页可用、标签改名完整竖切；外壳 UI 随后续需求改（顶栏 64 px + 2.5em 间隔 + 暖纸灰底色；侧栏等比 **1.25 倍**并跟随滚动）。**两轮真人验收反馈已修完**：首页看板拖拽排序恢复（根因是每个分区各包一层 `DndContext`、分区之间互不可见；现由 `BoardDndProvider` 罩住整个看板，跨分区拖拽一并可用），右栏加 240 px 最小宽度；D5 拆分三处缺陷（归并选中不回填标题、拆分只能增不能删后继、拆到 1 个后继抛客户端 schema 原始报错）已修并补回归用例；拆空原条会让它从信息库消失、留在其上的用户状态够不着，现补 `StoryDetail.story.splitFrom` 回链（无 migration，复用 `StoryReplacement` 反向关系）并在拆空前确认。逐轮证据见其 walkthrough 与五册归档，勘误见 [`frontend-redesign-v1`](docs/proposals/frontend-redesign-v1.md)。
 
 - **真人验收**：Task 35 延后的 3 条关键任务与第一轮反馈 A–F 已由维护者 2026-10-05 验收通过（D4/D5/D6 无问题）。
-- **验收债**：切片 C/D/E 仍无专属 e2e（`object-pages.spec.ts` 只覆盖列表页创建）；拖拽排序已补真实指针用例。维护者以「验收完成」覆盖了本轮真人验收，但该项未单独销账。
-- **合并**：改动已提交为 `9fccfcb`（125 文件，+6648/−1832），分支 `feat/t36-reading-layout-and-object-details` **未推送、未合并**；worktree 保留。
+- **验收债**：切片 C/D/E 的专属 e2e 已补齐（`2257480` 新增 `e2e/browser/object-detail-pages.spec.ts`）；拖拽排序也已补真实指针用例。
+- **合并**：`9fccfcb`（125 文件，+6648/−1832）＋ `2257480` 已 `--no-ff` 合并为 `710c2b1` 并推送 `origin/master`（2026-10-05）。分支与 worktree 尚未清理。
 - **窄档取舍**：右栏 240 px 下限生效时整组略超视口 80%（维护者选定）；首屏 JS 余量约 7.7 KB（门禁 328.1 KB，实测 320.4 KB）。
 
 **前端界面从 0 重新设计已落地（Task [`35`](.agents/tasks/35-frontend-redesign/README.md)，2026-10-01）**：外壳（顶栏 + 悬浮侧栏）+ 十个路由取代「单页 + Story 抽屉」，单一明暗轴 `data-cosmos-appearance` 取代 `theme × colorway` 两套轴，SSE 提升到外壳层且全程恰好一条，用户可见文案集中到 `apps/web/src/copy/` 并有禁用词与内联文案只减不增门禁；版面/预算/行为三类门禁落在 `e2e/browser/layout-and-budget.spec.ts` 与 `story-live-refresh.spec.ts`。真人验收做了 6 条中的 3 条，剩余 3 条由 Task 36 承接；Task 35 移交的四项均已在 Task 36 落地。仍不随 Task 36 修的：`/automation` 三条交互诉求与组件级文案迁移 772 处。
@@ -53,14 +55,14 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **本次未纳入、仍开着的项**（不随 Phase 2 收口顺带执行）：
 
-- Entity merge/dedup；批注的正文片段字符级锚点；**代码规模行数门禁已由 G08 修复**（完整口径下仍有 3 个文件超 800 行——全部是留待 UI 重做的 Web 文件，非 UI 侧已清零；另有 2 个入口超 300 行。G09–G16 已治理 `packages/domain`、`media-acquisition`、`workflow-host-runtime`、`worker-admin`、`collectors`、`workflow-backend` 与 `workflow-ingest` 测试）。
+- Entity merge/dedup；批注的正文片段字符级锚点；**代码规模行数门禁已由 G08 修复**（2026-10-08 复测：完整口径下只剩 **1 个**文件超 800 行——`product-fixtures.tsx`（1192 行，留待组件实验室重做），非 UI 侧已清零；入口 2 个超 300 行，均已在 size 基线内登记。G09–G16 已治理 `packages/domain`、`media-acquisition`、`workflow-host-runtime`、`worker-admin`、`collectors`、`workflow-backend` 与 `workflow-ingest` 测试）。
 - **搜索 FTS5 语法字符导致 500：已合并**（`04ecbfc`）——`-` 等 FTS5 运算符会让用户输入变成畸形查询；现按维护者裁定「全当字面文本」处理（按空白切词、每段作字面短语、多词保持 AND、无词可搜时退回无文本条件）。**代价**：搜索框不再是 FTS5 查询接口。
 - **已知不稳定的测试用例**（2026-09-24 更新）：`phase2-organization.spec.ts:539` 搜索用例**已归因并修复**（根因是 Feed 卡片列表的 React key 重复，改用 `entryId`），同一次排查还修掉一个陈旧刷新覆盖搜索结果的竞态；过程见 Task [`30`](.agents/tasks/30-feed-stale-response-race/README.md)。2026-09-23 另修掉一个**确定性**布局缺陷（`webhook-entry.spec.ts` 的点击被溢出的连接面板拦截），它不是抖动。**仍未归因且失败点漂移**：8 轮整套里 4 轮失败，落点分别在 `source-lifecycle-and-search-filters.spec.ts`（`locator.fill` 卡满 300 秒、整轮 7.2 分钟）、`collection-plan-multi.spec.ts`、`phase2-organization.spec.ts`（`:103`/`:417` 与拆分场景）——症状集中在 DOM/前端层。**Task [`34`](.agents/tasks/34-sqlite-lock-observation/README.md) 已证伪「SQLite 锁/慢操作同根因」这条候选路径**（3/4 个失败轮次慢操作总数为 0）；下一步看 Playwright 的失败 trace。两处 390px 断言随移动端适配后置**暂停执行**。症状与建议次序只在 [`known-unstable-cases.md`](docs/testing/known-unstable-cases.md) 维护。**2026-10-03 追加（Task 36）**：`locator.fill` 卡满 300 秒那类症状在 `story-live-refresh.spec.ts:104` 又出现一次（整套 8.1 分钟、单跑正常），**落点继续漂移**；同轮实验室 `connection-panel.spec.ts` 也出现一次瞬时双预览的严格模式冲突。
 - ING-009 剩余后置项（历史媒体回填、音频/视频下载实体、单条目媒体数量上限、全局默认值 env 化）按 ADR-0015 Revisit Gate 评估。
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
 
-**Phase 3 入口条件（2026-09-15 复核，尚未满足）**：Phase 3 目前没有 Proposal、ADR 或 Task。架构约定的 Agent 运行时 `neuro-agent-harness` 与共享记忆 `nb-memory` 仍是外部候选，仓库内没有 LLM/Agent 依赖、没有 Artifact/Workspace/Agent Session 数据模型，可执行 Action 只有 `cosmos.ingest@1` 与 `cosmos.media-cleanup@1`（`agent`/`artifact` 只是 `actionKindSchema` 的枚举值，注册表里没有对应实现；给新 Action 用的注册、重试策略、执行位置与宿主栅栏管道已具备）。PRD §12 Phase 3 的 5 条范围与主文档「后置决定」中的 6 项尚未收敛为 Proposal。
+**Phase 3 入口条件（2026-10-08 复核，仍未满足）**：Phase 3 没有 Proposal、ADR 或 Task。架构约定的 Agent 运行时 `neuro-agent-harness` 与共享记忆 `nb-memory` 仍是外部候选，仓库内没有 LLM/Agent 依赖、没有 Artifact/Workspace/Agent Session 数据模型（Prisma 47 模型、37 迁移中均无对应表），可执行 Action 只有 `cosmos.ingest@1` 与 `cosmos.media-cleanup@1`（`agent`/`artifact` 只是 `actionKindSchema` 的枚举值，注册表无对应实现；给新 Action 用的注册、重试策略、执行位置与宿主栅栏管道已具备）。PRD §12 Phase 3 的 5 条范围与「后置决定」中的 6 项尚未收敛为 Proposal；按 §7 逐行统计标 `Phase 3` 的需求行共 **33 行**，需先分批再排期。`.agents/learning/phase3-tech/` 的技术预研自 2026-09-16 起停滞。
 
 ## 当前架构基线
 
