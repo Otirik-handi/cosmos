@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated": "2026-10-01",
-  "note": "脚本生成（size-governance.py --map），代码结构变化后重新生成提交，CI 校验与提交版本 diff 为零",
+  "generated": "2026-10-08",
+  "note": "脚本生成（size-governance.py --map）。CI 不校验本文件——结构变化后需手工重新生成并提交，否则它会与实际结构脱节。生成时已排除 .gitignore 忽略的文件，所以本机专属文件不会入图。",
   "categories": [
     "code",
     "config",
@@ -16,8 +16,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 116,
-      "bytes": 1606606,
+      "files": 135,
+      "bytes": 1848685,
       "red": [],
       "warn": [
         ".agents/tasks/07-deferred-workflow-host/walkthrough.md"
@@ -111,7 +111,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 9,
-      "bytes": 113111,
+      "bytes": 117007,
       "red": [],
       "warn": []
     },
@@ -121,31 +121,9 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 27917,
+      "bytes": 28153,
       "red": [],
       "warn": []
-    },
-    {
-      "dir": "Phase-2-UNDO",
-      "moduleDoc": null,
-      "moduleDocBytes": null,
-      "entry": null,
-      "files": 2,
-      "bytes": 11725,
-      "red": [],
-      "warn": []
-    },
-    {
-      "dir": "Phase-2-UNDO.md",
-      "moduleDoc": null,
-      "moduleDocBytes": null,
-      "entry": null,
-      "files": 1,
-      "bytes": 29609,
-      "red": [],
-      "warn": [
-        "Phase-2-UNDO.md"
-      ]
     },
     {
       "dir": "README.md",
@@ -163,11 +141,12 @@
       "moduleDocBytes": 3077,
       "entry": null,
       "files": 35,
-      "bytes": 262557,
+      "bytes": 264867,
       "red": [],
       "warn": [
         "apps/api/src/app.controller.sources.test.ts",
         "apps/api/src/app.controller.story-domain.test.ts",
+        "apps/api/src/app.controller.user-organization.test.ts",
         "apps/api/src/app.controller/content.ts",
         "apps/api/src/app.controller/organization.ts",
         "apps/api/src/app.controller/sources.ts"
@@ -178,8 +157,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 163,
-      "bytes": 911742,
+      "files": 178,
+      "bytes": 1021640,
       "red": [
         "apps/web/src/component-lab/product-fixtures.tsx"
       ],
@@ -192,8 +171,6 @@
         "apps/web/src/components/cosmos/feed-browser.tsx",
         "apps/web/src/components/cosmos/source-form.tsx",
         "apps/web/src/components/cosmos/story-edit-panel.tsx",
-        "apps/web/src/components/cosmos/story-reading-content.tsx",
-        "apps/web/src/components/cosmos/story-panel/organization.tsx",
         "apps/web/src/components/cosmos/topic-panel.tsx"
       ]
     },
@@ -234,8 +211,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 167,
-      "bytes": 2387886,
+      "files": 171,
+      "bytes": 2465952,
       "red": [
         "docs/requirements/0001-original-requirements.md",
         "docs/spec/contracts/0001-public-contracts.md",
@@ -257,12 +234,12 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 30,
-      "bytes": 228255,
-      "red": [],
-      "warn": [
+      "files": 38,
+      "bytes": 300816,
+      "red": [
         "e2e/browser/phase2-organization.spec.ts"
-      ]
+      ],
+      "warn": []
     },
     {
       "dir": "fixtures",
@@ -295,7 +272,7 @@
         "zone": "warn"
       },
       "files": 50,
-      "bytes": 399914,
+      "bytes": 400134,
       "red": [],
       "warn": [
         "packages/application/src/catalog.ts",
@@ -332,12 +309,12 @@
       "moduleDocBytes": 4129,
       "entry": {
         "path": "packages/contracts/src/index.ts",
-        "bytes": 13562,
-        "lines": 205,
+        "bytes": 13683,
+        "lines": 208,
         "zone": "warn"
       },
       "files": 33,
-      "bytes": 228816,
+      "bytes": 231147,
       "red": [],
       "warn": [
         "packages/contracts/src/base.ts",
@@ -390,7 +367,7 @@
         "zone": "ok"
       },
       "files": 146,
-      "bytes": 1116244,
+      "bytes": 1125631,
       "red": [],
       "warn": [
         "packages/storage-prisma/prisma/schema.prisma",
@@ -426,7 +403,7 @@
         "zone": "ok"
       },
       "files": 22,
-      "bytes": 116936,
+      "bytes": 117456,
       "red": [],
       "warn": [
         "packages/transport-http/src/client-content.ts"
@@ -443,7 +420,7 @@
         "zone": "ok"
       },
       "files": 13,
-      "bytes": 62405,
+      "bytes": 64055,
       "red": [],
       "warn": [
         "packages/worker-admin/src/service.ts"
@@ -509,7 +486,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 18,
-      "bytes": 125183,
+      "bytes": 126757,
       "red": [],
       "warn": [
         "scripts/e2e/helpers.ts"

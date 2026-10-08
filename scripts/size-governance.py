@@ -23,8 +23,9 @@ token 估算口径（见 estimate_tokens）对中文密集文档偏保守（宁�
 
 包地图（代码治理，docs/proposals/code-size-governance-v1.md §4.5）：
   python scripts/size-governance.py --map [--path <仓库根>]   # 生成 repo-map.json 后退出
-  # 默认扫 code+tests 类别，按 packages/apps/plugins/<name> 聚合；
-  # CI 重新生成后须与提交版本 diff 为零。
+  # 默认扫 code+tests 类别，按 packages/apps/plugins/<name> 聚合。
+  # CI 不校验本文件：结构变化后需手工重新生成并提交。
+  # 扫描排除 .gitignore 忽略的文件，本机专属文件不会入图。
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -92,8 +94,30 @@ def classify(path: Path) -> str | None:
     return cat
 
 
+def ignored_paths(root: Path) -> set[str]:
+    """返回被 .gitignore 排除、且存在于工作区的文件（仓库相对 POSIX 路径）。
+
+    扫描器按文件系统遍历，本身不读 .gitignore，于是本机专属文件（会话计划、
+    本地工具配置、生成物）会被算进治理口径与包地图——它们在其他 clone 与 CI
+    上并不存在，会把「本机快照」当成仓库结构提交。这里用 git 自己的判定补齐。
+
+    只排除**被忽略**的文件：未跟踪但未被忽略的文件属仓库内容（只是还没 add），
+    必须继续计入，否则门禁会漏掉新引入的超标文件。
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files", "-z", "--others", "--ignored", "--exclude-standard"],
+            cwd=root, capture_output=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        # 不是 git 工作区（或没有 git）时退回纯文件系统口径，不让治理脚本硬失败。
+        return set()
+    return {name for name in completed.stdout.decode("utf-8", "surrogateescape").split("\0") if name}
+
+
 def scan(root: Path, cats: set[str]) -> list[dict]:
     found: list[dict] = []
+    skip = ignored_paths(root)
     for dirpath, dirnames, filenames in os.walk(root, onerror=lambda _e: None):
         rel_dir = Path(dirpath).relative_to(root)
         dirnames[:] = [
@@ -105,11 +129,13 @@ def scan(root: Path, cats: set[str]) -> list[dict]:
             cat = classify(path)
             if cat not in cats:
                 continue
+            rel = path.relative_to(root).as_posix()
+            if rel in skip:
+                continue
             try:
                 data = path.read_bytes()
             except OSError:
                 continue
-            rel = path.relative_to(root).as_posix()
             non_ascii = len(data.translate(None, bytes(range(128))))
             found.append({
                 "path": rel,
@@ -362,13 +388,20 @@ def write_repo_map(args: argparse.Namespace, root: Path, files: list[dict], cats
     payload = {
         "version": 1,
         "generated": datetime.date.today().isoformat(),
-        "note": "脚本生成（size-governance.py --map），代码结构变化后重新生成提交，CI 校验与提交版本 diff 为零",
+        "note": "脚本生成（size-governance.py --map）。CI 不校验本文件——结构变化后需手工重新生成并提交，否则它会与实际结构脱节。生成时已排除 .gitignore 忽略的文件，所以本机专属文件不会入图。",
         "categories": sorted(cats),
         "packages": packages,
     }
     target = args.map
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # newline="\n" 与 write_baseline 同理：Windows 默认写 CRLF 会让同一份地图在本地与
+    # Linux CI 产出不同字节。这里还多一层后果——地图把自身算进 docs 的字节数，
+    # CRLF 版本会比自己记录的多出每行 1 字节，于是每次重新生成都漂移、永不幂等。
+    target.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     print(f"已写入包地图 {target}（{len(packages)} 个包/应用目录）")
     return 0
 
