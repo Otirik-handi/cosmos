@@ -254,7 +254,7 @@ export function CollectionPlanList({
             </div>
             {plans.length === 0 ? (
                 <p className="rounded-[var(--radius-control)] border border-dashed px-3 py-4 text-sm leading-6 text-muted-foreground">
-                    还没有采集计划；点击右上角“新建计划”开始。
+                    还没有采集计划；点击右上角“新建来源”开始，保存后会自动生成采集计划。
                 </p>
             ) : (
                 <div className="flex flex-col gap-4">
