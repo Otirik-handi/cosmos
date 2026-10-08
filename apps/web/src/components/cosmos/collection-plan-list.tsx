@@ -248,7 +248,7 @@ export function CollectionPlanList({
                 <h2 className="font-display text-lg font-semibold tracking-tight">采集计划</h2>
                 <p className="text-sm text-muted-foreground">
                     {plans.length === 0
-                        ? "创建第一个采集计划。"
+                        ? "采集计划随来源一同创建，一个来源对应一个计划。"
                         : "启用后按各自频率自动抓取；同一个连接下可以有多个计划，互不影响。"}
                 </p>
             </div>
