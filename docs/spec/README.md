@@ -12,6 +12,7 @@
 
 - 需求、PRD、架构图或 ADR 中尚未进入当前实现的目标设计；
 - `Draft`、`Planned`、`Reserved` API、Gateway、远程 Worker、Redis、PostgreSQL/S3 或多主机部署；
+- 已接受但尚未实现的 Agent Invocation、`agent.invoke@1`、`pi-ai`/Harness Adapter、Artifact、Workspace、Knowledge 和 Research 能力；这些边界以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md) 和 [`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 为准，不能视为当前实现；
 - 历史 Task Spike、dirty worktree、保护区分支、旧草稿或没有在当前实现中重新验证的行为；
 - 只存在于测试替身、fixture 或构建产物中的额外行为。
 
@@ -121,6 +122,7 @@
 | Drain | 停止新 poll、等待已登记资源并按 deadline 给出终态的运维操作 | [`runtime/0003-worker-admin.md`](runtime/0003-worker-admin.md) |
 | Manifest | 不含 executable 的可序列化 Definition/Action/Source 描述及稳定 hash | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |
 | Capability | Manifest/Worker 可公开声明的能力布尔值或 capability 名称 | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |
+| Agent Invocation | `agent.invoke@1` 的当前 Action/Port/Fake Adapter 行为；真实模型 Adapter、Harness、长期记忆和产品 Artifact 能力后置 | [`application/0010-agent-invocation.md`](application/0010-agent-invocation.md) |
 
 ### 2.1 Wire shape 与 semantic owner 分工
 

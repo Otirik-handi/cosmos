@@ -7,6 +7,13 @@ type	ActionManifest
 type	ActionRef
 type	AddEntityAliasCommand
 type	AddTopicMemberCommand
+type	AgentInvocationBudget
+type	AgentInvocationInput
+type	AgentInvocationMessage
+type	AgentInvocationOutput
+type	AgentInvocationTool
+type	AgentInvocationToolCall
+type	AgentInvocationUsage
 type	AiHotSourceConfig
 type	Annotation
 type	AnnotationList
@@ -252,6 +259,13 @@ value	actionManifestSchema
 value	actionRefSchema
 value	addEntityAliasCommandSchema
 value	addTopicMemberCommandSchema
+value	agentInvocationBudgetSchema
+value	agentInvocationInputSchema
+value	agentInvocationMessageSchema
+value	agentInvocationOutputSchema
+value	agentInvocationToolCallSchema
+value	agentInvocationToolSchema
+value	agentInvocationUsageSchema
 value	aiHotSourceConfigSchema
 value	annotationListSchema
 value	annotationSchema

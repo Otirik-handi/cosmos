@@ -39,6 +39,8 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 当前下一步
 
+**Task 38（Agent Invocation 基础接入 v1）已完成**（2026-10-08）：新增版本化 `agent.invoke@1` Workflow Action、JSON-safe Agent Invocation 合同、Invocation Port 与确定性 Fake Adapter；复用现有 Activity Worker 的 Run/Job/Lease、取消、重试和 completion 语义。全量单元测试 139 个文件/798 个测试、全仓 typecheck、共享包构建和 docs:check 均通过。真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、工具执行、Artifact、Workspace、Knowledge/Research 另开后续 Task。
+
 **Task 36（阅读页版面、对象详情页与外壳 UI）已完成**（2026-10-05）：阅读页两栏（**视口 80% 居中、左右 3:1、正文撑满左栏**，34em 行宽合同废止）、右栏按 C→B→A→D 分段**且四段各有段标题**、分隔线全仓统一、**全站回执改 toast**；归并改可搜索目标、两个对象详情页可用、标签改名完整竖切；外壳 UI 随后续需求改（顶栏 64 px + 2.5em 间隔 + 暖纸灰底色；侧栏等比 **1.25 倍**并跟随滚动）。**两轮真人验收反馈已修完**：首页看板拖拽排序恢复（根因是每个分区各包一层 `DndContext`、分区之间互不可见；现由 `BoardDndProvider` 罩住整个看板，跨分区拖拽一并可用），右栏加 240 px 最小宽度；D5 拆分三处缺陷（归并选中不回填标题、拆分只能增不能删后继、拆到 1 个后继抛客户端 schema 原始报错）已修并补回归用例；拆空原条会让它从信息库消失、留在其上的用户状态够不着，现补 `StoryDetail.story.splitFrom` 回链（无 migration，复用 `StoryReplacement` 反向关系）并在拆空前确认。逐轮证据见其 walkthrough 与五册归档，勘误见 [`frontend-redesign-v1`](docs/proposals/frontend-redesign-v1.md)。
 
 - **真人验收**：Task 35 延后的 3 条关键任务与第一轮反馈 A–F 已由维护者 2026-10-05 验收通过（D4/D5/D6 无问题）。
@@ -62,7 +64,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
 
-**Phase 3 入口条件（2026-10-08 复核，仍未满足）**：Phase 3 没有 Proposal、ADR 或 Task。架构约定的 Agent 运行时 `neuro-agent-harness` 与共享记忆 `nb-memory` 仍是外部候选，仓库内没有 LLM/Agent 依赖、没有 Artifact/Workspace/Agent Session 数据模型（Prisma 47 模型、37 迁移中均无对应表），可执行 Action 只有 `cosmos.ingest@1` 与 `cosmos.media-cleanup@1`（`agent`/`artifact` 只是 `actionKindSchema` 的枚举值，注册表无对应实现；给新 Action 用的注册、重试策略、执行位置与宿主栅栏管道已具备）。PRD §12 Phase 3 的 5 条范围与「后置决定」中的 6 项尚未收敛为 Proposal；按 §7 逐行统计标 `Phase 3` 的需求行共 **33 行**，需先分批再排期。`.agents/learning/phase3-tech/` 的技术预研自 2026-09-16 起停滞。
+**Phase 3 入口状态（2026-10-08）**：Phase 3 第一切片已由 Proposal [`agent-invocation-v1`](docs/proposals/agent-invocation-v1.md)、ADR [`0030`](docs/adr/0030-agent-invocation-v1.md) 和 Task [`38`](.agents/tasks/38-agent-invocation/README.md) 收敛并完成。当前已实现 `agent.invoke@1`、Invocation Port 和 Fake Adapter；真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、Artifact/Workspace/Agent Session 数据模型仍未实现。下一步需单独创建并执行真实 `pi-ai` Adapter Task，不 reopen Task 38。PRD §12 Phase 3 其余范围仍需分批排期。`.agents/learning/phase3-tech/` 的技术预研材料保留为后续技术决策输入。
 
 ## 当前架构基线
 

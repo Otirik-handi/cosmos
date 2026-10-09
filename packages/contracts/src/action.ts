@@ -67,6 +67,8 @@ export function parseActionRef(ref: string): ParsedActionRef {
 export const actionErrorCodeSchema = z.enum([
     "dependency_unavailable",
     "authentication_required",
+    "budget_exhausted",
+    "cancelled",
     "timeout",
     "rate_limited",
     "malformed_payload",

@@ -3,6 +3,8 @@ type	ActionExecutionContext
 type	ActionHandler
 type	ActivityJobLease
 type	ActivityJobTerminalResult
+type	AgentInvocationContext
+type	AgentInvocationPort
 type	CancelWorkflowRunInput
 type	CatalogPort
 type	ClaimActivityJobInput
@@ -24,6 +26,7 @@ type	DeadLetterWorkflowCompletionInput
 type	DeliverWorkflowCompletionInput
 type	EntityLinkProvenanceInput
 type	FailWorkflowRunInput
+type	FakeAgentInvocationResponse
 type	HeartbeatActivityJobInput
 type	HeartbeatWorkflowCompletionInput
 type	HeartbeatWorkflowRunInput
@@ -119,6 +122,7 @@ value	EntityRevisionConflictError
 value	EntryNotFoundError
 value	EntryRelationConflictError
 value	EntryStoryLinkConflictError
+value	FakeAgentInvocationAdapter
 value	FixedRunIdGenerator
 value	IngestionService
 value	IngestionWorker
@@ -146,9 +150,11 @@ value	WorkflowHostConflictError
 value	WorkflowHostError
 value	WorkflowRunLane
 value	acquireItemsSkippingUnchanged
+value	createAgentInvocationAction
 value	createBuiltinManifestCatalog
 value	createHealthSnapshot
 value	createMediaAcquirer
+value	getAgentInvocationDefinition
 value	isPublicAddress
 value	mediaAcquisitionDefaults
 value	mediaDownloadCapability

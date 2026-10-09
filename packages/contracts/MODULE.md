@@ -20,6 +20,7 @@
 | `base.ts` | 基础合同：来源 / 内容 / 发布者 / 触发器 / 连接 / 媒体策略（83 导出） | ~3.9k |
 | `collection-plan.ts` | 采集计划（ADR-0023）：快照读投影、创建/更新命令与 v1 重叠策略枚举（← base） | ~0.4k |
 | `action.ts` | Action 与采集合同：Action manifest/执行、归一化采集项、媒体重试、Source fetch/checkpoint（53 导出） | ~3.3k |
+| `agent.ts` | Agent Invocation 输入/输出与预算、工具、usage 的 JSON-safe 合同 | ~0.8k |
 | `source.ts` | 来源与采集：Connector 描述符、Catalog SourceDefinition 清单、来源配置探测、Job 快照、资产与媒体清理（← search、entry-relation） | ~2.4k |
 | `run-control.ts` | Run/Job 生命周期：五态状态机、步与作业状态、Run 快照、取消/恢复/重跑命令与结果（← source） | ~0.6k |
 | `platform.ts` | 运行平台：存储占用与备份、健康快照、服务错误、事件信封与 SSE 事件快照 | ~0.8k |

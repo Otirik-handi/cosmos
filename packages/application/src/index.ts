@@ -4,6 +4,10 @@
  */
 
 export {
+    createAgentInvocationAction, FakeAgentInvocationAdapter, getAgentInvocationDefinition,
+    type AgentInvocationContext, type AgentInvocationPort, type FakeAgentInvocationResponse,
+} from "./agent-invocation.js";
+export {
     ActionExecutionError, ActionRegistry, type ActionExecutionContext,
     type HostActionExecutionFence, type HostActionExecutionContext, type ActionHandler,
     type HostActionHandler, type RegisteredAction,

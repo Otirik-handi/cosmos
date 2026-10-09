@@ -16,6 +16,10 @@ import {
     ActionExecutionError,
     ActionRegistry,
 } from "./action.js";
+import {
+    createAgentInvocationAction,
+    FakeAgentInvocationAdapter,
+} from "./agent-invocation.js";
 import { WorkflowActivityWorker } from "./workflow-activity-worker.js";
 import { WorkflowCompletionDispatcher } from "./workflow-completion-dispatcher.js";
 import { WorkflowRunLane } from "./workflow-run-lane.js";
@@ -85,6 +89,25 @@ function view(status: RunView["status"] = "waiting"): RunView {
         updatedAt: clock.toISOString(),
     };
 }
+
+const agentInput = {
+    provider: "fake",
+    model: "test-model",
+    messages: [{ role: "user" as const, content: "Summarize this." }],
+    tools: [],
+    budget: { maxDurationMs: 5_000, maxToolCalls: 0, maxOutputTokens: 128 },
+    metadata: {},
+};
+
+const agentOutput = {
+    content: "A short result.",
+    toolCalls: [],
+    usage: { inputTokens: 4, outputTokens: 3, totalTokens: 7 },
+    provider: "fake",
+    model: "test-model",
+    finishReason: "stop" as const,
+    metadata: {},
+};
 
 function actionDefinition(
     executionPlacement: ActionDefinition["executionPlacement"] = "trusted_worker",
@@ -345,6 +368,92 @@ describe("Workflow Host runtime", () => {
         });
         await expect(lane.pollOnce()).resolves.toBeNull();
         expect(created).toBe(false);
+    });
+
+    it("executes agent.invoke@1 through the Activity Worker and completes with JSON-safe output", async () => {
+        let completed: CompleteActivityInput | undefined;
+        const actions = new ActionRegistry([
+            createAgentInvocationAction(new FakeAgentInvocationAdapter({
+                kind: "success",
+                output: agentOutput,
+            })),
+        ]);
+        const job = {
+            ...activityJob(),
+            payload: {
+                ...activityJob().payload,
+                reference: "agent.invoke@1",
+                input: agentInput,
+            },
+        };
+        const worker = new WorkflowActivityWorker({
+            store: fakeStore({
+                claimActivityJob: async () => job,
+                completeActivity: async (input: CompleteActivityInput) => {
+                    completed = input;
+                    return { accepted: true, jobStatus: input.result.status, completion: null };
+                },
+            }),
+            actions,
+            owner: runLease.owner,
+            leaseMs: 10_000,
+            heartbeatMs: 0,
+            now: () => clock,
+        });
+
+        await expect(worker.pollOnce()).resolves.toMatchObject({ accepted: true, jobStatus: "succeeded" });
+        expect(completed).toMatchObject({
+            result: { status: "succeeded" },
+            completion: { status: "completed", result: agentOutput },
+        });
+    });
+
+    it("requeues retryable Agent Adapter errors using the existing Activity policy", async () => {
+        let completed: CompleteActivityInput | undefined;
+        const actions = new ActionRegistry([
+            createAgentInvocationAction(new FakeAgentInvocationAdapter({
+                kind: "error",
+                code: "dependency_unavailable",
+                message: "No fake provider configured.",
+                retryable: true,
+            })),
+        ]);
+        const job = {
+            ...activityJob(),
+            attempts: 1,
+            maxAttempts: 3,
+            payload: {
+                ...activityJob().payload,
+                reference: "agent.invoke@1",
+                input: agentInput,
+            },
+        };
+        const worker = new WorkflowActivityWorker({
+            store: fakeStore({
+                claimActivityJob: async () => job,
+                completeActivity: async (input: CompleteActivityInput) => {
+                    completed = input;
+                    return { accepted: true, jobStatus: input.result.status, completion: null };
+                },
+            }),
+            actions,
+            owner: runLease.owner,
+            leaseMs: 10_000,
+            heartbeatMs: 0,
+            now: () => clock,
+            retryDelayMs: 250,
+        });
+
+        await expect(worker.pollOnce()).resolves.toMatchObject({ accepted: true, jobStatus: "retry_wait" });
+        expect(completed).toMatchObject({
+            result: {
+                status: "retry_wait",
+                errorCode: "dependency_unavailable",
+                error: "No fake provider configured.",
+                retryDelayMs: 1_000,
+            },
+        });
+        expect(completed).not.toHaveProperty("completion");
     });
 
     it("maps retryable Activity failures below exhaustion to retry_wait", async () => {

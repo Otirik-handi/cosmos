@@ -114,7 +114,8 @@
 70. Local Durable 默认 SQLite + 自适应 polling；真正多主机目标是 PostgreSQL + S3/MinIO + 可选 Redis，不通过共享 SQLite 网络盘实现。
 71. API 是 manifest-only 控制面，Worker 是 executable 执行面，Migrator 是独立一次性运维单元；当前代码尚需 convergence 才完全满足。
 72. Agent 能力属于可选 `nb-workflow` Extension，映射到 `agent.invoke@1`；Core 不依赖 Harness，具体 Adapter 等 `neuro-agent-harness` 合同稳定后接入。
-73. 并发控制分为 Worker slot、多 Worker、Workflow 内并发、资源级限流和 CollectionPlan overlap policy；任一层都不能替代 TaskStore lease/fencing。
+73. Phase 3 第一切片先以 `agent.invoke@1` + Invocation Port + Fake Adapter 验证现有 Workflow/Job durable truth、trusted Worker 执行、取消、重试和预算边界；真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、Artifact、Workspace、Knowledge 和 Research 产品能力后置（Proposal [`agent-invocation-v1`](../proposals/agent-invocation-v1.md)、ADR [`0030`](../adr/0030-agent-invocation-v1.md)）。
+74. 并发控制分为 Worker slot、多 Worker、Workflow 内并发、资源级限流和 CollectionPlan overlap policy；任一层都不能替代 TaskStore lease/fencing。
 74. 对外边界拆为 Product Service API、Worker Admin API 和 Worker Gateway API；三者使用独立消费者、路径和版本。
 75. Worker Gateway v1 使用 HTTPS long-poll，先由 SQL TaskStore 原子 claim 再返回 Attempt；未来 WebSocket 只能作为相同语义的 Transport Adapter。
 76. ActionDefinition 使用 `host`、`trusted_worker` 和 `remote_worker` execution placement；领域写入不经普通远程 Worker。

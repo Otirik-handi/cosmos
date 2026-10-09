@@ -451,6 +451,19 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             inputSchema: builtinSchema("collection-plan.checkpoint.input@1", { type: "object" }),
             outputSchema: builtinSchema("collection-plan.checkpoint.output@1", { type: "object" }),
         },
+        {
+            id: "agent.invoke",
+            version: 1,
+            ref: "agent.invoke@1",
+            provider: "cosmos",
+            manifestHash: builtinHash("builtin:agent.invoke@1:invocation-v1"),
+            effectMode: "external",
+            executionPlacement: "trusted_worker",
+            requiredCapabilities: ["agent:invoke"],
+            status: "enabled",
+            inputSchema: builtinSchema("agent.invoke.input@1", { type: "object" }),
+            outputSchema: builtinSchema("agent.invoke.output@1", { type: "object" }),
+        },
     ];
 
     const connectors: readonly ConnectorDescriptor[] = sourceDefinitions.map((item) => ({

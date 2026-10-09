@@ -59,6 +59,7 @@ Task 导航：
 
 - [`36-reading-layout-and-object-details/`](36-reading-layout-and-object-details/)：Story 阅读页两栏版面与对象详情页补完——阅读页改成「左内容 / 右操作编辑」两栏 3:2 居中版面并拆开 `StoryEditSurface`（只读归左栏、可写归右栏、媒体移出编辑面）、归并从粘贴 Story ID 改成可搜索选择（复用 `GET /search`）、`/topics/:id` 与 `/entities/:id` 从占位变可用、标签改名补成完整竖切；编号 36 由维护者 2026-10-02 分配。
 - [`37-automation-interaction-polish/`](37-automation-interaction-polish/)：自动化页交互补完——Task 35 记录的两条交互缺口：连接创建从常驻内联表单改成「新建连接」按钮 + 模态框（表单 + 确认/取消），连接区常驻内容变成连接列表并补空状态；采集计划行的纯图标按钮（启用/停用、运行、Webhook 入口、媒体策略、删除）加 `Tooltip`，悬停与键盘聚焦都能看到，文案与既有 `sr-only` 同源。无数据合同变更，`Dialog` 与 `Tooltip` 组件均已存在；编号 37 由维护者 2026-10-08 分配。
+- [`38-agent-invocation/`](38-agent-invocation/)：Phase 3 第一切片 Agent Invocation 基础接入——版本化 `agent.invoke@1` 普通 Workflow Action、Invocation Port、`trusted_worker` 执行位置与 Fake Adapter 先行；复用现有 Run/Activity/Job/Attempt/Lease/取消/重试/completion durable truth。真实 `pi-ai`、`neuro-agent-harness`、`nb-memory`、Artifact、Workspace、Knowledge/Research 后置；编号 38 由维护者 2026-10-08 分配。
 
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 

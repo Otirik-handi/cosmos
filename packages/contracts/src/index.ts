@@ -186,6 +186,15 @@ export {
 } from "./board.js";
 
 export {
+    agentInvocationBudgetSchema, agentInvocationInputSchema, agentInvocationMessageSchema,
+    agentInvocationOutputSchema, agentInvocationToolCallSchema, agentInvocationToolSchema,
+    agentInvocationUsageSchema,
+    type AgentInvocationBudget, type AgentInvocationInput, type AgentInvocationMessage,
+    type AgentInvocationOutput, type AgentInvocationTool, type AgentInvocationToolCall,
+    type AgentInvocationUsage,
+} from "./agent.js";
+
+export {
     actionDefinitionSchema, actionDescriptorSchema, actionErrorCodeSchema,
     actionExecutionSchema, actionKindSchema, actionManifestSchema, actionRefSchema,
     blobRefSchema, executionPlacementSchema, ingestTriggerEvidenceSchema,

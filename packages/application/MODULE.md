@@ -35,6 +35,7 @@
 | `workflow-completion-dispatcher.ts` | Completion dispatcher:Workflow 完成投递与重排/死信 | ~2.8k |
 | `workflow-action-support.ts` | Action 错误/取消/重试判定、心跳与租约竞速助手 | ~2.1k |
 | `action.ts` / `catalog.ts` | Action 注册表 / manifest 目录 | ~3.1k / ~4.0k |
+| `agent-invocation.ts` | Agent Invocation Port、Fake Adapter 与 `agent.invoke@1` Action 定义 | ~1.5k |
 | `media-policy.ts` | 媒体策略解析:默认值、上限与 `parseAllowedHosts` | ~0.6k |
 | `media-ports.ts` | 媒体端口与结果类型(`MediaAcquirer`/`MediaRetrier`/`MediaOutcome` 家族) | ~0.6k |
 | `media-acquirer.ts` | 采集器装配、跳过未变化项与资产改写 | ~2.6k |
