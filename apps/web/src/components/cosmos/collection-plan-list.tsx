@@ -1,5 +1,15 @@
 import { Play, Power, PowerOff, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+    createContext,
+    createElement,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type ComponentProps,
+    type ComponentType,
+    type ReactNode,
+} from "react";
 
 import type {
     CollectionPlanSnapshot,
@@ -12,6 +22,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { IconActionTooltipProps } from "@/components/cosmos/collection-plan-list/icon-action-tooltip";
 import {
     describeMediaPolicy,
     mediaPolicyFormValues,
@@ -42,6 +53,80 @@ type CollectionPlanListProps = {
     /** 用于把计划的 `connectionId` 显示成连接名（ADR-0017）。 */
     connections: readonly ConnectionInstance[];
 };
+
+/**
+ * 提示层在 `load` 之后才异步取回（Task 37 切片 3）。
+ *
+ * 为什么不在首屏就挂上：`@base-ui/react` 的浮层依赖未压缩约 450 KB，静态引入会把首页
+ * 首屏 JS 从 320.9 KB 顶到 339.4 KB，超过 E7 的 335.9 KB 预算（实测）。首屏 JS 由浏览器
+ * 在 `load` 那一刻结算，取回动作发生在 `load` 之后，这份依赖就不计入首屏。
+ *
+ * 为什么等 `load` 而不是在 `useEffect` 里直接取：hydration 的 effect 仍可能早于 `load`。
+ * `document.readyState === "complete"` 是同一条件的兜底，避免 `load` 已经错过时永不加载。
+ *
+ * 取回失败或尚未取回时一律回落成 `null`，调用方据此渲染纯按钮：提示是增强，不是前置条件。
+ */
+const IconActionTooltipContext = createContext<ComponentType<IconActionTooltipProps> | null>(null);
+
+function useIconActionTooltip(): ComponentType<IconActionTooltipProps> | null {
+    const [TooltipLayer, setTooltipLayer] = useState<ComponentType<IconActionTooltipProps> | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = (): void => {
+            void import("@/components/cosmos/collection-plan-list/icon-action-tooltip").then((module) => {
+                if (!cancelled) setTooltipLayer(() => module.IconActionTooltip);
+            });
+        };
+        if (document.readyState === "complete") {
+            load();
+            return () => {
+                cancelled = true;
+            };
+        }
+        window.addEventListener("load", load, { once: true });
+        return () => {
+            cancelled = true;
+            window.removeEventListener("load", load);
+        };
+    }, []);
+
+    return TooltipLayer;
+}
+
+/**
+ * 图标按钮的文字提示（Task 37 切片 3）。计划行的动作按钮只有图标，鼠标用户看不出
+ * 每个按钮做什么；`sr-only` 只对屏幕阅读器可见，帮不到他们。
+ *
+ * `label` 同时喂给两处：按钮内的 `sr-only`（读屏用户的可访问名）与 tooltip 文案
+ * （鼠标用户）。**只写一份**——两份措辞迟早漂移，而 e2e 是按可访问名定位按钮的
+ * （`getByRole("button", { name: "启用 X" })`），提示若自成一套，读屏用户与鼠标用户
+ * 看到的就不是同一个动作名。
+ *
+ * 按 `tooltip.tsx` 的硬约束，提示只承载说明、不承载操作：按钮本身仍是唯一动作入口。
+ */
+function IconAction({
+    label,
+    children,
+    ...buttonProps
+}: { label: string; children: ReactNode } & ComponentProps<typeof Button>) {
+    const TooltipLayer = useContext(IconActionTooltipContext);
+    const button = (
+        <Button {...buttonProps}>
+            {children}
+            <span className="sr-only">{label}</span>
+        </Button>
+    );
+
+    // 提示层未就位：按钮照常渲染、照常可点，只是少一个鼠标提示。
+    if (TooltipLayer === null) {
+        return button;
+    }
+    // 用 `createElement` 而不是 JSX：`TooltipLayer` 是从 context 取到的组件类型，
+    // 写成 JSX 会被 React Compiler 的 `react-hooks/static-components` 判成「渲染期创建组件」。
+    // 它其实是模块级稳定引用（`import()` 的产物），只是编译器看不出这一点。
+    return createElement(TooltipLayer, { label, button });
+}
 
 /** 稳定的中文运行时间；解析失败按“尚未运行”处理。 */
 function formatLastRun(value: string | null): string {
@@ -159,6 +244,7 @@ export function CollectionPlanList({
     const [webhookBusy, setWebhookBusy] = useState(false);
     const [webhookError, setWebhookError] = useState<string | null>(null);
     const groups = useMemo(() => groupPlans(plans, connections), [plans, connections]);
+    const TooltipLayer = useIconActionTooltip();
 
     const toggleWebhookPanel = (plan: CollectionPlanSnapshot): void => {
         setWebhookEntry(null);
@@ -243,7 +329,13 @@ export function CollectionPlanList({
     };
 
     return (
-        <section className="flex flex-col gap-3">
+        /**
+         * 提示层在组件内部取回一次，再经 context 分发给行内按钮（Task 37 切片 3）：
+         * 本组件同时被 `/automation` 与首页看板的 `planListSlot` 使用，挂在某一页会漏掉
+         * 另一处，挂外壳 layout 又超出本 Task 范围；包在这里既不漏也不越界。
+         */
+        <IconActionTooltipContext.Provider value={TooltipLayer}>
+            <section className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
                 <h2 className="font-display text-lg font-semibold tracking-tight">采集计划</h2>
                 <p className="text-sm text-muted-foreground">
@@ -310,28 +402,27 @@ export function CollectionPlanList({
                                                     )}
                                                 </div>
                                                 <div className="flex shrink-0 items-center gap-1">
-                                                    <Button
+                                                    <IconAction
+                                                        label={plan.enabled ? `停用 ${plan.name}` : `启用 ${plan.name}`}
                                                         size="icon-sm"
                                                         variant="outline"
                                                         disabled={activating || running}
                                                         onClick={() => void onToggleActivation(plan, !plan.enabled)}
                                                     >
                                                         {plan.enabled ? <PowerOff aria-hidden={true} /> : <Power aria-hidden={true} />}
-                                                        <span className="sr-only">
-                                                            {plan.enabled ? `停用 ${plan.name}` : `启用 ${plan.name}`}
-                                                        </span>
-                                                    </Button>
-                                                    <Button
+                                                    </IconAction>
+                                                    <IconAction
+                                                        label={`立即抓取 ${plan.name}`}
                                                         size="icon-sm"
                                                         variant="outline"
                                                         disabled={!plan.enabled || running || activating}
                                                         onClick={() => void onRun(plan)}
                                                     >
                                                         <Play aria-hidden={true} />
-                                                        <span className="sr-only">{plan.name}</span>
-                                                    </Button>
+                                                    </IconAction>
                                                     {onRotateWebhookEntry && (
-                                                        <Button
+                                                        <IconAction
+                                                            label={`Webhook 入口 ${plan.name}`}
                                                             size="icon-sm"
                                                             variant="outline"
                                                             aria-expanded={webhookOpen}
@@ -339,10 +430,10 @@ export function CollectionPlanList({
                                                             onClick={() => toggleWebhookPanel(plan)}
                                                         >
                                                             <Webhook aria-hidden={true} />
-                                                            <span className="sr-only">Webhook 入口 {plan.name}</span>
-                                                        </Button>
+                                                        </IconAction>
                                                     )}
-                                                    <Button
+                                                    <IconAction
+                                                        label={`媒体策略 ${plan.name}`}
                                                         size="icon-sm"
                                                         variant="outline"
                                                         aria-expanded={editingPolicy}
@@ -355,16 +446,15 @@ export function CollectionPlanList({
                                                         }}
                                                     >
                                                         <SlidersHorizontal aria-hidden={true} />
-                                                        <span className="sr-only">媒体策略 {plan.name}</span>
-                                                    </Button>
+                                                    </IconAction>
                                                     {onDelete && (
-                                                        <Button
+                                                        <IconAction
+                                                            label={confirmingDelete
+                                                                ? `确认删除 ${plan.name}`
+                                                                : `删除 ${plan.name}`}
                                                             size="icon-sm"
                                                             variant={confirmingDelete ? "destructive" : "outline"}
                                                             disabled={deleting || running || activating}
-                                                            aria-label={confirmingDelete
-                                                                ? `确认删除 ${plan.name}`
-                                                                : `删除 ${plan.name}`}
                                                             onClick={() => {
                                                                 if (!confirmingDelete) {
                                                                     setConfirmingDeleteId(plan.id);
@@ -375,10 +465,7 @@ export function CollectionPlanList({
                                                             }}
                                                         >
                                                             <Trash2 aria-hidden={true} />
-                                                            <span className="sr-only">
-                                                                {confirmingDelete ? `确认删除 ${plan.name}` : `删除 ${plan.name}`}
-                                                            </span>
-                                                        </Button>
+                                                        </IconAction>
                                                     )}
                                                 </div>
                                             </div>
@@ -654,7 +741,8 @@ export function CollectionPlanList({
                     )}
                 </div>
             )}
-        </section>
+            </section>
+        </IconActionTooltipContext.Provider>
     );
 }
 

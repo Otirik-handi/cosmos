@@ -95,7 +95,7 @@ test("creates an RSS source, runs ingest, and reads the Story at its own URL", a
     // 启用后健康看板解释定时计划：表单填的是 30 分钟。
     await expect(healthRow.getByText("每 30 分钟自动抓取")).toBeVisible();
 
-    await healthRow.getByRole("button", { name: sourceName, exact: true }).click();
+    await healthRow.getByRole("button", { name: `立即抓取 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
     // 阅读流在 /library（同一个 FeedBrowser）。

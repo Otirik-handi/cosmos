@@ -49,7 +49,7 @@ async function enableAndRun(page: Page, sourceName: string): Promise<void> {
     const row = planRowOf(page, sourceName);
     await row.getByRole("button", { name: `启用 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
-    await row.getByRole("button", { name: sourceName, exact: true }).click();
+    await row.getByRole("button", { name: `立即抓取 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 }
 

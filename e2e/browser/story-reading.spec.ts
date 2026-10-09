@@ -38,7 +38,7 @@ async function ingestFeed(page: import("@playwright/test").Page, prefix: string)
     const planSection = page.getByRole("region", { name: "采集计划" }).or(page.locator("section").filter({ hasText: "采集计划" })).first();
     await planSection.getByRole("button", { name: `启用 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("已启用；可执行手动录入")).toBeVisible();
-    await planSection.getByRole("button", { name: sourceName, exact: true }).click();
+    await planSection.getByRole("button", { name: `立即抓取 ${sourceName}`, exact: true }).click();
     await expect(page.getByText("录入任务已排队", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
     return sourceName;
 }

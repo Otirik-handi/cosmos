@@ -17,9 +17,12 @@ test("连接面板显示并记录授权范围与失效原因", async ({ page }) 
     let connectionId: string | null = null;
 
     try {
-        await connections.getByLabel("连接名称").fill(connectionName);
-        await connections.getByLabel("连接授权范围").fill('{"read":true,"comment":false}');
-        await connections.getByRole("button", { name: "新建连接" }).click();
+        // 创建表单在模态框里（Task 37 切片 1）：模态框 portal 到 body，不再是 region 的子节点，
+        // 所以从 page 定位。按钮名与 label 未变，其余断言照旧。
+        await page.getByRole("button", { name: "新建连接" }).click();
+        await page.getByLabel("连接名称").fill(connectionName);
+        await page.getByLabel("连接授权范围").fill('{"read":true,"comment":false}');
+        await page.getByRole("button", { name: "保存连接" }).click();
 
         const row = connections.locator("li", { hasText: connectionName });
         await expect(row).toBeVisible();
@@ -72,10 +75,12 @@ test("连接面板能发起登录探测并记录检查时间", async ({ page }) 
     let connectionId: string | null = null;
 
     try {
-        await connections.getByLabel("连接名称").fill(connectionName);
-        await connections.getByLabel("连接 Connector").fill("bilibili");
-        await connections.getByLabel("连接适配器配置").fill('{"profile":"chrome-main"}');
-        await connections.getByRole("button", { name: "新建连接" }).click();
+        // 同上：创建表单在模态框里，从 page 定位。
+        await page.getByRole("button", { name: "新建连接" }).click();
+        await page.getByLabel("连接名称").fill(connectionName);
+        await page.getByLabel("连接 Connector").fill("bilibili");
+        await page.getByLabel("连接适配器配置").fill('{"profile":"chrome-main"}');
+        await page.getByRole("button", { name: "保存连接" }).click();
 
         const row = connections.locator("li", { hasText: connectionName });
         await expect(row).toBeVisible();

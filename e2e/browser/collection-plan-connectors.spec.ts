@@ -25,10 +25,12 @@ test("builds two Bilibili plans under one connection from the manifest-driven fo
     await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
     // 连接按 Bilibili 连接器建：登录态（OpenCLI profile）归连接，表单只做提示。
+    // 创建表单在模态框里（Task 37 切片 1），模态框 portal 到 body，所以从 page 定位。
+    await page.getByRole("button", { name: "新建连接" }).click();
     await page.getByLabel("连接名称").fill(connectionName);
     await page.getByLabel("连接 Connector").fill("bilibili");
     await page.getByLabel("连接适配器配置").fill('{"profile":"chrome-main"}');
-    await page.getByRole("button", { name: "新建连接" }).click();
+    await page.getByRole("button", { name: "保存连接" }).click();
     await expect(page.getByText(connectionName, { exact: true })).toBeVisible();
     // 适配器配置按可读形式回显（Proposal connection-login-lifecycle-v1 决定 1）。
     await expect(page.getByText("profile: chrome-main")).toBeVisible();

@@ -313,7 +313,9 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
 
     async listConnections(): Promise<readonly ConnectionInstance[]> {
         const connections = await this.prisma.connectionInstance.findMany({
-            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            // 倒序（Task 37）：新建的连接排在列表最前，用户建完立刻能在顶部看到它，
+            // 不必在长列表里找。`id` 作次键让同一毫秒创建的连接有稳定顺序。
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         });
         return connections.map((connection) => this.toConnectionSnapshot(connection));
     }

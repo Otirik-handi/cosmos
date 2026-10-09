@@ -237,6 +237,14 @@ export function useSourceWorkspace(
         }
     };
 
+    const closeSourceForm = useCallback((): void => {
+        setShowSourceForm(false);
+        sourceForm.reset();
+        setProbeState({status: "idle"});
+        probeConfigKeyRef.current = null;
+        ctx.setError(null);
+    }, [ctx, sourceForm]);
+
     const onCreateSource = sourceForm.handleSubmit(async (values) => {
         ctx.setError(null);
         if (!selectedManifest) {
@@ -473,6 +481,7 @@ export function useSourceWorkspace(
         runPlan,
         runningPlanId,
         saveMediaPolicy,
+        closeSourceForm,
         setShowSourceForm,
         showSourceForm,
         toggleActivation,

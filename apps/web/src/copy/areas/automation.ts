@@ -8,7 +8,22 @@ export const automation = {
     checkService: "检查服务",
     newSource: "新建来源",
     closeForm: "关闭表单",
+    source: {
+        dialogTitle: "新建来源",
+        dialogDescription: "配置来源、抓取频率与可选连接；保存后会生成一个停用的采集计划。",
+        cancel: "取消",
+    },
     plans: "采集计划",
     connections: "连接",
     runHistory: "运行记录",
+    /** 连接区（Task 37）：创建入口从常驻内联表单改成按钮 + 模态框。 */
+    connection: {
+        newButton: "新建连接",
+        dialogTitle: "新建连接",
+        dialogDescription:
+            "连接保存的是登录凭据的引用，不是凭据本身。适配器配置与授权范围是可选的补充说明。",
+        submit: "保存连接",
+        cancel: "取消",
+        empty: "尚未创建连接；接入认证类平台前无需配置。",
+    },
 } as const;

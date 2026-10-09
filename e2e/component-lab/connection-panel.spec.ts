@@ -51,13 +51,17 @@ test("rejects a non-JSON authorized scope before creating the connection", async
     const preview = page.locator(PREVIEW_ROOT);
     await expect(preview).toBeVisible();
 
-    await preview.getByLabel("连接名称").fill("范围格式用例");
-    await preview.getByLabel("连接授权范围").fill("{read: true}");
-    await preview.getByRole("button", { name: "新建连接" }).click();
+    // 创建表单在模态框里（Task 37 切片 1）：模态框 portal 到 body，脱离 preview 根，
+    // 所以从 dialog 定位（而不是 preview），也避免与页面其它 alert 撞车。
+    const dialog = page.locator('[data-slot="dialog-content"]');
+    await page.getByRole("button", { name: "新建连接" }).click();
+    await dialog.getByLabel("连接名称").fill("范围格式用例");
+    await dialog.getByLabel("连接授权范围").fill("{read: true}");
+    await dialog.getByRole("button", { name: "保存连接" }).click();
 
-    await expect(preview.getByRole("alert")).toContainText("授权范围必须是合法 JSON");
+    await expect(dialog.getByRole("alert")).toContainText("授权范围必须是合法 JSON");
     // 表单没有被清空：用户不必重新输入名称。
-    await expect(preview.getByLabel("连接名称")).toHaveValue("范围格式用例");
+    await expect(dialog.getByLabel("连接名称")).toHaveValue("范围格式用例");
 });
 
 /**
@@ -69,12 +73,14 @@ test("rejects a non-JSON adapter configuration before creating the connection", 
     const preview = page.locator(PREVIEW_ROOT);
     await expect(preview).toBeVisible();
 
-    await preview.getByLabel("连接名称").fill("适配器配置格式用例");
-    await preview.getByLabel("连接适配器配置").fill("{profile: chrome-main}");
-    await preview.getByRole("button", { name: "新建连接" }).click();
+    const dialog = page.locator('[data-slot="dialog-content"]');
+    await page.getByRole("button", { name: "新建连接" }).click();
+    await dialog.getByLabel("连接名称").fill("适配器配置格式用例");
+    await dialog.getByLabel("连接适配器配置").fill("{profile: chrome-main}");
+    await dialog.getByRole("button", { name: "保存连接" }).click();
 
-    await expect(preview.getByRole("alert")).toContainText("适配器配置必须是合法 JSON");
-    await expect(preview.getByLabel("连接名称")).toHaveValue("适配器配置格式用例");
+    await expect(dialog.getByRole("alert")).toContainText("适配器配置必须是合法 JSON");
+    await expect(dialog.getByLabel("连接名称")).toHaveValue("适配器配置格式用例");
 });
 
 /**

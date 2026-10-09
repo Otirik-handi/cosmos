@@ -78,6 +78,8 @@ export type SourceDefinitionState =
 
 type SourceFormProps = {
     form: UseFormReturn<SourceFormValues>;
+    /** 在 Dialog 内展示时去掉外层 Card 标题，避免模态框内嵌套一层页面面板。 */
+    embedded?: boolean;
     definitionState: SourceDefinitionState;
     /** 当前选中的来源定义 ref；未选中或目录里没有时表单不渲染字段。 */
     selectedDefinitionRef: string;
@@ -263,21 +265,24 @@ export function SourceForm({
     probeState,
     onRetryDefinition,
     connections,
+    embedded = false,
 }: SourceFormProps) {
     const manifests = definitionState.status === "ready" ? definitionState.manifests : [];
     const manifest = manifests.find((item) => item.ref === selectedDefinitionRef) ?? null;
     const operationIds = manifest?.operationIds ?? [];
     const fields = manifest ? readManifestFields(manifest, selectedOperationId) : [];
 
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>新建采集计划</CardTitle>
-                <CardDescription>
-                    一个计划 = 一个采集目标 + 它自己的频率、媒体预算与游标。先选来源定义，
-                    再按它的声明填配置；可先测试未保存配置，再保存为停用计划。
-                </CardDescription>
-            </CardHeader>
+    const content = (
+        <>
+            {!embedded && (
+                <CardHeader>
+                    <CardTitle>新建采集计划</CardTitle>
+                    <CardDescription>
+                        一个计划 = 一个采集目标 + 它自己的频率、媒体预算与游标。先选来源定义，
+                        再按它的声明填配置；可先测试未保存配置，再保存为停用计划。
+                    </CardDescription>
+                </CardHeader>
+            )}
             {definitionState.status === "error" ? (
                 <CardContent className="flex flex-col gap-3">
                     <div
@@ -466,8 +471,10 @@ export function SourceForm({
                     </CardFooter>
                 </form>
             )}
-        </Card>
+        </>
     );
+
+    return embedded ? content : <Card>{content}</Card>;
 }
 
 function ProbeFeedback({probeState}: {probeState: ProbeState}) {

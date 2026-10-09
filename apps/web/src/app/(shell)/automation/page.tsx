@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, RefreshCcw, X } from "lucide-react";
+import { Plus, RefreshCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -12,6 +12,14 @@ import { useNoticeToast } from "@/app/home/use-notice-toast";
 import { client } from "@/app/home/page-runtime";
 
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import { CollectionPlanList } from "@/components/cosmos/collection-plan-list";
 import { ConnectionPanel } from "@/components/cosmos/connection-panel";
 import { RunHistory } from "@/components/cosmos/run-history";
@@ -28,9 +36,9 @@ import { messages } from "@/copy/messages";
  * 这一页从首页右栏与底部搬来，是「接一个新来源 → 试跑 → 看运行结果」的唯一入口。
  * 它不引入 feed / story workspace：useSourceWorkspace 只用到 feed 的 refresh 一个方法。
  *
- * 「来源表单开合」的状态**由 workspace 持有**（`showSourceForm`），本页不再自己 useState：
- * 保存成功后 workspace 会把它置回收起，两个所有者时本页那份永远不收起，会出现「回执说已保存、
- * 表单还开着、字段已被 reset 回示例值」的错位。
+ * 「来源表单开合」的状态由 workspace 持有（`showSourceForm`）；本页只把它接到 Dialog。
+ * 保存成功后 workspace 会关闭并 reset，取消、Esc 与关闭按钮走同一个 `closeSourceForm`，避免
+ * 草稿字段和模态框状态分叉。
  */
 export default function AutomationPage() {
     const [loading, setLoading] = useState(true);
@@ -81,6 +89,7 @@ export default function AutomationPage() {
         selectOperation,
         selectedDefinitionRef,
         selectedOperationId,
+        closeSourceForm,
         onCreateSource,
         onTestSourceConfig,
         setShowSourceForm,
@@ -132,10 +141,36 @@ export default function AutomationPage() {
                         <RefreshCcw data-icon="inline-start" />
                         {messages.automation.checkService}
                     </Button>
-                    <Button onClick={() => setShowSourceForm((value) => !value)} size="sm">
-                        {showSourceForm ? <X data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                        {showSourceForm ? messages.automation.closeForm : messages.automation.newSource}
-                    </Button>
+                    <Dialog open={showSourceForm} onOpenChange={(open) => (open ? setShowSourceForm(true) : closeSourceForm())}>
+                        <DialogTrigger
+                            render={
+                                <Button size="sm">
+                                    <Plus data-icon="inline-start" />
+                                    {messages.automation.newSource}
+                                </Button>
+                            }
+                        />
+                        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>{messages.automation.source.dialogTitle}</DialogTitle>
+                                <DialogDescription>{messages.automation.source.dialogDescription}</DialogDescription>
+                            </DialogHeader>
+                            <SourceForm
+                                connections={connections}
+                                definitionState={definitionState}
+                                embedded={true}
+                                form={sourceForm}
+                                onRetryDefinition={() => void loadDefinitions()}
+                                onSelectDefinition={selectDefinition}
+                                onSelectOperation={selectOperation}
+                                onSubmit={onCreateSource}
+                                onTest={() => void onTestSourceConfig()}
+                                probeState={probeState}
+                                selectedDefinitionRef={selectedDefinitionRef}
+                                selectedOperationId={selectedOperationId}
+                            />
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </div>
 
@@ -146,22 +181,6 @@ export default function AutomationPage() {
                 >
                     {error}
                 </div>
-            )}
-
-            {showSourceForm && (
-                <SourceForm
-                    connections={connections}
-                    definitionState={definitionState}
-                    form={sourceForm}
-                    onRetryDefinition={() => void loadDefinitions()}
-                    onSelectDefinition={selectDefinition}
-                    onSelectOperation={selectOperation}
-                    onSubmit={onCreateSource}
-                    onTest={() => void onTestSourceConfig()}
-                    probeState={probeState}
-                    selectedDefinitionRef={selectedDefinitionRef}
-                    selectedOperationId={selectedOperationId}
-                />
             )}
 
             <section aria-label={messages.automation.plans} className="flex flex-col gap-3">

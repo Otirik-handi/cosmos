@@ -7,7 +7,16 @@ import type { HttpCosmosClient } from "@cosmos/transport-http";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { messages } from "@/copy/messages";
 
 const statusLabel: Record<ConnectionInstance["status"], string> = {
     active: "可用",
@@ -115,6 +124,11 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
     >(null);
     /** 声明了 `auth.probeSupported` 的 Connector：按声明决定「检查登录状态」是否出现。 */
     const [probeSupportedConnectorIds, setProbeSupportedConnectorIds] = useState<readonly string[]>([]);
+    /**
+     * 创建表单开合（Task 37）。表单从常驻内联改成模态框承载：列表位置因此空出来给
+     * 连接本身，创建入口收进按钮。取消与提交成功都要关掉它并清空输入，见 `closeCreate`。
+     */
+    const [createOpen, setCreateOpen] = useState(false);
 
     const load = (): void => {
         client.listConnections()
@@ -163,6 +177,20 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
         return <p className="text-sm text-muted-foreground">连接读取失败。</p>;
     }
 
+    /**
+     * 关闭创建模态框并清空输入。取消与提交成功走同一条路径：留下上一次的输入会让
+     * 「再建一个」变成「改一个刚才没建成的」，而用户已经看不到那次失败的原因。
+     */
+    const closeCreate = (): void => {
+        setCreateOpen(false);
+        setName("");
+        setConnectorId("");
+        setScope("");
+        setAdapterConfig("");
+        setScopeError(null);
+        setAdapterConfigError(null);
+    };
+
     const create = (): void => {
         const trimmedName = name.trim();
         if (!trimmedName) return;
@@ -196,10 +224,7 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
             ...(configJson === undefined ? {} : { configJson }),
         })
             .then(() => {
-                setName("");
-                setConnectorId("");
-                setScope("");
-                setAdapterConfig("");
+                closeCreate();
                 load();
                 onConnectionsChanged?.();
             })
@@ -424,55 +449,82 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
                 </ul>
             ) : (
                 <p className="text-sm text-muted-foreground">
-                    尚未创建连接；接入认证类平台前无需配置。
+                    {messages.automation.connection.empty}
                 </p>
             )}
-            <div className="flex flex-col gap-1.5">
-                <Input
-                    aria-label="连接名称"
-                    placeholder="连接名称"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                />
-                <Input
-                    aria-label="连接 Connector"
-                    placeholder="Connector（如 bilibili）"
-                    value={connectorId}
-                    onChange={(event) => setConnectorId(event.target.value)}
-                />
-                <Input
-                    aria-label="连接适配器配置"
-                    placeholder={'适配器配置（JSON，可选，如 {"profile": "chrome-main"}）'}
-                    value={adapterConfig}
-                    onChange={(event) => {
-                        setAdapterConfig(event.target.value);
-                        setAdapterConfigError(null);
-                    }}
-                />
-                {adapterConfigError ? (
-                    <p role="alert" className="text-xs text-destructive">{adapterConfigError}</p>
-                ) : null}
-                <Input
-                    aria-label="连接授权范围"
-                    placeholder={'授权范围（JSON，可选，如 {"read": true}）'}
-                    value={scope}
-                    onChange={(event) => {
-                        setScope(event.target.value);
-                        setScopeError(null);
-                    }}
-                />
-                {scopeError ? (
-                    <p role="alert" className="text-xs text-destructive">{scopeError}</p>
-                ) : null}
+            <div className="flex">
                 <Button
                     size="sm"
                     variant="outline"
-                    disabled={name.trim() === ""}
-                    onClick={create}
+                    onClick={() => setCreateOpen(true)}
                 >
-                    新建连接
+                    {messages.automation.connection.newButton}
                 </Button>
             </div>
+            {/*
+             * 创建连接（Task 37）：表单从常驻内联搬进模态框。`onOpenChange` 覆盖了 Esc、
+             * 遮罩点击与关闭按钮三条路径，都走 `closeCreate` 清空输入；焦点回到触发按钮
+             * 由 Base UI 提供，不自行实现。
+             */}
+            <Dialog open={createOpen} onOpenChange={(open) => (open ? setCreateOpen(true) : closeCreate())}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{messages.automation.connection.dialogTitle}</DialogTitle>
+                        <DialogDescription>
+                            {messages.automation.connection.dialogDescription}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-1.5">
+                        <Input
+                            aria-label="连接名称"
+                            placeholder="连接名称"
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                        />
+                        <Input
+                            aria-label="连接 Connector"
+                            placeholder="Connector（如 bilibili）"
+                            value={connectorId}
+                            onChange={(event) => setConnectorId(event.target.value)}
+                        />
+                        <Input
+                            aria-label="连接适配器配置"
+                            placeholder={'适配器配置（JSON，可选，如 {"profile": "chrome-main"}）'}
+                            value={adapterConfig}
+                            onChange={(event) => {
+                                setAdapterConfig(event.target.value);
+                                setAdapterConfigError(null);
+                            }}
+                        />
+                        {adapterConfigError ? (
+                            <p role="alert" className="text-xs text-destructive">{adapterConfigError}</p>
+                        ) : null}
+                        <Input
+                            aria-label="连接授权范围"
+                            placeholder={'授权范围（JSON，可选，如 {"read": true}）'}
+                            value={scope}
+                            onChange={(event) => {
+                                setScope(event.target.value);
+                                setScopeError(null);
+                            }}
+                        />
+                        {scopeError ? (
+                            <p role="alert" className="text-xs text-destructive">{scopeError}</p>
+                        ) : null}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeCreate}>
+                            {messages.automation.connection.cancel}
+                        </Button>
+                        <Button
+                            disabled={name.trim() === ""}
+                            onClick={create}
+                        >
+                            {messages.automation.connection.submit}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
