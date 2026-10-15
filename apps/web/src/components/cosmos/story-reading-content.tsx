@@ -7,7 +7,6 @@ import { messages } from "@/copy/messages";
 import { EvidenceSection } from "./story-panel/evidence";
 import { RelatedSection } from "./story-panel/related";
 import { SplitOriginSection } from "./story-panel/split-origin";
-import { RevisionAssets } from "./story-panel/revision-assets";
 import { SourceMembersSection } from "./story-panel/source-members";
 import { TimelineSection } from "./story-panel/timeline-section";
 import type { StoryEntryOption } from "./story-panel/entry-option";
@@ -74,7 +73,6 @@ export function StoryReadingContent({
     const [linkRelationType, setLinkRelationType] =
         useState<EntryStoryRelationType>("evidence_for");
 
-    const currentRevision = story.entry?.revisions[0];
     const timeline = buildStoryTimeline(story);
 
     /**
@@ -158,7 +156,6 @@ export function StoryReadingContent({
                 story={story}
                 title={story.story.title}
             />
-            <RevisionAssets assets={currentRevision?.assets ?? []} />
         </div>
     );
 }

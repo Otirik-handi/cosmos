@@ -755,7 +755,7 @@ type StoryLabState =
     | "human-protected";
 
 /** 阅读页两栏共用的 Story 夹具；两个渲染函数各自只取自己那一半所需的 props。 */
-function storyLabFixture(
+export function storyLabFixture(
     state: StoryLabState,
     title: string,
     contentText: string,

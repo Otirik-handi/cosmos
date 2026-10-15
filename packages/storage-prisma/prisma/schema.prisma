@@ -276,6 +276,7 @@ model Observation {
     discoveryContextJson String?
     webUrl            String?
     payloadBlobKey    String?
+    contentSourceBlobKey String?
     title             String?
     contentText       String?
     contentFingerprint String?
@@ -290,6 +291,8 @@ model Observation {
     run               Run?            @relation(fields: [runId], references: [id], onDelete: SetNull)
     workflowRun       WorkflowRun?    @relation("WorkflowRunObservations", fields: [workflowRunId], references: [id], onDelete: SetNull)
     entry             Entry?          @relation(fields: [entryId], references: [id], onDelete: SetNull)
+
+    evidenceForRevisions EntryRevision[] @relation("RevisionEvidence")
 
     @@unique([sourceInstanceId, runId, externalKey])
     @@index([sourceInstanceId, externalKey, capturedAt])
@@ -336,9 +339,35 @@ model EntryRevision {
     entry              Entry         @relation("EntryRevisions", fields: [entryId], references: [id], onDelete: Cascade)
     currentForEntry    Entry?        @relation("EntryCurrentRevision")
     assets             Asset[]
+    evidenceObservationId String?
+    evidenceObservation Observation? @relation("RevisionEvidence", fields: [evidenceObservationId], references: [id], onDelete: SetNull)
+    currentRepresentationId String? @unique
+    representationLocked Boolean @default(false)
+    currentRepresentation ContentRepresentation? @relation("CurrentContentRepresentation", fields: [currentRepresentationId], references: [id], onDelete: SetNull)
+    representations ContentRepresentation[] @relation("RevisionContentRepresentations")
 
     @@unique([entryId, revision])
     @@index([entryId, createdAt])
+}
+
+model ContentRepresentation {
+    id String @id @default(cuid())
+    entryRevisionId String
+    representationVersion Int
+    parserVersion String
+    status String
+    blocksJson String
+    contentText String
+    qualitySignalsJson String
+    supersedesRepresentationId String?
+    createdAt DateTime @default(now())
+    entryRevision EntryRevision @relation("RevisionContentRepresentations", fields: [entryRevisionId], references: [id], onDelete: Cascade)
+    currentForRevision EntryRevision? @relation("CurrentContentRepresentation")
+    supersedes ContentRepresentation? @relation("RepresentationSupersession", fields: [supersedesRepresentationId], references: [id], onDelete: SetNull)
+    successors ContentRepresentation[] @relation("RepresentationSupersession")
+
+    @@unique([entryRevisionId, representationVersion])
+    @@index([entryRevisionId, createdAt])
 }
 
 model Asset {
@@ -379,6 +408,7 @@ model Story {
     entryLinks        EntryStoryLink[]
     successors        StoryReplacement[] @relation("StoryReplacementShell")
     splitFrom         StoryReplacement[] @relation("StoryReplacementSuccessor")
+    candidates        StoryAgentCandidate[]
 }
 
 model StoryRevision {
@@ -767,6 +797,21 @@ model SpotlightPlacement {
     @@unique([boardId, targetType, targetId])
     @@index([boardId])
     @@index([targetType, targetId])
+}
+
+model StoryAgentCandidate {
+    id             String   @id
+    storyId        String
+    storyRevisionId String
+    candidateJson  String
+    status         String   @default("pending")
+    createdAt      DateTime @default(now())
+    decidedAt      DateTime?
+    decidedBy      String?
+    story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+    @@index([storyId, createdAt])
+    @@index([status, createdAt])
 }
 
 model WorkflowRun {

@@ -6,6 +6,7 @@
 export * from "./story-subtypes.js";
 export * from "./enums.js";
 export * from "./content.js";
+export * from "./content-representation.js";
 export * from "./temporal.js";
 export * from "./story-representation.js";
 export * from "./revision-fingerprints.js";

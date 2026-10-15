@@ -10,6 +10,7 @@
         "typecheck": "tsc -p tsconfig.json --noEmit --rootDir ../.."
     },
     "dependencies": {
+        "@cosmos/agent-pi-ai": "workspace:*",
         "@cosmos/application": "workspace:*",
         "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",

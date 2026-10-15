@@ -30,9 +30,38 @@ import {
     topicPanelControls,
 } from "./controls";
 import {control, sharedTokens} from "./shared";
+import { renderContentBlockReaderLab, renderStorySourceReaderLab } from "../content-reader-fixtures";
+import { AgentCandidateFixture } from "../agent-candidate-fixtures";
 
 /** components/cosmos 顶层产品组件的登记表。 */
 export const cosmosComponentDefinitions = [
+    {
+        id: "story-agent-candidates", label: "Story Agent Candidates", category: "Cosmos",
+        modulePath: "components/cosmos/story-agent-candidates.tsx", defaultSceneId: "interactive",
+        controls: [], scenes: [{ id: "interactive", label: "Preview and decide", props: {} }],
+        tokens: sharedTokens, render: () => <AgentCandidateFixture />,
+    },
+    {
+        id: "content-block-reader", label: "ContentBlockReader", category: "Cosmos",
+        modulePath: "components/cosmos/content-block-reader.tsx", defaultSceneId: "mixed",
+        controls: [], scenes: [{ id: "mixed", label: "Ordered text and media", props: {} }],
+        tokens: sharedTokens, render: renderContentBlockReaderLab,
+    },
+    {
+        id: "story-source-reader", label: "StorySourceReader", category: "Cosmos",
+        modulePath: "components/cosmos/story-source-reader.tsx", defaultSceneId: "complete",
+        controls: [control("state", "State", "select", "complete", ["complete", "partial", "legacy", "unavailable", "loading", "error", "empty"])],
+        scenes: [
+            { id: "complete", label: "Multiple sources", props: { state: "complete" } },
+            { id: "partial", label: "Partial", props: { state: "partial" } },
+            { id: "legacy", label: "Legacy", props: { state: "legacy" } },
+            { id: "unavailable", label: "Unavailable", props: { state: "unavailable" } },
+            { id: "loading", label: "Loading", props: { state: "loading" } },
+            { id: "error", label: "Read failure", props: { state: "error" } },
+            { id: "empty", label: "No source", props: { state: "empty" } },
+        ],
+        tokens: sharedTokens, render: renderStorySourceReaderLab,
+    },
     {
         id: "feed-browser",
         label: "FeedBrowser",

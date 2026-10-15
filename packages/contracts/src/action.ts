@@ -1,4 +1,5 @@
 import { z, type ZodType } from "zod";
+import { contentSourceSchema } from "./content-representation.js";
 
 import {
     assetErrorCodeSchema,
@@ -222,6 +223,7 @@ export const normalizedIngestItemSchema = z.object({
     title: z.string().trim().min(1),
     summary: z.string().nullable(),
     contentText: z.string(),
+    contentSource: contentSourceSchema.optional(),
     webUrl: z.string().nullable(),
     kind: contentKindSchema,
     publisher: publisherSchema.nullable(),

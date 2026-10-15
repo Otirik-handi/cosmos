@@ -1,6 +1,6 @@
 import { type IngestTriggerKind, type SourceCheckpointOutput, type MediaCleanupReport, mediaCleanupReportSchema, retryableAssetErrorCodes } from "@cosmos/contracts";
 import { deriveExternalKey, fingerprintEntryRevision, type NormalizedIngestItem } from "@cosmos/domain";
-import { type HostActionExecutionFence, type JobLease, type MediaRetryCandidate, type MediaRetryOutcome, type PersistIngestItemResult } from "@cosmos/application";
+import { type HostActionExecutionFence, type JobLease, type MediaRetryCandidate, type MediaRetryOutcome, type PersistIngestItemResult, type ContentDraft, type StagedIngestBlobs } from "@cosmos/application";
 import { FileBlobStore } from "@cosmos/blob-store";
 import { type Prisma } from "@prisma/client";
 import { appendDomainEvent, assertJobLease, assertWorkflowActionFence, parseJson } from "./repository-internals.js";
@@ -22,6 +22,7 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
             webUrl: item.webUrl,
             kind: item.kind,
             publisher: item.publisher,
+            contentSource: item.contentSource,
         }));
         const existing = await this.prisma.entry.findMany({
             where: {
@@ -297,10 +298,13 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
         return parsed.success ? parsed.data : null;
     }
 
-    async persistWorkflowIngestItem(input: {        sourceId: string;
+    async persistWorkflowIngestItem(input: {
+        sourceId: string;
         workflowRunId: string;
         triggerKind: IngestTriggerKind;
         item: NormalizedIngestItem;
+        contentDraft?: ContentDraft;
+        stagedBlobs?: StagedIngestBlobs;
         fence: HostActionExecutionFence;
         idempotencyKey: string;
     }): Promise<PersistIngestItemResult> {
@@ -310,6 +314,8 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
             workflowRunId: input.workflowRunId,
             triggerKind: input.triggerKind,
             item: input.item,
+            contentDraft: input.contentDraft,
+            stagedBlobs: input.stagedBlobs,
             fence: input.fence,
             ingestCommandId: input.idempotencyKey,
         });
@@ -319,6 +325,8 @@ export class PrismaCosmosRepositoryMedia extends PrismaCosmosRepositoryJobClaims
         sourceId: string;
         runId: string;
         item: NormalizedIngestItem;
+        contentDraft?: ContentDraft;
+        stagedBlobs?: StagedIngestBlobs;
     }): Promise<PersistIngestItemResult> {
         const startedAt = Date.now();
         try {

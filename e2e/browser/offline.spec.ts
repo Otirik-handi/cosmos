@@ -34,11 +34,25 @@ test("offline: locally saved images render from the API after the network is blo
     await card.getByRole("button", { name: "打开 Story" }).click();
     await expect(page.locator("[data-story-id]")).toBeVisible();
 
+    const content = page.getByRole("region", { name: "来源正文", exact: true });
+    await expect(content.locator("[data-content-block]")).toHaveCount(2);
+    await expect(content.locator("[data-content-block]").nth(0)).toHaveAttribute("data-content-block", "paragraph");
+    await expect(content.locator("[data-content-block]").nth(0)).toContainText("This item carries one local image");
+    await expect(content.locator("[data-content-block]").nth(1)).toHaveAttribute("data-content-block", "image");
+    await page.setViewportSize({ width: 768, height: 900 });
+    await expect(page.getByText("窗口过窄", { exact: true })).toBeVisible();
+    await expect(content).not.toBeVisible();
+    for (const width of [1024, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(content).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+
     // Online: the saved image loads from the local API and really decodes.
     // 图是 loading="lazy" 且位于阅读页折叠线以下：先滚进视口再断言，否则这条断言依赖浏览器
     // 对屏外图片的预加载时机——页面并发请求一多就会被推迟，失败与「图片是否可取」无关。
     const savedImage = page
-        .locator('section[aria-label="媒体"]')
+        .getByRole("region", { name: "来源正文", exact: true })
         .locator("[data-asset-status=saved] img")
         .first();
     await expect(savedImage).toHaveAttribute("src", SAVED_IMAGE_SRC);
@@ -59,7 +73,7 @@ test("offline: locally saved images render from the API after the network is blo
     // Reload the same Story and verify the bytes still come from the local API.
     await page.reload();
     const offlineImage = page
-        .locator('section[aria-label="媒体"]')
+        .getByRole("region", { name: "来源正文", exact: true })
         .locator("[data-asset-status=saved] img")
         .first();
     await expect(offlineImage).toBeVisible({ timeout: 30_000 });

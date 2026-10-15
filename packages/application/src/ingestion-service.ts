@@ -5,6 +5,8 @@ import type {
 } from "@cosmos/contracts";
 
 import { acquireItemsSkippingUnchanged } from "./media-acquirer.js";
+import { prepareContentItem } from "./content-ingest.js";
+import { stageIngestBlobs, type IngestBlobWriter } from "./ingest-blob-staging.js";
 import { mediaDownloadCapability, resolveMediaPolicy } from "./media-policy.js";
 import type { MediaAcquirer } from "./media-ports.js";
 
@@ -44,6 +46,7 @@ export class IngestionService {
         private readonly resolveConnector: ConnectorResolver,
         logger?: LoggerPort,
         private readonly mediaAcquirer?: MediaAcquirer,
+        private readonly blobs?: IngestBlobWriter,
     ) {
         this.logger = resolveLogger(logger);
     }
@@ -180,18 +183,20 @@ export class IngestionService {
                 durationMs: Date.now() - fetchStartedAt,
             });
 
-            let acquiredItems = page.items;
+            const prepared = page.items.map((item) => prepareContentItem(item));
+            const preparedItems = prepared.map(({ item }) => item);
+            let acquiredItems: typeof page.items = preparedItems;
             if (
                 this.mediaAcquirer
                 && connector.capabilities.includes(mediaDownloadCapability)
             ) {
                 const unchanged = await this.repository.listContentUnchangedItems({
                     sourceId: source.id,
-                    items: page.items,
+                    items: preparedItems,
                 });
                 acquiredItems = await acquireItemsSkippingUnchanged(
                     this.mediaAcquirer,
-                    page.items,
+                    preparedItems,
                     unchanged,
                     { policy: resolveMediaPolicy(source.mediaPolicy) },
                 );
@@ -202,6 +207,8 @@ export class IngestionService {
                     sourceId: source.id,
                     runId,
                     item,
+                    contentDraft: prepared[index]?.draft,
+                    stagedBlobs: this.blobs ? await stageIngestBlobs(item, this.blobs) : undefined,
                 });
                 logger.debug("ingest.item.persisted", {
                     index,

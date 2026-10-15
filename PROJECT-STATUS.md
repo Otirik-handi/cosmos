@@ -39,14 +39,11 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 ## 当前下一步
 
+**Task [40](.agents/tasks/40-story-content-representation/README.md)（Story 内容表示与多模态阅读）实施与验收中**：已实现确定性解析、有序安全内容块、版本表示与历史读取、重建／锁定／回退、Story 来源切换和 Agent 候选决策。候选接受复用正式命令，与状态及审计原子提交。隔离组件实验室 9 个浏览器用例通过，覆盖 320/768/1024/1440。生产 Agent profile/resolver 未配置，生成入口明确返回 409；NASA RSS 隔离验收已通过（10 条）；真实 Agent 与完整产品运行时浏览器验收仍未完成。未迁移用户数据、未部署，最终验证与未覆盖范围见同一 Task walkthrough。
+
 **Task 38（Agent Invocation 基础接入 v1）已完成**（2026-10-08）：新增版本化 `agent.invoke@1` Workflow Action、JSON-safe Agent Invocation 合同、Invocation Port 与确定性 Fake Adapter；复用现有 Activity Worker 的 Run/Job/Lease、取消、重试和 completion 语义。全量单元测试 139 个文件/798 个测试、全仓 typecheck、共享包构建和 docs:check 均通过。真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、工具执行、Artifact、Workspace、Knowledge/Research 另开后续 Task。
 
-**Task 36（阅读页版面、对象详情页与外壳 UI）已完成**（2026-10-05）：阅读页两栏（**视口 80% 居中、左右 3:1、正文撑满左栏**，34em 行宽合同废止）、右栏按 C→B→A→D 分段**且四段各有段标题**、分隔线全仓统一、**全站回执改 toast**；归并改可搜索目标、两个对象详情页可用、标签改名完整竖切；外壳 UI 随后续需求改（顶栏 64 px + 2.5em 间隔 + 暖纸灰底色；侧栏等比 **1.25 倍**并跟随滚动）。**两轮真人验收反馈已修完**：首页看板拖拽排序恢复（根因是每个分区各包一层 `DndContext`、分区之间互不可见；现由 `BoardDndProvider` 罩住整个看板，跨分区拖拽一并可用），右栏加 240 px 最小宽度；D5 拆分三处缺陷（归并选中不回填标题、拆分只能增不能删后继、拆到 1 个后继抛客户端 schema 原始报错）已修并补回归用例；拆空原条会让它从信息库消失、留在其上的用户状态够不着，现补 `StoryDetail.story.splitFrom` 回链（无 migration，复用 `StoryReplacement` 反向关系）并在拆空前确认。逐轮证据见其 walkthrough 与五册归档，勘误见 [`frontend-redesign-v1`](docs/proposals/frontend-redesign-v1.md)。
-
-- **真人验收**：Task 35 延后的 3 条关键任务与第一轮反馈 A–F 已由维护者 2026-10-05 验收通过（D4/D5/D6 无问题）。
-- **验收债**：切片 C/D/E 的专属 e2e 已补齐（`2257480` 新增 `e2e/browser/object-detail-pages.spec.ts`）；拖拽排序也已补真实指针用例。
-- **合并**：`9fccfcb`（125 文件，+6648/−1832）＋ `2257480` 已 `--no-ff` 合并为 `710c2b1` 并推送 `origin/master`（2026-10-05）。分支与 worktree 尚未清理。
-- **窄档取舍**：右栏 240 px 下限生效时整组略超视口 80%（维护者选定）；首屏 JS 余量约 7.7 KB（门禁 328.1 KB，实测 320.4 KB）。
+Task 36 已完成并通过真人验收；实现、合并与验收证据见 [Task36 完成历史](PROJECT-STATUS/history-2026-10-task36.md)。当前仍保留右栏 240 px 下限与首屏预算约束，分支和 worktree 尚未清理。
 
 **前端界面从 0 重新设计已落地（Task [`35`](.agents/tasks/35-frontend-redesign/README.md)，2026-10-01）**：外壳（顶栏 + 悬浮侧栏）+ 十个路由取代「单页 + Story 抽屉」，单一明暗轴 `data-cosmos-appearance` 取代 `theme × colorway` 两套轴，SSE 提升到外壳层且全程恰好一条，用户可见文案集中到 `apps/web/src/copy/` 并有禁用词与内联文案只减不增门禁；版面/预算/行为三类门禁落在 `e2e/browser/layout-and-budget.spec.ts` 与 `story-live-refresh.spec.ts`。真人验收做了 6 条中的 3 条，剩余 3 条由 Task 36 承接；Task 35 移交的四项均已在 Task 36 落地。仍不随 Task 36 修的：`/automation` 三条交互诉求与组件级文案迁移 772 处。
 

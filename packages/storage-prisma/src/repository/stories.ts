@@ -4,6 +4,7 @@ import { fingerprintStoryRevision, listStorySubtypes as listRegisteredStorySubty
 import { StoryNotFoundError, StoryRevisionConflictError, StorySplitConflictError } from "@cosmos/application";
 import { appendDomainEvent, assertStorySubtype } from "./repository-internals.js";
 import { PrismaCosmosRepositorySearch } from "./search.js";
+import { writeStoryRevision } from "./story-revision-command.js";
 
 export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch {
     async moveEntryToStory(input: {
@@ -86,80 +87,7 @@ export class PrismaCosmosRepositoryStories extends PrismaCosmosRepositorySearch 
         if (await this.isStoryShell(canonicalStoryId)) {
             throw new StoryRevisionConflictError(canonicalStoryId);
         }
-        const story = await this.prisma.story.findUnique({
-            where: { id: canonicalStoryId },
-            include: { currentRevision: true },
-        });
-        if (!story) {
-            throw new StoryNotFoundError(input.storyId);
-        }
-        if (!story.currentRevision || story.currentRevision.id !== input.baseRevisionId) {
-            throw new StoryRevisionConflictError(input.storyId);
-        }
-        // A subtype already stored on this Story may be unregistered (legacy
-        // data); editing other fields keeps it. Any other value is a new
-        // assignment and must be a writable registration (ORG-013).
-        if (input.kind !== story.kind || input.subtype !== story.subtype) {
-            assertStorySubtype(input.kind, input.subtype);
-        }
-        // Fingerprint and persistence share one normalization so that a Story
-        // created before the extension keeps its stored fingerprint and stays a
-        // no-op (ADR-0021 decision 4).
-        const representation = normalizeStoryRepresentation(input);
-        const fingerprint = fingerprintStoryRevision({
-            title: input.title,
-            summary: input.summary,
-            kind: input.kind,
-            subtype: input.subtype,
-            timeRange: representation.timeRange,
-            keyFacts: representation.keyFacts,
-        });
-        if (story.currentRevision.fingerprint === fingerprint) {
-            return this.story(canonicalStoryId);
-        }
-        await this.prisma.$transaction(async (tx) => {
-            const latest = await tx.storyRevision.findFirst({
-                where: { storyId: canonicalStoryId },
-                orderBy: { revision: "desc" },
-                select: { revision: true },
-            });
-            const created = await tx.storyRevision.create({
-                data: {
-                    story: { connect: { id: canonicalStoryId } },
-                    revision: (latest?.revision ?? 0) + 1,
-                    fingerprint,
-                    producer: "human",
-                    actorJson: input.actor == null ? null : JSON.stringify(input.actor),
-                    reason: input.reason ?? null,
-                    title: input.title,
-                    summary: input.summary,
-                    timeRangeJson: serializeTimeRange(representation.timeRange),
-                    keyFactsJson: serializeKeyFacts(representation.keyFacts),
-                },
-            });
-            await tx.story.update({
-                where: { id: canonicalStoryId },
-                data: {
-                    currentRevisionId: created.id,
-                    // kind/subtype are Story display fields (ADR-0006 decision 3);
-                    // before ORG-013 they were fingerprinted but never persisted.
-                    kind: input.kind,
-                    subtype: input.subtype,
-                },
-            });
-            await appendDomainEvent(tx, {
-                type: "story.revision_created.v1",
-                aggregateType: "Story",
-                aggregateId: canonicalStoryId,
-                payload: {
-                    storyId: canonicalStoryId,
-                    baseRevisionId: input.baseRevisionId,
-                    revision: created.revision,
-                    actor: input.actor ?? null,
-                    reason: input.reason ?? null,
-                },
-            });
-        });
+        await this.prisma.$transaction((tx) => writeStoryRevision(tx, { ...input, storyId: canonicalStoryId }));
         return this.story(canonicalStoryId);
     }
 

@@ -1,10 +1,14 @@
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { createMediaAcquirer, IngestionService, mediaDownloadCapability, type IngestConnector } from "@cosmos/application";
 import type { NormalizedIngestItem } from "@cosmos/domain";
+import { contentBlockSchema } from "@cosmos/contracts";
 import { resolveStorageRoots } from "./index.js";
 import { createFixtureSource, withRepository } from "./index.fixtures.js";
+import { ContentRebuild, ContentQuery } from "@cosmos/application";
+import { PrismaContentRebuildRepository } from "./repository/content-rebuild.js";
+import { PrismaContentQueryRepository } from "./repository/content-query.js";
 
     it("anchors relative data roots to the workspace root", () => {
         const workspaceRoot = resolve(tmpdir(), "cosmos-workspace-root");
@@ -16,6 +20,99 @@ import { createFixtureSource, withRepository } from "./index.fixtures.js";
             ".cosmos",
             "cosmos.sqlite",
         ));
+    });
+
+    it("revises equal-text sources when image order changes and skips unchanged declared content", async () => {
+        await withRepository("content-source-revisions", async (repository, prisma) => {
+            const source = await createFixtureSource(repository, { name: "Content source fixture", config: {} });
+            const item: NormalizedIngestItem = {
+                externalId: "ordered-media",
+                title: "Ordered media",
+                summary: null,
+                contentText: "same text",
+                contentSource: { format: "safe-html-input", html: "<p>same text</p><img src='https://example.test/a.png'>" },
+                webUrl: null,
+                kind: "article",
+                publisher: null,
+                metrics: null,
+                publishedAt: null,
+                updatedAt: null,
+                sourceLocator: { provider: "fixture", item: "ordered-media" },
+                rawPayload: "fixture",
+                assets: [],
+            };
+            let current = item;
+            const connector: IngestConnector = {
+                id: "test-fixture",
+                description: "Content source fixture",
+                configVersion: "v1",
+                capabilities: ["test"],
+                validate: () => undefined,
+                async fetchItems() { return { items: [current], nextCursor: null }; },
+            };
+            const blobWrites = vi.spyOn(repository.blobs, "put");
+            let stagedWrites = 0;
+            const service = new IngestionService(repository, () => connector, undefined, undefined, {
+                async put(bytes, options) {
+                    stagedWrites += 1;
+                    return repository.blobs.put(bytes, options);
+                },
+            });
+            expect((await service.runSource(source.id)).createdEntryCount).toBe(1);
+            expect(stagedWrites).toBe(2);
+            expect(blobWrites).toHaveBeenCalledTimes(2);
+            const observation = await prisma.observation.findFirstOrThrow({ where: { sourceInstanceId: source.id } });
+            expect(observation.contentSourceBlobKey).toBeTruthy();
+            expect(observation.contentSourceBlobKey).not.toBe(observation.payloadBlobKey);
+            const retainedSource = await repository.blobs.read(observation.contentSourceBlobKey!);
+            expect(JSON.parse(new TextDecoder().decode(retainedSource))).toEqual(item.contentSource);
+            expect(await repository.listContentUnchangedItems({ sourceId: source.id, items: [current] })).toEqual([true]);
+            current = { ...item, contentSource: { format: "safe-html-input", html: "<img src='https://example.test/a.png'><p>same text</p>" } };
+            expect(await repository.listContentUnchangedItems({ sourceId: source.id, items: [current] })).toEqual([false]);
+            expect((await service.runSource(source.id)).revisedEntryCount).toBe(1);
+            expect((await service.runSource(source.id)).revisedEntryCount).toBe(0);
+            const entries = await repository.entries({ sourceId: source.id, limit: 20 });
+            expect(entries.items).toHaveLength(1);
+            expect(entries.items[0].revisionCount).toBe(2);
+            const revisions = await prisma.entryRevision.findMany({
+                orderBy: { revision: "asc" },
+                include: { currentRepresentation: true, assets: true, evidenceObservation: true },
+            });
+            expect(revisions).toHaveLength(2);
+            for (const revision of revisions) {
+                expect(revision.evidenceObservation).not.toBeNull();
+                expect(revision.currentRepresentation?.entryRevisionId).toBe(revision.id);
+                expect(revision.currentRepresentation?.representationVersion).toBe(1);
+                const blocks = contentBlockSchema.array().parse(JSON.parse(revision.currentRepresentation!.blocksJson));
+                const image = blocks.find((block) => block.type === "image");
+                expect(image?.type).toBe("image");
+                if (image?.type === "image") expect(image.data.assetId).toBe(revision.assets[0].id);
+                expect(blocks.map((block) => block.type)).toEqual(revision.revision === 1 ? ["paragraph", "image"] : ["image", "paragraph"]);
+            }
+            expect(await prisma.contentRepresentation.count()).toBe(2);
+            const rebuildRepository = new PrismaContentRebuildRepository(prisma, repository.blobs);
+            const rebuild = new ContentRebuild(rebuildRepository);
+            const authority = { actorId: "user", canManageRepresentations: true };
+            const rebuilt = await rebuild.rebuild(revisions[0].id, authority);
+            expect(rebuilt).toMatchObject({ representationVersion: 2, promoted: true });
+            const query = new ContentQuery(new PrismaContentQueryRepository(prisma));
+            const historic = await query.structuredContent({ entryRevisionId: revisions[0].id, representationVersion: 1 }, { allowedProfiles: ["structured-content"] });
+            expect(historic?.representation?.id).toBe(revisions[0].currentRepresentationId);
+            await prisma.entryRevision.update({ where: { id: revisions[0].id }, data: { representationLocked: true } });
+            const locked = await rebuild.rebuild(revisions[0].id, authority);
+            expect(locked).toMatchObject({ representationVersion: 3, promoted: false });
+            const after = await prisma.entryRevision.findUniqueOrThrow({ where: { id: revisions[0].id } });
+            expect(after.currentRepresentationId).toBe(rebuilt.representationId);
+            expect(await prisma.entryRevision.count()).toBe(2);
+            expect(await prisma.asset.count()).toBe(2);
+            const stale = await rebuildRepository.readRebuildSource(revisions[0].id);
+            expect(stale).not.toBeNull();
+            await expect(rebuildRepository.commitRebuild({
+                entryRevisionId: revisions[0].id, expectedCurrentId: null, expectedLocked: true,
+                draft: { blocks: [], contentText: "", status: "complete", parserVersion: "fixture", qualitySignals: {} }, actorId: "user",
+            })).rejects.toThrow("selection conflict");
+            expect(await prisma.contentRepresentation.count()).toBe(4);
+        });
     });
 
     it("persists observations, revisions, assets, Story projections and FTS results", async () => {

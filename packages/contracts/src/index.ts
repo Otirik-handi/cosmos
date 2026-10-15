@@ -36,6 +36,16 @@ export {
 } from "./base.js";
 
 export {
+    contentInputBudget, contentInlineSchema, contentBlockSchema, structuredSourceBlockSchema,
+    contentSourceSchema, evidenceRefSchema, evidenceStatusSchema, contentEvidenceSchema,
+    contentRepresentationSchema, structuredContentViewSchema, type StructuredContentViewContract, contentProfileSchema,
+    contentSelectionCommandSchema, contentSelectionResultSchema, contentRebuildCommandSchema, contentRebuildResultSchema,
+    type ContentSourceContract, type ContentBlockContract, type StructuredSourceBlockContract,
+    type EvidenceRefContract, type ContentRepresentationContract, type ContentEvidenceContract,
+    type ContentProfileContract,
+} from "./content-representation.js";
+
+export {
     collectionPlanOverlapPolicySchema, collectionPlanSnapshotSchema,
     collectionPlanWebhookEntryPath, collectionPlanWebhookEntrySchema,
     createCollectionPlanCommandSchema, updateCollectionPlanCommandSchema,
@@ -193,6 +203,13 @@ export {
     type AgentInvocationOutput, type AgentInvocationTool, type AgentInvocationToolCall,
     type AgentInvocationUsage,
 } from "./agent.js";
+
+export {
+    storyAgentTaskSchema, storyAgentSourceBindingSchema, storyAgentRequestSchema, storyAgentProposalSchema,
+    storyAgentCandidateSchema, storyAgentCandidateRecordSchema, storyAgentCandidateDecisionSchema,
+    type StoryAgentCandidateRecordContract, type StoryAgentTask, type StoryAgentSourceBinding,
+    type StoryAgentProposal, type StoryAgentCandidate,
+} from "./story-agent.js";
 
 export {
     actionDefinitionSchema, actionDescriptorSchema, actionErrorCodeSchema,

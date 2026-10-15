@@ -1,0 +1,137 @@
+import { type Prisma, type PrismaClient } from "@prisma/client";
+import {
+    StoryAgentCandidateError,
+    type StoryAgentCandidateRecord,
+    type StoryAgentCandidateRepository,
+    type StoryAgentCandidateStatus,
+} from "@cosmos/application";
+import { type StoryAgentCandidate, storyAgentCandidateSchema, storySuccessorSchema, storyTimeRangeSchema } from "@cosmos/contracts";
+import { writeEntryRelation } from "./entry-relation-command.js";
+import { writeStoryRevision } from "./story-revision-command.js";
+import { appendDomainEvent } from "./repository-internals.js";
+
+function parseCandidate(value: string): StoryAgentCandidate {
+    return storyAgentCandidateSchema.parse(JSON.parse(value));
+}
+
+function record(candidate: StoryAgentCandidate, status: StoryAgentCandidateStatus): StoryAgentCandidateRecord {
+    return { candidate, status };
+}
+
+export class PrismaStoryAgentCandidateRepository implements StoryAgentCandidateRepository {
+    constructor(private readonly prisma: PrismaClient) {}
+
+    async save(candidate: StoryAgentCandidate): Promise<StoryAgentCandidateRecord> {
+        const parsed = storyAgentCandidateSchema.parse(candidate);
+        const row = await this.prisma.$transaction(async (tx) => {
+            const revision = await tx.storyRevision.findUnique({ where: { id: parsed.storyRevisionId } });
+            if (!revision || revision.storyId !== parsed.storyId) throw new StoryAgentCandidateError("conflict", "Story candidate revision mismatch");
+            for (const binding of parsed.inputSources) {
+                const representation = await tx.contentRepresentation.findUnique({
+                    where: { entryRevisionId_representationVersion: binding },
+                });
+                if (!representation || representation.status === "failed") throw new StoryAgentCandidateError("conflict", "Story candidate source unavailable");
+            }
+            return tx.storyAgentCandidate.create({
+                data: {
+                    id: parsed.id,
+                    storyId: parsed.storyId,
+                    storyRevisionId: parsed.storyRevisionId,
+                    candidateJson: JSON.stringify(parsed),
+                    status: "pending",
+                    createdAt: new Date(parsed.createdAt),
+                },
+            });
+        });
+        return record(parseCandidate(row.candidateJson), "pending");
+    }
+
+    async list(storyId: string): Promise<readonly StoryAgentCandidateRecord[]> {
+        const rows = await this.prisma.storyAgentCandidate.findMany({
+            where: { storyId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100,
+        });
+        return rows.map((row) => {
+            if (row.status !== "pending" && row.status !== "accepted" && row.status !== "rejected") {
+                throw new Error("Invalid Story candidate status");
+            }
+            return record(parseCandidate(row.candidateJson), row.status);
+        });
+    }
+
+    async decide(input: {
+        candidateId: string;
+        decision: "accept" | "reject";
+        actorId: string;
+    }): Promise<StoryAgentCandidateRecord> {
+        return this.prisma.$transaction(async (tx) => {
+            const row = await tx.storyAgentCandidate.findUnique({ where: { id: input.candidateId } });
+            if (!row) throw new StoryAgentCandidateError("not_found", "Story candidate not found");
+            if (row.status !== "pending") throw new StoryAgentCandidateError("conflict", "Story candidate decision conflict");
+            const candidate = parseCandidate(row.candidateJson);
+
+            if (input.decision === "accept") {
+                const story = await tx.story.findUnique({ where: { id: candidate.storyId } });
+                if (!story || story.currentRevisionId !== candidate.storyRevisionId) throw new StoryAgentCandidateError("conflict", "Story candidate input changed");
+                for (const binding of candidate.inputSources) {
+                    const representation = await tx.contentRepresentation.findUnique({
+                        where: { entryRevisionId_representationVersion: binding },
+                    });
+                    if (!representation || representation.status === "failed") throw new StoryAgentCandidateError("conflict", "Story candidate source unavailable");
+                }
+                await this.applyCandidate(tx, candidate, input.actorId);
+            }
+
+            const decidedAt = new Date();
+            const updated = await tx.storyAgentCandidate.updateMany({
+                where: { id: row.id, status: "pending" },
+                data: { status: input.decision === "accept" ? "accepted" : "rejected", decidedAt, decidedBy: input.actorId },
+            });
+            if (updated.count !== 1) throw new StoryAgentCandidateError("conflict", "Story candidate decision conflict");
+            await appendDomainEvent(tx, {
+                type: "story.agent_candidate_decided.v1",
+                aggregateType: "Story",
+                aggregateId: candidate.storyId,
+                payload: { candidateId: candidate.id, decision: input.decision, actorId: input.actorId },
+            });
+            return record(candidate, input.decision === "accept" ? "accepted" : "rejected");
+        });
+    }
+
+    private async applyCandidate(tx: Prisma.TransactionClient, candidate: StoryAgentCandidate, actorId: string): Promise<void> {
+        if (candidate.proposal.task === "story.summarize") {
+            const story = await tx.story.findUnique({ where: { id: candidate.storyId }, select: { kind: true, subtype: true, currentRevision: { select: { timeRangeJson: true } } } });
+            if (!story) throw new StoryAgentCandidateError("conflict", "Story candidate story not found");
+            await writeStoryRevision(tx, {
+                storyId: candidate.storyId,
+                baseRevisionId: candidate.storyRevisionId,
+                title: candidate.proposal.title,
+                summary: candidate.proposal.summary,
+                kind: storySuccessorSchema.shape.kind.parse(story.kind),
+                subtype: story.subtype,
+                // Summary proposals do not own the existing temporal annotation.
+                timeRange: story.currentRevision?.timeRangeJson
+                    ? storyTimeRangeSchema.parse(JSON.parse(story.currentRevision.timeRangeJson)) : null,
+                keyFacts: candidate.proposal.keyFacts.map((fact) => ({ text: fact.text, entryId: fact.evidence[0]?.entryId ?? null })),
+                actor: actorId,
+                reason: `Accepted Story Agent candidate ${candidate.id}`,
+            });
+            return;
+        }
+        if (candidate.proposal.task === "story.extract-relations") {
+            for (const relation of candidate.proposal.relations) {
+                await writeEntryRelation(tx, {
+                    fromEntryId: relation.sourceEntryId,
+                    toEntryId: relation.targetEntryId,
+                    relationType: relation.type,
+                    producer: candidate.producer,
+                    producerVersion: candidate.producerVersion,
+                    evidence: JSON.stringify(relation.evidence),
+                    actor: actorId,
+                    reason: relation.reason,
+                });
+            }
+            return;
+        }
+        throw new StoryAgentCandidateError("unsupported", "Story Agent quality review candidates are not formally writable");
+    }
+}

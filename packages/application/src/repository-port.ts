@@ -35,6 +35,8 @@ import type {
     MediaRetryCandidate, MediaRetryOutcome,
 } from "./media-ports.js";
 
+import type { ContentDraft } from "./content-normalizer.js";
+import type { StagedIngestBlobs } from "./ingest-blob-staging.js";
 import type {
     JobLease,
 } from "./connector-ports.js";
@@ -267,12 +269,16 @@ export interface CosmosRepository {
         sourceId: string;
         runId: string;
         item: NormalizedIngestItem;
+        contentDraft?: ContentDraft;
+        stagedBlobs?: StagedIngestBlobs;
     }): Promise<PersistIngestItemResult>;
     persistWorkflowIngestItem(input: {
         sourceId: string;
         workflowRunId: string;
         triggerKind: IngestTriggerKind;
         item: NormalizedIngestItem;
+        contentDraft?: ContentDraft;
+        stagedBlobs?: StagedIngestBlobs;
         fence: HostActionExecutionFence;
         idempotencyKey: string;
     }): Promise<PersistIngestItemResult>;

@@ -183,6 +183,32 @@ function actionsWithMedia(options: {
 }
 
 describe("source.fetch media acquisition wiring (ADR-0005)", () => {
+    it("preserves declared HTML content through the workflow output boundary", async () => {
+        const contentSource = {
+            format: "safe-html-input" as const,
+            html: '<p>Before</p><img src="a.png"><p>After</p>',
+            baseUrl: "https://example.test/post/1",
+        };
+        const { registry } = actionsWithMedia({
+            withAcquirer: false,
+            items: [{ ...ingestItemWithImage(), contentSource }],
+        });
+        const output = await registry.dispatch(
+            "source.fetch@1",
+            { source, cursor: null },
+            context(),
+        );
+        expect(output).toMatchObject({ items: [{
+            contentSource,
+            contentText: "Before After",
+            assets: expect.arrayContaining([expect.objectContaining({
+                kind: "image",
+                sourceUrl: "https://example.test/post/a.png",
+                status: "metadata_only",
+            })]),
+        }] });
+    });
+
     it("downloads image candidates into a BlobRef for media-capable connectors", async () => {
         const { registry, puts } = actionsWithMedia({});
         const output = await registry.dispatch(

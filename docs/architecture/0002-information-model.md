@@ -112,6 +112,16 @@
 
 → §12–14 迁移、后置压力测试问题与变更记录 已归档:[part-12-14.md](0002-information-model/part-12-14.md)
 
+## Story 内容表示增量设计（Task 40）
+
+已接受的目标与分层合同见 [Story 内容目标设计](../aegis/specs/2026-10-08-story-content-representation-design.md) 和 [内容表示架构](../aegis/specs/2026-10-08-story-content-representation-architecture.md)，实施与验证由 [Task 40](../../.agents/tasks/40-story-content-representation/README.md) 承接。此处记录已接受设计，不表示全部能力已实现。
+
+- Observation 继续唯一拥有原始采集证据；EntryRevision 的来源事实保持不可变。其 `currentRepresentationId` 是可变的表示选择元数据，不构成新的来源修订。
+- ContentRepresentation 是 EntryRevision 下独立持久化、版本化的阅读投影；正文为保留语义顺序的受控块 JSON。重新解析新增表示，保留原表示与版本化证据引用。
+- Application 统一拥有规范化、质量选择、读取投影与访问策略；Storage 原子保存表示与当前指针并验证归属；Web 和 Agent 不自行解析来源正文或直接读取 Blob。
+- 本增量细化 §1 决定 30 的 Agent 边界：单用户最大产品权限不代表生成结果可以自动成为正式事实。三项 Story 分析默认产生候选，接受后才通过正式命令写入并审计；原始证据与媒体字节通过受管读取 scope 检查，不默认注入模型输入。
+- 旧 `contentText` 合同和可解释 legacy 回退保留；不批量回填旧数据，不执行任意 HTML，不抓取外链全文。
+
 ## 分册勘误登记
 
 分册封口后只读；对已封口分册的更正登记在此，不改写分册正文。

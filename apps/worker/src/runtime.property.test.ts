@@ -46,6 +46,7 @@ function optionsFor(recovered: readonly { runId: string }[], runPoll: ReturnType
             workerAdminHost: "127.0.0.1",
             workerAdminPort: 0,
             workerAdminToken: null,
+            agent: null,
         },
         instanceId: "instance-test",
         heartbeat: vi.fn(async () => undefined),

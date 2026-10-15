@@ -1,4 +1,5 @@
 import { hashValue, normalizeText, stableStringify } from "./internal.js";
+import type { ContentSource } from "./content-representation.js";
 import type { StoryKind } from "./story-subtypes.js";
 import type { TemporalValue } from "./temporal.js";
 
@@ -95,6 +96,8 @@ export interface NormalizedIngestItem {
     title: string;
     summary: string | null;
     contentText: string;
+    /** New sources may provide structured content; legacy connectors may omit it. */
+    contentSource?: import("./content-representation.js").ContentSource;
     webUrl: string | null;
     kind: ContentKind;
     publisher: Publisher | null;
@@ -150,8 +153,13 @@ export function fingerprintEntryRevision(input: {
     webUrl: string | null;
     kind: ContentKind;
     publisher: Publisher | null;
+    contentSource?: ContentSource;
 }): string {
-    return hashValue(JSON.stringify(input));
+    const { contentSource, ...legacyFields } = input;
+    // Preserve legacy fingerprints; declared source order changes revisions independently of parsing or downloads.
+    const serialized = JSON.stringify(legacyFields);
+    const { contentText: _derivedText, ...sourceFields } = legacyFields;
+    return hashValue(contentSource === undefined ? serialized : `${JSON.stringify(sourceFields)}\u001f${stableStringify(contentSource)}`);
 }
 
 export function normalizePublisher(input: {

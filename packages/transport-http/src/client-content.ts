@@ -21,6 +21,18 @@ import {
     entryDetailSchema,
     entryPageSchema,
     revisionDetailSchema,
+    structuredContentViewSchema,
+    contentSelectionCommandSchema,
+    contentSelectionResultSchema,
+    contentRebuildCommandSchema,
+    contentRebuildResultSchema,
+    storyAgentCandidateRecordSchema,
+    storyAgentCandidateDecisionSchema,
+    storyAgentRequestSchema,
+    type StoryAgentTask,
+    type StoryAgentSourceBinding,
+    type StoryAgentCandidateRecordContract,
+    type StructuredContentViewContract,
     type FeedPage,
     type SearchPage,
     type SearchQuery,
@@ -82,6 +94,18 @@ import type {
 } from "./types.js";
 import { CosmosTransportError } from "./types.js";
 export class ContentClient extends SourcesClient {
+    async revisionContent(revisionId: string, representationVersion?: number): Promise<StructuredContentViewContract> {
+        if (representationVersion !== undefined && (!Number.isSafeInteger(representationVersion) || representationVersion < 1)) {
+            throw new RangeError("representationVersion must be a positive safe integer.");
+        }
+        const params = new URLSearchParams();
+        if (representationVersion !== undefined) params.set("representationVersion", String(representationVersion));
+        const suffix = params.size ? `?${params.toString()}` : "";
+        return this.request(`/api/v1/revisions/${encodeURIComponent(revisionId)}/content${suffix}`, {
+            schema: structuredContentViewSchema,
+        });
+    }
+
     async feed(options: {
         cursor?: string;
         limit?: number;
@@ -136,6 +160,32 @@ export class ContentClient extends SourcesClient {
         }
         return this.request(`/api/v1/search?${params.toString()}`, {
             schema: searchPageSchema,
+        });
+    }
+
+    async proposeStoryAgentCandidate(storyId: string, request: {
+        task: StoryAgentTask; sources?: readonly StoryAgentSourceBinding[];
+    }): Promise<StoryAgentCandidateRecordContract> {
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/agent-candidates`, {
+            method: "POST", body: storyAgentRequestSchema.parse(request), schema: storyAgentCandidateRecordSchema,
+        });
+    }
+
+    async rebuildRevisionContent(revisionId: string) {
+        return this.request(`/api/v1/revisions/${encodeURIComponent(revisionId)}/content/rebuild`, {
+            method: "POST", body: contentRebuildCommandSchema.parse({}), schema: contentRebuildResultSchema,
+        });
+    }
+
+    async storyAgentCandidates(storyId: string): Promise<StoryAgentCandidateRecordContract[]> {
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/agent-candidates`, {
+            schema: storyAgentCandidateRecordSchema.array(),
+        });
+    }
+
+    async decideStoryAgentCandidate(candidateId: string, decision: "accept" | "reject"): Promise<StoryAgentCandidateRecordContract> {
+        return this.request(`/api/v1/story-agent-candidates/${encodeURIComponent(candidateId)}/decision`, {
+            method: "POST", body: storyAgentCandidateDecisionSchema.parse({ decision }), schema: storyAgentCandidateRecordSchema,
         });
     }
 
@@ -447,6 +497,15 @@ export class ContentClient extends SourcesClient {
     async entry(entryId: string): Promise<EntryDetail> {
         return this.request(`/api/v1/entries/${encodeURIComponent(entryId)}`, {
             schema: entryDetailSchema,
+        });
+    }
+
+    async selectRevisionContent(revisionId: string, command: {
+        expectedCurrentId: string | null; expectedLocked: boolean;
+        operation: "lock" | "unlock" | "rollback"; representationId?: string;
+    }) {
+        return this.request(`/api/v1/revisions/${encodeURIComponent(revisionId)}/content/selection`, {
+            method: "POST", body: contentSelectionCommandSchema.parse(command), schema: contentSelectionResultSchema,
         });
     }
 

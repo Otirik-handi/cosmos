@@ -28,6 +28,31 @@ const firstPage = `<?xml version="1.0"?>
 const revisedPage = firstPage.replace("First item.", "Revised item.");
 
 describe("RSS connector", () => {
+    it("declares ordered RSS and Atom HTML bodies with a resolution base", () => {
+        const html = "<p>Before</p><img src='/figure.png'><p>After</p>";
+        const rss = parseRssXml(`<rss><channel><item><title>RSS</title><link>https://example.test/post</link><description><![CDATA[${html}]]></description></item></channel></rss>`, {});
+        const atom = parseRssXml(`<feed><entry><title>Atom</title><content type='html'><![CDATA[${html}]]></content></entry></feed>`, { feedUrl: "https://example.test/feed" });
+        expect(rss[0].contentSource).toEqual({ format: "safe-html-input", html, baseUrl: "https://example.test/post" });
+        expect(atom[0].contentSource).toEqual({ format: "safe-html-input", html, baseUrl: "https://example.test/feed" });
+        const empty = parseRssXml("<rss><channel><item><title>Only title</title></item></channel></rss>", {});
+        expect(empty[0].contentSource).toEqual({ format: "plain-text", text: "Only title" });
+    });
+    it("preserves Atom plain text and does not discover literal HTML as media", () => {
+        const text = "A <word> and <img src='https://example.test/literal.png'>";
+        for (const body of [
+            `<content type='text'><![CDATA[${text}]]></content>`,
+            `<content><![CDATA[${text}]]></content>`,
+            `<summary type='text'><![CDATA[${text}]]></summary>`,
+        ]) {
+            const [item] = parseRssXml(`<feed><entry><title>Atom</title>${body}</entry></feed>`, {});
+            expect(item.contentSource).toEqual({ format: "plain-text", text });
+            expect(item.contentText).toBe(text);
+            expect(item.assets).toEqual([]);
+        }
+        const [summary] = parseRssXml("<feed><entry><title>Atom</title><summary type='html'><![CDATA[<p>Summary</p>]]></summary></entry></feed>", {});
+        expect(summary.contentSource).toEqual({ format: "safe-html-input", html: "<p>Summary</p>" });
+    });
+
     it("sends stored validators and skips the body on 304 (AUT-003)", async () => {
         const requests: Array<{ url: string; headers: Record<string, string> }> = [];
         const connector = createRssConnector({

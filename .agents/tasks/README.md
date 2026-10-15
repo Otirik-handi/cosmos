@@ -61,6 +61,9 @@ Task 导航：
 - [`37-automation-interaction-polish/`](37-automation-interaction-polish/)：自动化页交互补完——Task 35 记录的两条交互缺口：连接创建从常驻内联表单改成「新建连接」按钮 + 模态框（表单 + 确认/取消），连接区常驻内容变成连接列表并补空状态；采集计划行的纯图标按钮（启用/停用、运行、Webhook 入口、媒体策略、删除）加 `Tooltip`，悬停与键盘聚焦都能看到，文案与既有 `sr-only` 同源。无数据合同变更，`Dialog` 与 `Tooltip` 组件均已存在；编号 37 由维护者 2026-10-08 分配。
 - [`38-agent-invocation/`](38-agent-invocation/)：Phase 3 第一切片 Agent Invocation 基础接入——版本化 `agent.invoke@1` 普通 Workflow Action、Invocation Port、`trusted_worker` 执行位置与 Fake Adapter 先行；复用现有 Run/Activity/Job/Attempt/Lease/取消/重试/completion durable truth。真实 `pi-ai`、`neuro-agent-harness`、`nb-memory`、Artifact、Workspace、Knowledge/Research 后置；编号 38 由维护者 2026-10-08 分配。
 
+- [`39-pi-ai-adapter/`](39-pi-ai-adapter/)：真实 pi-ai Adapter，承接 Task 38；编号 39 由维护者分配，当前状态与验证见任务记录。
+- [`40-story-content-representation/`](40-story-content-representation/)：Story 内容表示与多模态阅读——有序内容块、版本化投影、统一 Web/Agent 读取与候选接受；编号 40 由维护者分配，内容表示、读取、阅读和候选决定已有实现，当前推进剩余修复、生产 Agent 装配与整体验收；当前证据和缺口见同一 walkthrough。
+
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 
 实现规格入口：[`../../docs/spec/README.md`](../../docs/spec/README.md)。先读 spec 索引与公共合同，再按组件读取

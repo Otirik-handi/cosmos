@@ -31,6 +31,7 @@ import { WorkerRuntime } from "./runtime.js";
 import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
 import { createScheduleQueue } from "./scheduling.js";
 import { createWorkflowHost } from "./workflow-host.js";
+import { createWorkerAgentAction } from "./agent-action.js";
 
 /**
  * 把执行快照解析成连接器状态句柄：命名空间取自 manifest 的 `stateStoreNamespace`
@@ -123,6 +124,7 @@ async function bootstrap(): Promise<void> {
             (source) => connectors.resolve(source),
             logger,
             mediaAcquirer,
+            repository.blobs,
         );
         const probe = new ConnectorProbeService(
             repository,
@@ -163,6 +165,10 @@ async function bootstrap(): Promise<void> {
                     createMediaCleanupWorkflowDefinition(),
                 ],
                 actions: [
+                    ...(config.agent ? [createWorkerAgentAction(config.agent, {
+                        connections: repository,
+                        secrets: repository.secrets,
+                    })] : []),
                     ...createIngestActions({
                         resolveConnector: (source) => connectors.resolve(source),
                         blobs: repository.blobs,

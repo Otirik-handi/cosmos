@@ -22,6 +22,31 @@ describe("parseWorkerRuntimeConfig", () => {
         });
     });
 
+    it("keeps Agent disabled until complete provider configuration is explicit", () => {
+        expect(parseWorkerRuntimeConfig({}).agent).toBeNull();
+        expect(() => parseWorkerRuntimeConfig({ COSMOS_AGENT_ENABLED: "true" })).toThrow(
+            "COSMOS_AGENT_CONTEXT_WINDOW is required when COSMOS_AGENT_ENABLED=true.",
+        );
+        expect(parseWorkerRuntimeConfig({
+            COSMOS_AGENT_ENABLED: "true",
+            COSMOS_AGENT_PROVIDER: "jijiapi",
+            COSMOS_AGENT_MODEL: "gpt-6-luna",
+            COSMOS_AGENT_API: "openai-completions",
+            COSMOS_AGENT_BASE_URL: "https://api-slb.jiji.cc/v1",
+            COSMOS_AGENT_CONTEXT_WINDOW: "262144",
+            COSMOS_AGENT_MAX_OUTPUT_TOKENS: "32768",
+            COSMOS_AGENT_CONNECTION_ID: "connection-1",
+        }).agent).toMatchObject({
+            provider: "jijiapi",
+            model: "gpt-6-luna",
+            api: "openai-completions",
+            baseUrl: "https://api-slb.jiji.cc/v1",
+            contextWindow: 262144,
+            maxOutputTokens: 32768,
+            connectionId: "connection-1",
+        });
+    });
+
     it.each([
         ["COSMOS_WORKER_POLL_MS", "0", "COSMOS_WORKER_POLL_MS must be a positive integer."],
         ["COSMOS_WORKER_POLL_MS", "1.5", "COSMOS_WORKER_POLL_MS must be a positive integer."],

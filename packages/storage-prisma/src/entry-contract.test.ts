@@ -8,7 +8,11 @@ import * as entry from "./index.js";
 const FROZEN_VALUE_EXPORTS = [
     "FileSecretStore",
     "PrismaConnectorStateStore",
+    "PrismaContentQueryRepository",
+    "PrismaContentRebuildRepository",
+    "PrismaContentSelectionRepository",
     "PrismaCosmosRepository",
+    "PrismaStoryAgentCandidateRepository",
     "PrismaWorkflowBackend",
     "PrismaWorkflowEventSink",
     "PrismaWorkflowHostStore",

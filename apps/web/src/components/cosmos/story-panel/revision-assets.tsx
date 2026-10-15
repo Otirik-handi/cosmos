@@ -8,6 +8,7 @@ import {
 import {
     Badge,
 } from "@/components/ui/badge";
+import { safeContentUrl } from "@/lib/content-url";
 import {
     STATUS_LABELS,
     formatBytes,
@@ -26,6 +27,7 @@ export function RevisionAssets({ assets }: { assets: readonly PublicAssetSnapsho
         <section aria-label="媒体" className="grid gap-3">
             {assets.map((asset) => {
                 const label = kindLabel(asset.kind);
+                const sourceUrl = safeContentUrl(asset.sourceUrl);
                 if (asset.status === "saved") {
                     return (
                         <figure
@@ -72,9 +74,9 @@ export function RevisionAssets({ assets }: { assets: readonly PublicAssetSnapsho
                                 已尝试 {asset.attemptCount} 次
                             </span>
                         )}
-                        {asset.sourceUrl && (
+                        {sourceUrl && (
                             <a
-                                href={asset.sourceUrl}
+                                href={sourceUrl}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1 rounded-sm text-primary underline-offset-4 hover:underline focus-visible:border-ring focus-visible:shadow-[var(--focus-ring)] focus-visible:outline-none"

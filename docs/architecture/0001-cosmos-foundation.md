@@ -113,8 +113,8 @@
 69. `TaskStore` 是 Job 状态、retry 和 lease 的唯一权威；`WakeupBus` 只负责通知，Redis Streams 是可选 Adapter，不是 Job 或领域终态真相。
 70. Local Durable 默认 SQLite + 自适应 polling；真正多主机目标是 PostgreSQL + S3/MinIO + 可选 Redis，不通过共享 SQLite 网络盘实现。
 71. API 是 manifest-only 控制面，Worker 是 executable 执行面，Migrator 是独立一次性运维单元；当前代码尚需 convergence 才完全满足。
-72. Agent 能力属于可选 `nb-workflow` Extension，映射到 `agent.invoke@1`；Core 不依赖 Harness，具体 Adapter 等 `neuro-agent-harness` 合同稳定后接入。
-73. Phase 3 第一切片先以 `agent.invoke@1` + Invocation Port + Fake Adapter 验证现有 Workflow/Job durable truth、trusted Worker 执行、取消、重试和预算边界；真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、Artifact、Workspace、Knowledge 和 Research 产品能力后置（Proposal [`agent-invocation-v1`](../proposals/agent-invocation-v1.md)、ADR [`0030`](../adr/0030-agent-invocation-v1.md)）。
+72. Agent 能力属于可选 `nb-workflow` Extension，映射到 `agent.invoke@1`；Core 不依赖 Harness。真实 Agent Provider Adapter 由可信 Worker 显式装配，并仅在部署配置明确启用时注册。v1 使用单 Worker-local provider/model profile + 显式 Connection ID；profile 与 Secret 不进入 Invocation payload 或 durable state。
+73. Phase 3 第一切片先以 `agent.invoke@1` + Invocation Port + Fake Adapter 验证现有 Workflow/Job durable truth、trusted Worker 执行、取消、重试和预算边界；Task 39 已增加独立 pi-ai Adapter。真实调用仍是可选 Worker 能力；Connection/SecretRef 的消费遵循 ADR-0017 与 Proposal [`agent-provider-connection-credential-v1`](../proposals/agent-provider-connection-credential-v1.md)，不代表默认生产 profile 或外部服务可用性保证。Harness、`nb-memory`、Artifact、Workspace、Knowledge 和 Research 产品能力仍后置（Proposal [`agent-invocation-v1`](../proposals/agent-invocation-v1.md)、ADR [`0030`](../adr/0030-agent-invocation-v1.md)）。
 74. 并发控制分为 Worker slot、多 Worker、Workflow 内并发、资源级限流和 CollectionPlan overlap policy；任一层都不能替代 TaskStore lease/fencing。
 74. 对外边界拆为 Product Service API、Worker Admin API 和 Worker Gateway API；三者使用独立消费者、路径和版本。
 75. Worker Gateway v1 使用 HTTPS long-poll，先由 SQL TaskStore 原子 claim 再返回 Attempt；未来 WebSocket 只能作为相同语义的 Transport Adapter。
@@ -198,4 +198,5 @@
 61. 并发 Gateway claim 必须在 TaskStore 中原子保留 Session/lane capacity；Worker 上报 slot 和进程内 long-poll 都不是容量权威。
 62. `nb-workflow@0.2.0` Kernel API 已用于当前 Cosmos Durable Host 固定 Ingest；后续扩展仍须通过 Kernel/Backend conformance。Task 04 Spike 与 API Draft 只能作为 Host/Worker 边界和历史证据，不能被误报为 Gateway 或其它未实现能力。
 63. 采集计划、采集目标、连接与触发器的归属边界唯一：Run/WorkflowRun 记录计划，Entry/Observation 归目标，计划级 checkpoint 与状态命名空间不出现第二套并行当前状态。
+64. Agent 是默认关闭的可选 Worker Workflow Action；每个 Worker 至多一个本机非秘密 profile，Connection ID 显式选择凭证，不把 connectorId 当模型 Provider；每次调用校验 active Connection 并通过 SecretStore callback 临时把凭证交给 pi-ai，不能承诺内存清零或撤销已发出的外部请求。
 

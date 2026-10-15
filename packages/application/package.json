@@ -43,6 +43,7 @@
         "@cosmos/blob-store": "workspace:*",
         "@cosmos/contracts": "workspace:*",
         "@cosmos/domain": "workspace:*",
+        "parse5": "^7.3.0",
         "zod": "^4.0.0"
     }
 }

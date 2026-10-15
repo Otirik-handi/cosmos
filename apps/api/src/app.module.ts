@@ -1,10 +1,15 @@
 import { Module } from "@nestjs/common";
+import { ContentRebuild, ContentCommands, ContentQuery, StoryAgentCandidates } from "@cosmos/application";
 import { createBuiltinManifestCatalog } from "@cosmos/application/catalog";
 import { MediaCleanupWorkflowControlService } from "@cosmos/application/media-cleanup";
 import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import { createLogger } from "@cosmos/logging";
 import {
     PrismaCosmosRepository,
+    PrismaContentQueryRepository,
+    PrismaContentRebuildRepository,
+    PrismaContentSelectionRepository,
+    PrismaStoryAgentCandidateRepository,
     PrismaWorkflowHostStore,
 } from "@cosmos/storage-prisma";
 
@@ -32,6 +37,10 @@ export const cosmosIngestControl = new IngestWorkflowControlService({
     },
     getCheckpointSnapshot: (planId) => cosmosRepository.getCheckpointSnapshot(planId),
 });
+export const cosmosContentRebuild = new ContentRebuild(new PrismaContentRebuildRepository(cosmosRepository.prisma, cosmosRepository.blobs));
+export const cosmosContentQuery = new ContentQuery(new PrismaContentQueryRepository(cosmosRepository.prisma));
+export const cosmosContentCommands = new ContentCommands(new PrismaContentSelectionRepository(cosmosRepository.prisma));
+export const cosmosStoryAgentCandidates = new StoryAgentCandidates(new PrismaStoryAgentCandidateRepository(cosmosRepository.prisma));
 export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService({
     store: cosmosWorkflowStore,
 });
@@ -62,6 +71,22 @@ export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService(
         {
             provide: "COSMOS_MEDIA_CLEANUP_CONTROL",
             useValue: cosmosMediaCleanupControl,
+        },
+        {
+            provide: "COSMOS_CONTENT_QUERY",
+            useValue: cosmosContentQuery,
+        },
+        {
+            provide: "COSMOS_CONTENT_COMMANDS",
+            useValue: cosmosContentCommands,
+        },
+        {
+            provide: "COSMOS_STORY_AGENT_CANDIDATES",
+            useValue: cosmosStoryAgentCandidates,
+        },
+        {
+            provide: "COSMOS_CONTENT_REBUILD",
+            useValue: cosmosContentRebuild,
         },
         SourceProbeService,
     ],

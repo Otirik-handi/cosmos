@@ -2,7 +2,7 @@
 
 > 状态：Accepted design contract
 >
-> 部分取代：决定 1 的「Bilibili 的 OpenCLI profile 继续作为外部登录态例外留在 `config.profile`」由 ADR [`0027`](0027-connection-login-lifecycle-v1.md) 取代（2026-09-23，profile 归连接的非秘密配置 `configJson`）；决策 2/4 的 SecretStore 与租约形状不变（本片不实现凭证读取）。
+> 部分取代：决定 1 的「Bilibili 的 OpenCLI profile 继续作为外部登录态例外留在 `config.profile`」由 ADR [`0027`](0027-connection-login-lifecycle-v1.md) 取代（2026-09-23，profile 归连接的非秘密配置 `configJson`）；决定 2/4 的 SecretStore 文件格式与 `put/read/delete(ref)` 公共接口不变。Agent provider connection 凭证使用合同由已接受 Proposal [`agent-provider-connection-credential-v1`](../proposals/agent-provider-connection-credential-v1.md) 细化。
 >
 > 日期：2026-09-10
 >
@@ -28,7 +28,7 @@
 
 ### 4. Secret 脱敏与所有权边界（OPS-005/009）
 
-`SecretRef` 只出不透明引用，Secret 读取只在 Worker/Connector 边界通过能力受限租约发生；Secret 不进入 DomainEvent、Job payload、日志或普通 DTO；`ConnectorState.valueJson` 不允许写 Secret。所有权：Secret → SecretStore；cursor/ETag/token/rate → ConnectorStateStore；Blob/Artifact → 既有 Blob Root，三者互不混写。
+`SecretRef` 只出不透明引用；Secret 读取只在可信 Worker/Connector 执行边界发生。现有 `SecretStorePort` 是 `put/read/delete(ref)`，没有可撤销的租约句柄；Agent v1 使用按次的短时回调读取：每次 Invocation 重新读取 Connection 与 SecretStore，不缓存凭证；取消已触发时不读 Secret，状态非 `active`、无 `secretRef` 或读取失败时 fail closed。Secret 只在回调期间传给可信 pi-ai SDK，不进入 DomainEvent、Job payload、日志或普通 DTO；JavaScript 无法保证内存物理清零。调用已发出后，Connection 撤销不能保证 Provider 侧请求停止，只阻止后续读取；现有取消信号尽力中止本地 SDK 请求。`ConnectorState.valueJson` 不允许写 Secret。所有权：Secret → SecretStore；cursor/ETag/token/rate → ConnectorStateStore；Blob/Artifact → 既有 Blob Root，三者互不混写。
 
 ## Consequences
 
@@ -42,7 +42,8 @@
 
 - SecretStore v1 是明文文件，仅靠文件系统权限；单用户本地场景可接受，多用户/远程/云端后需要重新评估（Revisit Gate）。
 - `SourceInstance.connectionId` 无 DB FK（SQLite 限制），删除连接的 SetNull 由仓库事务显式保证；绕过仓库直接写库可能留下悬空引用。
-- 本切片是基础设施，v1 没有真实认证 Adapter 消费 Connection/Secret（Bilibili 仍走 OpenCLI profile）；价值在合同与地基，不在即时可见功能。
+- SecretStore v1 是本机受限权限明文文件，不加密；Windows 权限保护 best effort。部署者必须保护 Data Root。Worker 的 Agent profile 与 Connection ID 是非秘密部署配置，不持久化至 Agent payload；管理员显式确保 Connection 凭证适用于选定 Provider，系统不解析 Secret 以检测错配。
+- Agent credential callback 缩小 Secret 引用存活范围，但不等同租约、内存清零或 provider 侧撤销；已开始请求可能继续执行。
 
 ## Alternatives considered
 
@@ -72,5 +73,6 @@
 
 - 引入多用户、远程 Worker 或云端同步（SecretStore 需加密/OS 凭据库）；
 - CollectionPlan / 多采集计划进入实现（Checkpoint 迁移到按计划的 ConnectorStateStore）；
-- 出现真实认证类 Adapter（Connection.secretRef 被实际写入/读取，需登录生命周期与撤销语义）；
+- 多 Provider、多 Agent profile 或动态路由需要由产品层管理 Agent profile/Provider-to-Connection 绑定；
+- Agent Worker profile / Connection 凭证消费者需要超出当前单 profile、callback-scoped 读取合同的能力；
 - 需要 Secret 轮换、过期、审计或细粒度授权。

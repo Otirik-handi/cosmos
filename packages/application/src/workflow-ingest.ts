@@ -1,4 +1,5 @@
 import { readVerifiedBlob } from "@cosmos/blob-store";
+import { toBlobRef } from "./workflow-blob-ref.js";
 import { z } from "zod";
 import {
     ingestTriggerEvidenceSchema,
@@ -43,6 +44,9 @@ import type {
     SourceExecutionSnapshot,
 } from "@cosmos/contracts";
 import { acquireItemsSkippingUnchanged } from "./media-acquirer.js";
+import { prepareContentItem } from "./content-ingest.js";
+import type { ContentDraft } from "./content-normalizer.js";
+import { stageIngestBlobs, type StagedIngestBlobs } from "./ingest-blob-staging.js";
 import { mediaDownloadCapability, resolveMediaPolicy } from "./media-policy.js";
 import type { MediaAcquirer, MediaRetrier, MediaRetryOutcome } from "./media-ports.js";
 import type {
@@ -116,6 +120,8 @@ export interface WorkflowIngestDomainPort {
         workflowRunId: string;
         triggerKind: IngestTriggerKind;
         item: NormalizedIngestItem;
+        contentDraft?: ContentDraft;
+        stagedBlobs?: StagedIngestBlobs;
         fence: HostActionExecutionFence;
         idempotencyKey: string;
     }): Promise<PersistIngestItemResult>;
@@ -188,11 +194,11 @@ export function createIngestWorkflowDefinition(): IngestWorkflowDefinition {
         requiredActionRefs: ingestRequiredActionReferences,
         run: async (workflow, rawInput) => {
             const input = ingestWorkflowInputSchema.parse(rawInput);
-            const page = await workflow.callAction<SourceFetchOutput>(
+            const page = sourceFetchOutputSchema.parse(await workflow.callAction<JsonValue>(
                 ingestFetchActionReference,
                 asJson({ source: input.source, cursor: input.cursor }),
                 { key: "source.fetch" },
-            );
+            ));
             // Retry degraded media stored by earlier runs. This runs before the
             // page is persisted so "retry" means "next collection of this
             // source", never an immediate second attempt on the same bytes
@@ -418,18 +424,19 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
                 } catch (error) {
                     throw mapConnectorError(error, connector.id, "fetch");
                 }
-                let acquiredItems = page.items;
+                const preparedItems = page.items.map((item) => prepareContentItem(item).item);
+                let acquiredItems: typeof page.items = preparedItems;
                 if (
                     connector.capabilities.includes(mediaDownloadCapability)
                     && options.mediaAcquirer
                 ) {
                     const unchanged = await options.unchangedItems.listContentUnchangedItems({
                         sourceId: parsed.source.id,
-                        items: page.items,
+                        items: preparedItems,
                     });
                     acquiredItems = await acquireItemsSkippingUnchanged(
                         options.mediaAcquirer,
-                        page.items,
+                        preparedItems,
                         unchanged,
                         {
                             signal: context.signal,
@@ -468,12 +475,15 @@ export function createIngestActions(options: IngestActionOptions): readonly Regi
             handler: async (input: unknown, context: ActionExecutionContext) => {
                 const parsed = libraryIngestInputSchema.parse(input);
                 const hostContext = requireHostContext(context);
-                const item = await fromJsonItem(parsed.item, options.blobs);
+                const prepared = prepareContentItem(await fromJsonItem(parsed.item, options.blobs));
+                const item = prepared.item;
                 return libraryIngestOutputSchema.parse(await options.domain.persistWorkflowIngestItem({
                     sourceId: parsed.sourceId,
                     workflowRunId: hostContext.fence.workflowRunId,
                     triggerKind: parsed.triggerKind,
                     item,
+                    contentDraft: prepared.draft,
+                    stagedBlobs: await stageIngestBlobs(item, options.blobs),
                     fence: hostContext.fence,
                     idempotencyKey: context.idempotencyKey,
                 }));
@@ -589,27 +599,6 @@ function requireHostContext(context: ActionExecutionContext): HostActionExecutio
     return context as HostActionExecutionContext;
 }
 
-async function toBlobRef(
-    content: Uint8Array,
-    mimeType: string | null,
-    blobs: WorkflowBlobStore,
-): Promise<{
-    key: string;
-    hash: string;
-    byteSize: number;
-    mediaType: string;
-}> {
-    const stored = await blobs.put(content, {
-        mimeType: mimeType ?? "application/octet-stream",
-    });
-    return {
-        key: stored.key,
-        hash: stored.hash,
-        byteSize: stored.byteSize,
-        mediaType: stored.mimeType ?? mimeType ?? "application/octet-stream",
-    };
-}
-
 async function toJsonItem(
     item: NormalizedIngestItem,
     blobs: WorkflowBlobStore,
@@ -653,6 +642,7 @@ async function toJsonItem(
         title: item.title,
         summary: item.summary,
         contentText: item.contentText,
+        ...(item.contentSource === undefined ? {} : { contentSource: item.contentSource }),
         webUrl: item.webUrl,
         kind: item.kind,
         publisher: item.publisher,

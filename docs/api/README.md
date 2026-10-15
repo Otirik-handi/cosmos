@@ -81,6 +81,8 @@ Product Service 与 Worker Gateway 初期可以由同一个 NestJS 进程承载�
 - [`0007-review-findings.md`](0007-review-findings.md)：多代理审查发现、处理结果和
   未决问题。
 
+- [`0008-story-content-representation.md`](0008-story-content-representation.md)：Task 40 内容输入、版本化表示、受管读取与候选接受草案；实现状态见 Task，未上线端点保持 Draft。
+
 ## 4. 成熟度标记
 
 | 标记 | 含义 |

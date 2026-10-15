@@ -30,6 +30,33 @@ export {
     acquireItemsSkippingUnchanged, createMediaAcquirer,
 } from "./media-acquirer.js";
 export { isPublicAddress } from "./public-address.js";
+export { bindContentBlocks, type ContentAssetBinding } from "./content-binding.js";
+export { type ContentDraft } from "./content-normalizer.js";
+export { ContentRebuild, type ContentRebuildRepository, type ContentRebuildState } from "./content-rebuild.js";
+export { requireContentProfile, type ContentReadAuthority } from "./content-access-policy.js";
+export { StoryAgentService } from "./story-agent-service.js";
+export {
+    StoryAgent, type StoryAgentSnapshot, type StoryAgentSnapshotReader,
+    type StoryAgentRequest, type StoryAgentHost,
+} from "./story-agent.js";
+export {
+    StoryAgentCandidates, StoryAgentCandidateError, type StoryAgentCandidateStatus, type StoryAgentCandidateRecord,
+    type StoryAgentCandidateRepository, type StoryAgentCandidateAuthority,
+} from "./story-agent-candidates.js";
+export {
+    ContentCommands, ContentCommandError, type ContentSelectionCommand, type ContentSelectionState,
+    type ContentSelectionRepository, type ContentCommandAuthority,
+} from "./content-commands.js";
+export {
+    ContentQuery, type ContentReadTarget, type ContentReadSource,
+    type ContentQueryRepository, type StructuredContentView,
+} from "./content-query.js";
+export {
+    stageIngestBlobs, type IngestBlobReference, type IngestBlobWriter, type StagedIngestBlobs,
+} from "./ingest-blob-staging.js";
+export {
+    shouldPromoteRepresentation, validateRepresentationRollback, type RepresentationSelection,
+} from "./representation-policy.js";
 export {
     WorkflowHostError, WorkflowHostConflictError, type WorkflowRunStatus,
     type WorkflowJobStatus, type WorkflowCompletionStatus, type WorkflowActivityJobKind,

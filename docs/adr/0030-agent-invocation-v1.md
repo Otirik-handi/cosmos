@@ -29,7 +29,7 @@ Secret、数据库对象、文件句柄、网络连接、进程对象和具体 S
 
 第一实现提供确定性的 Fake Adapter，用于验证 Action 和 Runtime 合同。它不模拟模型智能性，只返回预先配置的结构化结果或受控错误。
 
-真实 `pi-ai` Adapter 是后续切片，必须实现同一个 Invocation Port。`neuro-agent-harness` 未来也必须通过同一 Port/Adapter 边界接入，不得让业务 Workflow 直接依赖它。
+真实 `pi-ai` Adapter 作为独立包实现同一个 Invocation Port；只由可信 Worker 显式组合，未配置时不注册 Action。生产 credential source 与 Worker profile/Connection 绑定见 ADR-0017 和已接受 Proposal [`agent-provider-connection-credential-v1`](../proposals/agent-provider-connection-credential-v1.md)。`neuro-agent-harness` 未来也必须通过同一 Port/Adapter 边界接入，不得让业务 Workflow 直接依赖它。
 
 ### 4. Cosmos 持有唯一 durable truth
 
@@ -55,7 +55,8 @@ Cosmos 持有 Workflow Run、Activity journal、Job、Attempt、Lease、fence、
 
 - 第一切片需要定义新的 Invocation input/output schema、Port 和 Adapter 注册方式。
 - Fake Adapter 不能证明真实模型质量、真实 token 费用或真实 provider 行为。
-- `pi-ai` 接入仍需单独处理 provider 配置、凭证、真实错误、usage 和 Node 生产兼容性。
+- Agent Provider 配置是 Worker-local 单 profile；部署者显式绑定 Connection ID 和模型 Provider，系统不检查 Secret 是否适用于该 Provider。
+- Connection 和 SecretStore 在每次调用重新读取；凭证只在短时回调内传入 pi-ai SDK，不缓存、不进入 durable payload/log；这不是物理内存擦除保证，也不能撤销已发出的 Provider 请求。SecretStore 仍是本机受限权限明文文件，需保护 Data Root。
 - Harness Adapter 仍需验证 Session、等待、取消、usage 和恢复如何映射到 Cosmos Activity/Job 合同。
 - Agent 工具执行、Artifact 持久化和安全页面隔离不在本 ADR 的实现范围内。
 

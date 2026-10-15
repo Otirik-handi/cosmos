@@ -1,14 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { jobKindSchema, sourceKindSchema, sourceConfigSchema, type ConnectionInstance, type FeedItem, type JobSnapshot, type IngestTriggerKind, type SourceMediaPolicy, type SourceSnapshot, type Annotation } from "@cosmos/contracts";
 import { deriveExternalKey, fingerprintEntryRevision, fingerprintStoryRevision, projectEntryToStory, temporalProjection, type FavoriteTargetType, type NormalizedIngestItem, type TargetType } from "@cosmos/domain";
-import { EntryNotFoundError, StoryNotFoundError, TopicNotFoundError, type HostActionExecutionFence, type PersistIngestItemResult } from "@cosmos/application";
-import { FileBlobStore } from "@cosmos/blob-store";
+import { EntryNotFoundError, StoryNotFoundError, TopicNotFoundError, type HostActionExecutionFence, type PersistIngestItemResult, type ContentAssetBinding, type ContentDraft, type StagedIngestBlobs, stageIngestBlobs } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { appendDomainEvent, assertWorkflowActionFence, parseJson } from "./repository-internals.js";
 import { PrismaCosmosRepositoryHelpers3 } from "./helpers-3.js";
+import { persistInitialContentRepresentation } from "./content-representation.js";
 
 /** `PrismaClient` 与事务客户端都能满足的读模型：只读 Run／WorkflowRun。 */
 type RunDiagnosticsReader = Pick<Prisma.TransactionClient, "run" | "workflowRun">;
+
+type ContentAssetKind = "image" | "video" | "audio";
+
+function isContentAssetKind(kind: string): kind is ContentAssetKind {
+    return kind === "image" || kind === "video" || kind === "audio";
+}
 
 export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelpers3 {
     protected async persistIngestItemInternal(input: {
@@ -19,6 +25,8 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         fence?: HostActionExecutionFence;
         ingestCommandId?: string;
         item: NormalizedIngestItem;
+        contentDraft?: ContentDraft;
+        stagedBlobs?: StagedIngestBlobs;
     }): Promise<PersistIngestItemResult> {
         const externalKey = deriveExternalKey(input.item);
         const contentFingerprint = fingerprintEntryRevision({
@@ -28,6 +36,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             webUrl: input.item.webUrl,
             kind: input.item.kind,
             publisher: input.item.publisher,
+            contentSource: input.item.contentSource,
         });
         const publishedAtJson = input.item.publishedAt
             ? JSON.stringify(input.item.publishedAt)
@@ -45,53 +54,20 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
         const metricsJson = input.item.metrics
             ? JSON.stringify(input.item.metrics)
             : null;
-        let rawPayload: Awaited<ReturnType<FileBlobStore["put"]>>;
-        try {
-            rawPayload = await this.blobs.put(
-                new TextEncoder().encode(input.item.rawPayload),
-                {
-                    mimeType: input.item.rawPayloadMimeType
-                        ?? "application/octet-stream",
-                },
-            );
-        } catch (error) {
-            this.logger?.error("storage.blob.put.failed", {
-                sourceId: input.sourceId,
-                runId: input.runId,
-                kind: "raw_payload",
-                byteSize: Buffer.byteLength(input.item.rawPayload, "utf8"),
-            }, error);
-            throw error;
-        }
-        const storedAssets = await Promise.all(input.item.assets.map(async (asset, index) => {
-            if (!asset.content || asset.status !== "saved") {
-                return {
-                    ...asset,
-                    storageKey: null,
-                };
-            }
-            let stored: Awaited<ReturnType<FileBlobStore["put"]>>;
-            try {
-                stored = await this.blobs.put(asset.content, {
-                    mimeType: asset.mimeType,
-                });
-            } catch (error) {
-                this.logger?.error("storage.blob.put.failed", {
-                    sourceId: input.sourceId,
-                    runId: input.runId,
-                    kind: "asset",
-                    assetKind: asset.kind,
-                    assetIndex: index,
-                    byteSize: asset.content.byteLength,
-                }, error);
-                throw error;
-            }
-            return {
-                ...asset,
-                storageKey: stored.key,
-                byteSize: stored.byteSize,
-            };
-        }));
+        const { rawPayload, contentSource, assets: storedAssets } = input.stagedBlobs ?? await stageIngestBlobs(input.item, {
+            put: async (bytes, options) => {
+                try {
+                    return await this.blobs.put(bytes, options);
+                } catch (error) {
+                    this.logger?.error("storage.blob.put.failed", {
+                        sourceId: input.sourceId,
+                        runId: input.runId,
+                        byteSize: bytes.byteLength,
+                    }, error);
+                    throw error;
+                }
+            },
+        });
 
         return this.prisma.$transaction(async (tx) => {
             if (input.fence && input.workflowRunId) {
@@ -157,6 +133,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                     }),
                     webUrl: input.item.webUrl,
                     payloadBlobKey: rawPayload.key,
+                    contentSourceBlobKey: contentSource?.key ?? null,
                     title: input.item.title,
                     contentText: input.item.contentText,
                     contentFingerprint,
@@ -236,6 +213,7 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                 data: {
                     entryId: entry.id,
                     revision: revisionNumber,
+                    evidenceObservationId: observation.id,
                     title: input.item.title,
                     summary: input.item.summary,
                     contentText: input.item.contentText,
@@ -339,8 +317,9 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                 },
             });
 
+            const contentAssets: ContentAssetBinding[] = [];
             for (const asset of storedAssets) {
-                await tx.asset.create({
+                const savedAsset = await tx.asset.create({
                     data: {
                         entryRevisionId: revision.id,
                         kind: asset.kind,
@@ -354,6 +333,12 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
                         attemptCount: asset.attemptCount ?? 0,
                     },
                 });
+                if (isContentAssetKind(asset.kind) && asset.sourceUrl !== null) {
+                    contentAssets.push({ id: savedAsset.id, kind: asset.kind, sourceUrl: asset.sourceUrl });
+                }
+            }
+            if (input.contentDraft) {
+                await persistInitialContentRepresentation(tx, revision.id, input.contentDraft, contentAssets);
             }
 
             await tx.$executeRawUnsafe(

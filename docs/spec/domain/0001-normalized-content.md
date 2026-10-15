@@ -40,6 +40,14 @@ Connector 先把来源数据交给本组件的纯函数生成 `NormalizedIngestI
 - **NormalizedAssetInput** 是领域侧附件输入：`kind`、可空 `sourceUrl`、`status`（`saved`/`metadata_only`/`skipped`/`failed`）、可空 `mimeType`、可空 `byteSize`、可选可空 `errorMessage`（降级原因）和 `content: Uint8Array | null`。这里的 bytes 是领域运行时值，不是 Workflow JSON 字段；Workflow 中的 BlobRef wire shape 只由[公共合同](../contracts/0001-public-contracts.md)定义，bytes 的 hash/containment 校验由[FileBlobStore](../storage/0005-file-blob-store.md)负责。
 - **NormalizedIngestItem** 包含可选可空 `externalId`、`title`、可空 `summary`、`contentText`、可空 `webUrl`、`kind`、可空 `publisher`、可空 `metrics`、可空 `publishedAt`、可选可空 `updatedAt`、`sourceLocator: Record<string, unknown>`、可选 `discoveryChannel`（受管发现渠道，ING-004；由连接器声明，**不参与 fingerprint**——同一条内容换一种发现方式不产生新 Revision）、`rawPayload`、可选 `rawPayloadMimeType` 和只读资产数组。URL 可以为 null；没有 URL 仍可凭 externalId 或 sourceLocator 建立身份。进入 Workflow JSON 前由 contracts schema 做 wire 校验，domain 不再定义第二套边界规则。
 
+### 有序内容表示（Task40）
+
+`NormalizedIngestItem` 可选声明 `contentSource`：`plain-text`、`safe-html-input` 或 `structured-source-content`。HTML 输入不可信。Application 的确定性 Normalizer 按来源顺序生成受控内容块；领域只定义语义类型，不依赖 HTML 解析库。媒体输入以来源 URL 表达，持久化时绑定同一来源修订下的实际 Asset ID。
+
+Observation 分别持有原始 payload 和声明输入的 Blob 引用。EntryRevision 保持来源修订不变；其 `ContentRepresentation` 子版本保存解析器版本、有序 JSON 块、可读文本与 `complete/partial/failed` 状态。重新解析只追加表示版本，当前指针及人工锁属于选择元数据。明确读取历史版本失败时不回退到当前或旧文本；无表示的旧数据只做安全文本投影，不批量回填。
+
+公开读取、重建、锁定／回退和 Agent 候选接口见[内容表示 API](../../api/0008-story-content-representation.md)。实施与分层验证见 [Task40 walkthrough](../../../.agents/tasks/40-story-content-representation/walkthrough.md)。
+
 ### Publisher
 
 **PublisherMetrics** 是领域侧发布者指标语义：可选可空的 `followers`、`following`、`statuses`、`voteup` 数值和 `reliable`（`high`/`low`/`unknown`）。**Publisher** 有可空 `platformId`、`handle`、`profileUrl`、非空 `name`、`kind` 和可选可空 `metrics`。相同字段在 Workflow/HTTP 中的 wire shape 由[公共合同](../contracts/0001-public-contracts.md)校验；domain 只负责下述归一化算法。
@@ -94,7 +102,7 @@ exact 是可投影的准确时间；fallback 只表达来源文本和一个下�
 
 ### 身份和 Story 输入
 
-`deriveExternalKey` 接受 optional externalId/webUrl、必需 title、可选 contentText/publishedAt/sourceLocator。`fingerprintEntryRevision` 只接受 title、summary、contentText、webUrl、kind、publisher。`projectEntryToStory` 接受 entryId、revisionId、title 和可选 summary/kind/subtype/contentKind。`fingerprintTopicRevision` 接受 title、purpose、可空 scope。
+`deriveExternalKey` 接受 optional externalId/webUrl、必需 title、可选 contentText/publishedAt/sourceLocator。`fingerprintEntryRevision` 接受 title、summary、contentText、webUrl、kind、publisher 和可选 `contentSource`。未声明 `contentSource` 时保持原有指纹算法；声明后以稳定序列化的来源输入替代解析派生的 `contentText` 参与指纹，图片或顺序变化产生新来源修订，解析器变化与下载状态变化不产生来源修订。`projectEntryToStory` 接受 entryId、revisionId、title 和可选 summary/kind/subtype/contentKind。`fingerprintTopicRevision` 接受 title、purpose、可空 scope。
 
 ## 输出
 

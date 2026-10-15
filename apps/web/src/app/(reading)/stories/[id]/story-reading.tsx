@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { StorySourceReader } from "@/components/cosmos/story-source-reader";
+import { StoryAgentCandidatesPanel } from "@/components/cosmos/story-panel/agent-candidates";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -276,29 +278,7 @@ export function StoryReading({ storyId }: { storyId: string }) {
                             <StoryHumanProtectedNotice story={story} />
                         </header>
 
-                        {revision !== null && revision.contentText.trim() !== "" && (
-                            <div className="mt-6 w-full text-[16px] leading-[1.8] whitespace-pre-wrap">
-                                {revision.contentText}
-                            </div>
-                        )}
-
-                        {revision?.webUrl != null && (
-                            <p className="mt-6">
-                                {/*
-                                 * `nativeButton={false}`：这里渲染的是 `<a>`，不关掉的话 Base UI
-                                 * 会往控制台写一条「期望原生 button」的告警，而浏览器验收断言 console
-                                 * 零错误——真链接又必须保留（新标签页打开原文、可复制地址）。
-                                 */}
-                                <Button
-                                    nativeButton={false}
-                                    render={<a href={revision.webUrl} rel="noreferrer" target="_blank" />}
-                                    variant="outline"
-                                >
-                                    <ExternalLink data-icon="inline-start" />
-                                    {messages.reading.readOriginal}
-                                </Button>
-                            </p>
-                        )}
+                        <StorySourceReader key={`${story.story.id}-${reloadToken}`} story={story} />
 
                         <div className="mt-8">
                             {/*
@@ -309,6 +289,13 @@ export function StoryReading({ storyId }: { storyId: string }) {
                             <StoryKeyFactsBlock entryOptions={keyFactEntryOptions} story={story} />
                         </div>
                     </article>
+
+                    <StoryAgentCandidatesPanel
+                        key={story.story.id}
+                        story={story}
+                        unsavedEdit={unsavedEdit}
+                        onAccepted={reloadStory}
+                    />
 
                     <StoryReadingContent
                         busy={busy}

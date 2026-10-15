@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Inject, Optional } from "@nestjs/common";
-import { type CosmosRepository, type WorkflowEnvelope, type WorkflowHostStore } from "@cosmos/application";
+import { type ContentRebuild, type ContentCommands, type ContentQuery, type StoryAgentCandidates, type StoryAgentService, type CosmosRepository, type WorkflowEnvelope, type WorkflowHostStore } from "@cosmos/application";
 import type { CatalogPort } from "@cosmos/application/catalog";
 import type { MediaCleanupWorkflowControlService } from "@cosmos/application/media-cleanup";
 import type { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
@@ -32,9 +32,24 @@ export class AppControllerBase {
         @Optional()
         @Inject("COSMOS_MEDIA_CLEANUP_CONTROL")
         protected readonly mediaCleanupControl?: MediaCleanupWorkflowControlService,
-    @Optional()
-    @Inject("COSMOS_CATALOG")
-    protected readonly catalog?: CatalogPort,
+        @Optional()
+        @Inject("COSMOS_CATALOG")
+        protected readonly catalog?: CatalogPort,
+        @Optional()
+        @Inject("COSMOS_CONTENT_QUERY")
+        protected readonly contentQuery?: ContentQuery,
+        @Optional()
+        @Inject("COSMOS_CONTENT_COMMANDS")
+        protected readonly contentCommands?: ContentCommands,
+        @Optional()
+        @Inject("COSMOS_STORY_AGENT_CANDIDATES")
+        protected readonly storyAgentCandidates?: StoryAgentCandidates,
+        @Optional()
+        @Inject("COSMOS_STORY_AGENT_SERVICE")
+        protected readonly storyAgentService?: StoryAgentService,
+        @Optional()
+        @Inject("COSMOS_CONTENT_REBUILD")
+        protected readonly contentRebuild?: ContentRebuild,
     ) {}
 
     /**

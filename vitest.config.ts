@@ -25,6 +25,7 @@ export default defineConfig({
             "plugins/**/src/**/*.test.ts",
             "apps/**/src/**/*.test.ts",
             "scripts/**/*.test.ts",
+            ".agents/tasks/39-pi-ai-adapter/**/*.test.ts",
         ],
         exclude: [...configDefaults.exclude, "**/*.property.test.ts"],
         environment: "node",

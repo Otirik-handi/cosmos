@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
 import {
+    BadRequestException,
+    ConflictException,
     Bind,
     Get,
     NotFoundException,
@@ -10,6 +13,14 @@ import {
 } from "@nestjs/common";
 import {
     entryListQuerySchema,
+    structuredContentViewSchema,
+    contentSelectionCommandSchema,
+    contentSelectionResultSchema,
+    contentRebuildCommandSchema,
+    contentRebuildResultSchema,
+    storyAgentCandidateRecordSchema,
+    storyAgentCandidateDecisionSchema,
+    storyAgentRequestSchema,
     searchQuerySchema,
     mergeStoriesCommandSchema,
     migrateStoryUserStateCommandSchema,
@@ -37,6 +48,7 @@ import {
     removeEntityRelationCommandSchema,
     updateStoryRevisionCommandSchema,
 } from "@cosmos/contracts";
+import { ContentCommandError, StoryAgentCandidateError } from "@cosmos/application";
 import "reflect-metadata";
 import { AppControllerRuns } from "./runs.js";
 import { validationError, sourceCommandError, clampLimit, catalogPage } from "./internals.js";
@@ -48,6 +60,98 @@ import {
 } from "./public-projection.js";
 
 export class AppControllerContent extends AppControllerRuns {
+    @Get("revisions/:revisionId/content")
+    @Bind(Param("revisionId"), Query())
+    async revisionContent(revisionId: string, query: Record<string, unknown> = {}) {
+        const version = query.representationVersion;
+        if (Object.keys(query).some((key) => key !== "representationVersion") ||
+            (version !== undefined && (typeof version !== "string" || !/^[1-9]\d*$/.test(version) || !Number.isSafeInteger(Number(version))))) {
+            throw new BadRequestException({ code: "validation_failed", message: "Expected a positive representationVersion only.", retryable: false });
+        }
+        if (!this.contentQuery) {
+            throw new ConflictException({ code: "conflict", message: "Content reading is not enabled.", retryable: false });
+        }
+        const result = await this.contentQuery.structuredContent({
+            entryRevisionId: revisionId,
+            ...(version === undefined ? {} : { representationVersion: Number(version) }),
+        }, { allowedProfiles: ["structured-content"] });
+        if (!result) {
+            throw new NotFoundException({ code: "not_found", message: `Revision not found: ${revisionId}`, retryable: false });
+        }
+        return structuredContentViewSchema.parse(result);
+    }
+
+    @Post("revisions/:revisionId/content/rebuild")
+    @Bind(Param("revisionId"), Body())
+    async rebuildRevisionContent(revisionId: string, body: unknown) {
+        if (!contentRebuildCommandSchema.safeParse(body).success) {
+            throw new BadRequestException({ code: "validation_failed", message: "Invalid content rebuild command.", retryable: false });
+        }
+        if (!this.contentRebuild) throw new ConflictException({ code: "conflict", message: "Content rebuild is not enabled.", retryable: false });
+        try {
+            return contentRebuildResultSchema.parse(await this.contentRebuild.rebuild(revisionId, { actorId: "user", canManageRepresentations: true }));
+        } catch (error) {
+            if (!(error instanceof ContentCommandError)) throw error;
+            const response = { code: error.code, message: error.message, retryable: false };
+            if (error.code === "not_found") throw new NotFoundException(response);
+            if (error.code === "invalid_command") throw new BadRequestException(response);
+            throw new ConflictException(response);
+        }
+    }
+
+    @Post("revisions/:revisionId/content/selection")
+    @Bind(Param("revisionId"), Body())
+    async selectRevisionContent(revisionId: string, body: unknown) {
+        const parsed = contentSelectionCommandSchema.safeParse(body);
+        if (!parsed.success) throw new BadRequestException({ code: "validation_failed", message: "Invalid content selection command.", retryable: false });
+        if (!this.contentCommands) throw new ConflictException({ code: "conflict", message: "Content management is not enabled.", retryable: false });
+        try {
+            return contentSelectionResultSchema.parse(await this.contentCommands.select({
+                ...parsed.data, entryRevisionId: revisionId,
+            }, { actorId: "user", canManageRepresentations: true }));
+        } catch (error) {
+            if (!(error instanceof ContentCommandError)) throw error;
+            const response = { code: error.code, message: error.message, retryable: false };
+            if (error.code === "not_found") throw new NotFoundException(response);
+            if (error.code === "invalid_command") throw new BadRequestException(response);
+            throw new ConflictException(response);
+        }
+    }
+
+    @Post("stories/:storyId/agent-candidates")
+    @Bind(Param("storyId"), Body())
+    async proposeStoryAgentCandidate(storyId: string, body: unknown) {
+        const parsed = storyAgentRequestSchema.safeParse(body);
+        if (!parsed.success) throw new BadRequestException({ code: "validation_failed", message: "Invalid Story Agent request.", retryable: false });
+        if (!this.storyAgentService) throw new ConflictException({ code: "conflict", message: "Story Agent generation is not configured.", retryable: false });
+        return storyAgentCandidateRecordSchema.parse(await this.storyAgentService.propose({ storyId, ...parsed.data }, {
+            idempotencyKey: randomUUID(), signal: new AbortController().signal,
+        }));
+    }
+
+    @Get("stories/:storyId/agent-candidates")
+    @Bind(Param("storyId"))
+    async listStoryAgentCandidates(storyId: string) {
+        if (!this.storyAgentCandidates) throw new ConflictException({ code: "conflict", message: "Story candidates are not enabled.", retryable: false });
+        return storyAgentCandidateRecordSchema.array().parse(await this.storyAgentCandidates.list(storyId, { allowedProfiles: ["summary-only"] }));
+    }
+
+    @Post("story-agent-candidates/:candidateId/decision")
+    @Bind(Param("candidateId"), Body())
+    async decideStoryAgentCandidate(candidateId: string, body: unknown) {
+        const parsed = storyAgentCandidateDecisionSchema.safeParse(body);
+        if (!parsed.success) throw new BadRequestException({ code: "validation_failed", message: "Invalid Story candidate decision.", retryable: false });
+        if (!this.storyAgentCandidates) throw new ConflictException({ code: "conflict", message: "Story candidates are not enabled.", retryable: false });
+        try {
+            return storyAgentCandidateRecordSchema.parse(await this.storyAgentCandidates.decide(candidateId, parsed.data.decision, { actorId: "user", canManageCandidates: true }));
+        } catch (error) {
+            if (!(error instanceof StoryAgentCandidateError)) throw error;
+            const response = { code: error.code, message: error.message, retryable: false };
+            if (error.code === "not_found") throw new NotFoundException(response);
+            throw new ConflictException(response);
+        }
+    }
+
     @Get("feed")
     @Bind(Query("cursor"), Query("limit"))
     async feed(cursor?: string, limit?: string) {

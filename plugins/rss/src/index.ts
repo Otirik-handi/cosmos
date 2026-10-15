@@ -331,11 +331,18 @@ export function parseRssXml(
         const item = raw as Record<string, unknown>;
         const title = readText(item.title) || "Untitled RSS item";
         const link = readLink(item.link);
-        const rawContentHtml = readText(item["content:encoded"])
-            || readText(item.description)
-            || readText(item.content)
-            || "";
-        const contentText = stripMarkup(rawContentHtml || title);
+        const encoded = readText(item["content:encoded"]);
+        const description = readText(item.description);
+        const atomContent = readText(item.content);
+        const atomBody = atomContent ? item.content : item.summary;
+        const rawContentHtml = encoded || description || atomContent || readText(item.summary) || "";
+        const atomType = atomBody && typeof atomBody === "object"
+            ? readText((atomBody as Record<string, unknown>)["@_type"])
+            : "";
+        const isAtomPlainText = parsed.feed !== undefined && !encoded && !description
+            && (atomType === "text" || atomType === "");
+        const contentText = isAtomPlainText ? rawContentHtml || title : stripMarkup(rawContentHtml || title);
+        const baseUrl = link ?? (typeof locator.feedUrl === "string" ? locator.feedUrl : null);
         const externalId = readText(item.guid)
             || readText(item.id)
             || null;
@@ -350,7 +357,7 @@ export function parseRssXml(
             || null;
         const assets = readMediaAssets(
             item,
-            rawContentHtml,
+            isAtomPlainText ? "" : rawContentHtml,
             link ?? (typeof locator.feedUrl === "string" ? locator.feedUrl : null),
         );
 
@@ -359,6 +366,14 @@ export function parseRssXml(
             title,
             summary: readText(item.description) || null,
             contentText,
+            contentSource: isAtomPlainText
+                ? { format: "plain-text", text: rawContentHtml || title }
+                : rawContentHtml ? {
+                    format: "safe-html-input",
+                    html: rawContentHtml,
+                    ...(baseUrl ? { baseUrl } : {}),
+                }
+                : { format: "plain-text", text: title },
             webUrl: link,
             kind: "article",
             publisher: normalizePublisher({

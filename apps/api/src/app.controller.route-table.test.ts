@@ -63,7 +63,15 @@ const key = (route: Route) => `${route.verb} ${route.path}`;
 
 describe("AppController route table", () => {
     const actual = routesOf(AppController);
-    const expected = snapshotRoutes();
+    // G03 remains the refactor baseline; Task40 intentionally adds these public contracts.
+    const expected = [...snapshotRoutes(),
+        { verb: "GET", path: "/revisions/:revisionId/content", handler: "revisionContent" },
+        { verb: "GET", path: "/stories/:storyId/agent-candidates", handler: "listStoryAgentCandidates" },
+        { verb: "POST", path: "/revisions/:revisionId/content/rebuild", handler: "rebuildRevisionContent" },
+        { verb: "POST", path: "/revisions/:revisionId/content/selection", handler: "selectRevisionContent" },
+        { verb: "POST", path: "/stories/:storyId/agent-candidates", handler: "proposeStoryAgentCandidate" },
+        { verb: "POST", path: "/story-agent-candidates/:candidateId/decision", handler: "decideStoryAgentCandidate" },
+    ];
 
     it("registers the same method+path set as the committed snapshot", () => {
         expect([...actual].map(key).sort()).toEqual([...expected].map(key).sort());
