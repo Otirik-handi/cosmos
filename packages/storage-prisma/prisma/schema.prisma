@@ -112,6 +112,62 @@ model ConnectionInstance {
     updatedAt   DateTime         @updatedAt
     sources     SourceInstance[]
     plans       CollectionPlan[]
+    modelId     String?
+    version     Int              @default(1)
+    model       ConfiguredModel? @relation(fields: [modelId], references: [id], onDelete: Restrict)
+
+    @@index([modelId])
+}
+
+model ModelProvider {
+    id                 String            @id @default(cuid())
+    name               String
+    api                String
+    baseUrl            String
+    secretRef          String?           @unique
+    version            Int               @default(1)
+    state              String            @default("active")
+    pendingOperationId String?           @unique
+    createdAt          DateTime          @default(now())
+    updatedAt          DateTime          @updatedAt
+    models             ConfiguredModel[]
+}
+
+model ConfiguredModel {
+    id              String               @id @default(cuid())
+    providerId      String
+    modelId         String
+    name            String
+    contextWindow   Int
+    maxOutputTokens Int
+    version         Int                  @default(1)
+    createdAt       DateTime             @default(now())
+    updatedAt       DateTime             @updatedAt
+    provider        ModelProvider        @relation(fields: [providerId], references: [id], onDelete: Restrict)
+    connections     ConnectionInstance[]
+
+    @@unique([providerId, modelId])
+}
+
+// Receipts outlive Provider deletion; refs identify only files owned by this operation.
+// Credential bytes and replayable command payloads must never be stored here.
+model ModelConfigurationOperation {
+    id              String   @id @default(cuid())
+    idempotencyKey  String   @unique
+    kind            String
+    providerId      String
+    state           String   @default("pending")
+    phase           String   @default("registered")
+    generation      Int      @default(1)
+    expectedVersion Int?
+    resourceVersion Int?
+    newSecretRef    String?   @unique
+    oldSecretRef    String?
+    errorCode       String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([providerId, state])
 }
 
 // Namespaced + versioned non-secret connector state (ADR-0017): cursor/ETag/
@@ -215,6 +271,7 @@ model Job {
     leaseOwner             String?
     leaseToken             String?
     leaseExpiresAt         DateTime?
+    dispatchAuthorizedAt   DateTime?
     nextAttemptAt          DateTime?
     errorCode              String?
     errorMessage           String?
