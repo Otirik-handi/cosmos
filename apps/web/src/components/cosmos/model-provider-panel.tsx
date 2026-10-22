@@ -17,6 +17,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { ProviderModelsSection } from "@/components/cosmos/provider-models-section";
 import {
     providerWriteOutcome,
@@ -48,6 +49,17 @@ const failureText: Record<WriteFailureNotice, string> = {
     unavailable: messages.models.notices.unavailable,
 };
 
+const failureReasonText: Record<WriteFailureNotice, string> = {
+    versionConflict: messages.models.notices.failureReasons.versionConflict,
+    credentialMissing: messages.models.notices.failureReasons.credentialMissing,
+    operationInProgress: messages.models.notices.failureReasons.operationInProgress,
+    cleanupPending: messages.models.notices.failureReasons.cleanupPending,
+    credentialWriteFailed: messages.models.notices.failureReasons.credentialWriteFailed,
+    notFound: messages.models.notices.failureReasons.notFound,
+    payloadTooLarge: messages.models.notices.failureReasons.payloadTooLarge,
+    unavailable: messages.models.notices.failureReasons.unavailable,
+};
+
 const protocolLabels = {
     "openai-completions": messages.models.provider.protocols.completions,
     "openai-responses": messages.models.provider.protocols.responses,
@@ -73,13 +85,13 @@ type ModelProviderPanelProps = {
  *    重新看到它，任何「空 = 清空」的解释都会静默删掉凭证。
  */
 export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
+    const toast = useToast();
     const [providers, setProviders] = useState<readonly ModelProviderSnapshot[] | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [editor, setEditor] = useState<EditorState | null>(null);
     const [values, setValues] = useState<ProviderFormValues>(emptyValues);
     const [errors, setErrors] = useState<ProviderFormErrors>({});
     const [saving, setSaving] = useState(false);
-    const [notice, setNotice] = useState<string | null>(null);
     /** 展开模型区的服务商；同一时刻只展开一个，避免十个模型列表同时请求。 */
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -98,6 +110,8 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
     }, [client]);
 
     useEffect(() => {
+        // 初始读取必须在客户端 effect 中启动；loadProviders 负责把网络结果写回页面状态。
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         void loadProviders();
     }, [loadProviders]);
 
@@ -105,7 +119,6 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
         setEditor({ mode: "create" });
         setValues(emptyValues);
         setErrors({});
-        setNotice(null);
     }
 
     function openEdit(provider: ModelProviderSnapshot) {
@@ -118,7 +131,6 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
             apiKey: "",
         });
         setErrors({});
-        setNotice(null);
     }
 
     function closeEditor() {
@@ -158,20 +170,27 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
     async function write(send: () => Promise<ModelProviderSnapshot | ModelProviderOperationSnapshot>) {
         setSaving(true);
         setErrors({});
-        setNotice(null);
         try {
             const outcome = providerWriteOutcome(await send());
             if (outcome.kind === "saved") {
                 closeEditor();
-                setNotice(messages.models.notices.saved);
+                toast.success({ title: messages.models.notices.saved });
             } else if (outcome.kind === "pending") {
                 // 202：服务端还在写凭证。关掉编辑框，但绝不能显示成「已保存」。
                 closeEditor();
-                setNotice(messages.models.notices.stillPending);
+                toast.info({ title: messages.models.notices.stillPending });
             } else {
-                setNotice(failureText[outcome.notice]);
+                if (outcome.notice === "versionConflict" || outcome.notice === "notFound") {
+                    closeEditor();
+                    await loadProviders();
+                    toast.info({ title: failureText[outcome.notice] });
+                } else {
+                    setErrors({ form: outcome.notice });
+                }
             }
-            await loadProviders();
+            if (outcome.kind !== "failed" || (outcome.notice !== "versionConflict" && outcome.notice !== "notFound")) {
+                await loadProviders();
+            }
         } catch (error) {
             if (error instanceof CosmosTransportError) {
                 const noticeKey = writeFailureNotice(error.status, error.body);
@@ -179,10 +198,12 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
                 if (noticeKey === "versionConflict" || noticeKey === "notFound") {
                     closeEditor();
                     await loadProviders();
+                    toast.info({ title: failureText[noticeKey] });
+                } else {
+                    setErrors({ form: noticeKey });
                 }
-                setNotice(failureText[noticeKey]);
             } else {
-                setNotice(messages.models.notices.unavailable);
+                setErrors({ form: "unavailable" });
             }
         } finally {
             setSaving(false);
@@ -274,9 +295,16 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
                         />
                     </Field>
                     {errors.form && (
-                        <p className="text-[12px] text-destructive" role="alert">
-                            {errors.form === "unchanged" ? messages.models.errors.unchanged : failureText.unavailable}
-                        </p>
+                        <div className="flex flex-col gap-1 text-[12px] text-destructive" role="alert">
+                            <p>
+                                {errors.form === "unchanged"
+                                    ? messages.models.errors.unchanged
+                                    : failureText[errors.form as WriteFailureNotice]}
+                            </p>
+                            {errors.form !== "unchanged" && (
+                                <p>{failureReasonText[errors.form as WriteFailureNotice]}</p>
+                            )}
+                        </div>
                     )}
                     <DialogFooter>
                         <Button onClick={closeEditor} size="sm" type="button" variant="ghost">
@@ -318,12 +346,6 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
                 >
                     {loadError}
                 </div>
-            )}
-
-            {notice && (
-                <p className="text-[12px] text-muted-foreground" role="status">
-                    {notice}
-                </p>
             )}
 
             {providers === null && loadError === null && (

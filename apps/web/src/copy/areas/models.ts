@@ -108,6 +108,16 @@ export const models = {
         notFound: "这个配置已经不在了，已重新读取列表。",
         payloadTooLarge: "提交内容过大，已被拒绝。",
         unavailable: "保存失败，请稍后重试。",
+        failureReasons: {
+            versionConflict: "可能原因：这条记录已在别处更新；请以最新内容为准再保存。",
+            credentialMissing: "可能原因：凭证没有写入或已被清理；请检查 API Key 后再保存。",
+            operationInProgress: "可能原因：上一次保存仍在处理；等待片刻后再试。",
+            cleanupPending: "可能原因：旧凭证清理暂未完成；稍后再次保存可继续清理。",
+            credentialWriteFailed: "可能原因：本地凭证存储不可写；检查存储权限后重试。",
+            notFound: "可能原因：该服务商已被删除；请关闭窗口并从最新列表重新添加。",
+            payloadTooLarge: "可能原因：提交内容超过限制；缩短 API Key 或联系管理员检查上限。",
+            unavailable: "可能原因：网络、基础地址或上游服务暂时不可用；检查协议和地址后重试。",
+        },
         /** 202：服务端仍未完成凭证写入。不能显示成成功。 */
         stillPending: "保存已提交，但服务端还没完成凭证写入；稍后重新打开列表查看结果。",
         saved: "已保存。保存不调用模型。",
