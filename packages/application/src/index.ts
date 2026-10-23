@@ -3,10 +3,44 @@
  * 公共面由 `entry-surface.txt` 冻结、`entry-contract.test.ts` 看守;改导出前先看 `MODULE.md`。
  */
 
+export { ModelProviderQuery, type ModelProviderQueryRepository, type ModelProviderOperationSnapshot } from "./model-provider-query.js";
+export { ConfiguredModels, type ConfiguredModelRepository } from "./configured-models.js";
+export { ModelProviderRemovals, type ModelProviderRemovalRepository } from "./model-provider-removals.js";
+export { ModelProviderCredentials } from "./model-provider-credentials.js";
+export {
+    ProviderDiscoveryConflictError, ProviderDiscoveryNotFoundError, ProviderModelDiscoveryUnavailableError,
+    ProviderModelDiscoveryRunner,
+    type ProviderDiscoveryIdGenerator, type ProviderDiscoveryClock, type ProviderDiscoveryReader,
+    type ProviderDiscoveryTarget,
+    type ProviderModelDiscoveryOptions,
+} from "./provider-discovery.js";
+export {
+    ProviderModelDirectoryError,
+    type ProviderModelDirectoryPort, type ProviderModelDirectoryRequest,
+    type ProviderModelDirectoryResponse,
+} from "./provider-model-directory.js";
+export {
+    createHttpsProviderModelDirectory, PROVIDER_DIRECTORY_MAX_BYTES, PROVIDER_DIRECTORY_TIMEOUT_MS,
+    type HttpsProviderModelDirectoryOptions, type ProviderModelDirectoryEgress,
+    type ProviderModelDirectoryEgressRequest, type ProviderModelDirectoryEgressResponse,
+    type ProviderModelDirectoryHostResolver,
+} from "./provider-model-directory-https.js";
+export {
+    parseProviderModelCatalog, providerModelCatalogLimits,
+    type ProviderModelCatalogResult,
+} from "./provider-model-catalog.js";
+export {
+    type ProviderCredentialFields, type ProviderCredentialState, type ProviderCredentialOperation,
+    type ProviderCredentialReceipt, type ProviderCredentialRepository,
+} from "./model-provider-credential-port.js";
 export {
     createAgentInvocationAction, FakeAgentInvocationAdapter, getAgentInvocationDefinition,
     type AgentInvocationContext, type AgentInvocationPort, type FakeAgentInvocationResponse,
 } from "./agent-invocation.js";
+export {
+    createAgentInvocationV2Action, getAgentInvocationV2Definition,
+    type AgentInvocationV2Port, type AgentModelConnectionResolver, type AgentModelConnectionSnapshot,
+} from "./agent-invocation-v2.js";
 export {
     ActionExecutionError, ActionRegistry, type ActionExecutionContext,
     type HostActionExecutionFence, type HostActionExecutionContext, type ActionHandler,
@@ -66,7 +100,8 @@ export {
     type WorkflowRunLeasePort, type WorkflowActivityJobPayload, type WorkflowActivityJob,
     type WorkflowActivityJobClaim, type WorkflowRuntimeAttempt, type ClaimActivityJobInput,
     type HeartbeatActivityJobInput, type ReleaseActivityJobInput, type ActivityJobLease,
-    type ActivityJobTerminalResult, type CompleteActivityInput,
+    type ActivityJobTerminalResult, type ConsumeActivityDispatchInput,
+    type ConsumeActivityDispatchResult, type CompleteActivityInput,
     type CompleteActivityResult, type WorkflowActivityJobPort, type WorkflowCompletion,
     type WorkflowCompletionClaim, type ClaimWorkflowCompletionInput,
     type HeartbeatWorkflowCompletionInput, type DeliverWorkflowCompletionInput,
@@ -104,6 +139,7 @@ export {
 } from "./logger.js";
 export {
     SourceNotFoundError, SourceRevisionConflictError, ConnectionNotFoundError,
+    ConnectionVersionConflictError, InvalidModelSelectionError,
     CollectionPlanNotFoundError, CollectionPlanRevisionConflictError,
     ConnectorStateImportRejectedError,
     StoryNotFoundError, StoryRevisionConflictError, StoryMergeConflictError,
@@ -135,6 +171,9 @@ export {
 export {
     ConnectionProbeService,
 } from "./connection-probe.js";
+export {
+    ConnectionUpdateInvalidError, resolveModelConnectionWrite, type ModelConnectionWrite,
+} from "./connection-model-selection.js";
 export {
     IngestionService, type IngestionWorkerOptions, type WorkerJobResult,
 } from "./ingestion-service.js";

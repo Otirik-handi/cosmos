@@ -220,6 +220,17 @@ export interface ActivityJobTerminalResult {
     retryDelayMs?: number;
 }
 
+export interface ConsumeActivityDispatchInput {
+    jobLease: ActivityJobLease;
+    runLease: WorkflowRunLease;
+    now?: Date;
+}
+
+export interface ConsumeActivityDispatchResult {
+    accepted: boolean;
+    alreadyConsumed: boolean;
+}
+
 export interface CompleteActivityInput {
     jobLease: ActivityJobLease;
     runLease: WorkflowRunLease;
@@ -241,6 +252,7 @@ export interface WorkflowActivityJobPort {
         input: ClaimActivityJobInput,
     ): Promise<WorkflowActivityJobClaim | null>;
     heartbeatActivityJob(input: HeartbeatActivityJobInput): Promise<boolean>;
+    consumeActivityDispatch(input: ConsumeActivityDispatchInput): Promise<ConsumeActivityDispatchResult>;
     releaseActivityJob(input: ReleaseActivityJobInput): Promise<boolean>;
     completeActivity(input: CompleteActivityInput): Promise<CompleteActivityResult>;
 }

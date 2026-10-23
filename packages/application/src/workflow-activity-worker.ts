@@ -109,6 +109,17 @@ export class WorkflowActivityWorker {
 
         let attempt: WorkflowRuntimeAttempt | null = null;
         try {
+            const dispatch = await this.options.store.consumeActivityDispatch({
+                jobLease,
+                runLease,
+                now: nowFor(this.options),
+            });
+            if (!dispatch.accepted) {
+                throw new WorkflowHostError(
+                    "lease_lost",
+                    `Activity dispatch authorization was lost for Job ${job.id}.`,
+                );
+            }
             const request = this.actionRequest(job, controller.signal);
             const action = this.options.actions.resolve(request.reference);
             attempt = {

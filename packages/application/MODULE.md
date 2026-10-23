@@ -35,6 +35,13 @@
 | `workflow-completion-dispatcher.ts` | Completion dispatcher:Workflow 完成投递与重排/死信 | ~2.8k |
 | `workflow-action-support.ts` | Action 错误/取消/重试判定、心跳与租约竞速助手 | ~2.1k |
 | `action.ts` / `catalog.ts` | Action 注册表 / manifest 目录 | ~3.1k / ~4.0k |
+| `model-provider-query.ts` | Provider/操作收据安全读取与分页校验；尚未接 API | — |
+| `configured-models.ts` | ConfiguredModel 列表、详情、创建、版本更新与删除的应用层编排；通过仓储端口接入 | — |
+| `model-provider-credentials.ts` / `model-provider-credential-port.ts` | Provider 凭证保存/补偿/显式恢复编排与非秘密事务端口；尚未接 API | — |
+| `provider-discovery.ts` | Provider 模型发现:同步只读执行器,校验版本、读一次凭证、映射固定失败码 | ~1.5k |
+| `provider-model-catalog.ts` | OpenAI `/models` 候选解析:去重、名字回退与数量/长度上限 | ~0.6k |
+| `provider-model-directory.ts` | 发现外呼端口、请求/响应类型与固定传输失败码 | ~0.3k |
+| `provider-model-directory-https.ts` | 受控 HTTPS 外呼:公网答案审核、地址绑定、总预算与响应上限 | ~2.4k |
 | `agent-invocation.ts` | Agent Invocation Port、Fake Adapter 与 `agent.invoke@1` Action 定义 | ~1.5k |
 | `media-policy.ts` | 媒体策略解析:默认值、上限与 `parseAllowedHosts` | ~0.6k |
 | `media-ports.ts` | 媒体端口与结果类型(`MediaAcquirer`/`MediaRetrier`/`MediaOutcome` 家族) | ~0.6k |

@@ -31,6 +31,33 @@ export class ConnectionNotFoundError extends Error {
     }
 }
 
+/**
+ * 模型连接的期望版本对不上（API 0009）：两次换选同时提交时，后到的那个必须失败而不是
+ * 覆盖前一个。外部平台连接没有版本命令，所以这个错误只由 `cosmos.agent` 的更新路径抛出。
+ */
+export class ConnectionVersionConflictError extends Error {
+    readonly code = "version_conflict" as const;
+
+    constructor(connectionId: string, expectedVersion: number) {
+        super(`Connection version conflict: ${connectionId} (expected ${expectedVersion})`);
+        this.name = "ConnectionVersionConflictError";
+    }
+}
+
+/**
+ * 模型连接的选择在当前状态下不成立：引用不存在的模型、模型所属 Provider 正在删除，
+ * 或者连接还是 active 却把模型解除掉。它与「字段格式不对」不同，调用方要改的是选择
+ * 或状态，不是重发同一个请求。
+ */
+export class InvalidModelSelectionError extends Error {
+    readonly code = "invalid_model_selection" as const;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "InvalidModelSelectionError";
+    }
+}
+
 export class CollectionPlanNotFoundError extends Error {
     readonly code = "not_found" as const;
 

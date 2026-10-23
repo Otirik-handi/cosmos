@@ -20,6 +20,8 @@ function connection(overrides: Partial<ConnectionInstance> = {}): ConnectionInst
         secretRef: null,
         lastError: null,
         lastCheckedAt: null,
+        modelId: null,
+        version: 1,
         createdAt: "2026-09-23T00:00:00.000Z",
         updatedAt: "2026-09-23T00:00:00.000Z",
         ...overrides,

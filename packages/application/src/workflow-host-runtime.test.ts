@@ -207,6 +207,7 @@ function fakeStore(overrides: Record<string, unknown> = {}): WorkflowHostStore {
         }),
         claimActivityJob: async () => activityJob(),
         heartbeatActivityJob: async () => true,
+        consumeActivityDispatch: async () => ({ accepted: true, alreadyConsumed: false }),
         completeActivity: async () => ({
             accepted: true,
             jobStatus: "succeeded",
@@ -747,6 +748,34 @@ describe("Workflow Host runtime", () => {
             },
             now: clock,
         });
+    });
+
+    it("does not invoke an action when dispatch authorization was already consumed", async () => {
+        let actionCalls = 0;
+        let completeCalls = 0;
+        const actions = new ActionRegistry();
+        actions.register(actionDefinition(), async () => {
+            actionCalls += 1;
+            return { echoed: "hello" };
+        });
+        const worker = new WorkflowActivityWorker({
+            store: fakeStore({
+                consumeActivityDispatch: async () => ({ accepted: false, alreadyConsumed: true }),
+                completeActivity: async () => {
+                    completeCalls += 1;
+                    return { accepted: false, jobStatus: "leased", completion: null };
+                },
+            }),
+            actions,
+            owner: runLease.owner,
+            leaseMs: 10_000,
+            heartbeatMs: 0,
+            now: () => clock,
+        });
+
+        await expect(worker.pollOnce()).rejects.toMatchObject({ code: "lease_lost" });
+        expect(actionCalls).toBe(0);
+        expect(completeCalls).toBe(0);
     });
 
     it("passes a host-only fence without leaking lease fields to public payloads", async () => {

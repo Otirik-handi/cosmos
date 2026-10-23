@@ -464,6 +464,21 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             inputSchema: builtinSchema("agent.invoke.input@1", { type: "object" }),
             outputSchema: builtinSchema("agent.invoke.output@1", { type: "object" }),
         },
+        {
+            // @2 的输入只有连接 ID；模型与凭证在执行时由 Worker 解析（API 0009）。
+            // 与 @1 并存，直到新路径完成真实服务验收后 @1 才退出。
+            id: "agent.invoke",
+            version: 2,
+            ref: "agent.invoke@2",
+            provider: "cosmos",
+            manifestHash: builtinHash("builtin:agent.invoke@2:connection-v1"),
+            effectMode: "external",
+            executionPlacement: "trusted_worker",
+            requiredCapabilities: ["agent:invoke"],
+            status: "enabled",
+            inputSchema: builtinSchema("agent.invoke.input@2", { type: "object" }),
+            outputSchema: builtinSchema("agent.invoke.output@2", { type: "object" }),
+        },
     ];
 
     const connectors: readonly ConnectorDescriptor[] = sourceDefinitions.map((item) => ({
