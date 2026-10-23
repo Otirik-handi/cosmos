@@ -231,6 +231,15 @@ export const serviceErrorCodeSchema = z.enum([
     "service_unavailable",
     "protocol_mismatch",
     "uncertain",
+    "invalid_input",
+    "forbidden_origin",
+    "version_conflict",
+    "in_use",
+    "operation_in_progress",
+    "payload_too_large",
+    "credential_write_failed",
+    "cleanup_pending",
+    "dependency_unavailable",
 ]);
 
 
@@ -242,6 +251,7 @@ export const serviceErrorSchema = z.object({
     message: z.string(),
     requestId: z.string().optional(),
     commandId: z.string().optional(),
+    operationId: z.string().regex(/^[A-Za-z0-9._:-]{1,200}$/).optional(),
     details: z.record(z.string(), z.unknown()).optional(),
     retryable: z.boolean(),
 });

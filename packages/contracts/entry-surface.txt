@@ -14,6 +14,7 @@ type	AgentInvocationOutput
 type	AgentInvocationTool
 type	AgentInvocationToolCall
 type	AgentInvocationUsage
+type	AgentInvocationV2Input
 type	AiHotSourceConfig
 type	Annotation
 type	AnnotationList
@@ -40,6 +41,8 @@ type	CollectionPlanOverlapPolicy
 type	CollectionPlanSnapshot
 type	CollectionPlanWebhookEntry
 type	CollectionSummary
+type	ConfiguredModelPage
+type	ConfiguredModelSnapshot
 type	ConnectionInstance
 type	ConnectionProbeJobPayload
 type	ConnectionProbeJobSnapshot
@@ -65,10 +68,13 @@ type	CreateBlockCommand
 type	CreateBoardCommand
 type	CreateCollectionCommand
 type	CreateCollectionPlanCommand
+type	CreateConfiguredModelCommand
 type	CreateConnectionCommand
 type	CreateEntityCommand
 type	CreateEntityRelationCommand
 type	CreateLabelCommand
+type	CreateModelProviderCommand
+type	CreateProviderModelDiscoveryCommand
 type	CreateSavedViewCommand
 type	CreateSectionCommand
 type	CreateSourceCommand
@@ -143,6 +149,9 @@ type	MediaRetryPolicySnapshot
 type	MergeStoriesCommand
 type	MergeTopicsCommand
 type	MigrateStoryUserStateCommand
+type	ModelProviderOperationSnapshot
+type	ModelProviderPage
+type	ModelProviderSnapshot
 type	MoveBlockCommand
 type	MoveEntryToStoryCommand
 type	NormalizedAssetInputContract
@@ -150,6 +159,9 @@ type	NormalizedIngestItemContract
 type	ObservationSnapshot
 type	ParsedActionRef
 type	PinSpotlightCommand
+type	ProviderModelDiscoveryCandidate
+type	ProviderModelDiscoveryErrorCode
+type	ProviderModelDiscoverySnapshot
 type	PublicAssetSnapshot
 type	Publisher
 type	PublisherKind
@@ -251,9 +263,11 @@ type	UpdateBlockConfigCommand
 type	UpdateBoardCommand
 type	UpdateCollectionCommand
 type	UpdateCollectionPlanCommand
+type	UpdateConfiguredModelCommand
 type	UpdateConnectionCommand
 type	UpdateEntityCommand
 type	UpdateLabelCommand
+type	UpdateModelProviderCommand
 type	UpdateSavedViewCommand
 type	UpdateSectionCommand
 type	UpdateSourceCommand
@@ -263,6 +277,7 @@ type	UpdateTopicMemberRoleCommand
 type	UserDataExport
 type	UserDataExportTarget
 type	UserOrganizationAck
+value	MODEL_CONNECTION_CONNECTOR_ID
 value	actionDefinitionSchema
 value	actionDescriptorSchema
 value	actionErrorCodeSchema
@@ -279,6 +294,7 @@ value	agentInvocationOutputSchema
 value	agentInvocationToolCallSchema
 value	agentInvocationToolSchema
 value	agentInvocationUsageSchema
+value	agentInvocationV2InputSchema
 value	aiHotSourceConfigSchema
 value	annotationListSchema
 value	annotationSchema
@@ -309,6 +325,8 @@ value	collectionPlanSnapshotSchema
 value	collectionPlanWebhookEntryPath
 value	collectionPlanWebhookEntrySchema
 value	collectionSummarySchema
+value	configuredModelPageSchema
+value	configuredModelSnapshotSchema
 value	connectionInstanceSchema
 value	connectionProbeJobPayloadSchema
 value	connectionProbeJobSnapshotSchema
@@ -339,10 +357,13 @@ value	createBlockCommandSchema
 value	createBoardCommandSchema
 value	createCollectionCommandSchema
 value	createCollectionPlanCommandSchema
+value	createConfiguredModelCommandSchema
 value	createConnectionCommandSchema
 value	createEntityCommandSchema
 value	createEntityRelationCommandSchema
 value	createLabelCommandSchema
+value	createModelProviderCommandSchema
+value	createProviderModelDiscoveryCommandSchema
 value	createSavedViewCommandSchema
 value	createSectionCommandSchema
 value	createSourceCommandSchema
@@ -420,6 +441,9 @@ value	mediaRetryPolicySnapshotSchema
 value	mergeStoriesCommandSchema
 value	mergeTopicsCommandSchema
 value	migrateStoryUserStateCommandSchema
+value	modelProviderOperationSnapshotSchema
+value	modelProviderPageSchema
+value	modelProviderSnapshotSchema
 value	moveBlockCommandSchema
 value	moveEntryToStoryCommandSchema
 value	normalizedAssetInputSchema
@@ -429,6 +453,9 @@ value	openCliProfileSchema
 value	parseActionRef
 value	pinSpotlightCommandSchema
 value	protocolVersion
+value	providerModelDiscoveryCandidateSchema
+value	providerModelDiscoveryErrorCodeSchema
+value	providerModelDiscoverySnapshotSchema
 value	publicAssetSnapshotSchema
 value	publisherKindSchema
 value	publisherMetricsSchema
@@ -535,9 +562,11 @@ value	updateBlockConfigCommandSchema
 value	updateBoardCommandSchema
 value	updateCollectionCommandSchema
 value	updateCollectionPlanCommandSchema
+value	updateConfiguredModelCommandSchema
 value	updateConnectionCommandSchema
 value	updateEntityCommandSchema
 value	updateLabelCommandSchema
+value	updateModelProviderCommandSchema
 value	updateSavedViewCommandSchema
 value	updateSectionCommandSchema
 value	updateSourceCommandSchema

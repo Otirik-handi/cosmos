@@ -471,10 +471,23 @@ export const connectionInstanceSchema = z.object({
      * 它由探测回写，不走公开的更新命令。
      */
     lastCheckedAt: z.string().nullable(),
+    /**
+     * 乐观版本（API 0009「Connection 与 invocation 版本」）：每次模型连接写入递增，
+     * 更换选择时用它挡住覆盖。外部平台连接也有版本，只是它们的命令不接受期望值。
+     */
+    version: z.number().int().positive(),
+    /**
+     * 该连接使用的本地模型配置 ID（同上）；只有 `cosmos.agent` 会填，其它连接恒为 null。
+     * Provider 由模型归属推导，不在连接上重复保存。
+     */
+    modelId: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
 }).strict();
 export type ConnectionInstance = z.infer<typeof connectionInstanceSchema>;
+
+/** `cosmos.agent` 是 Cosmos 的模型连接种类，不是外部服务商标识（API 0009）。 */
+export const MODEL_CONNECTION_CONNECTOR_ID = "cosmos.agent" as const;
 
 export const createConnectionCommandSchema = z.object({
     name: z.string().trim().min(1).max(200),
@@ -483,7 +496,36 @@ export const createConnectionCommandSchema = z.object({
     scopeJson: z.string().max(4000).nullable().optional(),
     configJson: z.string().max(4000).nullable().optional(),
     secretRef: z.string().trim().min(1).max(300).nullable().optional(),
-}).strict();
+    modelId: z.string().trim().min(1).max(200).optional(),
+}).strict().superRefine((value, context) => {
+    if (value.connectorId === MODEL_CONNECTION_CONNECTOR_ID) {
+        // 模型连接必须有模型；凭证属于 Provider，连接上出现 secretRef 就是所有权越界
+        // （显式传 null 也算，因为那会让调用方以为「这里本来能放凭证」）。
+        if (value.modelId === undefined) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["modelId"],
+                message: "A model connection requires a model.",
+            });
+        }
+        if (Object.hasOwn(value, "secretRef")) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["secretRef"],
+                message: "A model connection must not carry its own credential.",
+            });
+        }
+        return;
+    }
+    // 其它连接没有本地模型可选；写进来只会让人以为它被忽略了。
+    if (value.modelId !== undefined) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["modelId"],
+            message: "Only a model connection selects a model.",
+        });
+    }
+});
 export type CreateConnectionCommand = z.infer<typeof createConnectionCommandSchema>;
 
 export const updateConnectionCommandSchema = z.object({
@@ -492,6 +534,13 @@ export const updateConnectionCommandSchema = z.object({
     configJson: z.string().max(4000).nullable().optional(),
     secretRef: z.string().trim().min(1).max(300).nullable().optional(),
     lastError: z.string().max(500).nullable().optional(),
+    /**
+     * 模型连接更换选择时必填（由调用方按 connectorId 判定，见 application 的
+     * `validateConnectionUpdate`）：合同层无法从更新命令里看到 connectorId。
+     */
+    expectedVersion: z.number().int().positive().optional(),
+    /** 省略表示保留，`null` 表示解除选择，非空 ID 表示更换。 */
+    modelId: z.string().trim().min(1).max(200).nullable().optional(),
 }).strict();
 export type UpdateConnectionCommand = z.infer<typeof updateConnectionCommandSchema>;
 

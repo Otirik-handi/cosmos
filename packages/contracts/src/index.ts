@@ -12,6 +12,7 @@ export {
     fixtureRssSourceConfigSchema,
     getSourceConfigurationSchema, idempotencyKeySchema, ingestCommandSchema,
     mediaPolicyCeilings, mediaPolicyImagesSchema, mediaRetryCeiling, mediaRetryPolicySchema,
+    MODEL_CONNECTION_CONNECTOR_ID,
     openCliProfileSchema,
     protocolVersion, publisherKindSchema, publisherMetricsSchema, publisherSchema,
     retryableAssetErrorCodes, rssSourceConfigSchema,
@@ -198,11 +199,24 @@ export {
 export {
     agentInvocationBudgetSchema, agentInvocationInputSchema, agentInvocationMessageSchema,
     agentInvocationOutputSchema, agentInvocationToolCallSchema, agentInvocationToolSchema,
-    agentInvocationUsageSchema,
+    agentInvocationUsageSchema, agentInvocationV2InputSchema,
     type AgentInvocationBudget, type AgentInvocationInput, type AgentInvocationMessage,
     type AgentInvocationOutput, type AgentInvocationTool, type AgentInvocationToolCall,
-    type AgentInvocationUsage,
+    type AgentInvocationUsage, type AgentInvocationV2Input,
 } from "./agent.js";
+
+export {
+    createModelProviderCommandSchema, updateModelProviderCommandSchema, modelProviderSnapshotSchema,
+    modelProviderOperationSnapshotSchema, modelProviderPageSchema,
+    createConfiguredModelCommandSchema, updateConfiguredModelCommandSchema, configuredModelSnapshotSchema, configuredModelPageSchema,
+    createProviderModelDiscoveryCommandSchema, providerModelDiscoveryCandidateSchema,
+    providerModelDiscoveryErrorCodeSchema, providerModelDiscoverySnapshotSchema,
+    type CreateModelProviderCommand, type UpdateModelProviderCommand, type ModelProviderSnapshot,
+    type ModelProviderOperationSnapshot, type ModelProviderPage,
+    type CreateConfiguredModelCommand, type UpdateConfiguredModelCommand, type ConfiguredModelSnapshot, type ConfiguredModelPage,
+    type CreateProviderModelDiscoveryCommand, type ProviderModelDiscoveryCandidate,
+    type ProviderModelDiscoveryErrorCode, type ProviderModelDiscoverySnapshot,
+} from "./provider-model.js";
 
 export {
     storyAgentTaskSchema, storyAgentSourceBindingSchema, storyAgentRequestSchema, storyAgentProposalSchema,
