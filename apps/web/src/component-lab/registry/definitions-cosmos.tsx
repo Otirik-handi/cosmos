@@ -1,5 +1,9 @@
 import {renderSystemOutput, systemOutputControls} from "../primitive-fixtures";
 import {
+    renderModelProviderPanelLab,
+    renderProviderModelsSectionLab,
+} from "../model-fixtures";
+import {
     renderBoardBlockListLab,
     renderBoardViewLab,
     renderCollectionPlanListLab,
@@ -310,5 +314,38 @@ export const cosmosComponentDefinitions = [
         ],
         tokens: sharedTokens,
         render: renderSystemOutput,
+    },
+    {
+        id: "model-provider-panel",
+        label: "ModelProviderPanel",
+        category: "Cosmos",
+        modulePath: "components/cosmos/model-provider-panel.tsx",
+        defaultSceneId: "populated",
+        controls: [
+            control("state", "State", "select", "populated", ["populated", "conflict", "empty"]),
+        ] as const satisfies readonly LabControlDefinition[],
+        scenes: [
+            {id: "populated", label: "Populated", props: {state: "populated"}},
+            {id: "conflict", label: "Delete refused (in use)", props: {state: "conflict"}},
+            {id: "empty", label: "Empty", props: {state: "empty"}},
+        ],
+        tokens: sharedTokens,
+        render: renderModelProviderPanelLab,
+    },
+    {
+        id: "provider-models-section",
+        label: "ProviderModelsSection",
+        category: "Cosmos",
+        modulePath: "components/cosmos/provider-models-section.tsx",
+        defaultSceneId: "populated",
+        controls: [
+            control("state", "State", "select", "populated", ["populated", "empty"]),
+        ] as const satisfies readonly LabControlDefinition[],
+        scenes: [
+            {id: "populated", label: "Populated", props: {state: "populated"}},
+            {id: "empty", label: "Empty", props: {state: "empty"}},
+        ],
+        tokens: sharedTokens,
+        render: renderProviderModelsSectionLab,
     },
 ] as const satisfies readonly LabComponentDefinition[];

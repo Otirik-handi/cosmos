@@ -66,6 +66,8 @@ const labConnections: readonly ConnectionInstance[] = [{
     secretRef: null,
     lastError: null,
     lastCheckedAt: null,
+    modelId: null,
+    version: 1,
     createdAt: fixtureTimestamp,
     updatedAt: fixtureTimestamp,
 }];
@@ -109,7 +111,7 @@ function textProp(props: LabProps, name: string, fallback: string): string {
     return typeof value === "string" ? value : fallback;
 }
 
-function optionProp<T extends string>(props: LabProps, name: string, fallback: T, options: readonly T[]): T {
+export function optionProp<T extends string>(props: LabProps, name: string, fallback: T, options: readonly T[]): T {
     const value = props[name];
     return typeof value === "string" && options.includes(value as T) ? value as T : fallback;
 }
@@ -471,6 +473,8 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         secretRef: "secret:connection-bilibili",
         lastError: null,
         lastCheckedAt: "2026-09-10T08:05:00.000Z",
+        modelId: null,
+        version: 1,
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -485,6 +489,8 @@ const connectionLabConnections: readonly ConnectionInstance[] = [
         secretRef: null,
         lastError: "登录态已过期",
         lastCheckedAt: null,
+        modelId: null,
+        version: 2,
         createdAt: "2026-09-10T08:00:00.000Z",
         updatedAt: "2026-09-10T08:00:00.000Z",
     },
@@ -525,6 +531,9 @@ const connectionLabClient = {
     ],
     createConnectionProbe: async () => connectionProbeJob("succeeded"),
     getConnectionProbe: async () => connectionProbeJob("succeeded"),
+    // 模型选择器要读「已配置的模型」：夹具给一个空列表，实验室里模型连接显示「还没选模型」。
+    listModelProviders: async () => ({ items: [], nextCursor: null }),
+    listConfiguredModels: async () => ({ items: [], nextCursor: null }),
 } as unknown as HttpCosmosClient;
 
 /** 连接探测 Job 的夹具：终态 + 一条「已登录」结论。 */

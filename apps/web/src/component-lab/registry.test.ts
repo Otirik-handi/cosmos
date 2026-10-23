@@ -27,6 +27,8 @@ const expectedPublicModules = [
     "components/ui/toast.tsx",
     "components/ui/tooltip.tsx",
     "components/cosmos/content-block-reader.tsx",
+    "components/cosmos/model-provider-panel.tsx",
+    "components/cosmos/provider-models-section.tsx",
     "components/cosmos/story-source-reader.tsx",
     "components/cosmos/story-agent-candidates.tsx",
     "components/cosmos/connection-panel.tsx",

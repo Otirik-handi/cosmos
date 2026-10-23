@@ -2,8 +2,9 @@
 
 import { useEffect, useState, type ComponentProps } from "react";
 
-import type { ConnectionInstance } from "@cosmos/contracts";
+import type { ConfiguredModelSnapshot, ConnectionInstance } from "@cosmos/contracts";
 import type { HttpCosmosClient } from "@cosmos/transport-http";
+import { CosmosTransportError } from "@cosmos/transport-http";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,19 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { messages } from "@/copy/messages";
+
+import {
+    connectionModelNotice, connectionModelState, modelChoices, toSelectModelCommand,
+    type ConnectionModelNotice, type ModelChoice,
+} from "./connection-model-selection";
 
 const statusLabel: Record<ConnectionInstance["status"], string> = {
     active: "可用",
@@ -129,6 +142,19 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
      * 连接本身，创建入口收进按钮。取消与提交成功都要关掉它并清空输入，见 `closeCreate`。
      */
     const [createOpen, setCreateOpen] = useState(false);
+    /**
+     * 模型连接的选择器（Proposal connection-credential-entry-v1 的「连接里选模型」）。
+     * 选项来自 `/models` 已配置的模型：这里不创建模型，只引用。列表为空时告诉用户去
+     * 「模型」页配，而不是给一个空下拉框。
+     */
+    const [choices, setChoices] = useState<readonly ModelChoice[]>([]);
+    const [choicesState, setChoicesState] = useState<"loading" | "loaded" | "error">("loading");
+    /** 正在选模型的连接；同一时刻只开一个。 */
+    const [selectingId, setSelectingId] = useState<string | null>(null);
+    const [pendingModelId, setPendingModelId] = useState<string>("");
+    const [selectionNotice, setSelectionNotice] = useState<
+        { connectionId: string; notice: ConnectionModelNotice } | null
+    >(null);
 
     const load = (): void => {
         client.listConnections()
@@ -164,6 +190,25 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
             .catch(() => {
                 // 声明读不到时不显示探测入口：宁可少一个按钮，也不要给用户一个必然 409 的动作。
                 if (!cancelled) setProbeSupportedConnectorIds([]);
+            });
+        // 模型选项＝每个服务商下的已配置模型。现在没有跨服务商的批量接口，按服务商逐个读；
+        // 服务商数量是个位数，这个 N+1 换的是「不新增一条只为 UI 服务的聚合路由」。
+        (async () => {
+            const providers = await client.listModelProviders({ limit: 100 });
+            const modelsByProvider = new Map<string, readonly ConfiguredModelSnapshot[]>();
+            for (const provider of providers.items) {
+                modelsByProvider.set(provider.id, (await client.listConfiguredModels(provider.id)).items);
+            }
+            return modelChoices(providers.items, modelsByProvider);
+        })()
+            .then((list) => {
+                if (!cancelled) {
+                    setChoices(list);
+                    setChoicesState("loaded");
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setChoicesState("error");
             });
         return () => {
             cancelled = true;
@@ -259,6 +304,32 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
     };
 
     /**
+     * 保存连接上的模型选择。失败按固定错误码分类：版本冲突要重读再选，选择无效要换一个，
+     * 两种情况都不重试——重试只会拿同一个过期版本再撞一次。
+     */
+    const selectModel = (connection: ConnectionInstance): void => {
+        if (pendingModelId === "") return;
+        const command = toSelectModelCommand(connection, pendingModelId);
+        client.updateConnection(connection.id, command)
+            .then(() => {
+                setSelectingId(null);
+                setPendingModelId("");
+                setSelectionNotice(null);
+                load();
+                onConnectionsChanged?.();
+            })
+            .catch((error: unknown) => {
+                setSelectionNotice({
+                    connectionId: connection.id,
+                    notice: error instanceof CosmosTransportError
+                        ? connectionModelNotice(error.status, error.body)
+                        : "unavailable",
+                });
+                load();
+            });
+    };
+
+    /**
      * 检查登录状态（Proposal connection-login-lifecycle-v1 决定 2）：探测由 Worker 执行，
      * 这里轮询 Job；结论由 API 写回连接，所以成功后重取列表，让状态与失效原因反映的是
      * **系统观测**而不是用户手填。
@@ -313,7 +384,9 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
         <div className="flex min-w-0 flex-col gap-2">
             {connections && connections.length > 0 ? (
                 <ul className="grid min-w-0 gap-1">
-                    {connections.map((connection) => (
+                    {connections.map((connection) => {
+                        const modelState = connectionModelState(connection, choices);
+                        return (
                         <li
                             key={connection.id}
                             className="flex min-w-0 flex-col gap-1 rounded-sm border bg-card px-3 py-2 text-sm"
@@ -405,7 +478,103 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
                                             : formatCheckedAt(connection.lastCheckedAt)}
                                     </dd>
                                 </div>
+                                {modelState.kind === "not-model" ? null : (
+                                    <div className="flex min-w-0 gap-1">
+                                        <dt className="shrink-0">{messages.models.connection.label}</dt>
+                                        <dd className="min-w-0 break-words">
+                                            {modelState.kind === "selected"
+                                                ? `${modelState.providerName} · ${modelState.label}`
+                                                : modelState.kind === "unset"
+                                                    ? messages.models.connection.unset
+                                                    : messages.models.connection.missing}
+                                        </dd>
+                                    </div>
+                                )}
                             </dl>
+                            {modelState.kind === "missing" ? (
+                                <p role="alert" className="text-xs text-destructive">
+                                    {messages.models.connection.missingHint}
+                                </p>
+                            ) : null}
+                            {selectionNotice?.connectionId === connection.id ? (
+                                <p role="alert" className="text-xs text-destructive">
+                                    {messages.models.connection.notices[selectionNotice.notice]}
+                                </p>
+                            ) : null}
+                            {modelState.kind === "not-model" ? null : selectingId === connection.id ? (
+                                <div className="flex min-w-0 flex-col gap-1">
+                                    {choicesState === "loading" ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            {messages.models.connection.loading}
+                                        </p>
+                                    ) : choicesState === "error" ? (
+                                        <p role="alert" className="text-xs text-destructive">
+                                            {messages.models.connection.loadFailed}
+                                        </p>
+                                    ) : choices.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            {messages.models.connection.empty}
+                                        </p>
+                                    ) : (
+                                        <Select
+                                            value={pendingModelId}
+                                            onValueChange={(value) => setPendingModelId(typeof value === "string" ? value : "")}
+                                        >
+                                            <SelectTrigger aria-label={messages.models.connection.selectLabel(connection.name)}>
+                                                <SelectValue>
+                                                    {choices.find((choice) => choice.modelId === pendingModelId)
+                                                        ?.label ?? messages.models.connection.select}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {choices.map((choice) => (
+                                                    <SelectItem key={choice.modelId} value={choice.modelId}>
+                                                        {choice.providerName} · {choice.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="xs"
+                                            variant="outline"
+                                            disabled={pendingModelId === ""}
+                                            aria-label={messages.models.connection.saveLabel(connection.name)}
+                                            onClick={() => selectModel(connection)}
+                                        >
+                                            {messages.models.connection.save}
+                                        </Button>
+                                        <Button
+                                            size="xs"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                setSelectingId(null);
+                                                setPendingModelId("");
+                                            }}
+                                        >
+                                            {messages.models.connection.cancel}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex">
+                                    <Button
+                                        size="xs"
+                                        variant="ghost"
+                                        aria-label={messages.models.connection.selectLabel(connection.name)}
+                                        onClick={() => {
+                                            setSelectingId(connection.id);
+                                            setPendingModelId(connection.modelId ?? "");
+                                            setSelectionNotice(null);
+                                        }}
+                                    >
+                                        {modelState.kind === "selected"
+                                            ? messages.models.connection.change
+                                            : messages.models.connection.select}
+                                    </Button>
+                                </div>
+                            )}
                             {probeNotice?.connectionId === connection.id ? (
                                 <p
                                     role="status"
@@ -445,7 +614,8 @@ export function ConnectionPanel({ client, onConnectionsChanged, refreshToken = 0
                                 </div>
                             ) : null}
                         </li>
-                    ))}
+                        );
+                    })}
                 </ul>
             ) : (
                 <p className="text-sm text-muted-foreground">

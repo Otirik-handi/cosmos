@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
     candidateOptions,
+    createModelDraftRow,
+    defaultContextWindow,
+    defaultMaxOutputTokens,
     discoveryNotice,
+    emptyModelDraft,
+    fillDraftRows,
+    modelRowCommands,
     toCreateProviderCommand,
     toCreateModelCommand,
     providerWriteOutcome,
     toUpdateProviderCommand,
     writeFailureNotice,
+    type CandidateOption,
     type ProviderFormValues,
 } from "@/components/cosmos/provider-model-draft";
 
@@ -83,6 +90,97 @@ describe("模型页表单", () => {
         expect(tooLarge.ok).toBe(false);
     });
 
+    it("预算字段不预填，留空按默认值提交", () => {
+        const empty = emptyModelDraft();
+        expect(empty.contextWindow).toBe("");
+        expect(empty.maxOutputTokens).toBe("");
+
+        // 数据库两列非空，输入框留空只能是「用默认值」，否则提交必然被 schema 拒绝。
+        expect(toCreateModelCommand({ modelId: "gpt-x", name: "GPT X", contextWindow: "", maxOutputTokens: "" }))
+            .toEqual({
+                ok: true,
+                command: {
+                    modelId: "gpt-x",
+                    name: "GPT X",
+                    contextWindow: defaultContextWindow,
+                    maxOutputTokens: defaultMaxOutputTokens,
+                },
+            });
+    });
+
+    it("预算越界这类跨字段错误要落在具体输入框上，不能静默地什么都不做", () => {
+        const result = toCreateModelCommand({ modelId: "gpt-x", name: "GPT X", contextWindow: "100", maxOutputTokens: "200" });
+
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+        expect(result.errors.maxOutputTokens).toBe("maxOutputTokens");
+    });
+
+    it("一批多行：逐行校验、行内不合法就整批不提交、同批重复标记在行上", () => {
+        const valid = modelRowCommands([
+            createModelDraftRow("a", { modelId: "gpt-x", name: "GPT X" }),
+            createModelDraftRow("b", { modelId: "gpt-y", name: "GPT Y" }),
+        ]);
+        expect(valid.ok).toBe(true);
+        if (!valid.ok) return;
+        expect(valid.commands.map((item) => item.command.modelId)).toEqual(["gpt-x", "gpt-y"]);
+        expect(valid.commands[0]?.command.contextWindow).toBe(defaultContextWindow);
+
+        const duplicate = modelRowCommands([
+            createModelDraftRow("a", { modelId: "gpt-x", name: "GPT X" }),
+            createModelDraftRow("b", { modelId: "gpt-x", name: "GPT X again" }),
+        ]);
+        expect(duplicate.ok).toBe(false);
+        if (duplicate.ok) return;
+        expect(duplicate.errors.get("b")).toEqual({ modelId: "duplicate" });
+
+        const invalid = modelRowCommands([
+            createModelDraftRow("a", { modelId: "gpt-x", name: "GPT X" }),
+            createModelDraftRow("b", { modelId: "", name: "没有 ID" }),
+        ]);
+        expect(invalid.ok).toBe(false);
+        if (invalid.ok) return;
+        expect(invalid.errors.get("b")?.modelId).toBe("modelId");
+    });
+
+    it("完全空着的草稿行不阻塞提交，也不产生写入", () => {
+        const blank = modelRowCommands([
+            createModelDraftRow("empty"),
+            createModelDraftRow("a", { modelId: "gpt-x", name: "GPT X" }),
+        ]);
+        expect(blank.ok).toBe(true);
+        if (!blank.ok) return;
+        expect(blank.commands).toHaveLength(1);
+
+        const onlyBlank = modelRowCommands([createModelDraftRow("empty")]);
+        expect(onlyBlank.ok).toBe(true);
+        if (!onlyBlank.ok) return;
+        expect(onlyBlank.commands).toHaveLength(0);
+    });
+
+    it("发现结果先填满空着的草稿行，多出来的才新建，默认空行不会永远留在最上面", () => {
+        const selected: CandidateOption[] = [
+            { modelId: "gpt-a", name: "GPT A", configured: false },
+            { modelId: "gpt-b", name: "GPT B", configured: false },
+        ];
+        let next = 0;
+        const nextKey = () => `draft-${(next += 1)}`;
+
+        const first = fillDraftRows([createModelDraftRow("draft-0")], selected, nextKey);
+        expect(first.rows.map((row) => row.values.modelId)).toEqual(["gpt-a", "gpt-b"]);
+        expect(first.rows.map((row) => row.key)).toEqual(["draft-0", "draft-1"]);
+        expect(first.touched).toEqual(["draft-0", "draft-1"]);
+
+        // 已有内容（含只填了一半的行）不能被覆盖，新的候选只能追加。
+        const second = fillDraftRows(
+            [createModelDraftRow("kept", { modelId: "gpt-x", name: "GPT X" }), createModelDraftRow("draft-9")],
+            [{ modelId: "gpt-c", name: "GPT C", configured: false }],
+            nextKey,
+        );
+        expect(second.rows.map((row) => row.values.modelId)).toEqual(["gpt-x", "gpt-c"]);
+        expect(second.touched).toEqual(["draft-9"]);
+    });
+
     it("标记已配置的候选，而不是把它们从列表里藏掉", () => {
         const options = candidateOptions(
             [{ modelId: "gpt-x", name: "GPT X" }, { modelId: "gpt-y", name: "GPT Y" }],
@@ -117,7 +215,15 @@ describe("写操作失败的恢复提示", () => {
     it("版本冲突与凭证缺失分开，因为一个要重读、一个要补 key", () => {
         expect(writeFailureNotice(409, { code: "version_conflict" })).toBe("versionConflict");
         expect(writeFailureNotice(409, { code: "credential_missing" })).toBe("credentialMissing");
-        expect(writeFailureNotice(403, { code: "forbidden_origin" })).toBe("unavailable");
+    });
+
+    it("写来源未授权不能显示成网络故障", () => {
+        // 403 forbidden_origin 是启动配置问题，提示必须指向来源白名单而不是网络。
+        expect(writeFailureNotice(403, { code: "forbidden_origin" })).toBe("forbiddenOrigin");
+    });
+
+    it("重复录入不能提示成「稍后重试」，那个建议永远不成立", () => {
+        expect(writeFailureNotice(409, { code: "already_exists" })).toBe("alreadyExists");
     });
 
     it("凭证还没写成功时不能显示成「保存成功」", () => {

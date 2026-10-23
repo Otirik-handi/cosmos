@@ -36,6 +36,8 @@ const connection: ConnectionInstance = {
     secretRef: "opaque-secret-ref",
     lastError: null,
     lastCheckedAt: null,
+    modelId: null,
+    version: 1,
     createdAt: "2026-10-12T00:00:00.000Z",
     updatedAt: "2026-10-12T00:00:00.000Z",
 };

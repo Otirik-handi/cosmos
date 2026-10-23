@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    Boxes,
     Home,
     Inbox,
     RefreshCcw,
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { messages } from "@/copy/messages";
 
 /**
- * 侧栏导航的单一真相源。八项各占一层 URL，与 ADR-0029 决策 3 的
+ * 侧栏导航的单一真相源。九项各占一层 URL，与 ADR-0029 决策 3 的
  * 「URL 层级 = 导航层级」一致；新增页面只改这里，不改路由分组。
  * 文案取自集中文案模块，导航与页面标题不会各写一份。
  */
@@ -36,6 +37,7 @@ export const NAV_GROUPS = [
         title: messages.shell.nav.groups.management,
         items: [
             { href: "/organize", label: messages.shell.nav.items.organize, icon: Tag },
+            { href: "/models", label: messages.shell.nav.items.models, icon: Boxes },
             { href: "/automation", label: messages.shell.nav.items.automation, icon: RefreshCcw },
             { href: "/settings", label: messages.shell.nav.items.settings, icon: Settings },
         ],

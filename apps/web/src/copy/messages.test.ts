@@ -30,6 +30,7 @@ describe("集中文案模块", () => {
             "common",
             "home",
             "library",
+            "models",
             "notices",
             "organize",
             "pages",

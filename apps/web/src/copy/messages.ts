@@ -2,6 +2,7 @@ import { automation } from "./areas/automation";
 import { common } from "./areas/common";
 import { home } from "./areas/home";
 import { library } from "./areas/library";
+import { models } from "./areas/models";
 import { notices } from "./areas/notices";
 import { organize } from "./areas/organize";
 import { pages } from "./areas/pages";
@@ -27,6 +28,7 @@ export const messages = {
     shell,
     home,
     library,
+    models,
     pages,
     organize,
     automation,

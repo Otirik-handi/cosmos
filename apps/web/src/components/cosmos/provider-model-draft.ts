@@ -31,9 +31,9 @@ export type ProviderFormField = "name" | "api" | "baseUrl" | "apiKey";
 /** `form` 是整体性拒绝，没有可定位的字段。 */
 export type ProviderFormErrors = Partial<Record<ProviderFormField | "form", string>>;
 
-export type DraftResult<TCommand> =
+export type DraftResult<TCommand, TErrors = ProviderFormErrors> =
     | { ok: true; command: TCommand }
-    | { ok: false; errors: ProviderFormErrors };
+    | { ok: false; errors: TErrors };
 
 const issueReasons: Record<string, string> = {
     name: "name",
@@ -111,6 +111,30 @@ export type ModelDraftValues = {
     maxOutputTokens: string;
 };
 
+/**
+ * 上游的模型列表只返回模型 ID 与显示名称，不返回两个预算。这两个字段在数据库里是非空列，
+ * 所以「选填」只能做成「留空就提交默认值」：输入框里只放 placeholder，不预填数值。
+ * 数值取主流长上下文档位，低于它的模型会被上游拒绝超长请求，用户可以按需改小。
+ */
+export const defaultContextWindow = 262_144;
+export const defaultMaxOutputTokens = 32_768;
+
+export function emptyModelDraft(): ModelDraftValues {
+    return {
+        modelId: "",
+        name: "",
+        contextWindow: "",
+        maxOutputTokens: "",
+    };
+}
+
+/** 一行待录入的模型。key 只用于 React 列表与「哪一行的错误」，不进入请求。 */
+export type ModelDraftRow = { key: string; values: ModelDraftValues };
+
+export function createModelDraftRow(key: string, values: Partial<ModelDraftValues> = {}): ModelDraftRow {
+    return { key, values: { ...emptyModelDraft(), ...values } };
+}
+
 export type ModelFormField = keyof ModelDraftValues;
 export type ModelFormErrors = Partial<Record<ModelFormField | "form", string>>;
 
@@ -129,24 +153,66 @@ function toBudget(value: string): number | null {
     return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function toCreateModelCommand(values: ModelDraftValues): DraftResult<CreateConfiguredModelCommand> {
+/** 清空输入框表示「用默认预算」，不是 `0`：这两个字段在库里非空。 */
+function toBudgetOrDefault(value: string, fallback: number): number | null {
+    return value.trim() === "" ? fallback : toBudget(value);
+}
+
+export function toCreateModelCommand(values: ModelDraftValues): DraftResult<CreateConfiguredModelCommand, ModelFormErrors> {
     const parsed = createConfiguredModelCommandSchema.safeParse({
         modelId: values.modelId.trim(),
         name: values.name.trim(),
-        contextWindow: toBudget(values.contextWindow),
-        maxOutputTokens: toBudget(values.maxOutputTokens),
+        contextWindow: toBudgetOrDefault(values.contextWindow, defaultContextWindow),
+        maxOutputTokens: toBudgetOrDefault(values.maxOutputTokens, defaultMaxOutputTokens),
     });
     if (parsed.success) return { ok: true, command: parsed.data };
 
     const errors: ModelFormErrors = {};
     for (const issue of parsed.error.issues) {
-        const field = String(issue.path[0] ?? "");
+        // 「输出上限大于上下文窗口」是跨字段规则，合同挂在根上（path 为空）。
+        // 挂在根上时界面没有可标红的字段，用户只会看到按钮没反应，所以落到输出上限那一栏。
+        const field = issue.path.length === 0 ? "maxOutputTokens" : String(issue.path[0] ?? "");
         const reason = modelIssueReasons[field];
         if (reason !== undefined && errors[field as ModelFormField] === undefined) {
             errors[field as ModelFormField] = reason;
         }
     }
     return { ok: false, errors };
+}
+
+/**
+ * 一次提交多行时的逐行校验：先整批校验，任一行不合法就一行都不提交——部分提交会让用户
+ * 对着「有几个成功了」的列表重新数一遍。同一批里重复的模型 ID 由界面拦下，
+ * 不必等一次必然失败的写入。
+ *
+ * 完全空着的行被跳过：默认表单就带着一行空行，发现结果追加后它会留在最上面，
+ * 不跳过就等于要求用户先手动删掉它。只有模型 ID 与名称都为空才算空行，
+ * 因为只填了预算的行多半是填到一半。
+ */
+export function modelRowCommands(
+    rows: readonly ModelDraftRow[],
+): { ok: true; commands: readonly { key: string; command: CreateConfiguredModelCommand }[] } | { ok: false; errors: ReadonlyMap<string, ModelFormErrors> } {
+    const errors = new Map<string, ModelFormErrors>();
+    const seen = new Set<string>();
+    const commands: { key: string; command: CreateConfiguredModelCommand }[] = [];
+
+    for (const row of rows) {
+        if (row.values.modelId.trim() === "" && row.values.name.trim() === "") continue;
+        const result = toCreateModelCommand(row.values);
+        if (!result.ok) {
+            errors.set(row.key, result.errors);
+            continue;
+        }
+        const modelId = result.command.modelId;
+        if (seen.has(modelId)) {
+            errors.set(row.key, { modelId: "duplicate" });
+            continue;
+        }
+        seen.add(modelId);
+        commands.push({ key: row.key, command: result.command });
+    }
+
+    return errors.size > 0 ? { ok: false, errors } : { ok: true, commands };
 }
 
 export type CandidateOption = ProviderModelDiscoveryCandidate & { configured: boolean };
@@ -168,6 +234,39 @@ export type DiscoveryNotice =
     | { kind: "found"; count: number }
     | { kind: "empty" }
     | { kind: "failed"; reason: "authentication" | "unsupported" | "timeout" | "tooLarge" | "malformed" | "unreachable" };
+
+/**
+ * 把弹窗挑中的候选落成草稿行：先占用「模型 ID 与显示名称都为空」的行，多出来的才新建。
+ * 一律新建会把默认那一行永远留在最上面，用户得先删掉它才能继续填。
+ * `touched` 是这一轮被写入的行 key，用来清掉它们上一次的错误。
+ */
+export function fillDraftRows(
+    rows: readonly ModelDraftRow[],
+    selected: readonly CandidateOption[],
+    nextKey: () => string,
+): { rows: readonly ModelDraftRow[]; touched: readonly string[] } {
+    if (selected.length === 0) return { rows, touched: [] };
+
+    const emptyKeys = rows
+        .filter((row) => row.values.modelId.trim() === "" && row.values.name.trim() === "")
+        .map((row) => row.key);
+    const filled = new Map(emptyKeys.slice(0, selected.length).map((key, position) => [key, selected[position]!]));
+    const appended = selected.slice(filled.size).map((option) => createModelDraftRow(nextKey(), {
+        modelId: option.modelId,
+        name: option.name,
+    }));
+    const next = rows.map((row) => {
+        const option = filled.get(row.key);
+        return option === undefined
+            ? row
+            : { ...row, values: { ...row.values, modelId: option.modelId, name: option.name } };
+    });
+
+    return {
+        rows: [...next, ...appended],
+        touched: [...filled.keys(), ...appended.map((row) => row.key)],
+    };
+}
 
 export type DiscoveryOutcome =
     | { status: "succeeded"; count: number }
@@ -198,10 +297,13 @@ export function discoveryNotice(outcome: DiscoveryOutcome): DiscoveryNotice {
  */
 export type WriteFailureNotice =
     | "versionConflict"
+    | "alreadyExists"
+    | "inUse"
     | "credentialMissing"
     | "operationInProgress"
     | "cleanupPending"
     | "credentialWriteFailed"
+    | "forbiddenOrigin"
     | "notFound"
     | "payloadTooLarge"
     | "unavailable";
@@ -212,10 +314,17 @@ export function writeFailureNotice(status: number, body: unknown): WriteFailureN
         ? body.code
         : null;
     if (code === "version_conflict") return "versionConflict";
+    // 同一服务商下已有同一模型：重试永远不会成功，必须让人去核对已有条目。
+    if (code === "already_exists") return "alreadyExists";
+    // 被连接引用的模型删不掉：先改掉那些连接才可能成功，重试没有意义。
+    if (code === "in_use") return "inUse";
     if (code === "credential_missing") return "credentialMissing";
     if (code === "operation_in_progress") return "operationInProgress";
     if (code === "cleanup_pending") return "cleanupPending";
     if (code === "credential_write_failed") return "credentialWriteFailed";
+    // 写来源未授权和网络故障的恢复动作完全不同（改启动配置 vs 重试），
+    // 归到 unavailable 会把用户引向检查地址和 Key。
+    if (code === "forbidden_origin") return "forbiddenOrigin";
     if (status === 404) return "notFound";
     if (status === 413) return "payloadTooLarge";
     return "unavailable";

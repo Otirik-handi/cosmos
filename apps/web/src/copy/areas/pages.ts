@@ -111,6 +111,11 @@ export const pages = {
         description: "存储与数据管理",
         storage: "存储",
     },
+    models: {
+        title: "模型",
+        description: "服务商、它的凭证与模型；连接在这里选模型",
+        providers: "服务商",
+    },
     layout: {
         description: "本地优先的信息聚合与个人情报工作台",
     },

@@ -1,11 +1,21 @@
 "use client";
 
-import { ChevronDown, Pencil, Plus } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import type { ModelProviderOperationSnapshot, ModelProviderSnapshot } from "@cosmos/contracts";
 import { CosmosTransportError, type HttpCosmosClient } from "@cosmos/transport-http";
 
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,10 +50,13 @@ const emptyValues: ProviderFormValues = {
 
 const failureText: Record<WriteFailureNotice, string> = {
     versionConflict: messages.models.notices.versionConflict,
+    alreadyExists: messages.models.notices.alreadyExists,
+    inUse: messages.models.notices.inUse,
     credentialMissing: messages.models.notices.credentialMissing,
     operationInProgress: messages.models.notices.operationInProgress,
     cleanupPending: messages.models.notices.cleanupPending,
     credentialWriteFailed: messages.models.notices.credentialWriteFailed,
+    forbiddenOrigin: messages.models.notices.forbiddenOrigin,
     notFound: messages.models.notices.notFound,
     payloadTooLarge: messages.models.notices.payloadTooLarge,
     unavailable: messages.models.notices.unavailable,
@@ -51,10 +64,13 @@ const failureText: Record<WriteFailureNotice, string> = {
 
 const failureReasonText: Record<WriteFailureNotice, string> = {
     versionConflict: messages.models.notices.failureReasons.versionConflict,
+    alreadyExists: messages.models.notices.failureReasons.alreadyExists,
+    inUse: messages.models.notices.failureReasons.inUse,
     credentialMissing: messages.models.notices.failureReasons.credentialMissing,
     operationInProgress: messages.models.notices.failureReasons.operationInProgress,
     cleanupPending: messages.models.notices.failureReasons.cleanupPending,
     credentialWriteFailed: messages.models.notices.failureReasons.credentialWriteFailed,
+    forbiddenOrigin: messages.models.notices.failureReasons.forbiddenOrigin,
     notFound: messages.models.notices.failureReasons.notFound,
     payloadTooLarge: messages.models.notices.failureReasons.payloadTooLarge,
     unavailable: messages.models.notices.failureReasons.unavailable,
@@ -94,6 +110,19 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
     const [saving, setSaving] = useState(false);
     /** 展开模型区的服务商；同一时刻只展开一个，避免十个模型列表同时请求。 */
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    /** 待确认删除的服务商；非空时弹确认框。 */
+    const [removal, setRemoval] = useState<ModelProviderSnapshot | null>(null);
+    const [removing, setRemoving] = useState(false);
+    /** 删除被引用拒绝时的常驻原因。 */
+    const [removalError, setRemovalError] = useState<string | null>(null);
+    /**
+     * 编辑时有多少连接在用这个服务商的模型。
+     *
+     * 界面自行 join 连接列表与模型列表：一个专门的服务端端点只为一句提示，不值得多一套
+     * 仓储方法与测试面；代价是它只是提示，不构成服务端保证。带 providerId 存，切换编辑目标
+     * 时旧计数自然失效，不必在 effect 里同步清空。
+     */
+    const [affected, setAffected] = useState<{ providerId: string; count: number } | null>(null);
 
     const loadProviders = useCallback(async () => {
         setLoadError(null);
@@ -114,6 +143,31 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         void loadProviders();
     }, [loadProviders]);
+
+    const editingProviderId = editor?.mode === "edit" ? editor.provider.id : null;
+
+    useEffect(() => {
+        if (editingProviderId === null) return;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const [models, connections] = await Promise.all([
+                    client.listConfiguredModels(editingProviderId),
+                    client.listConnections(),
+                ]);
+                if (cancelled) return;
+                const used = new Set(models.items.map((model) => model.id));
+                setAffected({
+                    providerId: editingProviderId,
+                    count: connections.filter((connection) => connection.modelId !== null
+                        && used.has(connection.modelId)).length,
+                });
+            } catch {
+                // 只是提示：读不到就不显示，不打断编辑。
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [client, editingProviderId]);
 
     function openCreate() {
         setEditor({ mode: "create" });
@@ -210,6 +264,38 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
         }
     }
 
+    /**
+     * 删除一个服务商：连带它的模型与服务端保存的密钥。
+     *
+     * 被连接引用的模型会让服务端拒绝整次删除（409 in_use）。这时把原因留在列表上方，
+     * 而不是弹一个几秒就消失的提示——用户要照着它去改连接。
+     */
+    async function confirmRemoval() {
+        if (removal === null) return;
+        setRemoving(true);
+        setRemovalError(null);
+        try {
+            await client.deleteModelProvider(removal.id, removal.version, newRequestKey());
+            setRemoval(null);
+            toast.success({ title: messages.models.provider.removed });
+            await loadProviders();
+        } catch (error) {
+            const noticeKey = error instanceof CosmosTransportError
+                ? writeFailureNotice(error.status, error.body)
+                : "unavailable";
+            setRemoval(null);
+            if (noticeKey === "inUse") {
+                setRemovalError(`${failureText.inUse} ${failureReasonText.inUse}`);
+            } else {
+                toast.info({ title: failureText[noticeKey] ?? failureText.unavailable });
+            }
+            // 「已经不存在」说明列表过期：重读一次，别让用户对着一条已经不存在的记录再点。
+            if (noticeKey === "notFound") await loadProviders();
+        } finally {
+            setRemoving(false);
+        }
+    }
+
     const providerEditor = editor && (
         <Dialog
             open={true}
@@ -226,6 +312,11 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
                     </DialogTitle>
                     <DialogDescription>{messages.models.provider.createsNoCall}</DialogDescription>
                 </DialogHeader>
+                {affected !== null && affected.providerId === editingProviderId && affected.count > 0 && (
+                    <p className="text-[12px] text-muted-foreground">
+                        {messages.models.provider.affectedConnections(affected.count)}
+                    </p>
+                )}
                 <form
                     className="flex flex-col gap-3"
                     onSubmit={(event) => {
@@ -399,12 +490,50 @@ export function ModelProviderPanel({ client }: ModelProviderPanelProps) {
                                 >
                                     <Pencil />
                                 </Button>
+                                <Button
+                                    aria-label={`${messages.models.provider.remove} ${provider.name}`}
+                                    disabled={removing}
+                                    onClick={() => {
+                                        setRemovalError(null);
+                                        setRemoval(provider);
+                                    }}
+                                    size="icon-xs"
+                                    variant="ghost"
+                                >
+                                    <Trash2 />
+                                </Button>
                             </div>
                             {expanded && <ProviderModelsSection client={client} provider={provider} />}
                         </li>
                     );
                 })}
             </ul>
+
+            {removalError !== null && (
+                <div
+                    className="rounded-[var(--radius-control)] border border-destructive/30 bg-destructive/10 p-3 text-[13px] leading-6 text-destructive"
+                    role="alert"
+                >
+                    {removalError}
+                </div>
+            )}
+
+            <AlertDialog open={removal !== null} onOpenChange={(open) => { if (!open) setRemoval(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {removal === null ? "" : messages.models.provider.removeTitle(removal.name)}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>{messages.models.provider.removeHint}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={removing}>{messages.models.provider.cancel}</AlertDialogCancel>
+                        <AlertDialogAction disabled={removing} onClick={() => void confirmRemoval()}>
+                            {messages.models.provider.removeAction}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {providerEditor}
         </div>

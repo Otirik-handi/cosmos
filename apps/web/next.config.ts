@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiUrl = process.env.COSMOS_API_URL ?? "http://localhost:4310";
+const apiUrl = process.env.COSMOS_API_URL ?? "http://localhost:14310";
 
 const nextConfig: NextConfig = {
     output: "standalone",

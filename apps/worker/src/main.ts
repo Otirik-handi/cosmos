@@ -21,7 +21,7 @@ import {
 import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
 import { createLogger } from "@cosmos/logging";
 import { createBuiltInConnectorRegistry } from "@cosmos/plugin-collectors";
-import { PrismaConnectorStateStore, PrismaCosmosRepository } from "@cosmos/storage-prisma";
+import { PrismaAgentModelConnectionResolver, PrismaConnectorStateStore, PrismaCosmosRepository } from "@cosmos/storage-prisma";
 import { createWorkerAdminServer, type ComponentHealth, type WorkerAdminServer } from "@cosmos/worker-admin";
 import type { ConnectorStateHandle, ConnectorStateStorePort, LoggerPort } from "@cosmos/application";
 import type { CatalogPort } from "@cosmos/application/catalog";
@@ -32,6 +32,7 @@ import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
 import { createScheduleQueue } from "./scheduling.js";
 import { createWorkflowHost } from "./workflow-host.js";
 import { createWorkerAgentAction } from "./agent-action.js";
+import { createWorkerAgentInvocationV2Action } from "./agent-action-v2.js";
 
 /**
  * 把执行快照解析成连接器状态句柄：命名空间取自 manifest 的 `stateStoreNamespace`
@@ -169,6 +170,12 @@ async function bootstrap(): Promise<void> {
                         connections: repository,
                         secrets: repository.secrets,
                     })] : []),
+                    // @2 无条件注册：它没有启动期 Agent 配置，能否调用由调用时那条连接决定。
+                    // @1 暂时与 @2 并存，直到新路径完成真实服务验收（API 0009 第 87 行）。
+                    createWorkerAgentInvocationV2Action({
+                        connections: new PrismaAgentModelConnectionResolver(repository.prisma),
+                        secrets: repository.secrets,
+                    }),
                     ...createIngestActions({
                         resolveConnector: (source) => connectors.resolve(source),
                         blobs: repository.blobs,

@@ -16,6 +16,7 @@ export const shell = {
             entities: "Entity",
             system: "系统产出",
             organize: "整理",
+            models: "模型",
             automation: "自动化",
             settings: "设置",
         },
