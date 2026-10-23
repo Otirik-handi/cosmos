@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { canonicalJson, fingerprint, type ActivityExecutionRequest, type DeferredActivityCompletionInput, type DeferredActivityStartResult } from "@notnotype/nb-workflow";
-import { WorkflowHostConflictError, WorkflowHostError, type ClaimActivityJobInput, type CompleteActivityInput, type CompleteActivityResult, type HeartbeatActivityJobInput, type ReleaseActivityJobInput, type WorkflowActivityJobClaim, type WorkflowActivityJobPayload, type WorkflowJobStatus } from "@cosmos/application";
+import { WorkflowHostConflictError, WorkflowHostError, type ClaimActivityJobInput, type CompleteActivityInput, type CompleteActivityResult, type ConsumeActivityDispatchInput, type ConsumeActivityDispatchResult, type HeartbeatActivityJobInput, type ReleaseActivityJobInput, type WorkflowActivityJobClaim, type WorkflowActivityJobPayload, type WorkflowJobStatus } from "@cosmos/application";
 import { isWorkflowEnvelopeMarker } from "../workflow-envelope-marker.js";
 import { PrismaWorkflowHostRunLeaseStore } from "./run-lease-store.js";
 import { ACTIVITY_KIND, type ActivityJobRow, DEFAULT_COMPLETION_MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS, TERMINAL_RUN_STATUSES, type WorkflowCompletionRow, type WorkflowRunRow, assertValidDate, encodeJson, invalidState, isTerminalRunStatus, isUniqueConstraintError, normalizeRetryDelay, parseJson, requireNonEmptyString, validateLeaseMs } from "./internals-core.js";
 import { activityIdentityJson, existingActionResult, normalizeActivityJobLease, normalizeActivityRequest, normalizeRunLease, parseActivityPayload, pendingActivityForState, previousJobLeaseGuard, rejectedActivityResult, sameCompletionIdentity, toActivityJobClaim, toCompletion, validateActivityTerminalResult, validateCompletionForJob } from "./internals-activity.js";
-import { appendActivityLifecycleEvent, hasCurrentRunLease } from "./internals-events-lease.js";
+import { appendActivityLifecycleEvent, appendWorkflowRunFailedEvent, hasCurrentRunLease } from "./internals-events-lease.js";
 
 export class PrismaWorkflowHostActivityStore extends PrismaWorkflowHostRunLeaseStore {
     async startAction(
@@ -133,6 +134,10 @@ export class PrismaWorkflowHostActivityStore extends PrismaWorkflowHostRunLeaseS
             });
 
             for (const candidate of candidates) {
+                if (candidate.dispatchAuthorizedAt !== null) {
+                    await this.failFencedActivity(tx, candidate as ActivityJobRow, owner, now);
+                    continue;
+                }
                 if (!candidate.workflowRunId) {
                     throw invalidState(`Activity Job ${candidate.id} has no Workflow run.`);
                 }
@@ -161,8 +166,12 @@ export class PrismaWorkflowHostActivityStore extends PrismaWorkflowHostRunLeaseS
                     // leave an orphan queued Job for Run recovery instead of executing it.
                     continue;
                 }
-                if (candidate.attempts >= candidate.maxAttempts) {
-                    const error = "Activity Job exceeded its maximum attempts.";
+                if (candidate.dispatchAuthorizedAt !== null || candidate.attempts >= candidate.maxAttempts) {
+                    const outcomeUnknown = candidate.dispatchAuthorizedAt !== null;
+                    const errorCode = outcomeUnknown ? "outcome_unknown" : "max_attempts";
+                    const error = outcomeUnknown
+                        ? "Activity dispatch outcome is unknown; automatic replay is blocked."
+                        : "Activity Job exceeded its maximum attempts.";
                     const completion: DeferredActivityCompletionInput = {
                         activityKey: payload.activity.key,
                         receipt: candidate.id,
@@ -181,7 +190,7 @@ export class PrismaWorkflowHostActivityStore extends PrismaWorkflowHostRunLeaseS
                         data: {
                             status: "failed_terminal",
                             resultJson: null,
-                            errorCode: "max_attempts",
+                            errorCode,
                             errorMessage: error,
                             workflowKernelRevision: workflowRun.kernelRevision,
                             leaseOwner: null,
@@ -265,6 +274,146 @@ export class PrismaWorkflowHostActivityStore extends PrismaWorkflowHostRunLeaseS
                 return toActivityJobClaim(claimedRow, payload, owner, leaseToken);
             }
             return null;
+        });
+    }
+
+    private async failFencedActivity(
+        tx: Prisma.TransactionClient,
+        candidate: ActivityJobRow,
+        owner: string,
+        now: Date,
+    ): Promise<void> {
+        if (!candidate.workflowRunId) {
+            throw invalidState(`Fenced Activity Job ${candidate.id} has no Workflow run.`);
+        }
+        const run = await tx.workflowRun.findUnique({ where: { id: candidate.workflowRunId } });
+        if (!run) throw invalidState(`Fenced Activity Job ${candidate.id} has no Workflow run.`);
+        const payload = parseActivityPayload(candidate.payloadJson, candidate.id);
+        const updated = await tx.job.updateMany({
+            where: {
+                id: candidate.id,
+                kind: ACTIVITY_KIND,
+                status: candidate.status,
+                dispatchAuthorizedAt: { not: null },
+                ...previousJobLeaseGuard(candidate),
+            },
+            data: {
+                status: "failed_terminal",
+                resultJson: null,
+                errorCode: "outcome_unknown",
+                errorMessage: "Activity dispatch outcome is unknown; automatic replay is blocked.",
+                workflowKernelRevision: run.kernelRevision,
+                leaseOwner: null,
+                leaseToken: null,
+                leaseExpiresAt: null,
+                nextAttemptAt: null,
+            },
+        });
+        if (updated.count !== 1) return;
+        const error = "Activity dispatch outcome is unknown; the external request may already have been sent.";
+        const runFailed = await tx.workflowRun.updateMany({
+            where: { id: run.id, status: { notIn: [...TERMINAL_RUN_STATUSES] } },
+            data: {
+                status: "failed",
+                errorMessage: error,
+                finishedAt: now,
+                updatedAt: now,
+                runLeaseOwner: null,
+                runLeaseToken: null,
+                runLeaseExpiresAt: null,
+                resumeRequired: false,
+            },
+        });
+        if (runFailed.count === 1) {
+            await appendWorkflowRunFailedEvent(tx, { workflowRunId: run.id, error });
+        }
+        const completion: DeferredActivityCompletionInput = {
+            activityKey: payload.activity.key,
+            receipt: candidate.id,
+            reference: payload.reference,
+            fingerprint: payload.activity.fingerprint,
+            status: "failed",
+            error,
+        };
+        await tx.workflowCompletion.create({
+            data: {
+                id: randomUUID(),
+                workflowRunId: candidate.workflowRunId,
+                jobId: candidate.id,
+                activityKey: completion.activityKey,
+                receipt: completion.receipt,
+                reference: completion.reference,
+                fingerprint: completion.fingerprint,
+                completionJson: encodeJson(completion, "Activity completion"),
+                status: "queued",
+                attempts: 0,
+                maxAttempts: DEFAULT_COMPLETION_MAX_ATTEMPTS,
+                availableAt: now,
+                leaseOwner: null,
+                leaseToken: null,
+                leaseExpiresAt: null,
+                lastError: null,
+            },
+        });
+        await appendActivityLifecycleEvent(tx, {
+            workflowRunId: candidate.workflowRunId,
+            jobId: candidate.id,
+            attempt: candidate.attempts,
+            owner,
+            expiresAt: null,
+            status: "failed_terminal",
+            error: completion.error,
+            idempotencyKey: `${candidate.id}:attempt:${candidate.attempts}:terminal`,
+        });
+    }
+
+    async consumeActivityDispatch(
+        input: ConsumeActivityDispatchInput,
+    ): Promise<ConsumeActivityDispatchResult> {
+        const now = input.now ?? new Date();
+        assertValidDate(now, "now");
+        const jobLease = normalizeActivityJobLease(input.jobLease);
+        const runLease = normalizeRunLease(input.runLease);
+        return this.prisma.$transaction(async (tx) => {
+            const job = await tx.job.findUnique({ where: { id: jobLease.jobId } });
+            if (!job || job.kind !== ACTIVITY_KIND || job.workflowRunId !== runLease.runId) {
+                return { accepted: false, alreadyConsumed: false };
+            }
+            if (job.dispatchAuthorizedAt !== null) {
+                return { accepted: false, alreadyConsumed: true };
+            }
+            if (
+                job.status !== "leased"
+                || job.leaseOwner !== jobLease.owner
+                || job.leaseToken !== jobLease.leaseToken
+                || !job.leaseExpiresAt
+                || job.leaseExpiresAt.getTime() <= now.getTime()
+            ) return { accepted: false, alreadyConsumed: false };
+            const run = await tx.workflowRun.findUnique({ where: { id: runLease.runId } });
+            if (!run || isTerminalRunStatus(run.status) || !hasCurrentRunLease(run as WorkflowRunRow, runLease, now)) {
+                return { accepted: false, alreadyConsumed: false };
+            }
+            const payload = parseActivityPayload(job.payloadJson, job.id);
+            const state = parseJson(run.stateJson, `Workflow run ${run.id} state`);
+            if (job.workflowKernelRevision !== run.kernelRevision || !pendingActivityForState(state, payload, job.id)) {
+                return { accepted: false, alreadyConsumed: false };
+            }
+            const updated = await tx.job.updateMany({
+                where: {
+                    id: job.id,
+                    kind: ACTIVITY_KIND,
+                    status: "leased",
+                    leaseOwner: jobLease.owner,
+                    leaseToken: jobLease.leaseToken,
+                    leaseExpiresAt: { gt: now },
+                    workflowRunId: runLease.runId,
+                    workflowKernelRevision: run.kernelRevision,
+                    dispatchAuthorizedAt: null,
+                },
+                data: { dispatchAuthorizedAt: now },
+            });
+            if (updated.count !== 1) return { accepted: false, alreadyConsumed: false };
+            return { accepted: true, alreadyConsumed: false };
         });
     }
 
@@ -378,6 +527,11 @@ export class PrismaWorkflowHostActivityStore extends PrismaWorkflowHostRunLeaseS
                 && job.leaseExpiresAt !== null
                 && job.leaseExpiresAt.getTime() > now.getTime();
             if (!jobLeaseCurrent) {
+                // 已消费派发授权的 Attempt 结果一律作废：它可能对应一次真实外呼，
+                // 而 Run 已被判定为 outcome_unknown，晚到的成功不能回填成结果。
+                if (job.dispatchAuthorizedAt !== null) {
+                    return rejectedActivityResult(job.status);
+                }
                 if (
                     completion
                     && input.result.status !== "retry_wait"

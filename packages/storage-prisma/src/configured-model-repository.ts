@@ -1,0 +1,110 @@
+import type { ConfiguredModelRepository } from "@cosmos/application";
+import type { CreateConfiguredModelCommand, UpdateConfiguredModelCommand } from "@cosmos/contracts";
+
+const select = {
+    id: true, providerId: true, modelId: true, name: true,
+    contextWindow: true, maxOutputTokens: true, version: true, createdAt: true, updatedAt: true,
+} as const;
+
+type ModelRow = {
+    id: string; providerId: string; modelId: string; name: string;
+    contextWindow: number; maxOutputTokens: number; version: number;
+    createdAt: Date; updatedAt: Date;
+};
+
+type ModelClient = {
+    configuredModel: {
+        findMany(input: { where: { providerId: string }; orderBy: { id: "asc" }; select: typeof select }): Promise<ModelRow[]>;
+        findFirst(input: { where: { id: string; providerId: string }; select: typeof select }): Promise<ModelRow | null>;
+        create(input: { data: {
+            id: string; providerId: string; modelId: string; name: string;
+            contextWindow: number; maxOutputTokens: number;
+        }; select: typeof select }): Promise<ModelRow>;
+        updateMany(input: { where: { id: string; providerId: string; version: number }; data: {
+            modelId?: string; name?: string; contextWindow?: number; maxOutputTokens?: number;
+            version: { increment: 1 };
+        } }): Promise<{ count: number }>;
+        deleteMany(input: { where: { id: string; providerId: string; version: number } }): Promise<{ count: number }>;
+    };
+};
+
+function conflict(): never {
+    throw Object.assign(new Error("Configured model version conflict."), { code: "version_conflict" });
+}
+
+/**
+ * `@@unique([providerId, modelId])` 是「同一服务商不能重复录入同一模型」的唯一权威判据。
+ * 不在这里翻译成 already_exists，界面只能拿到兜底的 dependency_unavailable 并提示「稍后重试」，
+ * 而重试永远不会成功。
+ */
+function isDuplicateModel(error: unknown): boolean {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
+/**
+ * `ConnectionInstance.modelId` 是 `onDelete: Restrict` 外键：模型被连接引用时数据库会拒绝删除。
+ * 不在这里翻译成 in_use，界面只能拿到兜底的 dependency_unavailable 并提示「稍后重试」，
+ * 而只要那条连接还在，重试永远不会成功。
+ */
+function isReferencedModel(error: unknown): boolean {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "P2003";
+}
+
+function snapshot(row: ModelRow): Record<string, unknown> {
+    return {
+        id: row.id, providerId: row.providerId, modelId: row.modelId, name: row.name,
+        contextWindow: row.contextWindow, maxOutputTokens: row.maxOutputTokens, version: row.version,
+        createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+    };
+}
+
+export class PrismaConfiguredModelRepository implements ConfiguredModelRepository {
+    constructor(private readonly client: ModelClient) {}
+
+    async list(providerId: string): Promise<unknown[]> {
+        const rows = await this.client.configuredModel.findMany({ where: { providerId }, orderBy: { id: "asc" }, select });
+        return rows.map(snapshot);
+    }
+
+    async get(providerId: string, id: string): Promise<unknown | null> {
+        const row = await this.client.configuredModel.findFirst({ where: { id, providerId }, select });
+        return row === null ? null : snapshot(row);
+    }
+
+    async create(input: { id: string; providerId: string; fields: CreateConfiguredModelCommand }): Promise<unknown> {
+        try {
+            return snapshot(await this.client.configuredModel.create({
+                data: { id: input.id, providerId: input.providerId, ...input.fields }, select,
+            }));
+        } catch (error) {
+            if (isDuplicateModel(error)) {
+                throw Object.assign(new Error("Configured model already exists."), { code: "already_exists" });
+            }
+            throw error;
+        }
+    }
+
+    async update(input: { id: string; providerId: string; expectedVersion: number; fields: Omit<UpdateConfiguredModelCommand, "expectedVersion"> }): Promise<unknown> {
+        const changed = await this.client.configuredModel.updateMany({
+            where: { id: input.id, providerId: input.providerId, version: input.expectedVersion },
+            data: { ...input.fields, version: { increment: 1 } },
+        });
+        if (changed.count !== 1) return conflict();
+        const row = await this.get(input.providerId, input.id);
+        return row ?? conflict();
+    }
+
+    async delete(input: { id: string; providerId: string; expectedVersion: number }): Promise<void> {
+        try {
+            const deleted = await this.client.configuredModel.deleteMany({
+                where: { id: input.id, providerId: input.providerId, version: input.expectedVersion },
+            });
+            if (deleted.count !== 1) conflict();
+        } catch (error) {
+            if (isReferencedModel(error)) {
+                throw Object.assign(new Error("Configured model is still in use."), { code: "in_use" });
+            }
+            throw error;
+        }
+    }
+}

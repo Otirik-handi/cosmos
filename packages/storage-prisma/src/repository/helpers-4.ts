@@ -624,6 +624,8 @@ export class PrismaCosmosRepositoryHelpers4 extends PrismaCosmosRepositoryHelper
             secretRef: connection.secretRef,
             lastError: connection.lastError,
             lastCheckedAt: connection.lastCheckedAt?.toISOString() ?? null,
+            modelId: connection.modelId,
+            version: connection.version,
             createdAt: connection.createdAt.toISOString(),
             updatedAt: connection.updatedAt.toISOString(),
         };

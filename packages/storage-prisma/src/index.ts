@@ -12,5 +12,12 @@ export { PrismaWorkflowHostStore } from "./workflow-host-store.js";
 export { PrismaWorkflowEventSink } from "./workflow-event-sink.js";
 export { FileSecretStore } from "./secret-store.js";
 export { PrismaConnectorStateStore } from "./connector-state-store.js";
+export { PrismaProviderCredentialRepository } from "./model-provider-credential-repository.js";
+export { PrismaModelProviderQueryRepository } from "./model-provider-query-repository.js";
+export { PrismaConfiguredModelRepository } from "./configured-model-repository.js";
+export { PrismaProviderDiscoveryReader } from "./provider-discovery-reader.js";
+export { PrismaModelProviderRemovalRepository } from "./model-provider-removal-repository.js";
+export { PrismaAgentModelConnectionResolver } from "./agent-model-resolver.js";
+export { withModelConfigurationLock } from "./model-configuration-lock.js";
 
 export { type StorageRoots, resolveStorageRoots, createPrismaClient, resolveContainedPath } from "./storage-root.js";

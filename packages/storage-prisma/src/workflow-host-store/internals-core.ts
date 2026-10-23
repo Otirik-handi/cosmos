@@ -83,6 +83,7 @@ export type ActivityJobRow = {
     leaseOwner: string | null;
     leaseToken: string | null;
     leaseExpiresAt: Date | null;
+    dispatchAuthorizedAt: Date | null;
     nextAttemptAt: Date | null;
     errorCode: string | null;
     errorMessage: string | null;

@@ -2,16 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import * as entry from "./index.js";
 
-// 公共入口的值导出集合在治理拆分(G02)期间冻结：零增减、零改名。
+// G02 冻结基线上，Task 39 经批准添加 Provider 仓储与配置锁，供 API 通过包入口装配。
 // 任何变更都会破坏消费方 import,须显式更新本清单并向维护者说明理由
 // (docs/proposals/code-size-governance-v1.md:导出签名 diff 为零)。
 const FROZEN_VALUE_EXPORTS = [
     "FileSecretStore",
+    "PrismaAgentModelConnectionResolver",
+    "PrismaConfiguredModelRepository",
     "PrismaConnectorStateStore",
     "PrismaContentQueryRepository",
     "PrismaContentRebuildRepository",
     "PrismaContentSelectionRepository",
     "PrismaCosmosRepository",
+    "PrismaModelProviderQueryRepository",
+    "PrismaModelProviderRemovalRepository",
+    "PrismaProviderCredentialRepository",
+    "PrismaProviderDiscoveryReader",
     "PrismaStoryAgentCandidateRepository",
     "PrismaWorkflowBackend",
     "PrismaWorkflowEventSink",
@@ -19,6 +25,7 @@ const FROZEN_VALUE_EXPORTS = [
     "createPrismaClient",
     "resolveContainedPath",
     "resolveStorageRoots",
+    "withModelConfigurationLock",
 ];
 
 describe("storage-prisma 公共入口契约", () => {

@@ -4,12 +4,14 @@ Prisma + SQLite 存储适配层:把应用层与工作流引擎的端口(内容�
 
 ## 入口契约(冻结)
 
-`src/index.ts` 是 12 行门面,导出 9 个值符号 + 1 个类型,由 `src/entry-contract.test.ts` 看守,零增减零改名:
+`src/index.ts` 是门面，由 `src/entry-contract.test.ts` 看守值导出集合。Task 39 经维护者批准增量公开 Provider/ConfiguredModel 仓储和配置锁函数，供 API 复用既有存储所有者；不允许包外深层导入：
 
 - `PrismaCosmosRepository` —— 内容域仓储,实现 `CosmosRepository`(继承链门面)
 - `PrismaWorkflowBackend` / `PrismaWorkflowHostStore` / `PrismaWorkflowEventSink` —— 工作流运行后端、宿主存储、事件落库
 - `PrismaConnectorStateStore` —— 连接器非密钥状态(ADR-0017)
 - `FileSecretStore` —— 文件密钥存储
+- `PrismaProviderCredentialRepository` / `PrismaModelProviderQueryRepository` / `PrismaConfiguredModelRepository` —— Provider 凭证事务、非秘密查询投影与 ConfiguredModel CRUD
+- `withModelConfigurationLock` —— 可信数据根内的配置操作排他锁
 - `createPrismaClient` / `resolveStorageRoots` / `resolveContainedPath` / `type StorageRoots` —— 客户端与数据根布局
 
 ## 子模块地图(2026-09-11,G02 切片 4 后)
@@ -27,6 +29,9 @@ Prisma + SQLite 存储适配层:把应用层与工作流引擎的端口(内容�
 | src/repository/{views,board-content}.ts | SavedView/Board、区块/聚光/看板内容 |
 | src/workflow-host-store.ts(+/) | PrismaWorkflowHostStore 门面 → 继承链五分册 + internals-* 三层 |
 | src/workflow-backend.ts | PrismaWorkflowBackend:nb-workflow 运行与检查点落库 |
+| src/model-provider-query-repository.ts | 安全读取投影；隐藏未发布 Provider，仅选择非秘密列；隔离 ORM 已验，正式服务未验 |
+| src/model-provider-credential-repository.ts | Provider 凭证事务适配器：登记、代次 fencing、CAS 发布与补偿收据；API 装配复用既有 Prisma |
+| src/model-configuration-lock.ts | 配置操作排他锁；固定原生依赖，持锁至回调结束，API 注入可信数据根；不负责数据库或凭证恢复 |
 | src/workflow-event-sink.ts / connector-state-store.ts / secret-store.ts | 事件落库 / 连接器状态 / 文件密钥 |
 
 ## 阅读顺序

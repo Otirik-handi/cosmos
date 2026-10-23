@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { collectionPlanWebhookEntryPath, type CollectionPlanSnapshot, type CollectionPlanWebhookEntry, type CreateSourceCommand, type ConnectionInstance, type ConnectionStatus, type CreateConnectionCommand, type UpdateConnectionCommand, type StorageStats, type BackupSnapshot, type SourceMediaPolicy, type SourceSnapshot, type UpdateCollectionPlanCommand, type UpdateSourceCommand } from "@cosmos/contracts";
-import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, SourceNotFoundError, SourceRevisionConflictError, type CollectionPlanWebhookEntryTarget } from "@cosmos/application";
+import { CollectionPlanNotFoundError, CollectionPlanRevisionConflictError, ConnectionNotFoundError, ConnectionVersionConflictError, InvalidModelSelectionError, resolveModelConnectionWrite, SourceNotFoundError, SourceRevisionConflictError, type CollectionPlanWebhookEntryTarget } from "@cosmos/application";
 import { type Prisma } from "@prisma/client";
 import { directorySize, fileSize, parsePlanRevisionId, parseSourceRevisionId } from "../storage-root.js";
 import { appendDomainEvent } from "./repository-internals.js";
@@ -298,15 +298,21 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     }
 
     async createConnection(input: CreateConnectionCommand): Promise<ConnectionInstance> {
-        const connection = await this.prisma.connectionInstance.create({
-            data: {
-                name: input.name,
-                connectorId: input.connectorId,
-                account: input.account ?? null,
-                scopeJson: input.scopeJson ?? null,
-                configJson: input.configJson ?? null,
-                secretRef: input.secretRef ?? null,
-            },
+        const connection = await this.prisma.$transaction(async (tx) => {
+            if (input.modelId !== undefined) {
+                await assertSelectableModel(tx, input.modelId);
+            }
+            return tx.connectionInstance.create({
+                data: {
+                    name: input.name,
+                    connectorId: input.connectorId,
+                    account: input.account ?? null,
+                    scopeJson: input.scopeJson ?? null,
+                    configJson: input.configJson ?? null,
+                    secretRef: input.secretRef ?? null,
+                    modelId: input.modelId ?? null,
+                },
+            });
         });
         return this.toConnectionSnapshot(connection);
     }
@@ -328,19 +334,33 @@ export class PrismaCosmosRepositorySources extends PrismaCosmosRepositoryHelpers
     }
 
     async updateConnection(connectionId: string, input: UpdateConnectionCommand): Promise<ConnectionInstance> {
-        const current = await this.prisma.connectionInstance.findUnique({
-            where: { id: connectionId },
-        });
-        if (!current) throw new ConnectionNotFoundError(connectionId);
-        const updated = await this.prisma.connectionInstance.update({
-            where: { id: connectionId },
-            data: {
-                ...(input.name !== undefined ? { name: input.name } : {}),
-                ...(input.status !== undefined ? { status: input.status } : {}),
-                ...(input.configJson !== undefined ? { configJson: input.configJson } : {}),
-                ...(input.secretRef !== undefined ? { secretRef: input.secretRef } : {}),
-                ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
-            },
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const current = await tx.connectionInstance.findUnique({ where: { id: connectionId } });
+            if (!current) throw new ConnectionNotFoundError(connectionId);
+            const write = resolveModelConnectionWrite(this.toConnectionSnapshot(current), input);
+            if (write.selectionChanged && write.modelId !== null) {
+                await assertSelectableModel(tx, write.modelId);
+            }
+            // 版本是所有连接的写入序号，不只是模型连接的：通用更新也递增，读到的版本才能
+            // 当作「我这份快照有多旧」。CAS 用 version 条件，count 为 0 就是被别人改过。
+            const result = await tx.connectionInstance.updateMany({
+                where: { id: connectionId, version: current.version },
+                data: {
+                    ...(write.name !== undefined ? { name: write.name } : {}),
+                    ...(write.status !== undefined ? { status: write.status } : {}),
+                    ...(input.configJson !== undefined ? { configJson: input.configJson } : {}),
+                    ...(input.secretRef !== undefined ? { secretRef: input.secretRef } : {}),
+                    ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
+                    ...(write.modelId !== current.modelId ? { modelId: write.modelId } : {}),
+                    version: { increment: 1 },
+                },
+            });
+            if (result.count === 0) {
+                throw new ConnectionVersionConflictError(connectionId, input.expectedVersion ?? current.version);
+            }
+            const fresh = await tx.connectionInstance.findUnique({ where: { id: connectionId } });
+            if (!fresh) throw new ConnectionNotFoundError(connectionId);
+            return fresh;
         });
         return this.toConnectionSnapshot(updated);
     }
@@ -636,4 +656,27 @@ function toCollectionPlanSnapshot(
         createdAt: plan.createdAt.toISOString(),
         updatedAt: plan.updatedAt.toISOString(),
     };
+}
+
+/**
+ * 模型连接只能引用「还能用」的模型：模型行存在，且它所属 Provider 不在删除流程里
+ * （Proposal connection-credential-entry-v1 的删除规则要求先解除引用才允许删 Provider）。
+ *
+ * 判定与写入必须同一个事务：分两次读会让「校验通过」与「真的写进去」之间出现一个
+ * Provider 刚开始删除的窗口。
+ */
+async function assertSelectableModel(
+    tx: Prisma.TransactionClient,
+    modelId: string,
+): Promise<void> {
+    const model = await tx.configuredModel.findUnique({
+        where: { id: modelId },
+        select: { id: true, provider: { select: { state: true } } },
+    });
+    if (!model) {
+        throw new InvalidModelSelectionError(`Configured model not found: ${modelId}`);
+    }
+    if (model.provider.state !== "active") {
+        throw new InvalidModelSelectionError(`Configured model is not selectable: ${modelId}`);
+    }
 }
