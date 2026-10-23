@@ -6,7 +6,7 @@
 
 ## 最后更新
 
-2026-09-16
+2026-10-23（Task 39：Provider/model 配置的三个模型、仓储锚点与约束错误码翻译）。
 
 ## 组件定位
 
@@ -128,7 +128,10 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 | `Checkpoint` | sourceInstanceId 唯一、planId 唯一（可空）、cursor、revision、workflowRunId、updatedAt | 按**采集计划**寻址（ADR-0023 决策 2）；sourceInstanceId 保留到第 4 步 contract 删列；WorkflowRun 删除时 workflowRunId SET NULL |
 | `CollectionPlan` | name、sourceId 唯一、可空 connectionId、可空 mediaPolicyJson、overlapPolicy、enabled、revision、时间戳 | 拥有 triggerBindings/checkpoint/runs/workflowRuns；来源删除级联，连接删除 SET NULL；读投影派生 `scheduleIntervalMs`（schedule 行）与 `webhook` 入口（webhook 行），**不暴露触发器 id**（ADR-0025） |
 | `TriggerBinding` | sourceId、可空 planId、kind（`schedule`/`manual`/`webhook`）、configJson、enabled、revision、可空 webhookToken（唯一）、可空 secretRef | `(sourceId, kind)` 与 `(planId, kind)` 唯一：一个计划每种类型最多一行，schedule 与 webhook 可共存（ADR-0025）；来源删除级联，计划删除 SET NULL；只有 webhook 行写 webhookToken/secretRef，凭证字节在 SecretStore |
-| `ConnectionInstance` | id、name、connectorId、可空 account、可空 scopeJson（授权范围）、可空 configJson（适配器**非秘密**配置，JSON 文本）、status（`active`/`revoked`/`expired`/`error`）、可空 secretRef、可空 lastError、可空 lastCheckedAt（最近一次登录探测的时间）、时间戳 | 可复用连接身份（ADR-0017）；`secretRef` 只指向 SecretStore 里的字节，凭证不进本表；`configJson` 装适配器自己的非秘密配置（Bilibili 的 OpenCLI profile，Proposal connection-login-lifecycle-v1），连接器从入队冻结的连接投影读它；`lastCheckedAt` 由登录探测回写（仓库方法 `recordConnectionProbe`，ADR-0027 决定 2），**不走公开的更新命令**；计划删除 SET NULL、来源的 `connectionId` 由仓库事务显式置空 |
+| `ModelProvider` | id、name、api（`openai-completions`/`openai-responses`）、baseUrl、可空 secretRef（唯一）、version、state（默认 `active`）、可空 pendingOperationId（唯一）、时间戳 | 拥有 models；`secretRef` 只指向 SecretStore 里的字节，key 不进本表；`pendingOperationId` 是「同一 Provider 同时只有一个写操作」的占用标记；`state` 的 `deleting` 只存在于 DTO schema，当前没有写入点 |
+| `ConfiguredModel` | providerId、modelId（上游标识）、name、contextWindow、maxOutputTokens、version、时间戳 | `(providerId, modelId)` 唯一；`provider` 外键 RESTRICT，删 Provider 必须在同一事务里先删模型；`ConnectionInstance.modelId` 也以 RESTRICT 引用它，删被引用的模型会撞外键并被翻译成 409 `in_use` |
+| `ModelConfigurationOperation` | 全局唯一 idempotencyKey、kind（`create`/`update`）、providerId、state（`pending`/`completed`/`failed`/`cleanup_pending`）、phase、generation、可空 expectedVersion/resourceVersion、可空 newSecretRef（唯一）/oldSecretRef、可空 errorCode、时间戳 | 对 Provider 没有外键，所以收据可以活过 Provider 删除；只存非秘密的重放判定与清理线索，key 与可重放的命令 payload 不落本表 |
+| `ConnectionInstance` | id、name、connectorId、可空 account、可空 scopeJson（授权范围）、可空 configJson（适配器**非秘密**配置，JSON 文本）、status（`active`/`revoked`/`expired`/`error`）、可空 secretRef、可空 lastError、可空 lastCheckedAt（最近一次登录探测的时间）、可空 modelId、version、时间戳 | 可复用连接身份（ADR-0017）；`secretRef` 只指向 SecretStore 里的字节，凭证不进本表；`configJson` 装适配器自己的非秘密配置（Bilibili 的 OpenCLI profile，Proposal connection-login-lifecycle-v1），连接器从入队冻结的连接投影读它；`lastCheckedAt` 由登录探测回写（仓库方法 `recordConnectionProbe`，ADR-0027 决定 2），**不走公开的更新命令**；模型型连接（`connectorId = cosmos.agent`）用 `modelId` 指向本地模型配置、Provider 由模型归属推导（[Provider/model 配置合同](../../api/0009-provider-model-configuration.md)），`version` 是选择与撤销的 CAS 令牌；计划删除 SET NULL、来源的 `connectionId` 由仓库事务显式置空 |
 | `ConnectorState` | `(namespace, key)` 唯一、valueJson、单调 version（CAS 令牌）、updatedAt | 命名空间化 + 版本化的非秘密运行状态（ADR-0017）；**不写 Secret**，也没有指向计划／来源的外键——命名空间是宿主按 manifest 模板算出来的字符串 |
 | `ConnectorStateNamespace` | namespace 主键、planId、时间戳 | 抽屉归属（ADR-0026）：让「这个抽屉属于哪个计划」成为数据，`sourceId`／`connectionId` 靠 join `CollectionPlan` 取得；计划删除级联；**刻意没有从 `ConnectorState.namespace` 指向本表的外键**——登记是尽力而为的元数据，不能成为状态写入的前置条件 |
 | `Run` | source、triggerKind、status、created/started/finishedAt、item/created/revised/duplicate 计数、errorCode/errorMessage | 拥有 Step/Job/Observation/DomainEvent；子记录按 schema 级联或 SET NULL |
@@ -172,6 +175,8 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 - Observation：创建后作为证据保留；同一 legacy Run/external key 重放返回 duplicate。相同 Entry fingerprint 不追加修订，指标准确时间可刷新；不同 fingerprint 追加修订。
 - Checkpoint：legacy upsert 可直接替换 cursor；Workflow checkpoint 只有 expected revision 匹配才递增，失配只产生 superseded 结果。
 - DomainEvent：append-only，sequence 不复用；Workflow key 的同 type/version/payload 可幂等重放，不同 payload 由 Workflow event helper 冲突拒绝。
+- ModelProvider/ConfiguredModel：写入走 `expectedVersion` 的 CAS（`updateMany where { id, version }`，`count !== 1` 即 `version_conflict`）；Provider 的 `pendingOperationId` 在写操作期间占用，`state` 当前只会是 `active`。删除 Provider 在同一事务里连删模型，被 Connection 引用时整个事务拒绝。
+- ModelConfigurationOperation：`pending` → `completed` 或 `failed`（清理未完成时 `cleanup_pending`）；phase 与 generation 由恢复流程推进，代次递增后旧执行者失去发布资格。收据不对 Provider 建外键，所以 Provider 删除后仍可读取。
 
 ## 副作用
 
@@ -184,6 +189,7 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 ## 错误与降级
 
 - JSON/config/DTO 解析失败、日期过滤非法、FTS/Prisma/Blob I/O 失败一般按原异常向上抛出。
+- 两个例外按约束翻成业务码，而不是交给统一兜底：同一 Provider 下重复的 `modelId`（P2002）翻成 `already_exists`，删除仍被 Connection 引用的模型或 Provider（P2003 / 引用计数非零）翻成 `in_use`。两者重试都不会成功，退化成 `dependency_unavailable` 会让界面提示「稍后重试」并永远失败。
 - stale legacy Job 的 renew/complete 返回 `false`；空 acceptedKinds 返回 `null`；竞争导致条件更新为 0 时 claim 返回 `null` 并记录 debug。
 - maxAttempts 到达后 legacy Job terminalize，关联 Run 失败；具体 connector 错误是否可重试由 application worker 决定，本仓储只保存结果与 errorCode。
 - `health()` 对数据库查询失败或 heartbeat 查询失败返回失败状态而不是抛出；其它健康查询成功时 worker heartbeat 超时只投影为 stopped。
@@ -218,11 +224,13 @@ SQLite Prisma schema 是权威 durable truth。当前模型/关系的重建要�
 
 - `packages/storage-prisma/src/index.ts:53-110`：StorageRoots、Prisma client、Data Root containment；`:113-166`：仓储构造、initialize、close。
 - `packages/storage-prisma/src/index.ts:168-757`：Source、Run、Step、legacy Job、claim/renew/complete/reset；`:760-1268`：raw/asset Blob、Observation/Entry/Revision/Story/FTS、Workflow ingest item 与 checkpoint CAS；`:1288-1847`：Run completion、Feed/Search/Entries/Story/Entry/Revision/Event/Asset/heartbeat/health；`:1849-2252`：快照投影、attempt projection、Job/Workflow fence、DomainEvent helper。
-- `packages/storage-prisma/prisma/schema.prisma`：所有模型、字段、索引、唯一约束和关系；migration 按时间戳前缀顺序应用，Phase 1 从 `20260808003247_phase1_foundation` 起，Phase 2 依次为 `20260907120000_story_revision_versioning`、`20260907130000_story_merge_alias`、`20260908000000_topic_domain_v1`、`20260908120000_entity_relation_v1`、`20260908140000_user_organization_v1`、`20260909100000_board_section_block_v1`、`20260909120000_spotlight_placement_v1`（forward-only，只增不改）。
+- `packages/storage-prisma/prisma/schema.prisma`：所有模型、字段、索引、唯一约束和关系；migration 按时间戳前缀顺序应用，Phase 1 从 `20260808003247_phase1_foundation` 起，Phase 2 依次为 `20260907120000_story_revision_versioning`、`20260907130000_story_merge_alias`、`20260908000000_topic_domain_v1`、`20260908120000_entity_relation_v1`、`20260908140000_user_organization_v1`、`20260909100000_board_section_block_v1`、`20260909120000_spotlight_placement_v1`、`20261015000000_provider_model_configuration`、`20261018160000_workflow_activity_dispatch_fence`（forward-only，只增不改）。
 - `packages/storage-prisma/src/index.test.ts:58-219`：Data Root、Observation/Revision/Asset/Story/FTS；`:221-332`：metrics 不新建修订；`:334-409`：legacy Job 幂等、租约、事件；`:411-462`：Activity Job 与 legacy claim 隔离；`:464-566`：claim 竞争、max attempts、health 日志；`:568-822`：worker/probe/connector failure/schedule；`:823-912`：Workflow checkpoint 双 fence/CAS。
 - `packages/storage-prisma/src/user-organization-domain.test.ts`：Label 唯一命名/指派计数/详情标题解析、`(labelId, targetType, targetId)` 幂等附加与目标存在性、Collection 成员幂等与 `containsStory` 投影、Favorite 幂等与 Story 详情投影，以及 Story merge 的 move/collision 迁移（`collection.item_merged.v1`/`label.assignment_merged.v1`）。`entity-relation-domain.test.ts` 同形覆盖 Entity 命令与 `story_entity.merged.v1`。`entry-story-evidence.test.ts` 覆盖 Entry↔Story 关联的幂等/覆盖写、自关联与缺失目标错误、双向投影、merge 重定向与 self-link 清理、move 后的冗余删除，以及旧库 upgrade 后新表可用。`board-domain.test.ts` 覆盖默认 Board 幂等 seed、Board 唯一名与缺失错误、按类型 config 白名单（含未知 type 与非法 config）、跨 Section move 重排与 visible 切换、duplicate 原位副本、删除 Block 不删除被绑定的 SavedView，以及 Spotlight 的幂等 pin/解除、目标标题解析、缺失目标/看板错误与 Story merge 的 placement 重定向（含同 Board 冲突丢弃）。
 
 - `packages/storage-prisma/src/story-human-protection.test.ts`：PRD §12 第 4 条 / LIB-003 的回归锚点——人工编辑过表示的 Story 在来源重发布该 Entry 后标题/kind/时间范围/关键事实逐项不变、人工 merge 出的多 Entry Story 在成员被重发布后同样不变、未编辑的 Story 仍跟随来源、`producer` 按写入方取值（人工命令 `human`、投影 `system`）且冻结只在本该写入时记 `story.representation_projection_skipped.v1`（ADR-0028）。`story-revision-producer-migration.test.ts` 单独钉住回填判据：只把有匹配 `story.revision_created.v1` 事件（按 `storyId` + `revision` 配对）的 Revision 标为 `human`，同 Story 其它 revision 的事件不误伤。
+
+- Provider/model 配置的仓储在独立文件里，不挂在 `index.ts` 的巨型类上：`packages/storage-prisma/src/model-provider-query-repository.ts`（读投影与 operation 收据查询）、`model-provider-credential-repository.ts`（凭证发布与垃圾清理，`canDelete` 在事务内断言没有 Provider 还指向该 ref）、`model-provider-removal-repository.ts`（单事务删除，引用检查与删除同事务，见上表）、`configured-model-repository.ts`（模型 CRUD 与 CAS，`create` 把 P2002 翻成 `already_exists`、`delete` 把 P2003 翻成 `in_use`）、`model-configuration-lock.ts`（跨进程排他锁，`fs-native-extensions`）、`provider-discovery-reader.ts`。对应的隔离测试：`model-provider-query-integration.test.ts`、`model-provider-credential-repository.test.ts`、`model-provider-removal-integration.test.ts`（真实 sqlite + 42 迁移，覆盖被引用拒绝、版本过期、删除后 `PRAGMA foreign_key_check` 干净）、`configured-model-repository.test.ts`、`model-configuration-lock.test.ts`、`provider-model-migration.test.ts`。这些测试都在隔离数据根下生成自己的 Prisma client，不读写用户数据。
 
 ## 非目标/边界
 

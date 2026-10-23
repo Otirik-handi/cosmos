@@ -49,7 +49,7 @@ API 入口调用 runtime bootstrap；组合根注入各 port 后启动 Nest，�
 | 输入 | 默认值 | 作用 |
 | --- | --- | --- |
 | `COSMOS_API_HOST` | `127.0.0.1` | `app.listen` 的绑定 host。 |
-| `COSMOS_API_PORT` | `4310` | `app.listen` 的端口，按 `Number` 转换。 |
+| `COSMOS_API_PORT` | `14310` | `app.listen` 的端口，按 `Number` 转换。 |
 | `COSMOS_ALLOWED_ORIGIN` | 未设置时传入 `true` | Nest CORS 的 `origin` 选项；设置字符串时只使用该 origin，未设置时使用 Nest 的允许跨域行为。 |
 | `COSMOS_VERSION` | `0.1.0` | `/api/v1/health` 的服务版本。 |
 | `COSMOS_SSE_REPLAY_LIMIT` | `100` | 由 HTTP SSE Controller 读取；详见 [Product API HTTP](0002-product-api-http.md)。 |
@@ -135,13 +135,13 @@ Runtime 不依赖 Gateway、Redis、远程执行服务或浏览器运行时。
 
 ## 配置
 
-API 默认绑定 `127.0.0.1:4310`，适合本地/loopback 使用。改变 host 到其它接口不会自动获得身份验证、TLS、请求授权或安全文件访问。CORS 的允许 origin 与监听地址是独立配置，不能以 CORS 代替网络边界。
+API 默认绑定 `127.0.0.1:14310`，适合本地/loopback 使用。改变 host 到其它接口不会自动获得身份验证、TLS、请求授权或安全文件访问。CORS 的允许 origin 与监听地址是独立配置，不能以 CORS 代替网络边界。
 
 `COSMOS_VERSION` 只影响 health DTO；不会改变 protocol version（当前由 contracts 固定为 `v1`）。SSE replay 上限和日志配置由相邻组件消费；未设置时使用源码中的默认值。
 
 ## 重建验收
 
-1. 在有效 `COSMOS_DATA_ROOT` 下启动 API，未设置 host/port 时，观察进程监听 `127.0.0.1:4310`，且成功后 `GET /readyz` 返回 HTTP 200、`status=ready`。
+1. 在有效 `COSMOS_DATA_ROOT` 下启动 API，未设置 host/port 时，观察进程监听 `127.0.0.1:14310`，且成功后 `GET /readyz` 返回 HTTP 200、`status=ready`。
 2. 在 repository 尚未完成初始化的启动窗口请求 `/readyz`，观察 HTTP 503 和 `status=starting`；请求 `/healthz` 仍返回 HTTP 200 且不触发数据库查询。
 3. 请求 `GET /api/v1/health`，观察 `service=cosmos-api`、`protocolVersion=v1` 和 `COSMOS_VERSION` 的版本值，并确认 storage/migration/worker 状态来自 repository health，而非固定字符串。
 4. 启动后发送一次 SIGTERM，再请求 `/readyz`，观察 readiness 变为 HTTP 503；日志中按顺序出现停止阶段，且第二次 SIGTERM 不重复关闭资源。

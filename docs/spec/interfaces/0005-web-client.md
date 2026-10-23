@@ -20,9 +20,10 @@ Web Client 是 `apps/web/src/app/` 下的一个 client-side Next App Router 应�
 行宽不随之变宽，见 [`side-nav.tsx`](../../../apps/web/src/components/shell/side-nav.tsx)）；
 1.5 先试用后由维护者收敛到 1.25（2026-10-03）；
 **悬浮侧栏跟随滚动**（`sticky top-[calc(4rem+2.5em)]`，2026-10-03），其高度仍由内容撑开
-（导航项超过视口高度时底部会被裁，见 ADR-0029 的 Revisit Gate 第 1 条）；十个路由是 `/`（看板）、`/library`（信息库与检索）、
+（导航项超过视口高度时底部会被裁，见 ADR-0029 的 Revisit Gate 第 1 条）；十一个路由是 `/`（看板）、`/library`（信息库与检索）、
 `/topics`、`/entities`、`/organize`（标签/收藏夹/收藏/批注/已保存视图）、`/automation`
-（来源/采集计划/连接/运行记录）、`/settings`、`/system`、`/stories/:id`（读一条内容）与 `/dev/components`
+（来源/采集计划/连接/运行记录）、`/models`（模型：服务商凭证与模型目录）、`/settings`、`/system`、
+`/stories/:id`（读一条内容）与 `/dev/components`
 （组件实验室）。各页只挂载自己那几个域 hook，使用 `HttpCosmosClient` 读取 Feed/Source/Health 与来源定义
 Catalog、以未保存配置 Probe 测试 RSS 配置、创建默认停用的 Source、在来源列表行内启用/停用、手动触发
 已启用 Source 的 Run、搜索分页，并用 SSE 事件触发刷新。`layout.tsx` 提供中文语言、字体变量、
@@ -344,7 +345,7 @@ new HttpCosmosClient({
 
 空 base URL 产生同源 `/api/v1/...` URL；若设置绝对 URL，则浏览器直接访问该 API base URL。
 Next rewrite 在 `apps/web/next.config.ts` 将 `/api/:path*` 转到
-`${COSMOS_API_URL ?? "http://localhost:4310"}/api/:path*`。这些环境变量不是页面运行时
+`${COSMOS_API_URL ?? "http://localhost:14310"}/api/:path*`。这些环境变量不是页面运行时
 表单输入，不提供认证或 Secret。
 
 ### Form input
@@ -580,7 +581,7 @@ Web server instrumentation 的副作用独立于 client page：在 Node runtime�
 ## 配置
 
 - `NEXT_PUBLIC_COSMOS_API_URL`：客户端 API base URL，默认空字符串（同源 rewrite）。
-- `COSMOS_API_URL`：Next rewrite 的 server-side destination，默认 `http://localhost:4310`。
+- `COSMOS_API_URL`：Next rewrite 的 server-side destination，默认 `http://localhost:14310`。
 - Next 输出为 standalone；日志 incomingRequests/browserToTerminal 被关闭；具体 build/start
   脚本见 `apps/web/package.json`。
 - 页面 `layout.tsx` metadata 为 title `Cosmos`、description “本地优先的信息聚合与个人情报工作台”，

@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-09-15。
+2026-10-23（Task 39：Provider/model 配置方法与模型删除）。
 
 ## 组件定位
 
@@ -106,6 +106,27 @@ Phase 2 编排方法（同一 transport 形态：先 parse 命令 schema，再 P
 | `exportUserData()` | `GET /api/v1/exports/user-data` | `UserDataExport`（响应是附件下载，客户端仍按 JSON 校验） |
 | `listConnectorStateNamespaces()` / `exportConnectorState(scope?)` / `importConnectorState(input)` | `GET /api/v1/connector-state/namespaces`、`GET /api/v1/exports/connector-state`（范围参数由 `scope` 生成，缺省不带查询参数）、`POST /api/v1/imports/connector-state` | `ConnectorStateNamespaceSummary[]`、`ConnectorStateExport`、`ConnectorStateImportResult` |
 
+Provider/model 配置方法（`ProviderModelsClient` 与它的子类 `ConfiguredModelsClient`；读方法只带 schema，写方法先 `parse` 命令、再带 `idempotency-key` header）：
+
+| Client method | HTTP method/path | 输入与 header | 成功 schema/输出 |
+| --- | --- | --- | --- |
+| `listModelProviders({limit?,cursor?})` | `GET /api/v1/model-providers` | 只在非 `undefined` 时发 limit/cursor | `ModelProviderPage` |
+| `getModelProvider(providerId)` | `GET /api/v1/model-providers/:encodedId` | path encoded | `ModelProviderSnapshot` |
+| `createModelProvider(input,idempotencyKey)` | `POST /api/v1/model-providers` | `CreateModelProviderCommand`；必需 `idempotency-key` | 201 `ModelProviderSnapshot`，或 202 `ModelProviderOperationSnapshot`（凭证清理残留时按 status 分流） |
+| `updateModelProvider(providerId,input,idempotencyKey)` | `PATCH /api/v1/model-providers/:encodedId` | `UpdateModelProviderCommand`；必需 `idempotency-key` | 同上 |
+| `deleteModelProvider(providerId,expectedVersion,idempotencyKey)` | `DELETE /api/v1/model-providers/:encodedId` | body `{expectedVersion}`；必需 `idempotency-key` | 204，无响应体（同步删除；凭证清理失败不影响结果） |
+| `getModelConfigurationOperation(operationId)` | `GET /api/v1/model-configuration-operations/:encodedId` | path encoded | `ModelProviderOperationSnapshot` |
+| `getModelConfigurationOperationByKey(idempotencyKey)` | `GET /api/v1/model-configuration-operations/by-key/:encodedKey` | path encoded；用于首次响应丢失后按 key 查状态 | `ModelProviderOperationSnapshot` |
+| `retryModelConfigurationOperation(operationId)` | `POST /api/v1/model-configuration-operations/:encodedId/retries` | body `{}` | `ModelProviderOperationSnapshot` |
+| `discoverProviderModels(providerId,expectedProviderVersion)` | `POST /api/v1/model-providers/:encodedId/discoveries` | body `{expectedProviderVersion}` | `ProviderModelDiscoverySnapshot`（失败也返回已完成快照，调用方只看 `status`/`errorCode`，不重试） |
+| `listConfiguredModels(providerId)` | `GET /api/v1/model-providers/:encodedId/models` | path encoded | `ConfiguredModelPage` |
+| `getConfiguredModel(providerId,modelId)` | `GET /api/v1/model-providers/:encodedId/models/:encodedModelId` | 两段 path encoded | `ConfiguredModelSnapshot` |
+| `createConfiguredModel(providerId,input,idempotencyKey)` | `POST /api/v1/model-providers/:encodedId/models` | `CreateConfiguredModelCommand`；必需 `idempotency-key` | `ConfiguredModelSnapshot` |
+| `updateConfiguredModel(providerId,modelId,input,idempotencyKey)` | `PATCH /api/v1/model-providers/:encodedId/models/:encodedModelId` | `UpdateConfiguredModelCommand`；必需 `idempotency-key` | `ConfiguredModelSnapshot` |
+| `deleteConfiguredModel(providerId,modelId,expectedVersion,idempotencyKey)` | `DELETE /api/v1/model-providers/:encodedId/models/:encodedModelId` | body `{expectedVersion}`；必需 `idempotency-key` | 204，无响应体；被 Connection 引用时 409 `in_use` |
+
+模型配置的写入同时受本机信任门限制（精确 Origin + 受信 Host + `application/json` + 32 KiB），拒绝时返回 403 `forbidden_origin`；这不是客户端能重试解决的错误，客户端只把它翻成固定的失败提示。
+
 `feed`、`search`、`entries` 即使没有 query 也会生成带 `?` 的 path（例如
 `/api/v1/feed?`）；这是当前实现的 URL 结果，不影响服务器解析。Fetch options 默认
 method GET；有 body 时加入 `content-type: application/json` 并以 `JSON.stringify` 发送。
@@ -186,8 +207,7 @@ EventSource factory error 不会被包成 `CosmosTransportError`，会以原始�
 
 ## 依赖
 
-- `@cosmos/contracts` 的 connector/health/job/run/source/feed/search/story/entry/revision/
-  SSE schema 与 TypeScript types；
+- `@cosmos/contracts` 的 connector/health/job/run/source/feed/search/story/entry/revision/provider/model/operation/SSE schema 与 TypeScript types；
 - Web/Node global `fetch` 和可选 global `EventSource`；
 - 使用方自行管理 React state、retry 和 authentication；当前 Web UI 见 [Web Client](0005-web-client.md)。
 
@@ -195,7 +215,7 @@ EventSource factory error 不会被包成 `CosmosTransportError`，会以原始�
 
 客户端只有 `baseUrl` 配置。当前 Web 通过 `process.env.NEXT_PUBLIC_COSMOS_API_URL ?? ""`
 传入；空值意味着使用相对 `/api/v1/...` URL，配合 Next rewrite。Next rewrite 的服务端
-目标读取 `COSMOS_API_URL`，默认 `http://localhost:4310`，只重写 `/api/:path*` 到 API
+目标读取 `COSMOS_API_URL`，默认 `http://localhost:14310`，只重写 `/api/:path*` 到 API
 的同名 `/api/:path*`，不会改变客户端的 `/api/v1` prefix。
 
 没有当前配置项用于 timeout、retry、TLS、auth、custom headers 或 SSE replay limit；这些
@@ -203,8 +223,8 @@ EventSource factory error 不会被包成 `CosmosTransportError`，会以原始�
 
 ## 重建验收
 
-1. 用 `baseUrl="http://localhost:4310/"` 和注入 fetch 调用 `health()`，观察请求精确为
-   `http://localhost:4310/api/v1/health`，并观察返回 DTO 通过 health schema。
+1. 用 `baseUrl="http://localhost:14310/"` 和注入 fetch 调用 `health()`，观察请求精确为
+   `http://localhost:14310/api/v1/health`，并观察返回 DTO 通过 health schema。
 2. 调用 `getSource("a/b")`、`triggerSource("source-1",{idempotencyKey:"run-1"})`，
    观察 path segment 被 `encodeURIComponent`，POST header 为 `idempotency-key`，body 只有
    需要时才发送 JSON。
@@ -218,12 +238,18 @@ EventSource factory error 不会被包成 `CosmosTransportError`，会以原始�
    source.close 被调用。
 6. 在没有全局 EventSource 且未注入 factory 的运行时打开 SSE，观察明确的 unavailable
    Error；确认客户端不暗中使用 Node HTTP stream 替代 EventSource。
+7. 注入 fetch，调用 `createModelProvider` 与 `deleteModelProvider`，观察 path 段被
+   `encodeURIComponent`、`idempotency-key` header 存在、DELETE body 只有
+   `{expectedVersion}`；让 POST 返回 202 与 operation snapshot，观察按 status 返回
+   operation 而不是 provider snapshot；让 DELETE 返回 409 `in_use`，观察抛出
+   `CosmosTransportError` 且 body 保留 `code`。
 
 ## 实现与测试锚点
 
 - Client、CosmosTransportError、EventSource port 和所有方法：[`packages/transport-http/src/index.ts`](../../../packages/transport-http/src/index.ts)。
 - URL、health schema、connector catalog、SSE parse/close 测试：[`packages/transport-http/src/client-platform.test.ts`](../../../packages/transport-http/src/client-platform.test.ts)。
-- DTO/Zod owner：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)、[`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)。
+- DTO/Zod owner：[`packages/contracts/src/index.ts`](../../../packages/contracts/src/index.ts)、[`packages/contracts/src/base.ts`](../../../packages/contracts/src/base.ts)、[`packages/contracts/src/provider-model.ts`](../../../packages/contracts/src/provider-model.ts)。
+- Provider/model 客户端：[`packages/transport-http/src/client-provider-models.ts`](../../../packages/transport-http/src/client-provider-models.ts)（`ProviderModelsClient`，含 `deleteModelProvider` 与 `discoverProviderModels`）与它的子类 [`packages/transport-http/src/client-configured-models.ts`](../../../packages/transport-http/src/client-configured-models.ts)（`ConfiguredModelsClient`）；对应测试同目录 `client-provider-models.test.ts`、`client-configured-models.test.ts`。
 - 当前调用方与 error display：[`apps/web/src/app/(shell)/page.tsx`](../../../apps/web/src/app/%28shell%29/page.tsx)（2026-09-24 Task 35 切片 1 由 `apps/web/src/app/page.tsx` 移入路由组 `(shell)`）。
 - 同源 rewrite：[`apps/web/next.config.ts`](../../../apps/web/next.config.ts)。
 

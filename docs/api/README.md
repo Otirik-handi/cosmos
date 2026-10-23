@@ -83,6 +83,8 @@ Product Service 与 Worker Gateway 初期可以由同一个 NestJS 进程承载�
 
 - [`0008-story-content-representation.md`](0008-story-content-representation.md)：Task 40 内容输入、版本化表示、受管读取与候选接受草案；实现状态见 Task，未上线端点保持 Draft。
 
+- [`0009-provider-model-configuration.md`](0009-provider-model-configuration.md)：Task 39 Provider/model 配置、凭证协调、模型连接与 invocation v2 目标合同；部分实现（创建/编辑/删除、凭证写入、同步发现、模型选择与 `agent.invoke@2` 已落地，编辑前受影响连接查询与几处路径形状仍是目标合同，逐条状态见文内路由表）。
+
 ## 4. 成熟度标记
 
 | 标记 | 含义 |

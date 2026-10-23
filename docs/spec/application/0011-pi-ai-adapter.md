@@ -2,11 +2,11 @@
 
 ## 状态
 
-当前实现规格；描述独立 `@cosmos/agent-pi-ai` package 的真实 `pi-ai` Adapter，以及按已接受 Proposal 显式启用的 Worker Action 组合。Worker 默认仍关闭 Agent；profile 是单 Worker 非秘密配置，Connection ID 选择现有凭证。每次调用检查 Connection active/SecretRef 并通过 callback 读取 SecretStore；不把 connectorId 当模型 Provider。凭证回调不是强 lease 或内存擦除保证。已通过一次真实最小 Provider 请求；该 smoke 不覆盖生产可靠性或完整 Provider 行为。
+当前实现规格；描述独立 `@cosmos/agent-pi-ai` package 的真实 `pi-ai` Adapter（固定的 `agent.invoke@1` 与按连接解析的 `agent.invoke@2`），以及按已接受 Proposal 显式启用的 Worker Action 组合。Worker 默认仍关闭 @1；profile 是单 Worker 非秘密配置，Connection ID 选择现有凭证。每次调用检查 Connection active/SecretRef 并通过 callback 读取 SecretStore；不把 connectorId 当模型 Provider。凭证回调不是强 lease 或内存擦除保证。@1 已通过一次真实最小 Provider 请求；该 smoke 不覆盖生产可靠性或完整 Provider 行为。@2 尚未做真实 Provider 请求。
 
 ## 最后更新
 
-2026-10-08。
+2026-10-20。
 
 ## 组件定位
 
@@ -90,6 +90,18 @@ Worker 仅在显式启用且配置完整时，将真实 Adapter 包装为既有 
 
 已执行一次真实文本 smoke：provider `jijiapi`、model `gpt-6-luna`、OpenAI Chat Completions、`https://api-slb.jiji.cc/v1`，提示要求只回复 `READY`，调用 budget 的 `maxOutputTokens=64`。调用成功且输出未含 credential。SDK 返回 usage 报告 input 555、output 5、total 4400；其中 total 不等于 input+output，需视作 provider 计量语义未核实。该 smoke 不覆盖可靠性、生产部署、错误矩阵、工具执行、OAuth 或长时任务；Connection/SecretRef callback 组合的验证记录见本规格上方 Worker 接线章节。
 
+## 连接作用域适配器（`agent.invoke@2`）
+
+`PiAiAgentInvocationV2Adapter`（`packages/agent-pi-ai/src/invocation-v2.ts`）实现 `AgentInvocationV2Port`，与 @1 的差别是模型不再来自启动期配置：
+
+1. 每次调用先通过注入的 `AgentModelConnectionResolver` 解析 `connectionId`，得到连接、模型与 Provider 的同一次读取快照；
+2. 解析结果为 `null`（连接不存在/已撤销、`connectorId` 不是 `cosmos.agent`、没有选模型、Provider 非 `active` 或没有 SecretRef）时抛出不可重试 `authentication_required`，不读凭证、不调用 SDK；
+3. 按快照里的 `api` 构造 `openai-completions` 或 `openai-responses` 模型，地址取 Provider 的 `baseUrl`，预算取 `min(调用方 maxOutputTokens, 模型 maxOutputTokens)`；
+4. 通过 `PiAiSecretReader` 按 `secretRef` 读一次凭证，取消后不再读、也不调用 SDK；
+5. 输出里的 `provider`/`model` 回填实际使用的配置，而不是调用方声明的值。
+
+模型构造与协议错误映射由 `pi-models.ts` 拥有，`index.ts` 与 `invocation-v2.ts` 都从那里导入：若 @2 的适配器反过来从包入口 `index.ts` 导入，而入口又导出 @2 的适配器，ESM 循环会让类在求值前为 `undefined`，失败点是运行时的 `not a constructor`。
+
 ## 重建验收
 
 1. 给定注入式 fake client 与 credential resolver，调用 Adapter 可观察到 system/user/tool 请求映射，且 SDK options 含 maxTokens、AbortSignal 和 credential。本次真实调用结果记录于 `.agents/tasks/39-pi-ai-adapter/walkthrough.md`。
@@ -103,11 +115,13 @@ Worker 仅在显式启用且配置完整时，将真实 Adapter 包装为既有 
 
 ## 实现与测试锚点
 
-- 实现：`packages/agent-pi-ai/src/index.ts`；
-- 行为测试：`packages/agent-pi-ai/src/index.test.ts`；
-- Provider-neutral Port：`packages/application/src/agent-invocation.ts`；
+- 实现：`packages/agent-pi-ai/src/index.ts`（@1）、`packages/agent-pi-ai/src/invocation-v2.ts`（@2）、共享模型构造 `packages/agent-pi-ai/src/pi-models.ts`；
+- 行为测试：`packages/agent-pi-ai/src/index.test.ts`、`packages/agent-pi-ai/src/invocation-v2.test.ts`；
+- Provider-neutral Port：`packages/application/src/agent-invocation.ts`、`packages/application/src/agent-invocation-v2.ts`；
 - 共享 input/output：`packages/contracts/src/agent.ts`。
 
 ## 未验证边界
 
 已通过真实 API 最小 smoke；生产 profile + Connection/SecretRef 组合与 mock/集成链路已经实现并本地验证。这不提供 SecretStore 强租约或内存擦除保证。未验证多 Worker/多 profile、OAuth、provider matrix、工具执行、流式输出、长时间 Agent 运行或生产部署。
+
+`agent.invoke@2` 只通过隔离测试验证（合同、连接解析、适配器、Worker 注册），没有任何真实 Provider 请求：连接可用性判定、凭证读取时机与模型构造都有测试覆盖，但真实服务商对两种生成 API 的响应差异未验证。

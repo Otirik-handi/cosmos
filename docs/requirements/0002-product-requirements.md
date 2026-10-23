@@ -230,6 +230,10 @@ Cosmos 最终应成为用户可控制的“信息采集与理解层”：
 
 → §14 原始需求追踪、§15 当前解释与勘误候选 已归档:[part-14-15.md](0002-product-requirements/part-14-15.md)
 
+## 已接受、部分实现：模型配置入口
+
+用户可在左导航“模型”管理多个 Provider 及其模型，共享 Provider 的 API key；真实值仅保存到 SecretStore，编辑不回填，留空保留，保存不调用模型。模型型 Connection 单选已有 Provider 的一个模型，其它连接行为不变。模型发现必须显式触发，候选确认后才添加；首版公网 HTTPS、OpenAI 兼容 Chat Completions/Responses，分别验收、不自动回退。被引用配置禁止删除，删除 Provider 清理其本地凭证副本但不撤销服务商 key；清理失败须可见。依据 [已接受 Proposal](../proposals/connection-credential-entry-v1.md)，接口候选见 [Draft](../api/0009-provider-model-configuration.md)；创建/编辑、删除 Provider、凭证写入、同步发现、模型选择与 `agent.invoke@2` 已实现并有隔离测试，**编辑前受影响连接提示由界面自行聚合、不新增服务端端点**，接口逐条状态见该 Draft 的路由表；真实请求、迁移与浏览器验收仍未获批准。
+
 ## 分册勘误登记
 
 分册封口后只读；对已封口分册的更正登记在独立台账 [`ERRATA.md`](0002-product-requirements/ERRATA.md)（2026-09-18 从本文件拆出，只搬位置、不改写条目），不改写分册正文。新增勘误追加到该台账末尾。

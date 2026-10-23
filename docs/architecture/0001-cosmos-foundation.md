@@ -38,6 +38,10 @@
 | [part-18-20.md](0001-cosmos-foundation/part-18-20.md) | §18–20(实施路线、核心边界结论与后置决定) | 16.8 KB |
 | [part-22.md](0001-cosmos-foundation/part-22.md) | §22(变更记录) | 13.9 KB |
 
+## 已接受、部分实现：Provider/model 产品配置
+
+用户已接受 [Provider/model 配置](../proposals/connection-credential-entry-v1.md)。目标所有权为数据库 Provider/model 配置、Provider 独占 SecretStore 引用、模型型 Connection 单选已有模型；可信 Worker 按次解析并执行发现/生成，保存不外呼。详细接口与恢复边界见 [Draft 合同](../api/0009-provider-model-configuration.md)。已落地的部分：Provider/模型创建与编辑、Provider 删除（含引用检查与本地凭证清理）、凭证写入与清理补偿、同步模型发现、模型型 Connection 选择、`agent.invoke@2` 执行链路。编辑 Provider 前的受影响连接查询不新增服务端端点，由界面用连接列表与模型列表自行聚合。这将替代当前单 Worker 部署 profile 与 Connection.secretRef 模型凭证路径；在新实现验证并切换前，下文第 64 项仍描述当前实现，而非新目标已落地。普通非模型连接和 SecretStore 明文文件合同保留。
+
 ## 19. 当前决定
 
 以下决定进入当前 v0.19 基线，但后续需求仍可通过记录理由调整：

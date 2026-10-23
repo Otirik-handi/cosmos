@@ -12,7 +12,7 @@
 
 - 需求、PRD、架构图或 ADR 中尚未进入当前实现的目标设计；
 - `Draft`、`Planned`、`Reserved` API、Gateway、远程 Worker、Redis、PostgreSQL/S3 或多主机部署；
-- 已接受但尚未实现的 Agent Invocation、`agent.invoke@1`、`pi-ai`/Harness Adapter、Artifact、Workspace、Knowledge 和 Research 能力；这些边界以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md) 和 [`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 为准，不能视为当前实现；
+- 已接受但尚未实现的 Agent 后续能力：真实 Harness、产品 Artifact、Workspace、Knowledge 和 Research（`agent.invoke@1`／`@2` 与 fake adapter 已落地，属于当前实现，以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md)、[`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 与 [`Task 39`](../../.agents/tasks/39-pi-ai-adapter/README.md) 为准；`agent.invoke@2` 只用隔离测试验证过，没有真实 Provider 请求）；
 - 历史 Task Spike、dirty worktree、保护区分支、旧草稿或没有在当前实现中重新验证的行为；
 - 只存在于测试替身、fixture 或构建产物中的额外行为。
 
@@ -122,7 +122,9 @@
 | Drain | 停止新 poll、等待已登记资源并按 deadline 给出终态的运维操作 | [`runtime/0003-worker-admin.md`](runtime/0003-worker-admin.md) |
 | Manifest | 不含 executable 的可序列化 Definition/Action/Source 描述及稳定 hash | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |
 | Capability | Manifest/Worker 可公开声明的能力布尔值或 capability 名称 | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |
-| Agent Invocation | `agent.invoke@1` 的当前 Action/Port/Fake Adapter 行为；真实模型 Adapter、Harness、长期记忆和产品 Artifact 能力后置 | [`application/0010-agent-invocation.md`](application/0010-agent-invocation.md) |
+| Agent Invocation | `agent.invoke@1` 的 Action/Port/Fake Adapter 行为，以及 `agent.invoke@2` 按连接选模型的作用域链路；真实 Harness、长期记忆和产品 Artifact 能力后置 | [`application/0010-agent-invocation.md`](application/0010-agent-invocation.md) |
+| Pi-ai Adapter | 真实 `pi-ai` SDK 适配：@1 的部署 profile 解析与 @2 的按次读取快照、错误映射、预算收紧；Harness/长期记忆不在范围 | [`application/0011-pi-ai-adapter.md`](application/0011-pi-ai-adapter.md) |
+| Model Provider 配置 | 服务商与模型的写入信任门、凭证协调、同步发现、模型型连接与删除引用检查；合同逐条实现状态见 API Draft | [`interfaces/0002-product-api-http.md`](interfaces/0002-product-api-http.md)、[`interfaces/0004-http-client.md`](interfaces/0004-http-client.md)、[`storage/0001-prisma-repository.md`](storage/0001-prisma-repository.md) |
 
 ### 2.1 Wire shape 与 semantic owner 分工
 
@@ -155,10 +157,10 @@
 - **Projection：** Product Run 将内部 `waiting` 映射为公开 `running`，`completed` 映射为公开 `succeeded`；Source 公开配置由 Controller 白名单化。Asset 的公开投影在 API 边界剥离内部 Blob key：feed、search、entries、story、entry、revision 六条读路由都经 `toPublicAsset` 逐个挑字段（`apps/api/src/app.controller/public-projection.ts`），公开读 DTO 由 contracts 的 `publicAssetSnapshotSchema` 校验，该 schema 从 `assetSnapshotSchema` 省略 `storageKey`。仓储内部的 Asset snapshot（`PrismaCosmosRepository.toAssetSnapshot`）仍带 `storageKey`，只服务 Blob 读写与内部用例，不是公开面。其余 lease token、Secret、绝对路径和任意 payload 的边界仍以对应组件正文与实际投影为准。
 - **Blob/Value：** Blob Root 和 Data Root 必须 containment；Blob key 为 SHA-256 内容寻址。Workflow Value 使用 canonical JSON 和 `application/json`，读取时同时验证 key、hash、byteSize、mediaType，再返回 structured clone。
 - **默认运行路径：** Worker 默认启用 Durable Host；只有显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退 legacy path。空 definitions 或 actions 的 Host 组合必须拒绝启动，不能以“空目录”伪装成功。
-- **本地默认值：** `COSMOS_DATA_ROOT` 默认 `.cosmos`，Blob Root 默认 `.cosmos/blobs`；API 默认 `127.0.0.1:4310`，Worker Admin 默认 `127.0.0.1:9091`；Worker poll 默认 30,000 ms、lease 默认 120,000 ms。环境覆盖、取值范围和安全约束由相应组件 spec 详述。
+- **本地默认值：** `COSMOS_DATA_ROOT` 默认 `.cosmos`，Blob Root 默认 `.cosmos/blobs`；API 默认 `127.0.0.1:14310`，Worker Admin 默认 `127.0.0.1:9091`；Worker poll 默认 30,000 ms、lease 默认 120,000 ms。环境覆盖、取值范围和安全约束由相应组件 spec 详述。
 - **Catalog 边界：** Product API 只读取 manifest、schema 和 capability；executable Action/Connector 由 Worker 执行面加载。Source probe 可校验 manifest 与 config，但不能因为 probe 改写领域数据。
 - **日志边界：** `log.v1` 结构化记录传递 request/run/job/activity context；Secret、token、query、payload、正文和外部输出必须脱敏/截断。日志不是 Domain Event，也不是业务账本。
-- **Migration 顺序：** 当前 SQLite 路径按 `20260808003247_phase1_foundation`、`20260808150000_collector_jobs`、`20260810020829_normalized_content_model`、`20260813160000_workflow_run_backend`、`20260814090000_workflow_activity_host`、`20260815090000_workflow_ingest`、`20260818000000_workflow_run_source_projection`、`20260824000000_source_identity_revision`、`20260824100000_source_activation_result_snapshot`、`20260907120000_story_revision_versioning`、`20260907130000_story_merge_alias`、`20260908000000_topic_domain_v1`、`20260908120000_entity_relation_v1`、`20260908140000_user_organization_v1`、`20260908160000_annotation_v1`、`20260908180000_saved_view_v1`、`20260909100000_board_section_block_v1`、`20260909120000_spotlight_placement_v1`、`20260909140000_entry_story_evidence_v1`、`20260909160000_story_split_v1`、`20260909200000_media_retry_retention_v1`、`20260910120000_connection_state_store_v1`、`20260910140000_trigger_binding_v1`、`20260916120000_story_representation_v1`、`20260916140000_entry_relation_v1`、`20260918120000_source_soft_delete_v1` 顺序应用；组件 spec 只说明其拥有的模型和转移，不复制完整 SQL。
+- **Migration 顺序：** 当前 SQLite 路径按 `20260808003247_phase1_foundation`、`20260808150000_collector_jobs`、`20260810020829_normalized_content_model`、`20260813160000_workflow_run_backend`、`20260814090000_workflow_activity_host`、`20260815090000_workflow_ingest`、`20260818000000_workflow_run_source_projection`、`20260824000000_source_identity_revision`、`20260824100000_source_activation_result_snapshot`、`20260907120000_story_revision_versioning`、`20260907130000_story_merge_alias`、`20260908000000_topic_domain_v1`、`20260908120000_entity_relation_v1`、`20260908140000_user_organization_v1`、`20260908160000_annotation_v1`、`20260908180000_saved_view_v1`、`20260909100000_board_section_block_v1`、`20260909120000_spotlight_placement_v1`、`20260909140000_entry_story_evidence_v1`、`20260909160000_story_split_v1`、`20260909200000_media_retry_retention_v1`、`20260910120000_connection_state_store_v1`、`20260910140000_trigger_binding_v1`、`20260916120000_story_representation_v1`、`20260916140000_entry_relation_v1`、`20260918120000_source_soft_delete_v1`、`20261015000000_provider_model_configuration`、`20261018160000_workflow_activity_dispatch_fence` 顺序应用；组件 spec 只说明其拥有的模型和转移，不复制完整 SQL。
 
 ### 4.1 当前公开投影安全验收事实
 

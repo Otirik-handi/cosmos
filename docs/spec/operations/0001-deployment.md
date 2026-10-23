@@ -41,7 +41,7 @@
 - **日志目录**：`/var/lib/cosmos/logs`，由 `cosmos-logs` 命名卷持久化。
 - **API 健康门槛**：`api` 的健康检查成功后，Compose 才允许 `web` 和 `worker` 启动。
 - **迁移部署**：通过 Prisma `migrate deploy` 应用已经生成的前向迁移，不生成新迁移，也不提供自动回滚。
-- **默认服务网络**：Compose 自动创建的默认网络；容器内通过 `http://api:4310` 访问 API。
+- **默认服务网络**：Compose 自动创建的默认网络；容器内通过 `http://api:14310` 访问 API。
 - **接口所有权**：Product API、Feed、Search 和 SSE 契约由 [API 实现（接口所有者）](../../../apps/api/) 定义。`/api/v1/health` 在本组件中只作为容器就绪探针，不代表 Product API 的完整契约。
 
 ## 外部行为
@@ -49,13 +49,13 @@
 | 服务 | 启动行为 | 容器监听 | 主机映射 | 启动约束 |
 |---|---|---:|---:|---|
 | `web` | 启动 Next standalone server | `0.0.0.0:3000` | `3000:3000` | 等待 `api` healthy |
-| `api` | 创建数据目录和数据库文件，执行 Prisma 迁移，然后启动 `apps/api/dist/main.js` | `0.0.0.0:4310` | `4310:4310` | 迁移成功后才能启动 API |
+| `api` | 创建数据目录和数据库文件，执行 Prisma 迁移，然后启动 `apps/api/dist/main.js` | `0.0.0.0:14310` | `14310:14310` | 迁移成功后才能启动 API |
 | `worker` | 启动 `apps/worker/dist/main.js` | 无对外监听要求 | 无 | 等待 `api` healthy |
 
 健康检查请求：
 
 ```text
-GET http://127.0.0.1:4310/api/v1/health
+GET http://127.0.0.1:14310/api/v1/health
 ```
 
 检查参数：
@@ -76,8 +76,8 @@ GET http://127.0.0.1:4310/api/v1/health
 - 构建上下文：`..`
 - Dockerfile：`docker/Dockerfile`
 - 构建参数：`COSMOS_API_URL`
-- 构建参数默认值：`http://localhost:4310`
-- Compose 构建参数值：`http://api:4310`
+- 构建参数默认值：`http://localhost:14310`
+- Compose 构建参数值：`http://api:14310`
 - 依赖与编译输入：package manifests、锁文件、TypeScript 配置和工作区源代码。
 - 依赖安装命令：`bun install --frozen-lockfile`
 - 构建命令：`bun run build`
@@ -86,15 +86,15 @@ GET http://127.0.0.1:4310/api/v1/health
 
 | 服务 | 输入 |
 |---|---|
-| `web` | `HOSTNAME=0.0.0.0`、`PORT=3000`、日志模式 `both`、`cosmos-logs` 卷；`COSMOS_API_URL=http://api:4310` 只作为 Web 构建阶段的 build arg，不作为 Compose Web 运行时环境变量 |
-| `api` | API host `0.0.0.0`、API port `4310`、`COSMOS_DATA_ROOT=/var/lib/cosmos`、`DATABASE_URL=file:/var/lib/cosmos/cosmos.sqlite`、日志模式 `both`、`cosmos-data` 与 `cosmos-logs` 卷 |
+| `web` | `HOSTNAME=0.0.0.0`、`PORT=3000`、日志模式 `both`、`cosmos-logs` 卷；`COSMOS_API_URL=http://api:14310` 只作为 Web 构建阶段的 build arg，不作为 Compose Web 运行时环境变量 |
+| `api` | API host `0.0.0.0`、API port `14310`、`COSMOS_DATA_ROOT=/var/lib/cosmos`、`DATABASE_URL=file:/var/lib/cosmos/cosmos.sqlite`、日志模式 `both`、`cosmos-data` 与 `cosmos-logs` 卷 |
 | `worker` | workflow host `true`、`COSMOS_DATA_ROOT=/var/lib/cosmos`、`DATABASE_URL=file:/var/lib/cosmos/cosmos.sqlite`、poll interval `30000`、日志模式 `both`、`cosmos-data` 与 `cosmos-logs` 卷 |
 
 ## 输出
 
 - 一份包含 Web、API、Worker 运行产物的 Node.js 运行镜像。
 - `web` 进程及主机端口 `3000`。
-- `api` 进程及主机端口 `4310`。
+- `api` 进程及主机端口 `14310`。
 - 不暴露主机端口的 `worker` 进程。
 - SQLite 数据库文件 `/var/lib/cosmos/cosmos.sqlite`。
 - 写入控制台和文件的运行日志。
@@ -139,7 +139,7 @@ GET http://127.0.0.1:4310/api/v1/health
 - API 和 Worker 读写 `cosmos-data`。
 - Web、API、Worker 向控制台和 `cosmos-logs` 写入日志。
 - Web 在 `3000` 端口建立网络监听。
-- API 在 `4310` 端口建立网络监听。
+- API 在 `14310` 端口建立网络监听。
 - 健康检查周期性向 API 本地回环地址发起 HTTP 请求。
 - Worker 按 `30000` 的轮询间隔执行工作流相关轮询。
 
@@ -183,13 +183,13 @@ GET http://127.0.0.1:4310/api/v1/health
 | build image | `oven/bun:1.3.14` |
 | runtime image | `node:24-bookworm-slim` |
 | `WORKDIR` | `/app` |
-| `ARG COSMOS_API_URL` | `http://localhost:4310` |
+| `ARG COSMOS_API_URL` | `http://localhost:14310` |
 | `ENV COSMOS_API_URL` | 构建阶段使用同名 build arg 注入；不是 Compose Web 运行时环境变量 |
 | `NODE_ENV` | `production` |
 | `COSMOS_DATA_ROOT` | `/var/lib/cosmos` |
 | `DATABASE_URL` | `file:/var/lib/cosmos/cosmos.sqlite` |
 | exposed Web port | `3000` |
-| exposed API port | `4310` |
+| exposed API port | `14310` |
 | Prisma schema | `packages/storage-prisma/prisma/schema.prisma` |
 | Dockerfile 默认主进程 | `docker/start-api.sh`：数据库准备 → Prisma `migrate deploy` → `node apps/api/dist/main.js` |
 
@@ -200,17 +200,17 @@ GET http://127.0.0.1:4310/api/v1/health
 | services | `web`、`api`、`worker` |
 | build context | `..` |
 | Dockerfile | `docker/Dockerfile` |
-| build `COSMOS_API_URL` | `http://api:4310` |
+| build `COSMOS_API_URL` | `http://api:14310` |
 | Web host | `0.0.0.0` |
 | Web port | `3000` |
 | API host | `0.0.0.0` |
-| API port | `4310` |
+| API port | `14310` |
 | data root | `/var/lib/cosmos` |
 | database URL | `file:/var/lib/cosmos/cosmos.sqlite` |
 | workflow host | `true` |
 | worker poll interval | `30000` |
 | log mode | `both` |
-| API health URL | `http://127.0.0.1:4310/api/v1/health` |
+| API health URL | `http://127.0.0.1:14310/api/v1/health` |
 | health interval | `5s` |
 | health timeout | `3s` |
 | health retries | `20` |
@@ -223,12 +223,12 @@ GET http://127.0.0.1:4310/api/v1/health
 ## 重建验收
 
 - 给定当前实现和完整锁文件 → 观察 `oven/bun:1.3.14` 阶段完成冻结依赖安装及工作区构建 → 且不发生锁文件更新或未锁定依赖安装。
-- 给定 Compose 的三个服务构建配置 → 观察 `web`、`api`、`worker` 均使用上下文 `..`、`docker/Dockerfile` 和 `COSMOS_API_URL=http://api:4310` → 且不发生三个服务各自构建不同应用镜像。
-- 给定一份新建的 `cosmos-data` 卷 → 观察 API 创建 `/var/lib/cosmos/cosmos.sqlite`、成功执行 Prisma `migrate deploy` 后才启动 API → 且不发生 API 在迁移失败后继续监听 `4310`。
+- 给定 Compose 的三个服务构建配置 → 观察 `web`、`api`、`worker` 均使用上下文 `..`、`docker/Dockerfile` 和 `COSMOS_API_URL=http://api:14310` → 且不发生三个服务各自构建不同应用镜像。
+- 给定一份新建的 `cosmos-data` 卷 → 观察 API 创建 `/var/lib/cosmos/cosmos.sqlite`、成功执行 Prisma `migrate deploy` 后才启动 API → 且不发生 API 在迁移失败后继续监听 `14310`。
 - 给定 API 尚未达到 healthy → 观察 Web 和 Worker 受 `service_healthy` 条件阻塞 → 且不发生 Web 或 Worker 绕过初始 API 健康门槛启动。
-- 给定 API 已在 `127.0.0.1:4310` 成功响应健康检查 → 观察 Web 启动 Next standalone server且 Worker 启动其生产入口 → 且不发生健康端点被视为完整 Product API 合约验收。
-- 给定三个服务均已启动 → 观察主机只映射 Web `3000` 和 API `4310` → 且不发生 Worker 端口暴露。
-- 给定容器通过 Compose 默认网络通信 → 观察 Web 使用 `http://api:4310` 定位 API → 且不发生对外部 Gateway、Redis 或主机回环地址的服务发现依赖。
+- 给定 API 已在 `127.0.0.1:14310` 成功响应健康检查 → 观察 Web 启动 Next standalone server且 Worker 启动其生产入口 → 且不发生健康端点被视为完整 Product API 合约验收。
+- 给定三个服务均已启动 → 观察主机只映射 Web `3000` 和 API `14310` → 且不发生 Worker 端口暴露。
+- 给定容器通过 Compose 默认网络通信 → 观察 Web 使用 `http://api:14310` 定位 API → 且不发生对外部 Gateway、Redis 或主机回环地址的服务发现依赖。
 - 给定 API 或 Worker 写入 SQLite 状态后重建服务容器但保留命名卷 → 观察 `/var/lib/cosmos` 中的数据仍可见 → 且不发生仅因容器重建而清空数据库。
 - 给定任一服务产生文件日志后重建服务容器但保留 `cosmos-logs` → 观察日志卷中的既有内容仍保留 → 且不发生仅因容器重建而清空文件日志。
 - 给定执行当前 `smoke-node` 验收锚点 → 观察隔离数据根目录下的 Node 生产 API 与 Worker 完成迁移、持久结果、Feed、Search、SSE 和日志验证 → 且不发生将该结果解释为 Docker 镜像、Compose 网络、健康检查、端口映射或命名卷已验证。

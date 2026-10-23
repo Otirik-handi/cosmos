@@ -53,7 +53,7 @@ resolve(root, configuredDataRoot || ".cosmos")
 
 **API 端口**
 
-由 `findAvailablePort` 选择的可监听 TCP 端口。调用方在默认配置下显式传入首选端口 `4310`（即调用 `findAvailablePort(4310)`）；函数本身不声明无参默认值。主机默认值为 `127.0.0.1`，最多尝试连续 `50` 个候选端口。
+由 `findAvailablePort` 选择的可监听 TCP 端口。调用方在默认配置下显式传入首选端口 `14310`（即调用 `findAvailablePort(14310)`）；函数本身不声明无参默认值。主机默认值为 `127.0.0.1`，最多尝试连续 `50` 个候选端口。首选值为何是 `14310` 而不是早先的 `4310`，见 [ADR-0031](../../adr/0031-api-default-port-14310.md)。
 
 **API URL**
 
@@ -191,7 +191,7 @@ file:<databasePath with slash>
 
 **端口输入**
 
-- 每个服务独立的 `preferred`：API 默认 `4310`、Web 默认 `3000`、Worker Admin 默认
+- 每个服务独立的 `preferred`：API 默认 `14310`、Web 默认 `3000`、Worker Admin 默认
   `9091`（允许 `0` 动态）；由调用方经环境变量显式传入，函数参数仅提供默认主机与尝试数。
 - `host`：监听主机，默认 `127.0.0.1`。
 - `excludedPorts`：已选服务端口集合，保证多服务探测不重叠。
@@ -450,7 +450,7 @@ NEXT_PUBLIC_COSMOS_API_URL=http://localhost:<port>
 
 **端口配置**
 
-- 当前开发编排的首选端口配置值：`4310`，通过显式调用 `findAvailablePort(4310)` 传入；`preferredPort` 参数没有函数默认值。
+- 当前开发编排的首选端口配置值：`14310`，通过显式调用 `findAvailablePort(14310)` 传入；`preferredPort` 参数没有函数默认值。
 - 默认监听主机：`127.0.0.1`。
 - 合法端口范围：整数 `1..65535`。
 - 最大候选尝试次数：`50`。
@@ -510,8 +510,8 @@ packages/storage-prisma/prisma/schema.prisma
 ## 重建验收
 
 - 给定：在工作区根目录运行开发环境构造逻辑，且未提供 `configuredDataRoot`；观察：`COSMOS_WORKSPACE_ROOT` 等于由 `import.meta` URL 上级解析出的 root，`COSMOS_DATA_ROOT` 等于 `resolve(root, ".cosmos")`，`COSMOS_WORKFLOW_HOST_ENABLED` 等于 `true`；且不发生：返回对象包含第四个环境变量或复制全部 `process.env`。
-- 给定：调用方显式执行 `findAvailablePort(4310)`；观察：首选端口为 `4310`、监听主机为 `127.0.0.1`，候选端口逐个执行 `listen` 后 `close`；且不发生：依赖函数无参默认、尝试非整数、低于 `1`、高于 `65535` 的端口或无限尝试。
-- 给定：首选端口 `4310` 被占用；观察：函数尝试后续候选端口并返回一个成功绑定后已关闭探测监听的端口；且不发生：复用已确认不可用的 `4310`。
+- 给定：调用方显式执行 `findAvailablePort(14310)`；观察：首选端口为 `14310`、监听主机为 `127.0.0.1`，候选端口逐个执行 `listen` 后 `close`；且不发生：依赖函数无参默认、尝试非整数、低于 `1`、高于 `65535` 的端口或无限尝试。
+- 给定：首选端口 `14310` 被占用；观察：函数尝试后续候选端口并返回一个成功绑定后已关闭探测监听的端口；且不发生：复用已确认不可用的 `14310`。
 - 给定：端口为 `4321`；观察：`COSMOS_API_PORT=4321`、`COSMOS_API_URL=http://localhost:4321`、`NEXT_PUBLIC_COSMOS_API_URL=http://localhost:4321`；且不发生：两个 URL 使用不同端口或使用 `127.0.0.1` URL。
 - 给定：调用 `dev-service.ts api`；观察：服务名校验通过、重新查找可用端口、注入三个 API 端口变量并启动对应 package 的 `dev`；且不发生：沿用未重新验证的端口或跳过 API URL 注入。
 - 给定：调用 `dev-service.ts worker`；观察：服务名校验通过并启动 worker package 的 `dev`；且不发生：worker 启动前执行端口查找或分配新的 API 端口。
@@ -543,7 +543,7 @@ packages/storage-prisma/prisma/schema.prisma
   - `COSMOS_DATA_ROOT` 使用 `resolve(root, configuredDataRoot || ".cosmos")`。
 
 - [`scripts/dev-port.ts`](../../../scripts/dev-port.ts)
-  - 默认配置的调用方显式传入 `findAvailablePort(4310)`；函数要求调用方提供 `preferredPort`。
+  - 默认配置的调用方显式传入 `findAvailablePort(14310)`；函数要求调用方提供 `preferredPort`。
   - 默认 host `127.0.0.1`。
   - 最多尝试 `50` 次。
   - 校验整数范围 `1..65535`。

@@ -2,11 +2,11 @@
 
 ## 状态
 
-当前实现规格；描述 `agent.invoke@1` 与 Fake Adapter 的已实现行为。真实模型 Adapter 尚未实现。
+当前实现规格；描述 `agent.invoke@1`、`agent.invoke@2` 与 Fake Adapter 的已实现行为。真实模型 Adapter 见 [`pi-ai Agent Adapter`](0011-pi-ai-adapter.md)。
 
 ## 最后更新
 
-2026-10-08。
+2026-10-20。
 
 ## 组件定位
 
@@ -28,6 +28,19 @@
 4. 返回值再次经过 Agent output schema 校验和 Action output schema 校验。
 5. Handler 抛出的受管 Action 错误保留其 code/message/retryable；未受管错误由 Registry 统一归类。
 6. Activity Worker 接管 Job/Run lease、取消、重试和 completion；本组件不自行提交 Job 结果。
+
+## 连接作用域 Action（`agent.invoke@2`）
+
+`packages/application/src/agent-invocation-v2.ts` 在同一个 Registry 与同一套 Host 状态机上注册第二个版本：
+
+- **Agent Invocation V2 Port（`AgentInvocationV2Port`）**：接收只含 `connectionId` 的输入与执行上下文，返回 `AgentInvocationOutput`；模型与凭证由端口实现从连接解析。
+- **Agent Invocation @2（`agent.invoke@2`）**：`kind`、`executionPlacement`、能力、超时与 retry policy 与 @1 完全一致，只有输入形状不同。
+
+输入是 strict 对象：`connectionId`（非空）、`messages`、`tools`、`budget`、`metadata`。`provider`、`model`、`baseUrl`、`secretRef`、`apiKey` 一律不接受——静默忽略会让调用方误以为自己指定的模型生效了，所以多余字段必须报 `invalid_input`。
+
+`AgentModelConnectionResolver`（端口）返回 `AgentModelConnectionSnapshot | null`：一次读取连接、模型与 Provider，任一不满足就返回 `null`。分三次读会读到三个时刻的状态，用户刚换模型时可能把新模型的预算和旧服务商的地址拼在一起。
+
+与 @1 的选择关系：@1 继续服务显式配置了 Worker profile 的部署，@2 用于用户在模型页里选好的连接。两者在 catalog 与 Action Registry 中并存，`agent.invoke@1` 的退出以真实服务验收为前提（[API 0009](../../api/0009-provider-model-configuration.md)）。
 
 ## 输入
 
@@ -100,7 +113,8 @@ Fake Adapter 没有环境变量或外部配置。`agent.invoke@1` 的执行位�
 
 ## 实现与测试锚点
 
-- 实现：`packages/application/src/agent-invocation.ts`、`packages/contracts/src/agent.ts`、`packages/application/src/catalog.ts`；
+- 实现：`packages/application/src/agent-invocation.ts`、`packages/application/src/agent-invocation-v2.ts`、`packages/contracts/src/agent.ts`、`packages/application/src/catalog.ts`；
 - contracts 行为测试：`packages/contracts/src/agent.test.ts`、`packages/contracts/src/action.test.ts`；
-- application 行为测试：`packages/application/src/agent-invocation.test.ts`；
+- application 行为测试：`packages/application/src/agent-invocation.test.ts`、`packages/application/src/agent-invocation-v2.test.ts`；
+- 连接解析行为测试：`packages/storage-prisma/src/agent-model-resolver.test.ts`；
 - Activity Worker 行为测试：`packages/application/src/workflow-host-runtime.test.ts`。

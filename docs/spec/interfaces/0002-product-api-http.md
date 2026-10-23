@@ -8,7 +8,7 @@
 
 ## 最后更新
 
-2026-09-16。
+2026-10-23（Task 39：Provider/model 配置端点段与新增 409 冲突码）。
 
 ## 组件定位
 
@@ -362,6 +362,31 @@ SSE 数据可以包含当前持久 Domain Event 的业务 payload；HTTP Control
 写入 payload。公开事件仍不得把 lease token、Secret、绝对路径放入 payload；事件内容
 由持久化边界负责。
 
+### Model provider 配置
+
+这组端点由独立控制器提供（`model-provider.controller.ts`、`model-provider-write.controller.ts`、`configured-model.controller.ts`、`provider-model-discovery.controller.ts`），装配在 `ModelConfigurationModule` 里。完整合同、字段与错误语义见 [Provider/model 配置](../../api/0009-provider-model-configuration.md)；本节只记录 HTTP 层的行为。
+
+| Method/path | 输入 | 成功输出 |
+| --- | --- | --- |
+| `GET /model-providers` | `limit`/`cursor` query | `ModelProviderPage` |
+| `GET /model-providers/:providerId` | path | `ModelProviderSnapshot`；不存在 404 |
+| `POST /model-providers` | `CreateModelProviderCommand` + 必需 `Idempotency-Key` | 201 `ModelProviderSnapshot`，凭证清理未完成时 202 `ModelProviderOperationSnapshot` |
+| `PATCH /model-providers/:providerId` | `UpdateModelProviderCommand` + 必需 `Idempotency-Key` | 200 或 202，同上 |
+| `DELETE /model-providers/:providerId` | body `{expectedVersion}` + 必需 `Idempotency-Key` | 204 空响应体；同步删除，同一事务内检查引用，被引用 409 `in_use` |
+| `GET /model-configuration-operations/:operationId` | path | `ModelProviderOperationSnapshot` |
+| `GET /model-configuration-operations/by-key/:idempotencyKey` | path | `ModelProviderOperationSnapshot`；键没登记过 404 |
+| `POST /model-configuration-operations/:operationId/retries` | body `{}` | 202 `ModelProviderOperationSnapshot`；锁被占用 409 `operation_in_progress` |
+| `POST /model-providers/:providerId/discoveries` | body `{expectedProviderVersion}` | 200 `ProviderModelDiscoverySnapshot`；发现失败也是 200，错误在 `status`/`errorCode` 里 |
+| `GET /model-providers/:providerId/models` | `limit`/`cursor` query | `ConfiguredModelPage` |
+| `GET /model-providers/:providerId/models/:modelId` | path | `ConfiguredModelSnapshot`；不存在 404 |
+| `POST /model-providers/:providerId/models` | `CreateConfiguredModelCommand` + 必需 `Idempotency-Key` | 201 `ConfiguredModelSnapshot`；同 Provider 下重复 `modelId` 409 `already_exists` |
+| `PATCH /model-providers/:providerId/models/:modelId` | `UpdateConfiguredModelCommand` + 必需 `Idempotency-Key` | 200 `ConfiguredModelSnapshot` |
+| `DELETE /model-providers/:providerId/models/:modelId` | body `{expectedVersion}` + 必需 `Idempotency-Key` | 204 空响应体；被 Connection 引用 409 `in_use` |
+
+这组端点在读普通 body 之前先过本机信任门：精确 Origin、受信 Host、`application/json`、32 KiB 上限，不满足即 403 `forbidden_origin` 或 400 `invalid_input`。写请求的原始 body 由 `configureModelConfigurationBodyParsers` 单独登记（`model-configuration-body-parser.ts`），漏登记的路径会被通用 JSON 解析器提前消费，控制器只能报 `invalid_input`——新增写路由必须同时登记。
+
+`Idempotency-Key` 必须是恰好一个、匹配 `^[A-Za-z0-9._:-]{1,200}$` 的 header；同一键重放返回既有操作状态，不会再次执行。
+
 ## 输入
 
 所有 body/query 以 `unknown`/Nest query 输入后在 Controller 边界用 contracts Zod schema
@@ -448,6 +473,14 @@ Revision、Asset 查询找不到目标时返回 `NotFoundException`，错误码 
 `WorkflowHostConflictError`，Controller 返回 HTTP `409`，body 为 `{ code: "conflict", retryable: false, ... }`。
 同一 key 与同一 identity 的重放仍返回原 Workflow Run，不创建第二个 durable envelope。
 
+模型配置另有三类 409，都由业务状态而非载荷冲突产生，重试都不会成功：
+
+- `already_exists`：同一 Provider 下已有同一个 `modelId`（`@@unique([providerId, modelId])`）。
+- `in_use`：要删的模型或 Provider 仍被 Connection 引用（外键 RESTRICT / 事务内引用计数）。
+- `version_conflict` / `operation_in_progress`：`expectedVersion` 已过期，或该 Provider 正有写操作持锁。
+
+模型配置写入还有两道 Code 之外的拒绝：`403 forbidden_origin`（Origin 或 Host 不在启动时写定的信任集合里）与 `413 payload_too_large`（超过 32 KiB）。两者都不重试，界面按固定原因提示；把 `forbidden_origin` 报成网络故障会让人一直重试同一个坏配置。
+
 ### 其它错误
 
 Repository、catalog、SSE polling 或 Blob 读取异常上抛到全局 filter，通常转 500/
@@ -516,12 +549,16 @@ Repository、catalog、SSE polling 或 Blob 读取异常上抛到全局 filter�
 - Workflow enqueue and `cosmos.ingest@1` snapshot：[`packages/application/src/workflow-control.ts`](../../../packages/application/src/workflow-control.ts)。
 - Domain query/projection/event sequence：[`packages/storage-prisma/src/index.ts`](../../../packages/storage-prisma/src/index.ts)。
 - SSE snapshot fallback、probe queue、Run mapping、Attempt projection：[`apps/api/src/app.controller.runs.test.ts`](../../../apps/api/src/app.controller.runs.test.ts)、[`apps/api/src/app.controller.sources.test.ts`](../../../apps/api/src/app.controller.sources.test.ts)。
+- 模型配置路由在四个独立控制器里，不经 `app.controller.ts` 门面：[`apps/api/src/model-provider.controller.ts`](../../../apps/api/src/model-provider.controller.ts)（读）、[`apps/api/src/model-provider-write.controller.ts`](../../../apps/api/src/model-provider-write.controller.ts)（写与删除）、[`apps/api/src/configured-model.controller.ts`](../../../apps/api/src/configured-model.controller.ts)（模型 CRUD）、[`apps/api/src/provider-model-discovery.controller.ts`](../../../apps/api/src/provider-model-discovery.controller.ts)（同步发现）。
+- 模型配置的本机信任门与原始 body 读取：[`apps/api/src/model-configuration-trust.ts`](../../../apps/api/src/model-configuration-trust.ts)、[`apps/api/src/model-configuration-write-policy.ts`](../../../apps/api/src/model-configuration-write-policy.ts)、[`apps/api/src/model-configuration-body-parser.ts`](../../../apps/api/src/model-configuration-body-parser.ts)、[`apps/api/src/model-configuration-body-reader.ts`](../../../apps/api/src/model-configuration-body-reader.ts)；装配在 [`apps/api/src/model-configuration.module.ts`](../../../apps/api/src/model-configuration.module.ts)。
+- 对应测试：`model-provider-write.controller.test.ts`（含 DELETE 204、`in_use` 409、越权 Origin 403、缺幂等键与多余字段 400）、`configured-model.controller.test.ts`、`provider-model-discovery.controller.test.ts`、`model-configuration-body-parser.test.ts`、`model-configuration-trust.test.ts`、`model-provider-storage-integration.test.ts`（隔离 Prisma + FileSecretStore 的真实 HTTP 验证）。
 
 ## 非目标/边界
 
 - `docs/api/0002-product-service-api.md` 与 `0003-product-dtos.md` 中标为 Draft/Planned/
   Reserved 的 routes、plugins、connections、settings、workflow cancellation/signals、
   Gateway、Worker discovery 和远程执行均不是本文实现。
+- 模型配置的 Provider 删除没有采用 `docs/api/0009-provider-model-configuration.md` 原设计的 202 OperationSnapshot，而是同步 `DELETE` + 204；`GET /model-providers/:id/connections`（编辑前受影响连接查询）明确不实现，改由 Web 用连接列表与模型列表自行聚合。
 - 当前没有 Product API 的认证/授权、用户会话、CSRF、HTTPS、Range/ETag 目标合同或
   upload endpoint。
 - Controller 不提供 Job claim/renew/complete、lease token 管理、Kernel journal 或
