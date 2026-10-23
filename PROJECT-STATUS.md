@@ -41,7 +41,9 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **Task [40](.agents/tasks/40-story-content-representation/README.md)（Story 内容表示与多模态阅读）实施与验收中**：已实现确定性解析、有序安全内容块、版本表示与历史读取、重建／锁定／回退、Story 来源切换和 Agent 候选决策。候选接受复用正式命令，与状态及审计原子提交。隔离组件实验室 9 个浏览器用例通过，覆盖 320/768/1024/1440。生产 Agent profile/resolver 未配置，生成入口明确返回 409；NASA RSS 隔离验收已通过（10 条）；真实 Agent 与完整产品运行时浏览器验收仍未完成。未迁移用户数据、未部署，最终验证与未覆盖范围见同一 Task walkthrough。
 
-**Task 38（Agent Invocation 基础接入 v1）已完成**（2026-10-08）：新增版本化 `agent.invoke@1` Workflow Action、JSON-safe Agent Invocation 合同、Invocation Port 与确定性 Fake Adapter；复用现有 Activity Worker 的 Run/Job/Lease、取消、重试和 completion 语义。全量单元测试 139 个文件/798 个测试、全仓 typecheck、共享包构建和 docs:check 均通过。真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、工具执行、Artifact、Workspace、Knowledge/Research 另开后续 Task。
+**Task 38（Agent Invocation 基础接入 v1）已完成**（2026-10-08）：新增版本化 `agent.invoke@1` Workflow Action、JSON-safe Agent Invocation 合同、Invocation Port 与确定性 Fake Adapter；复用现有 Activity Worker 的 Run/Job/Lease、取消、重试和 completion 语义。全量单元测试 139 个文件/798 个测试、全仓 typecheck、共享包构建和 docs:check 均通过。真实 `pi-ai` Adapter 已由 Task 39 承接交付；`neuro-agent-harness`、`nb-memory`、工具执行、Artifact、Workspace、Knowledge/Research 仍未实现，另开后续 Task。
+
+**Task [39](.agents/tasks/39-pi-ai-adapter/README.md)（Pi-ai Adapter 与 Provider/model 配置）合并前验收中**：新增 `@cosmos/agent-pi-ai` 真实 SDK 适配（@1 部署 profile、@2 按连接选模型），以及模型页配置——三个模型与两条 migration、14 条 Product API 路由、本机写入信任门、Provider 独占凭证与清理补偿、模型型 Connection 单选、Worker `@2` 消费。全量 842 用例、typecheck 与 lint 通过；真实 Provider 仅一次隔离最小请求（`jijiapi`/`gpt-6-luna`，`completed`/200）。未完成：模型页与选模型无浏览器验收、`@1` 与旧 profile 退出需真实服务验收、Provider 删除是同步 204 而非 202 收据、受影响连接由界面聚合。偏差见 Task walkthrough。
 
 Task 36 已完成并通过真人验收；实现、合并与验收证据见 [Task36 完成历史](PROJECT-STATUS/history-2026-10-task36.md)。当前仍保留右栏 240 px 下限与首屏预算约束，分支和 worktree 尚未清理。
 
@@ -61,7 +63,7 @@ Task 36 已完成并通过真人验收；实现、合并与验收证据见 [Task
 - Read State 驱动的「未读」过滤、相关内容的服务端排序与更大候选集（当前 Web 侧组合既有读端点、上限 5 条）属 Phase 4 推荐体系；批注的 Artifact 目标属 Phase 3。
 - Phase 1 后置债（Docker/Compose、发布部署、真实公网长时定时抓取、非 Windows 平台 smoke、长时间故障恢复）按维护者 2026-09-07 划线保留；其中任一项需要提前补做时单独开 Task/申请授权，不随后续切片顺带执行。
 
-**Phase 3 入口状态（2026-10-08）**：Phase 3 第一切片已由 Proposal [`agent-invocation-v1`](docs/proposals/agent-invocation-v1.md)、ADR [`0030`](docs/adr/0030-agent-invocation-v1.md) 和 Task [`38`](.agents/tasks/38-agent-invocation/README.md) 收敛并完成。当前已实现 `agent.invoke@1`、Invocation Port 和 Fake Adapter；真实 `pi-ai` Adapter、`neuro-agent-harness`、`nb-memory`、Artifact/Workspace/Agent Session 数据模型仍未实现。下一步需单独创建并执行真实 `pi-ai` Adapter Task，不 reopen Task 38。PRD §12 Phase 3 其余范围仍需分批排期。`.agents/learning/phase3-tech/` 的技术预研材料保留为后续技术决策输入。
+**Phase 3 入口状态（2026-10-08，2026-10-23 补记）**：Phase 3 第一切片已由 Proposal [`agent-invocation-v1`](docs/proposals/agent-invocation-v1.md)、ADR [`0030`](docs/adr/0030-agent-invocation-v1.md) 和 Task [`38`](.agents/tasks/38-agent-invocation/README.md) 收敛并完成；真实 `pi-ai` Adapter 与 Provider/model 产品配置已由 Task [`39`](.agents/tasks/39-pi-ai-adapter/README.md) 交付。`neuro-agent-harness`、`nb-memory`、Artifact/Workspace/Agent Session 数据模型仍未实现，PRD §12 Phase 3 其余范围仍需分批排期。`.agents/learning/phase3-tech/` 的技术预研材料保留为后续技术决策输入。
 
 ## 当前架构基线
 

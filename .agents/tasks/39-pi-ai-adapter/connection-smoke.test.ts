@@ -98,7 +98,7 @@ describe("Task 39 Connection smoke input guard", () => {
         expect(process.env.OPENAI_LOG).toBe(originalLog);
     });
     it("pins migration export to the reviewed immutable commit", () => {
-        expect(SNAPSHOT_COMMIT).toBe("f66c33135351af38460fff73d311863dc7b4ef47");
+        expect(SNAPSHOT_COMMIT).toBe("62c8624d061e6ae9624bbe362785e558a9ac7348");
     });
 
     it("deploys only frozen migrations and dispatches through real isolated Connection/SecretStore", async () => {
@@ -108,7 +108,7 @@ describe("Task 39 Connection smoke input guard", () => {
         });
         try {
             const result = await runOfflineSmoke();
-            expect(result).toMatchObject({ mode: "offline", status: "completed", migrationCount: 37,
+            expect(result).toMatchObject({ mode: "offline", status: "completed", migrationCount: 42,
                 secretReads: 1, outputMatchesExpected: true, credentialAbsentFromOutput: true,
                 missingSecretRejected: true, retained: true });
             expect(fetch).not.toHaveBeenCalled();
@@ -117,8 +117,8 @@ describe("Task 39 Connection smoke input guard", () => {
                 commit: string; files: Array<{ path: string; sha256: string }>;
             };
             expect(manifest.commit).toBe(SNAPSHOT_COMMIT);
-            expect(manifest.files.filter((file) => file.path.endsWith("/migration.sql"))).toHaveLength(37);
-            expect(manifest.files.some((file) => file.path.includes("20261008"))).toBe(false);
+            expect(manifest.files.filter((file) => file.path.endsWith("/migration.sql"))).toHaveLength(42);
+            expect(manifest.files.some((file) => file.path.includes("20261008"))).toBe(true);
             expect(manifest.files.every((file) => /^[a-f0-9]{64}$/.test(file.sha256))).toBe(true);
             for (const name of ["result.json", "application.log.json", "migration.log"]) {
                 const text = await readFile(join(result.isolatedRoot, name), "utf8");
@@ -134,7 +134,7 @@ describe("Task 39 Connection smoke input guard", () => {
         try {
             const result = await prepareRealSmoke();
             expect(result.status).toBe("prepared-no-request");
-            expect(result.migrationCount).toBe(37);
+            expect(result.migrationCount).toBe(42);
             expect(await validatePreparedRoot(result.isolatedRoot)).toBe(result.isolatedRoot);
             expect(result.plan).toEqual(requestPlan(result.isolatedRoot));
             expect(result.plan.budget.maxOutputTokens).toBe(64);

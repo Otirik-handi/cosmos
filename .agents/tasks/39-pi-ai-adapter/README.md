@@ -27,10 +27,10 @@
 
 ### Non-goals
 
-- 不改造 `SecretStorePort` 为 credential lease；不新增数据库/migration。
+- 不改造 `SecretStorePort` 为 credential lease；不新增数据库/migration（仅指 Adapter 历史切片：Provider/model 扩展已新增两条 migration，见下方扩展段）。
 - Worker 默认不启用真实 Adapter；仅显式启用且配置完整时注册，不 fallback 到 Fake。
 - 不实现工具执行、流式输出、多轮 Session、Harness、Memory、Artifact、Workspace、Knowledge 或 Research。
-- 不新增 Product HTTP API、Web 配置页面或模型管理 UI。
+- 不新增 Product HTTP API、Web 配置页面或模型管理 UI（同样仅指 Adapter 历史切片：Provider/model 扩展已有 Product API 与模型页，见下方扩展段）。
 - 不提交 API key，不修改版本号或部署；每次真实 Provider 请求都需新的单独明确授权，历史批准不延续到本轮。
 
 ## Authority / Contracts
@@ -48,7 +48,7 @@
 - 已确认凭证边界：Adapter 注入最小 `PiAiCredentialResolver`，不接收原始 SecretStore 对象，不把凭证放进 `AgentInvocationInput`。
 - 已确认调用边界：`complete()` 一次调用；工具只映射为 SDK tool 描述，不执行工具。
 - 受影响合同：新增独立 package API；既有 `AgentInvocationPort`、`agent.invoke@1` 和 Workflow Host durable truth 不变。
-- 无新增持久化、HTTP endpoint、Prisma migration 或第二 runtime。
+- 无新增持久化、HTTP endpoint、Prisma migration 或第二 runtime（仅描述 Adapter 历史切片；Provider/model 扩展已新增 Prisma migration、Product API 与 Web 模型页，见下节）。
 - Worker 配置由 `apps/worker/src/config.ts` 解析；只在 `COSMOS_AGENT_ENABLED=true` 且 provider/model/API/baseURL/context/output limits/Connection ID 完整时加入 `agent.invoke@1`，默认关闭。
 - 每次调用从配置 Connection 重新读取 active 状态与 SecretRef，再从 SecretStore 读取凭证并只在 callback 内传给 pi-ai；不使用环境变量或 Fake fallback。模型与 provider profile 按用户配置构造；部署者负责确认 Connection 凭证适用于所选 Provider。
 
@@ -83,7 +83,7 @@
 
 用户已整体接受 [Provider/model 配置与 Connection 选择提案](../../../docs/proposals/connection-credential-entry-v1.md)。本 Task 复用相同 Adapter/Worker 凭证链路承接新产品配置，不新建任务编号；原 Scope/Non-goals 描述 Adapter 历史切片，不是对本次扩展的隐式否决。
 
-新范围为 Provider/model 管理、Provider-owned SecretStore 凭证、模型型 Connection 单选及对应 Worker 消费；当前仅进入技术合同/实施计划阶段，尚未开始业务实现。公共接口、schema 写入边界及旧配置退出按[过程续篇](walkthrough-provider-model.md)逐切片冻结。迁移执行、现有数据/凭证处置和每次真实请求仍需单独授权；Task 40、默认数据库、备份和 Git lifecycle 不在范围内。
+新范围为 Provider/model 管理、Provider-owned SecretStore 凭证、模型型 Connection 单选及对应 Worker 消费。已落地：模型页的 Provider/模型创建与编辑、Provider 删除（事务内引用检查、被引用返回 409 `in_use`、无引用则一并删除模型与本地凭证）、凭证写入与清理补偿、同步模型发现、模型型 Connection 选择、`agent.invoke@2` 与 Worker 注册，整条流程有一条隔离端到端验收。不再实现：编辑 Provider 前的受影响连接查询端点（界面用连接列表与模型列表自行聚合，代价是它只是界面提示、不构成服务端保证）。逐条实现状态见 [API Draft](../../../docs/api/0009-provider-model-configuration.md) 的路由表。公共接口、schema 写入边界及旧配置退出按[过程续篇](walkthrough-provider-model.md)逐切片冻结。迁移执行、现有数据/凭证处置和每次真实请求仍需单独授权；Task 40、默认数据库、备份和 Git lifecycle 不在范围内。
 
 ## Follow-ups
 

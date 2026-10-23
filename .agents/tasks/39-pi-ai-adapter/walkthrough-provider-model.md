@@ -1,7 +1,12 @@
 # Task 39 过程续篇：Provider/model 产品配置
 
+> 本册只保留目标、差距、实施顺序与验收门禁；B2b 的落地证据在 `walkthrough-provider-model-08.md`。
+> 同系列：`walkthrough-provider-model.md`（本篇）、`walkthrough-provider-model-02.md`、`walkthrough-provider-model-04.md`、`walkthrough-provider-model-06.md`、`walkthrough-provider-model-07.md`、`walkthrough-provider-model-08.md`。
+
+后续进展：[安全读取与后续产品接线](walkthrough-provider-model-02.md)。
+
 > 本文件是 [walkthrough](walkthrough.md) 的顺序续篇，不是第二套 tracker。历史 Adapter 和隔离真实验收证据留在原文。
-> 当前阶段：设计接受后的技术合同与实施计划；业务实现未开始。
+> 当前阶段：A 目标合同已完成设计复核，B1 与 B2a 已验证；B2b-1 内部锁组件已完成聚焦验证和独立静态审查。完整凭证协调与产品流程尚未实现。
 
 ## 本轮切片与 TaskStartSnapshot
 
@@ -81,8 +86,77 @@
 - 最终请独立 review 凭证并发/删除恢复/网络目的地及旧路径退役；修复问题后复跑受影响门禁。
 - 真实发现和生成各需重新披露准确命令、Provider/model、文本、预算、绝对隔离根、费用/副作用、日志与清理，并取得该次明确批准。历史 QmVMec 成功不替代新 UI/新路径验收。
 
+## A：目标合同草案与当前基线
+
+- 维护者要求继续后重新核实：HEAD `d511d799dd40d804820a27ed6a90054a23abb728`，master 相对上游 ahead 1 / behind 0；tracked 与 index 起始干净，仅两份排除提交的会话导出 untracked，均不读取、不处理。旧 dirty/共享写入描述是此前快照，不作为本轮状态。
+- 新增 [Provider/model Draft 合同](../../../docs/api/0009-provider-model-configuration.md)，同步 API 索引、PRD/架构目标入口及旧 Agent Provider Proposal 的局部取代说明；业务实现仍未开始。精确本轮写入范围为上述五个设计文档和本续篇。
+- 明确模型连接种类 `cosmos.agent`、本地 modelId 关联、`agent.invoke@2` 的 connectionId 输入；保留 @1 历史合同，F 切换前不移除生产注册，不把 metadata 当路由。
+- 发现复用可信 Worker/Job；凭证写入以非秘密操作记录协调，新独占 ref 发布与旧 ref 清理分离，崩溃不重放 key；清理失败可见并仅重试自身 ref。网络策略禁止私网/重定向/自动重试，实际目的地绑定及 SDK 注入尚需实现证据。
+- 新鲜验证：`bun run docs:check` 检查 1047 文件、零失败；`git diff --check` 通过。正在独立只读复核设计，不代表功能、迁移、浏览器或 Provider 验收完成。
+- 下一代码切片先做 contracts 的失败测试与最小实现；schema/migration 写入及任何隔离迁移仍须对应范围确认，不会因目标合同落盘自动执行。
+
+## B1：共享配置合同切片
+
+- Change Necessity：code-change；复杂度 medium，TDD Route: strict（沿用已记录 auto 决策）。仅校验 Provider/model 写入与非秘密快照，不提前接入数据库或发布新 Action。
+- 准确可写集合：新增 `packages/contracts/src/provider-model.ts` 与 `provider-model.test.ts`；必要增量 `packages/contracts/src/index.ts`、`packages/contracts/entry-surface.txt`、`packages/contracts/MODULE.md`；本续篇记录证据。保留旧 Connection/@1/Task40 合同。
+- 验证命令：`bun run vitest run packages/contracts/src/provider-model.test.ts packages/contracts/src/agent.test.ts packages/contracts/src/entry-contract.test.ts`，再运行 `bun run typecheck:contracts`；均为纯内存 schema 测试，不初始化仓储、SecretStore 或数据根。导出快照用既有 `scripts/entry-export-surface.ts` 显式更新，不新增依赖。
+- RED/GREEN 只证明输入及投影结构，不能证明凭证落盘、API 防泄漏、网络目的地、迁移或用户可用流程。
+
+## 本切片证据与审查结论
+
+- A 独立只读审查发现四项 Important：pending 恢复缺少执行者 fence、编辑影响提示缺读取接口、Connection 增量 DTO 不完整、发现中断未映射终态；均补入 Draft，复审确认合同层面闭合。API 索引位置也已修正。跨进程锁在 Windows/Node/Bun 的实现证明仍是 B 门禁，不能以文档替代。
+- B1 严格 RED：新增六项测试首次全部因接口未实现失败；GREEN 后 3 文件 11 项通过、contracts typecheck 通过。追加 URL 模型标识回归先观察到 1 项失败，再使用独立上游模型标识校验修复；create/update/snapshot 共用，不禁止合法 namespace/model。
+- 新增六个 schema 与六个类型显式导出；既有工具将入口快照从 549 更新至 561 项，入口运行时测试通过。普通 Connection 与 @1 未改。
+- 最近文档检查为 1049 文件零失败，diff 空白检查通过。仅纯内存测试；未访问仓储/SecretStore，不生成数据根。未运行构建、全仓测试、浏览器、迁移、真实请求；未改 Task40/default DB/备份/会话导出，未 commit/push。
+- 下一边界：B2 持久化需要在 Prisma schema 做 Provider/模型/操作记录与 Connection 关联的局部增量，并新增独立 migration；不改任何 Task40 字段/既有迁移。准确迁移目录及隔离 fresh/legacy 验证命令在启动前列出并单独取得批准；当前未执行。
+
+## B2：待批准的最小持久化切片
+
+本节是审批提案，不是迁移或共享 schema 的执行许可。先做 B2a 结构与升级证据，再做 B2b 凭证协调；不把整个 B–F 混成一次修改。
+
+### B2a 文件与数据边界
+
+- 修改 `packages/storage-prisma/prisma/schema.prisma`：仅新增 ModelProvider、ConfiguredModel、ModelConfigurationOperation 所需结构，以及 ConnectionInstance 的可空模型关联和版本字段；保留其它模型与现有 Connection.secretRef，不导入旧凭证、不自动选择模型。准确列与约束先由测试和目标合同逐项映射，不预设删除级联可以代替引用检查。
+- 新增候选 `packages/storage-prisma/prisma/migrations/20261015000000_provider_model_configuration/migration.sql`：仅一个新增迁移，落盘前确认目录不存在；名称冲突时停下重新列范围，不覆盖已有迁移。所有既有迁移（包括 Task40）保持原样。
+- 新增 `packages/storage-prisma/src/provider-model-migration.test.ts`：只验证 fresh 与合成 legacy 升级、旧 Connection 字段保持、modelId 默认空、版本初始化、外键/唯一约束及失败事务不破坏数据。此测试不声明凭证协调或产品仓储已通过。
+- 本续篇记录 RED/GREEN、文件差异和完整命令。B2a 不修改 API/Web/Worker、仓储继承链或公共导出；不调用 SecretStore。
+
+### 申请的验证方式（尚未运行）
+
+拟在上述测试实现并审查隔离守卫后运行：
+
+```text
+bun run vitest run packages/storage-prisma/src/provider-model-migration.test.ts
+```
+
+- 测试以 `mkdtemp` 在仓库 `.agent/tmp/task39-provider-model-migration-<随机后缀>/` 创建独立根，完整绝对路径随结果报告，保留目录，不自动删除。fresh 与 legacy 分属不同子目录，各自显式注入数据库 URL；不接受调用者传入数据库路径。
+- 通过已安装 Prisma CLI 的解析器定位可执行文件，以参数数组调用，并仅向子进程传入审核过的必要环境和隔离 DATABASE_URL；不改父进程环境、不下载依赖。命令与实际 schema 路径由测试固定，不使用 migrate dev/reset/db push。
+- fresh 应用复制到隔离根的完整迁移集合；legacy 先仅应用新增迁移之前的既有集合，写入合成旧 Connection，再应用新增迁移。只读取新建测试库，不复制或查询默认数据库/备份。所有迁移从工作区文件复制，记录路径与摘要，不从历史默认数据建 seed。
+- 只运行上述聚焦命令前必须确认其确实执行迁移；不能将它标为普通无副作用单元测试。Prisma validate/generate 和 storage typecheck 不隐含纳入授权：generate 可能写共享生成物，B2a 不需要 Client 读取新模型，后续使用时另列准确产物与命令。
+- 已只读核实 `scripts/prisma.ts:8-19` 会在分派命令前创建数据根/数据库文件，`:39-43` 会继承 DATABASE_URL。因此不直接运行根 db:validate/db:migrate/db:generate，也不以设置一个变量就声称已隔离。
+
+### B2b 入口门禁
+
+凭证服务/仓储与跨进程锁另列切片；必须先证明 Windows、Node/Bun 支持的真正进程间排他方案，以及执行者退出后的恢复。不用过期锁文件接管活执行者，不把 SQLite CAS 当作对未终止文件 I/O 的互斥证明。若现有依赖不能兑现，先提交设计取舍，不擅自新增依赖或降级合同。
+
+## B2a 开工快照与实施约束
+
+- 维护者明确批准 B2a 后正式开工。新鲜基线 HEAD `d511d799dd40d804820a27ed6a90054a23abb728`、master、ahead 1 / behind 0、单一 worktree；此前 A/B1 的八个 tracked 修改及三个新增设计/合同文件保留，两份会话导出保持不读不动。schema 无既有 diff，未发现进行中的 Git 操作。
+- 可写仅 schema、单一新增 migration、`provider-model-migration.test.ts` 及本续篇。Change Necessity 为 code-change，ArchitectureReviewRequired 为 yes（沿用已冻结目标合同）；TDD Route: strict，authority 为既有 recorded auto decision。先对真实隔离迁移观察 RED，再补结构。
+- Provider 保存非秘密配置、可空已发布 secretRef、版本及操作占用；ConfiguredModel 外键归属 Provider，Provider 内上游 ID 唯一；Connection 添加可空模型外键及版本。操作收据独立保留 providerId、执行代次、阶段及新旧 ref，不保存 key 或命令 payload，不随 Provider 删除级联消失。占用/发布/恢复的跨进程协调不是本切片实现。
+- 迁移只增表、增列和索引；旧 Connection.secretRef 及 Task40 完全保留，不导入旧配置，不回填模型选择。真实 SecretStore 不参与测试，合成 ref 只写隔离数据库文本列。删除限制由 FK 与后续事务引用检查共同承担，不把 FK 当成完整产品语义。
+
+## B2a 首轮运行证据
+
+- 已按批准正式写入四文件：schema 局部增量、`20261015000000_provider_model_configuration/migration.sql`、`provider-model-migration.test.ts` 和本续篇；无既有迁移改动。
+- RED：`bun run vitest run packages/storage-prisma/src/provider-model-migration.test.ts` 真实执行隔离迁移后两项失败，分别为 `no such table: ModelProvider` 与 `no such column: modelId`。保留根 `.agent/tmp/task39-provider-model-migration-F55DqB`、`.agent/tmp/task39-provider-model-migration-gm0scu`。
+- 首轮 GREEN：同命令 2/2 通过（13.53 秒），fresh 根 `.agent/tmp/task39-provider-model-migration-h58MXa`、legacy 根 `.agent/tmp/task39-provider-model-migration-hd1oB2` 均保留。legacy 从工作区此前 40 个迁移构造合成 Connection，再增量应用第 41 个；未复制默认数据库。
+- 覆盖真实 SQL 的 Provider 内模型唯一约束、跨 Provider 同模型名、模型/Provider 外键限制、Connection 缺失模型拒绝、失败事务回滚、版本默认值、操作幂等键/占用唯一性、Provider 删除后收据保留和关联索引；父进程环境不修改。未调用真实 SecretStore 或任何 Provider。
+- Prisma 子进程只传显式隔离 URL 和必要环境，stdio 写隔离日志，不使用根 Prisma 包装脚本；迁移 SQL 路径与 SHA-256 清单留在隔离根。未执行 validate/generate，未产生新 Prisma Client，因此测试仅用既有 Client 的原生 SQL 能力，不声称 ORM 新模型访问已验证。
+- 独立只读审查未发现可确认为 Important 的 B2a 问题；审查者未复跑测试，SQL/schema 一致仅为静态核对。根据审查补强 Provider.secretRef 与 Operation.newSecretRef 重复非空拒绝，以及落库迁移名称/校验和与 manifest 的逐条对应。
+- 补强后最终聚焦命令仍为 `bun run vitest run packages/storage-prisma/src/provider-model-migration.test.ts`：1 文件 2/2 通过（14.29 秒，退出 0）。最终保留根 `.agent/tmp/task39-provider-model-migration-ACVzty`（fresh）、`.agent/tmp/task39-provider-model-migration-HKbk5k`（legacy）。另已通过隔离库 `foreign_key_check` 与 `integrity_check`。
+- 本切片只新增数据库结构和隔离验证，无新运行时回退或双重凭证所有者；复杂度范围仍为单一迁移测试。证据置信度 B：真实隔离 SQL 目标验证通过，但未生成客户端，未证明 ORM、并发锁、凭证协调、API/UI、Worker 新链路或整体 Task39 完成。
+
 ## 当前未运行与下一步
 
-业务测试、类型检查、构建、浏览器、新迁移、真实 Provider 请求均未运行；本轮没有业务代码修改。下一步执行 A，冻结接口/稳定设计与第一个代码切片范围；B 的 schema 写入和隔离迁移执行在对应边界确认前不启动。当前计划不是 UI 已交付声明。
-
-本轮文档验证：`bun run docs:check` 检查 1046 个文件，failures 为空；`git diff --check` 无输出。另对本轮四个文档逐文件检查，尾随空白均为零，均无代码围栏；新续篇约 10 KB。原 walkthrough 约 39 KB，历史未搬移，本轮只加续篇入口，不声称已完成其存量大小治理。
+A 为目标设计完成，不等于 API 已上线；B1 的 3 文件 11 项测试、contracts 类型检查已通过。B2a 隔离迁移最终 2/2 GREEN，独立静态审查已回收。后续经单独批准完成锁可行性实验，并批准 B2b-1 内部组件接入，进展见下一节；本段此前的“先申请锁实验”建议已被这些批准及新鲜证据取代。产品仓储、凭证协调、API、网络策略、UI、Worker 新路径仍未实现或验证。validate/generate、storage 全包类型检查、构建、全仓测试、浏览器、默认数据库升级和本产品路径真实请求未运行。不新增提交，不清理保留的隔离根。
