@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { z, ZodError } from "zod";
-import { WorkflowHostError, ConnectionNotFoundError, type WorkflowEnvelope } from "@cosmos/application";
+import { WorkflowHostError, ConnectionNotFoundError, ConnectionUpdateInvalidError, ConnectionVersionConflictError, InvalidModelSelectionError, type WorkflowEnvelope } from "@cosmos/application";
 import { idempotencyKeySchema, getSourceConfigurationSchema, ingestTriggerEvidenceSchema, ingestTriggerKindSchema, type RunStatus, type SourceSnapshot } from "@cosmos/contracts";
 import "reflect-metadata";
 
@@ -93,12 +93,24 @@ export function runControlError(error: unknown): never {
 
 /**
  * Error funnel for the Connection endpoints. ConnectionNotFoundError maps to
- * 404; anything else reaching here is a server-side failure and stays a 500.
+ * 404; the model-connection write errors keep their own codes so the UI can tell
+ * "reload the row" (version conflict) from "pick another model" (invalid
+ * selection) from "the command itself is wrong" (400). Anything else reaching
+ * here is a server-side failure and stays a 500.
  */
 export function connectionError(error: unknown): never {
     if (error instanceof ZodError) validationError(error);
     if (error instanceof ConnectionNotFoundError) {
         throw new NotFoundException({ code: "not_found", message: error.message, retryable: false });
+    }
+    if (error instanceof ConnectionVersionConflictError) {
+        throw new ConflictException({ code: error.code, message: error.message, retryable: false });
+    }
+    if (error instanceof InvalidModelSelectionError) {
+        throw new ConflictException({ code: error.code, message: error.message, retryable: false });
+    }
+    if (error instanceof ConnectionUpdateInvalidError) {
+        throw new BadRequestException({ code: error.code, message: error.message, retryable: false });
     }
     throw error;
 }

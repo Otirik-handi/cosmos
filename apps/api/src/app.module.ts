@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
-import { ContentRebuild, ContentCommands, ContentQuery, StoryAgentCandidates } from "@cosmos/application";
+import { randomUUID } from "node:crypto";
+import { ContentRebuild, ContentCommands, ContentQuery, StoryAgentCandidates, ConfiguredModels, ModelProviderCredentials, ModelProviderQuery, ModelProviderRemovals, ProviderModelDiscoveryRunner, createHttpsProviderModelDirectory } from "@cosmos/application";
 import { createBuiltinManifestCatalog } from "@cosmos/application/catalog";
 import { MediaCleanupWorkflowControlService } from "@cosmos/application/media-cleanup";
 import { IngestWorkflowControlService } from "@cosmos/application/workflow-control";
@@ -11,11 +12,19 @@ import {
     PrismaContentSelectionRepository,
     PrismaStoryAgentCandidateRepository,
     PrismaWorkflowHostStore,
+    PrismaProviderCredentialRepository,
+    PrismaModelProviderQueryRepository,
+    PrismaModelProviderRemovalRepository,
+    PrismaConfiguredModelRepository,
+    PrismaProviderDiscoveryReader,
+    withModelConfigurationLock,
 } from "@cosmos/storage-prisma";
 
 import { AppController } from "./app.controller.js";
 import { HookController } from "./hook.controller.js";
 import { SourceProbeService } from "./source-probe.service.js";
+import { ModelConfigurationModule } from "./model-configuration.module.js";
+import { resolveModelConfigurationTrust } from "./model-configuration-trust.js";
 
 export const cosmosLogger = createLogger({
     service: "cosmos-api",
@@ -46,6 +55,36 @@ export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService(
 });
 
 @Module({
+    imports: [ModelConfigurationModule.register({
+        trust: resolveModelConfigurationTrust({
+            COSMOS_ALLOWED_ORIGIN: process.env.COSMOS_ALLOWED_ORIGIN,
+            COSMOS_MODEL_CONFIGURATION_AUTHORITIES: process.env.COSMOS_MODEL_CONFIGURATION_AUTHORITIES,
+        }),
+        query: new ModelProviderQuery(new PrismaModelProviderQueryRepository(cosmosRepository.prisma)),
+         models: new ConfiguredModels(new PrismaConfiguredModelRepository(cosmosRepository.prisma)),
+        removals: new ModelProviderRemovals({
+            repository: new PrismaModelProviderRemovalRepository(cosmosRepository.prisma),
+            secrets: cosmosRepository.secrets,
+            // 行已删除即视为删除成功；残留密钥文件只记 warn，重试删除是幂等的。
+            onCleanupFailure: ({ secretRef, error }) => cosmosLogger.warn("model_provider.secret.delete_failed", {
+                secretRef,
+                message: error instanceof Error ? error.message : String(error),
+            }),
+        }),
+        credentials: new ModelProviderCredentials({
+            repository: new PrismaProviderCredentialRepository(cosmosRepository.prisma),
+            secrets: cosmosRepository.secrets,
+            lock: (id, use) => withModelConfigurationLock(cosmosRepository.roots.dataRoot, id, use),
+            operationId: randomUUID,
+        }),
+        discovery: new ProviderModelDiscoveryRunner({
+            reader: new PrismaProviderDiscoveryReader(cosmosRepository.prisma),
+            secrets: cosmosRepository.secrets,
+            directory: createHttpsProviderModelDirectory(),
+            ids: { nextId: (prefix) => `${prefix}-${randomUUID()}` },
+            clock: { now: () => new Date() },
+        }),
+    })],
     controllers: [AppController, HookController],
     providers: [
         {

@@ -2,6 +2,8 @@ import "reflect-metadata";
 
 import { RequestMethod } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
+import { configureModelConfigurationBodyParsers } from "./model-configuration-body-parser.js";
 
 import {
     AppModule,
@@ -32,7 +34,9 @@ async function bootstrap(): Promise<void> {
     try {
         cosmosLogger.info("api.bootstrap.started");
         await cosmosRepository.initialize();
-        app = await NestFactory.create(AppModule);
+        const expressApp = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+        configureModelConfigurationBodyParsers(expressApp);
+        app = expressApp;
 
         app.use(requestContextMiddleware(cosmosLogger));
         app.enableCors({
@@ -62,7 +66,7 @@ async function bootstrap(): Promise<void> {
             });
         });
 
-        const port = Number(process.env.COSMOS_API_PORT ?? "4310");
+        const port = Number(process.env.COSMOS_API_PORT ?? "14310");
         const host = process.env.COSMOS_API_HOST ?? "127.0.0.1";
 
         await app.listen(port, host);
