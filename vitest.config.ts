@@ -16,6 +16,10 @@ export default defineConfig({
             "@cosmos/plugin-rss": resolve(rootDirectory, "plugins/rss/src/index.ts"),
             "@cosmos/plugin-collectors": resolve(rootDirectory, "plugins/collectors/src/index.ts"),
             "@cosmos/transport-http": resolve(rootDirectory, "packages/transport-http/src/index.ts"),
+            // 其它 workspace 包都在这里指向源码；漏掉 agent-pi-ai 会让测试落到已经过期的
+            // dist/ 上（node 解析条件取 dist，bun 条件才取 src），源码里的新导出在测试里
+            // 变成 undefined。
+            "@cosmos/agent-pi-ai": resolve(rootDirectory, "packages/agent-pi-ai/src/index.ts"),
             "@cosmos/worker-admin": resolve(rootDirectory, "packages/worker-admin/src/index.ts"),
         },
     },
