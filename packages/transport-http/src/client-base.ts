@@ -66,6 +66,7 @@ import { CosmosTransportError } from "./types.js";export class HttpCosmosClientB
             body?: unknown;
             headers?: Record<string, string>;
             schema: TSchema;
+            schemaForStatus?: (status: number) => TSchema;
         },
     ): Promise<ReturnType<TSchema["parse"]>> {
         const response = await this.fetcher(`${this.baseUrl}${path}`, {
@@ -82,6 +83,6 @@ import { CosmosTransportError } from "./types.js";export class HttpCosmosClientB
             throw new CosmosTransportError(response.status, body);
         }
 
-        return options.schema.parse(body) as ReturnType<TSchema["parse"]>;
+        return (options.schemaForStatus?.(response.status) ?? options.schema).parse(body) as ReturnType<TSchema["parse"]>;
     }
 }

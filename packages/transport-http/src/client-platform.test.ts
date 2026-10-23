@@ -6,6 +6,16 @@ import {
 } from "./index.js";
 
 describe("HttpCosmosClient 平台面", () => {
+    it("retains server operation recovery hints without retrying the request", async () => {
+        let sends = 0;
+        const body = { code: "dependency_unavailable", message: "Model configuration write rejected.", retryable: true, operationId: "operation:123" };
+        const client = new HttpCosmosClient({ baseUrl: "http://localhost:4310", fetch: async () => {
+            sends++;
+            return new Response(JSON.stringify(body), { status: 503, headers: { "content-type": "application/json" } });
+        } });
+        await expect(client.health()).rejects.toMatchObject({ name: "CosmosTransportError", status: 503, body });
+        expect(sends).toBe(1);
+    });
     it("reads the jobs of a run from the run-scoped endpoint (OPS-002)", async () => {
         const requests: string[] = [];
         const client = new HttpCosmosClient({

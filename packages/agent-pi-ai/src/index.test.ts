@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AssistantMessage, Context, ProviderStreamOptions } from "@mariozechner/pi-ai";
 import {
     createPiAiOpenAICompletionsModel,
+    createPiAiOpenAIResponsesModel,
     PiAiAgentInvocationAdapter,
     type PiAiClient,
 } from "./index.js";
@@ -66,6 +67,55 @@ describe("PiAiAgentInvocationAdapter", () => {
             contextWindow: 262_144,
             maxTokens: 32_768,
         });
+    });
+
+    it("constructs an OpenAI Responses-compatible custom model", () => {
+        expect(createPiAiOpenAIResponsesModel({
+            provider: "jijiapi",
+            model: "gpt-6-luna",
+            name: "gpt-6-luna",
+            baseUrl: "https://api.example.test/v1",
+            contextWindow: 262_144,
+            maxTokens: 32_768,
+        })).toMatchObject({
+            id: "gpt-6-luna",
+            provider: "jijiapi",
+            api: "openai-responses",
+            baseUrl: "https://api.example.test/v1",
+            contextWindow: 262_144,
+            maxTokens: 32_768,
+        });
+    });
+
+    it("passes a Responses model to the injected SDK client without protocol fallback", async () => {
+        let selectedApi: string | undefined;
+        const responsesModel = createPiAiOpenAIResponsesModel({
+            provider: "jijiapi",
+            model: "gpt-6-luna",
+            name: "gpt-6-luna",
+            baseUrl: "https://api.example.test/v1",
+            contextWindow: 262_144,
+            maxTokens: 32_768,
+        });
+        const adapter = new PiAiAgentInvocationAdapter({
+            credentials: { withCredential: async (_provider, _context, use) => use("synthetic") },
+            client: client(async (model) => {
+                selectedApi = model.api;
+                return response({
+                    api: model.api as AssistantMessage["api"],
+                    provider: model.provider,
+                    model: model.id,
+                });
+            }),
+            model: responsesModel,
+        });
+
+        await expect(adapter.invoke({
+            ...input,
+            provider: "jijiapi",
+            model: "gpt-6-luna",
+        }, context)).resolves.toMatchObject({ provider: "jijiapi", model: "gpt-6-luna" });
+        expect(selectedApi).toBe("openai-responses");
     });
 
     it("maps a pi-ai completion into the provider-neutral result", async () => {

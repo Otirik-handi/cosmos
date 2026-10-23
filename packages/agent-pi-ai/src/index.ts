@@ -16,34 +16,21 @@ import {
     type AgentInvocationInput,
     type AgentInvocationOutput,
 } from "@cosmos/contracts";
+import {
+    createPiAiOpenAICompletionsModel,
+    createPiAiOpenAIResponsesModel,
+    mapPiAiError,
+    type PiModel,
+} from "./pi-models.js";
 
-export type PiModel = Model<string & {}>;
-
-export interface PiAiOpenAICompletionsModelConfig {
-    provider: string;
-    model: string;
-    name: string;
-    baseUrl: string;
-    contextWindow: number;
-    maxTokens: number;
-}
-
-export function createPiAiOpenAICompletionsModel(
-    config: PiAiOpenAICompletionsModelConfig,
-): Model<"openai-completions"> {
-    return {
-        id: config.model,
-        name: config.name,
-        api: "openai-completions",
-        provider: config.provider,
-        baseUrl: config.baseUrl,
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: config.contextWindow,
-        maxTokens: config.maxTokens,
-    };
-}
+// 模型构造与协议错误映射由 `pi-models.ts` 拥有，@2 的适配器也从那里导入以避开循环。
+export {
+    createPiAiOpenAICompletionsModel,
+    createPiAiOpenAIResponsesModel,
+    mapPiAiError,
+    type PiAiOpenAICompletionsModelConfig,
+    type PiModel,
+} from "./pi-models.js";
 
 export interface PiAiCredentialResolver {
     withCredential<T>(
@@ -70,7 +57,7 @@ export const defaultPiAiClient: PiAiClient = {
 export interface PiAiAgentInvocationAdapterOptions {
     credentials: PiAiCredentialResolver;
     client?: PiAiClient;
-    model?: Model<"openai-completions">;
+    model?: Model<"openai-completions"> | Model<"openai-responses">;
 }
 
 export class PiAiAgentInvocationAdapter implements AgentInvocationPort {
@@ -236,20 +223,10 @@ function mapResponse(response: AssistantMessage, input: AgentInvocationInput): A
     }
 }
 
-function mapPiAiError(error: unknown, provider: string): ActionExecutionError {
-    const message = error instanceof Error ? error.message : "pi-ai request failed.";
-    const value = error as { status?: number; code?: string; name?: string };
-    if (value.name === "AbortError" || value.code === "ABORT_ERR") {
-        return new ActionExecutionError("timeout", "Agent invocation timed out.", true);
-    }
-    if (value.status === 401 || value.status === 403 || /auth|api key|credential/i.test(message)) {
-        return new ActionExecutionError("authentication_required", `Provider ${provider} rejected credentials.`, false);
-    }
-    if (value.status === 429 || /rate.?limit|too many requests/i.test(message)) {
-        return new ActionExecutionError("rate_limited", `Provider ${provider} rate limited the request.`, true);
-    }
-    if (/budget|token limit|context length/i.test(message)) {
-        return new ActionExecutionError("budget_exhausted", `Provider ${provider} rejected the request budget.`, false);
-    }
-    return new ActionExecutionError("dependency_unavailable", `Provider ${provider} is unavailable.`, true);
-}
+// agent.invoke@2 的适配器按连接解析模型，和上面的固定模型适配器共用同一套协议错误映射。
+export {
+    PiAiAgentInvocationV2Adapter,
+    type PiAiAgentInvocationV2AdapterOptions,
+    type PiAiClientV2,
+    type PiAiSecretReader,
+} from "./invocation-v2.js";

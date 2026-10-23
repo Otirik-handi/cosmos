@@ -306,6 +306,8 @@ describe("HttpCosmosClient 来源与运行", () => {
             secretRef: "secret:c1",
             lastError: null,
             lastCheckedAt: null,
+            modelId: null,
+            version: 1,
             createdAt: "2026-09-10T08:00:00.000Z",
             updatedAt: "2026-09-10T08:00:00.000Z",
         };
