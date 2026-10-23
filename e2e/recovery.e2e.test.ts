@@ -52,7 +52,7 @@ beforeAll(async () => {
     stack = await createIsolatedStackRoot("recovery-e2e");
     applyMigrations(stack.dataRoot);
     rss = await createControlledRssServer(fixtureXml);
-    const apiPort = await findAvailablePort(4310);
+    const apiPort = await findAvailablePort(14310);
     apiBaseUrl = `http://127.0.0.1:${apiPort}`;
     const environment = environmentForStack(process.env, stack, {
         NODE_ENV: "test",

@@ -28,7 +28,7 @@ async function main(): Promise<void> {
     await assertPortFree(webPort);
     stack = await createIsolatedStackRoot("browser-stack");
     applyMigrations(stack.dataRoot);
-    const apiPort = await findAvailablePort(4310);
+    const apiPort = await findAvailablePort(14310);
     const baseEnvironment = environmentForStack(process.env, stack, {
         NODE_ENV: "test",
         COSMOS_WORKSPACE_ROOT: repositoryRoot,
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     });
     // 这次构建**不能跳过**：`rewrites()` 的 API 目标地址在构建时就烘焙进
     // `routes-manifest.json`，只有带着本栈的 `COSMOS_API_URL` 重新构建，产物才会指向本栈的 API。
-    // （曾经加过「跳过构建」的开关，结果四套栈共用一份指向默认 4310 的产物，全部打到 QQ。）
+    // （曾经加过「跳过构建」的开关，结果四套栈共用一份指向默认 14310 的产物，全部打到 QQ。）
     execFileSync(process.env.BUN_BINARY?.trim() || "bun", ["run", "build:web"], {
         cwd: repositoryRoot,
         env: baseEnvironment,

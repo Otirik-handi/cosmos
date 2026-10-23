@@ -9,6 +9,7 @@ import { createWorkspaceDevEnvironment } from "./dev-env.js";
 import {
     findAvailablePort,
     withApiPortEnvironment,
+    withApiTrustEnvironment,
 } from "./dev-port.js";
 
 const rootDirectory = fileURLToPath(new URL("..", import.meta.url));
@@ -55,18 +56,21 @@ function stop(exitCode: number): void {
 
 async function start(): Promise<void> {
     const baseEnvironment = createWorkspaceDevEnvironment(rootDirectory);
+    const configuredPort = Number(baseEnvironment.COSMOS_API_PORT ?? "14310");
+    const selectedPort = service === "api"
+        ? await findAvailablePort(
+            configuredPort,
+            baseEnvironment.COSMOS_API_HOST ?? "127.0.0.1",
+        )
+        : configuredPort;
     const environment = service === "api"
-        ? withApiPortEnvironment(
-            baseEnvironment,
-            await findAvailablePort(
-                Number(baseEnvironment.COSMOS_API_PORT ?? "4310"),
-                baseEnvironment.COSMOS_API_HOST ?? "127.0.0.1",
-            ),
+        ? withApiTrustEnvironment(
+            withApiPortEnvironment(baseEnvironment, selectedPort),
+            selectedPort,
+            Number(baseEnvironment.COSMOS_WEB_PORT ?? "3000"),
         )
         : baseEnvironment;
 
-    const configuredPort = Number(baseEnvironment.COSMOS_API_PORT ?? "4310");
-    const selectedPort = Number(environment.COSMOS_API_PORT ?? "4310");
     if (service === "api" && selectedPort !== configuredPort) {
         console.warn(
             `[dev:${service}] API port ${configuredPort} is occupied; `

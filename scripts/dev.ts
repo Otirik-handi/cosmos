@@ -10,6 +10,7 @@ import { createWorkspaceDevEnvironment } from "./dev-env.js";
 import {
     findAvailablePort,
     withApiPortEnvironment,
+    withModelConfigurationAuthoritiesEnvironment,
     withWebOriginEnvironment,
 } from "./dev-port.js";
 
@@ -91,7 +92,7 @@ async function start(): Promise<void> {
         return port;
     }
 
-    const apiPreferred = Number(baseEnvironment.COSMOS_API_PORT ?? "4310");
+    const apiPreferred = Number(baseEnvironment.COSMOS_API_PORT ?? "14310");
     const adminPreferred = Number(baseEnvironment.COSMOS_WORKER_ADMIN_PORT ?? "9091");
     const webPreferred = Number(baseEnvironment.COSMOS_WEB_PORT ?? "3000");
 
@@ -114,9 +115,12 @@ async function start(): Promise<void> {
     }
 
     const environment: NodeJS.ProcessEnv = {
-        ...withWebOriginEnvironment(
-            withApiPortEnvironment(baseEnvironment, apiPort),
-            webPort,
+        ...withModelConfigurationAuthoritiesEnvironment(
+            withWebOriginEnvironment(
+                withApiPortEnvironment(baseEnvironment, apiPort),
+                webPort,
+            ),
+            apiPort,
         ),
         COSMOS_WEB_PORT: String(webPort),
         COSMOS_WORKER_ADMIN_HOST: adminHost,

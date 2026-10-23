@@ -60,7 +60,7 @@ let worker: ManagedProcess | undefined;
 
 try {
     applyMigrations(stack.dataRoot);
-    const apiPort = await findAvailablePort(4310);
+    const apiPort = await findAvailablePort(14310);
     const environment = environmentForStack(process.env, stack, {
         NODE_ENV: "test",
         COSMOS_API_HOST: "127.0.0.1",

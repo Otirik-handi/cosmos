@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     findAvailablePort,
     withApiPortEnvironment,
+    withApiTrustEnvironment,
+    withModelConfigurationAuthoritiesEnvironment,
     withWebOriginEnvironment,
 } from "./dev-port.js";
 
@@ -82,6 +84,14 @@ describe("development API port selection", () => {
             NEXT_PUBLIC_COSMOS_API_URL: "http://localhost:4311",
         });
     });
+    it("allows only exact loopback API authorities on the selected port", () => {
+        expect(withModelConfigurationAuthoritiesEnvironment({
+            COSMOS_MODEL_CONFIGURATION_AUTHORITIES: "stale.example:4310",
+        }, 4311)).toMatchObject({
+            COSMOS_MODEL_CONFIGURATION_AUTHORITIES: "localhost:4311,127.0.0.1:4311",
+        });
+    });
+
     it("derives the allowed origin from the selected web port after fallback", () => {
         // 模拟 .env / 全局环境把来源钉在默认 Web 端口，随后两个服务都发生端口回退。
         const environment = withWebOriginEnvironment(
@@ -96,6 +106,30 @@ describe("development API port selection", () => {
             COSMOS_API_URL: "http://localhost:4311",
             NEXT_PUBLIC_COSMOS_API_URL: "http://localhost:4311",
             COSMOS_ALLOWED_ORIGIN: "http://localhost:3001",
+        });
+    });
+
+    it("gives a standalone API both halves of the write trust", () => {
+        // 单独启动 API 也必须同时有来源与 authority：缺任一项都会让保存变成 403。
+        expect(withApiTrustEnvironment({}, 14311, 3002)).toMatchObject({
+            COSMOS_ALLOWED_ORIGIN: "http://localhost:3002",
+            COSMOS_MODEL_CONFIGURATION_AUTHORITIES: "localhost:14311,127.0.0.1:14311",
+        });
+    });
+
+    it("overrides a stale origin pinned in .env when the ports drift", () => {
+        const environment = withApiTrustEnvironment(
+            {
+                COSMOS_ALLOWED_ORIGIN: "http://localhost:3000",
+                COSMOS_MODEL_CONFIGURATION_AUTHORITIES: "localhost:4310,127.0.0.1:4310",
+            },
+            14311,
+            3002,
+        );
+
+        expect(environment).toMatchObject({
+            COSMOS_ALLOWED_ORIGIN: "http://localhost:3002",
+            COSMOS_MODEL_CONFIGURATION_AUTHORITIES: "localhost:14311,127.0.0.1:14311",
         });
     });
 });

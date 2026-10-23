@@ -61,7 +61,7 @@ beforeAll(async () => {
     rssBlocking = await createControlledRssServer(fixtureXml);
     applyMigrations(stack.dataRoot);
 
-    const apiPort = await findAvailablePort(4310);
+    const apiPort = await findAvailablePort(14310);
     apiBaseUrl = `http://127.0.0.1:${apiPort}`;
     const environment = environmentForStack(process.env, stack, {
         NODE_ENV: "test",

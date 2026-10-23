@@ -5,7 +5,7 @@
 FROM oven/bun:1.4.2 AS build
 
 WORKDIR /app
-ARG COSMOS_API_URL=http://localhost:4310
+ARG COSMOS_API_URL=http://localhost:14310
 ENV COSMOS_API_URL=${COSMOS_API_URL}
 
 COPY package.json bun.lock tsconfig.base.json tsconfig.node.json ./
@@ -48,6 +48,6 @@ RUN if [ -d apps/web/.next/static ]; then \
 
 RUN mkdir -p /var/lib/cosmos
 
-EXPOSE 3000 4310
+EXPOSE 3000 14310
 
 CMD ["sh", "/app/docker/start-api.sh"]

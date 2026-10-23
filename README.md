@@ -177,7 +177,7 @@ bun run db:migrate
 bun run dev
 ```
 
-也可以分别启动 `bun run dev:web`、`bun run dev:api` 和 `bun run dev:worker`。开发启动脚本会把相对 `COSMOS_DATA_ROOT` 自动解析为仓库根目录下的绝对路径，因此 API 和 Worker 不会因工作目录不同而打开不同的 SQLite 文件。API 默认优先使用 `COSMOS_API_PORT`（默认 `4310`）；如果端口已被占用，开发启动会自动选择后续空闲端口，并把实际 API 地址同步给 Web。健康检查地址以启动日志中的实际端口为准；类型检查、测试、构建和 Prisma schema 检查分别使用 `bun run typecheck`、`bun run test`、`bun run build` 和 `bun run db:validate`。Node 生产最小冒烟使用 `pwsh -NoProfile -File scripts/smoke-node.ps1`。
+也可以分别启动 `bun run dev:web`、`bun run dev:api` 和 `bun run dev:worker`。开发启动脚本会把相对 `COSMOS_DATA_ROOT` 自动解析为仓库根目录下的绝对路径，因此 API 和 Worker 不会因工作目录不同而打开不同的 SQLite 文件。API 默认优先使用 `COSMOS_API_PORT`（默认 `14310`）；如果端口已被占用，开发启动会自动选择后续空闲端口，并把实际 API 地址同步给 Web。健康检查地址以启动日志中的实际端口为准；类型检查、测试、构建和 Prisma schema 检查分别使用 `bun run typecheck`、`bun run test`、`bun run build` 和 `bun run db:validate`。Node 生产最小冒烟使用 `pwsh -NoProfile -File scripts/smoke-node.ps1`。
 
 ## 文档入口
 

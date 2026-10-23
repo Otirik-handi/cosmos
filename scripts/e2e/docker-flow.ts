@@ -10,12 +10,12 @@ try {
     runDocker([...composeArgs, "up", "--build", "-d"]);
     composeStarted = true;
 
-    await waitForHttp("http://127.0.0.1:4310/api/v1/health", 200, 180_000);
+    await waitForHttp("http://127.0.0.1:14310/api/v1/health", 200, 180_000);
     await waitForHttp("http://127.0.0.1:3000", 200, 180_000);
     await waitForCondition(
         "Docker Worker heartbeat",
         async () => {
-            const response = await fetch("http://127.0.0.1:4310/api/v1/health");
+            const response = await fetch("http://127.0.0.1:14310/api/v1/health");
             if (!response.ok) return false;
             const body = (await response.json()) as Record<string, unknown>;
             return body.workerStatus === "ready";
@@ -23,7 +23,7 @@ try {
         180_000,
     );
 
-    const source = await requestJson("http://127.0.0.1:4310/api/v1/sources", {
+    const source = await requestJson("http://127.0.0.1:14310/api/v1/sources", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -37,7 +37,7 @@ try {
     const sourceId = readString(source.body, "id");
     // 启用状态归计划（ADR-0023 决策 2）：写入口是计划端点，CAS 用计划的 revision。
     const activated = await requestJson(
-        `http://127.0.0.1:4310/api/v1/collection-plans/${encodeURIComponent(readString(source.body, "planId"))}`,
+        `http://127.0.0.1:14310/api/v1/collection-plans/${encodeURIComponent(readString(source.body, "planId"))}`,
         {
             method: "PATCH",
             headers: { "content-type": "application/json" },
@@ -50,7 +50,7 @@ try {
     assertStatus(activated, 200, "Docker RSS plan activation");
 
     const queued = await requestJson(
-        `http://127.0.0.1:4310/api/v1/sources/${sourceId}/runs`,
+        `http://127.0.0.1:14310/api/v1/sources/${sourceId}/runs`,
         {
             method: "POST",
             headers: { "idempotency-key": "docker-flow-rss-run" },
@@ -63,7 +63,7 @@ try {
         "Docker RSS Run succeeded",
         async () => {
             const result = await requestJson(
-                `http://127.0.0.1:4310/api/v1/runs/${runId}`,
+                `http://127.0.0.1:14310/api/v1/runs/${runId}`,
             );
             return (
                 result.status === 200 &&
@@ -75,7 +75,7 @@ try {
         500,
     );
     const feed = await requestJson(
-        "http://127.0.0.1:4310/api/v1/feed?limit=10",
+        "http://127.0.0.1:14310/api/v1/feed?limit=10",
     );
     assertStatus(feed, 200, "Docker RSS Feed");
     if (

@@ -46,6 +46,16 @@ export function withApiPortEnvironment(
     };
 }
 
+export function withModelConfigurationAuthoritiesEnvironment(
+    environment: NodeJS.ProcessEnv,
+    apiPort: number,
+): NodeJS.ProcessEnv {
+    return {
+        ...environment,
+        COSMOS_MODEL_CONFIGURATION_AUTHORITIES: `localhost:${apiPort},127.0.0.1:${apiPort}`,
+    };
+}
+
 export function withWebOriginEnvironment(
     environment: NodeJS.ProcessEnv,
     webPort: number,
@@ -56,6 +66,22 @@ export function withWebOriginEnvironment(
         ...environment,
         COSMOS_ALLOWED_ORIGIN: `http://localhost:${webPort}`,
     };
+}
+
+/**
+ * 单独启动 API（`bun run dev:api`）时也要有完整的写信任集合：缺任一项都会让所有
+ * 模型配置写请求变成 403，而读取仍然正常，看上去像网络故障。Web 端口没有编排可
+ * 依靠，只能取自 `COSMOS_WEB_PORT` 或默认 3000；浏览器换了端口就要重设该变量。
+ */
+export function withApiTrustEnvironment(
+    environment: NodeJS.ProcessEnv,
+    apiPort: number,
+    webPort: number,
+): NodeJS.ProcessEnv {
+    return withModelConfigurationAuthoritiesEnvironment(
+        withWebOriginEnvironment(environment, webPort),
+        apiPort,
+    );
 }
 
 async function isPortAvailable(port: number, host: string): Promise<boolean> {
