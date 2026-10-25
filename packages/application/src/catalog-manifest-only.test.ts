@@ -58,6 +58,18 @@ describe("EXT-008 manifest-only catalog", () => {
         expect(catalog.listSourceDefinitions()[0]?.capabilities).not.toContain("tampered");
     });
 
+    it("marks the retired agent invocation version as disabled while keeping its contract", () => {
+        const catalog = createBuiltinManifestCatalog();
+
+        // @1 的契约与 catalog 条目保留（Story 生成侧仍按这个端口注入），但没有进程注册它；
+        // status 是读方唯一能看到的信号，所以它必须与「谁真的注册了」一致。
+        expect(catalog.getActionDefinition("agent.invoke", 1)?.status).toBe("disabled");
+        expect(catalog.getActionDefinition("agent.invoke", 2)?.status).toBe("enabled");
+        expect(catalog.getActionDefinition("agent.invoke", 1)?.inputSchema.id).toBe(
+            "agent.invoke.input@1",
+        );
+    });
+
     it("keeps the executable registry out of the API process", () => {
         // 执行入口只存在于 Worker 组合根构造的 ConnectorRegistry；catalog 没有执行面。
         const catalog = createBuiltinManifestCatalog();

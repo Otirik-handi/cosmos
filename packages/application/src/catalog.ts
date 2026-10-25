@@ -452,6 +452,8 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             outputSchema: builtinSchema("collection-plan.checkpoint.output@1", { type: "object" }),
         },
         {
+            // 契约仍在（Story 生成侧按这个端口注入），但没有进程注册它：status 反映这一点，
+            // 避免 GET /action-definitions 的读方误以为可以直接 dispatch。
             id: "agent.invoke",
             version: 1,
             ref: "agent.invoke@1",
@@ -460,13 +462,13 @@ export function createBuiltinManifestCatalog(): StaticCatalog {
             effectMode: "external",
             executionPlacement: "trusted_worker",
             requiredCapabilities: ["agent:invoke"],
-            status: "enabled",
+            status: "disabled",
             inputSchema: builtinSchema("agent.invoke.input@1", { type: "object" }),
             outputSchema: builtinSchema("agent.invoke.output@1", { type: "object" }),
         },
         {
             // @2 的输入只有连接 ID；模型与凭证在执行时由 Worker 解析（API 0009）。
-            // 与 @1 并存，直到新路径完成真实服务验收后 @1 才退出。
+            // 真实服务验收已完成，Worker 只注册这个版本；@1 的条目保留但标为 disabled。
             id: "agent.invoke",
             version: 2,
             ref: "agent.invoke@2",

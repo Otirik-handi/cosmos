@@ -109,7 +109,7 @@ Fake Adapter 没有环境变量或外部配置。`agent.invoke@1` 的执行位�
 3. 已取消的 AbortSignal 进入 Fake Adapter 时，Action 结果使用 `cancelled` 且不可重试。
 4. 将 Agent Action 放入 Activity Worker 后，成功结果进入 completion；retryable dependency error 进入既有 `retry_wait`；Worker 不需要新的 Job 或 Lease owner。
 5. 输入、输出和 tool arguments 含 Date、Uint8Array、函数或其它非 JSON-safe 值时被拒绝。
-6. catalog 可读取 `agent.invoke@1` 的 manifest descriptor，但 descriptor 不包含 executable handler 或 Zod schema 对象。
+6. catalog 可读取 `agent.invoke@1` 的 manifest descriptor，但 descriptor 不包含 executable handler 或 Zod schema 对象。该条目 `status` 为 `disabled`（没有进程注册它），`agent.invoke@2` 为 `enabled`。
 
 ## 实现与测试锚点
 

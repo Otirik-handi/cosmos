@@ -2,7 +2,7 @@
 
 ## 状态
 
-当前实现规格；描述独立 `@cosmos/agent-pi-ai` package 的真实 `pi-ai` Adapter（固定的 `agent.invoke@1` 与按连接解析的 `agent.invoke@2`），以及按已接受 Proposal 显式启用的 Worker Action 组合。Worker 默认仍关闭 @1；profile 是单 Worker 非秘密配置，Connection ID 选择现有凭证。每次调用检查 Connection active/SecretRef 并通过 callback 读取 SecretStore；不把 connectorId 当模型 Provider。凭证回调不是强 lease 或内存擦除保证。@1 与 @2 均已通过真实最小 Provider 请求（HTTP 200，两次都走 Chat Completions）；这些 smoke 只证明单次链路可用，不覆盖生产可靠性或完整 Provider 行为。
+当前实现规格；描述独立 `@cosmos/agent-pi-ai` package 的真实 `pi-ai` Adapter（固定的 `agent.invoke@1` 与按连接解析的 `agent.invoke@2`），以及 Worker 无条件注册的 `agent.invoke@2` Action 组合。Worker 没有 Agent 部署 profile；每次调用校验 Connection active 与 Provider 的 SecretRef，并通过 callback 读取 SecretStore；不把 connectorId 当模型 Provider。凭证回调不是强 lease 或内存擦除保证。@1 与 @2 均已通过真实最小 Provider 请求（HTTP 200，两次都走 Chat Completions）；这些 smoke 只证明单次链路可用，不覆盖生产可靠性或完整 Provider 行为。
 
 ## 最后更新
 
@@ -88,7 +88,7 @@ Worker 没有 Agent 部署 profile：`COSMOS_AGENT_*` 已随 `agent.invoke@1` �
 
 Worker 无条件把 `agent.invoke@2` 注册到 Workflow Host，因为它的模型与凭证在调用时才解析，没有「启动期配置完整才可注册」的形态。每次调用重新读取指定 Connection 与 SecretStore；取消检查、状态非 active、没有选模型、Provider 非 active、无 SecretRef、读取异常或空值都阻止 SDK 调用。
 
-`agent.invoke@1` 的契约（`AgentInvocationPort`、输入输出 schema、`FakeAgentInvocationAdapter` 与 catalog 条目）仍然保留——Story 生成侧按这个端口注入，但 Worker 不再注册该 Action。那次真实验收用的装配留在 `.agents/tasks/39-pi-ai-adapter/connection-smoke.ts`，只为让证据可复现，不是生产注册路径。
+`agent.invoke@1` 的契约（`AgentInvocationPort`、输入输出 schema、`FakeAgentInvocationAdapter` 与 catalog 条目）仍然保留——Story 生成侧按这个端口注入，但 Worker 不再注册该 Action，因此 catalog 里该条目是 `status: "disabled"`（@2 是 `enabled`）。那次真实验收用的装配留在 `.agents/tasks/39-pi-ai-adapter/connection-smoke.ts`，只为让证据可复现，不是生产注册路径。
 
 已执行一次真实文本 smoke：provider `jijiapi`、model `gpt-6-luna`、OpenAI Chat Completions、`https://api-slb.jiji.cc/v1`，提示要求只回复 `READY`，调用 budget 的 `maxOutputTokens=64`。调用成功且输出未含 credential。SDK 返回 usage 报告 input 555、output 5、total 4400；其中 total 不等于 input+output，需视作 provider 计量语义未核实。该 smoke 不覆盖可靠性、生产部署、错误矩阵、工具执行、OAuth 或长时任务。它走的是已退役的环境变量凭证链路，只作为历史记录保留；`@1` 与 `@2` 各一次按 Connection/SecretRef 解析的真实请求见 [Task 39 第九册](../../../.agents/tasks/39-pi-ai-adapter/walkthrough-provider-model-09.md)。
 

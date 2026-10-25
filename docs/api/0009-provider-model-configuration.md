@@ -96,7 +96,7 @@ Connection 端点增量（首个消费者：现有连接面板；错误沿用上
 
 新增 `agent.invoke@2`：输入 connectionId/messages/tools/budget/metadata，不再接收 provider/model/API/baseUrl/secretRef/key；输出沿用实际 provider/model 与 usage 结构。Worker 按次读取 active Connection、模型和 Provider 的一致配置快照，再读取该 Provider key，取消后不读 key、不调用 SDK。一次调用固定快照，之后修改影响后续调用；没有强 lease 或撤销已发请求保证。预算不得超模型上限，两种生成 API 独立执行、不回退。实现落在 `packages/application/src/agent-invocation-v2.ts`（Action 定义 + 端口）、`packages/storage-prisma/src/agent-model-resolver.ts`（一次读取连接/模型/Provider）、`packages/agent-pi-ai/src/invocation-v2.ts`（按连接构造模型并调用）与 `apps/worker/src/agent-action-v2.ts`（无条件注册的 Worker Action）。
 
-`@1` 公共合同与历史证据保留；Worker 侧旧生产注册已退出——`COSMOS_AGENT_*` 不再被读取，`agent.invoke@1` 只作为 Story 生成侧复用的端口与输入输出契约存在，不再有进程注册它。不同时提供回退。生产者/消费者清单：application Action definition/catalog、adapter、Workflow Host 测试、Task39 runner/test；`apps/worker/src/main.ts` 现在只注册 `agent.invoke@2`，`apps/worker/src/agent-action.ts` 与 `config.ts` 的 Agent profile 已删除。迁移 runner 调用必须新单独验收，不能把历史 QmVMec 改写为 @2 证据。`@2` 首个可信消费者是现有 Workflow Host，不新增任意 HTTP 模型执行入口或第二运行时。
+`@1` 公共合同与历史证据保留；Worker 侧旧生产注册已退出——`COSMOS_AGENT_*` 不再被读取，`agent.invoke@1` 只作为 Story 生成侧复用的端口与输入输出契约存在，不再有进程注册它。catalog 因此把它标为 `status: "disabled"`：这个字段只是可读声明，不参与 dispatch 判定（`GET /action-definitions` 原样投影它），`enabled` 状态留给真正注册了的 Action。不同时提供回退。生产者/消费者清单：application Action definition/catalog、adapter、Workflow Host 测试、Task39 runner/test；`apps/worker/src/main.ts` 现在只注册 `agent.invoke@2`，`apps/worker/src/agent-action.ts` 与 `config.ts` 的 Agent profile 已删除。迁移 runner 调用必须新单独验收，不能把历史 QmVMec 改写为 @2 证据。`@2` 首个可信消费者是现有 Workflow Host，不新增任意 HTTP 模型执行入口或第二运行时。
 
 ## 发现任务与网络边界
 
