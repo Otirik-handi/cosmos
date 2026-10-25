@@ -1,7 +1,7 @@
 # Task 39 过程续篇：Provider/model 产品配置
 
-> 本册只保留目标、差距、实施顺序与验收门禁；B2b 的落地证据在 `walkthrough-provider-model-08.md`。
-> 同系列：`walkthrough-provider-model.md`（本篇）、`walkthrough-provider-model-02.md`、`walkthrough-provider-model-04.md`、`walkthrough-provider-model-06.md`、`walkthrough-provider-model-07.md`、`walkthrough-provider-model-08.md`。
+> 本册只保留目标、差距、实施顺序与验收门禁；B2b 的落地证据在 `walkthrough-provider-model-08.md`，`agent.invoke@2` 的真实请求证据在 `walkthrough-provider-model-09.md`。
+> 同系列：`walkthrough-provider-model.md`（本篇）、`walkthrough-provider-model-02.md`、`walkthrough-provider-model-04.md`、`walkthrough-provider-model-06.md`、`walkthrough-provider-model-07.md`、`walkthrough-provider-model-08.md`、`walkthrough-provider-model-09.md`。
 
 后续进展：[安全读取与后续产品接线](walkthrough-provider-model-02.md)。
 
@@ -76,6 +76,14 @@
 - 验收：每次读取新关联，轮换/撤销/删除/不匹配均 fail closed；缺配置不回退旧 profile/环境/Fake；两种 API、取消、预算与无泄漏通过隔离链路。
 - main 混有 Task 40 repository.blobs 改动，只允许经逐行核对的 Agent 区域增量；不能整体替换。
 - 退出只移除已无消费者的旧部署模型字段和注册路径，保留默认关闭及一般 Worker 行为；不删除旧凭证或验收根。若发现仍有消费者，记录阻塞，不做双轨 fallback。
+
+**已执行（2026-10-25）**。前置的真实服务验收在两次 HTTP 200 后满足（见 [第九册](walkthrough-provider-model-09.md)），于是：
+
+- 删除 `apps/worker/src/agent-action.ts` 与 `agent-action.test.ts`；`config.ts` 去掉 `WorkerAgentConfig`、`WorkerRuntimeConfig.agent`、`parseWorkerAgentConfig` 与只服务它的 `parseRequiredPositiveInteger`，保留注释说明 `COSMOS_AGENT_*` 现在被静默忽略（升级部署里还留着也要能起）。
+- `main.ts` 的 actions 数组只剩无条件注册的 `agent.invoke@2`；Admin manifest 的 actionEvidence 由 `actions.descriptors()` 驱动，因此自动不再列 `agent.invoke@1`。
+- **没有**退役 `agent.invoke@1` 的契约层：`AgentInvocationPort`、输入/输出 schema、`FakeAgentInvocationAdapter` 与 catalog 条目都还在，因为 `packages/application/src/story-agent.ts` 按这个端口注入（Task 40 尚未接入生产）。catalog 里 `agent.invoke@1` 仍是 `enabled`，但已没有进程注册它——这是「契约保留、执行者退出」的已知不一致，记录在此，不做双轨 fallback。
+- 那次 `@1` 真实验收的装配（凭证按次读取、连接/SecretRef 校验、取消与 fail closed）留在 `.agents/tasks/39-pi-ai-adapter/connection-smoke.ts` 的 `createTask39AgentAction`，只为复现证据；对应的 8 项 fail-closed 用例迁进 `connection-smoke.test.ts` 的 `Task 39 @1 evidence action composition`。
+- 未删任何旧凭证、验收根或 `.cosmos/` 数据。
 
 ## 测试路线与验证门禁
 
@@ -157,6 +165,12 @@ bun run vitest run packages/storage-prisma/src/provider-model-migration.test.ts
 - 补强后最终聚焦命令仍为 `bun run vitest run packages/storage-prisma/src/provider-model-migration.test.ts`：1 文件 2/2 通过（14.29 秒，退出 0）。最终保留根 `.agent/tmp/task39-provider-model-migration-ACVzty`（fresh）、`.agent/tmp/task39-provider-model-migration-HKbk5k`（legacy）。另已通过隔离库 `foreign_key_check` 与 `integrity_check`。
 - 本切片只新增数据库结构和隔离验证，无新运行时回退或双重凭证所有者；复杂度范围仍为单一迁移测试。证据置信度 B：真实隔离 SQL 目标验证通过，但未生成客户端，未证明 ORM、并发锁、凭证协调、API/UI、Worker 新链路或整体 Task39 完成。
 
+## `@2` 连接作用域 smoke
+
+runner 的三个 `@2` 模式、四次真实外呼的取证与结论、以及完成条件 ③ 的 `@2` 成功证据，见[本续篇（九）](walkthrough-provider-model-09.md)。结论：前三次 400 是终端粘贴损坏的凭证而非代码缺陷，第四次用正确凭证在 `.agent/tmp/task39-real-v2-YQqFPF` 上拿到 `responseStatus: 200`。
+
 ## 当前未运行与下一步
 
-A 为目标设计完成，不等于 API 已上线；B1 的 3 文件 11 项测试、contracts 类型检查已通过。B2a 隔离迁移最终 2/2 GREEN，独立静态审查已回收。后续经单独批准完成锁可行性实验，并批准 B2b-1 内部组件接入，进展见下一节；本段此前的“先申请锁实验”建议已被这些批准及新鲜证据取代。产品仓储、凭证协调、API、网络策略、UI、Worker 新路径仍未实现或验证。validate/generate、storage 全包类型检查、构建、全仓测试、浏览器、默认数据库升级和本产品路径真实请求未运行。不新增提交，不清理保留的隔离根。
+A 为目标设计完成，不等于 API 已上线；B2a 隔离迁移 2/2 GREEN，B2b-1 内部组件接入已批准。至本次收口，原本「未运行」的几项已有证据：`bun run test:browser:component-lab` 全量 45 passed（`connection-panel` 9 项含新增模型单选 5 项）、`bun run vitest run apps/web` 21 文件 146 项、全量 `bun run vitest run` **198 文件 1134 项**、`.agents/tasks/39-pi-ai-adapter` 2 文件 40 项（含从已删除的 `agent-action.test.ts` 迁入的 8 项 `@1` fail-closed）、`bun run docs:check` 0 失败、完成条件 ③ 的两半真实请求。F 切片已执行：Worker 不再读 `COSMOS_AGENT_*`、不再注册 `agent.invoke@1`，`apps/worker/src/agent-action.ts` 与其测试已删除。仍**未运行**：`bun run build`、默认数据库升级、生产部署。
+
+代码体积治理本轮**没有**拆任何文件：`apps/web/src/components/cosmos/connection-panel.tsx`（34.22 KB）、`packages/storage-prisma/src/workflow-host-store/activity-store.ts`（30.71 KB）、`packages/application/src/workflow-host-runtime.test.ts`（32.57 KB / 915 行）已按维护者裁决登记进 [拆账台账](../governance/split-backlog.md)，拆文件需单独开治理 Task；其中第三项在 `origin/master` 上就已 31.44 KB，与本轮无关。

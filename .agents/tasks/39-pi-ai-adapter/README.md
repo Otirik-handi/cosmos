@@ -49,8 +49,8 @@
 - 已确认调用边界：`complete()` 一次调用；工具只映射为 SDK tool 描述，不执行工具。
 - 受影响合同：新增独立 package API；既有 `AgentInvocationPort`、`agent.invoke@1` 和 Workflow Host durable truth 不变。
 - 无新增持久化、HTTP endpoint、Prisma migration 或第二 runtime（仅描述 Adapter 历史切片；Provider/model 扩展已新增 Prisma migration、Product API 与 Web 模型页，见下节）。
-- Worker 配置由 `apps/worker/src/config.ts` 解析；只在 `COSMOS_AGENT_ENABLED=true` 且 provider/model/API/baseURL/context/output limits/Connection ID 完整时加入 `agent.invoke@1`，默认关闭。
-- 每次调用从配置 Connection 重新读取 active 状态与 SecretRef，再从 SecretStore 读取凭证并只在 callback 内传给 pi-ai；不使用环境变量或 Fake fallback。模型与 provider profile 按用户配置构造；部署者负责确认 Connection 凭证适用于所选 Provider。
+- Worker 配置由 `apps/worker/src/config.ts` 解析。**F 切片已退出旧部署 profile**：Worker 不再读 `COSMOS_AGENT_*`、不再注册 `agent.invoke@1`，只无条件注册按连接解析的 `agent.invoke@2`；旧的 `WorkerAgentConfig`、`parseWorkerAgentConfig` 与 `apps/worker/src/agent-action.ts` 已删除，升级后的部署即使还留着这些环境变量也照常启动。
+- 每次调用从 Connection 重新解析模型、Provider 与 SecretRef，再从 SecretStore 读取凭证并只在 callback 内传给 pi-ai；不使用环境变量或 Fake fallback。那次 `@1` 真实验收的等价装配留在 `connection-smoke.ts` 的 `createTask39AgentAction`，只为复现证据，不是生产注册路径。
 
 ## Implementation Slices
 
@@ -84,6 +84,20 @@
 用户已整体接受 [Provider/model 配置与 Connection 选择提案](../../../docs/proposals/connection-credential-entry-v1.md)。本 Task 复用相同 Adapter/Worker 凭证链路承接新产品配置，不新建任务编号；原 Scope/Non-goals 描述 Adapter 历史切片，不是对本次扩展的隐式否决。
 
 新范围为 Provider/model 管理、Provider-owned SecretStore 凭证、模型型 Connection 单选及对应 Worker 消费。已落地：模型页的 Provider/模型创建与编辑、Provider 删除（事务内引用检查、被引用返回 409 `in_use`、无引用则一并删除模型与本地凭证）、凭证写入与清理补偿、同步模型发现、模型型 Connection 选择、`agent.invoke@2` 与 Worker 注册，整条流程有一条隔离端到端验收。不再实现：编辑 Provider 前的受影响连接查询端点（界面用连接列表与模型列表自行聚合，代价是它只是界面提示、不构成服务端保证）。逐条实现状态见 [API Draft](../../../docs/api/0009-provider-model-configuration.md) 的路由表。公共接口、schema 写入边界及旧配置退出按[过程续篇](walkthrough-provider-model.md)逐切片冻结。迁移执行、现有数据/凭证处置和每次真实请求仍需单独授权；Task 40、默认数据库、备份和 Git lifecycle 不在范围内。
+
+## `agent.invoke@2` 连接作用域 smoke（已外呼四次，最后一次通过）
+
+`connection-smoke.ts` 原有三种模式只覆盖 `agent.invoke@1`（计划写死 `provider`/`model`，连接自带 `secretRef`）。@2 的请求形状不同——调用方只给 `connectionId`——因此并列一套同等级保护的模式，旧计划与旧根的字节保持不变：
+
+- `offline-v2`：在隔离数据库里按产品路径造数（`ModelProviderCredentials` 写 Provider 凭证 → `ConfiguredModels` 建模型 → `createConnection` 建 `cosmos.agent` 连接），再用假 SDK 跑 `agent.invoke@2`。断言模型、地址与凭证全部来自连接解析结果、调用方预算被模型上限压回 64、删除凭证与撤销连接都在解析阶段失败关闭且不再触达 SDK。
+- `prepare-real-v2`：只生成隔离根与 `request-plan-v2.json`（`mode: "real-v2"`），不读凭证、不联网。根前缀 `task39-real-v2-`，与 @1 的 `task39-real-` 互不接受。
+- `real-v2 <prepared-root>`：与 `real` 相同的保护（TTY + 手打 `APPROVED` + 无回显凭证、单次传输、`redirect=error`、SDK 日志 off、300000ms 调用预算、305000ms 信号预算、诊断只记固定阶段与状态码）。
+
+**已外呼四次**。前三次（两次 `real-v2`：根 `.agent/tmp/task39-real-v2-35s4PY` 分类 `malformed_payload`、`.agent/tmp/task39-real-v2-hfdrrF` 分类 `invalid_configuration`；一次隔离用的 `real`：根 `.agent/tmp/task39-real-ppWAKt`）各 1 次传输、服务商均 HTTP 400、凭证均已删、都没有 `result.json`；原因是**粘进终端的凭证不是原始字节**，由维护者直连同一条 URL 得到 200 与两个一次性探针确认，不是请求形状或 `@1`/`@2` 管道的问题。据此新增 `assertUsableCredential`：空串、含空白或非 ASCII 的凭证在 `credential_input` 阶段失败（`transportSends: 0`），不再花一次真实请求换回一个无法解释的 400。
+
+**第四次通过**：根 `.agent/tmp/task39-real-v2-YQqFPF`，`result.json` 记 `status: "completed"`、`provider: "provider-task39-v2"`、`model: "gpt-6-luna"`、`outputMatchesExpected: true`、`credentialAbsentFromOutput: true`、`secretReads: 1`、`responseStatus: 200`、`providerBodyRecorded: false`；`diagnostic.json` 记 1 次传输、`firstFailure: null`、`secretDelete`/`disconnect` 均完成。这证明连接作用域解析（模型、地址、凭证全部按 Connection → Model → Provider → SecretStore 在服务端解析）真的能打通；不覆盖 UI 凭证录入、其它 Provider、OAuth、工具执行、流式结果、常驻调度与生产部署。逐条证据见 [本续篇（九）](walkthrough-provider-model-09.md) 的「三次 400」与「第四次外呼」。
+
+已生成的 @2 准备根、离线结果与四次外呼的诊断记录在 [本续篇（九）](walkthrough-provider-model-09.md)。
 
 ## Follow-ups
 
