@@ -1,117 +1,31 @@
-import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { closeSync, openSync } from "node:fs";
-import type { Readable } from "node:stream";
 import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
-import { ActionRegistry, type LoggerPort } from "@cosmos/application";
-import type { PiAiClient } from "@cosmos/agent-pi-ai";
-import { agentInvocationOutputSchema } from "@cosmos/contracts";
+import {
+    ActionRegistry, ActionExecutionError, createAgentInvocationAction,
+    type AgentInvocationContext, type RegisteredAction,
+} from "@cosmos/application";
+import {
+    PiAiAgentInvocationAdapter, createPiAiOpenAICompletionsModel,
+    type PiAiClient, type PiAiCredentialResolver,
+} from "@cosmos/agent-pi-ai";
+import { agentInvocationOutputSchema, type ConnectionInstance } from "@cosmos/contracts";
 import { PrismaCosmosRepository } from "@cosmos/storage-prisma";
-import { resolvePrismaCliPath } from "../../../packages/storage-prisma/src/prisma-cli.js";
-import { createWorkerAgentAction } from "../../../apps/worker/src/agent-action.js";
+import {
+    ISOLATION_PARENT, ROOT_PREFIX, SNAPSHOT_COMMIT, SYNTHETIC_CREDENTIAL,
+    assertUsableCredential, createCountingLogger, createSafeDiagnostics, model, prepareDatabase, provider,
+    readCredentialWithoutEcho, secretRef, validateRunnerInvocation, withBoundedProviderTransport,
+} from "./connection-smoke-harness.js";
+import {
+    prepareRealSmokeV2, runOfflineV2Smoke, runRealSmokeV2,
+} from "./connection-smoke-v2.js";
 
-const repositoryRoot = resolve(import.meta.dirname, "../../..");
-const snapshotPath = "packages/storage-prisma/prisma";
-const provider = "jijiapi";
-const model = "gpt-6-luna";
-const secretRef = "secret:task39-connection-smoke";
-export const SNAPSHOT_COMMIT = "62c8624d061e6ae9624bbe362785e558a9ac7348";
-export const SYNTHETIC_CREDENTIAL = "task39-synthetic-offline-only";
-export const ISOLATION_PARENT = join(repositoryRoot, ".agent/tmp");
-export const ROOT_PREFIX = "task39-offline-";
+// 隔离、终端与诊断边界在 harness 里；`@1` 与 `@2` 的请求计划、造数和 runner 各自成文件，
+// 这样两套验收互不改写对方的计划字节，也各自留在体积警戒线内。
 
-// This helper is retained for a separately approved real-terminal acceptance step.
-export function validateRunnerInvocation(input: {
-    args: readonly string[];
-    environment: NodeJS.ProcessEnv;
-    inputIsTTY: boolean;
-    outputIsTTY: boolean;
-}): void {
-    if (input.args.length !== 0) throw new Error("This runner accepts no command-line arguments.");
-    if (input.environment.COSMOS_TEST_API_KEY !== undefined || input.environment.COSMOS_AGENT_API_KEY !== undefined) {
-        throw new Error("Credential environment variables are not accepted by this runner.");
-    }
-    if (!input.inputIsTTY || !input.outputIsTTY) {
-        throw new Error("A real interactive terminal is required; no credential was read.");
-    }
-}
-
-export async function readCredentialWithoutEcho(input: Readable & {
-    isTTY?: boolean;
-    setRawMode?: (enabled: boolean) => void;
-}, outputIsTTY: boolean): Promise<string> {
-    if (!input.isTTY || !outputIsTTY || typeof input.setRawMode !== "function") {
-        throw new Error("A real interactive terminal is required; no credential was read.");
-    }
-    input.setRawMode(true);
-    input.resume();
-    const chunks: string[] = [];
-    let onData: ((chunk: Buffer) => void) | undefined;
-    let onEnd: (() => void) | undefined;
-    try {
-        return await new Promise<string>((resolveCredential, reject) => {
-            onData = (chunk: Buffer) => {
-                for (const character of chunk.toString("utf8")) {
-                    if (character === "\u0003") {
-                        reject(new Error("Credential entry cancelled."));
-                        return;
-                    }
-                    if (character === "\r" || character === "\n") {
-                        resolveCredential(chunks.join(""));
-                        return;
-                    }
-                    if (character === "\u007f" || character === "\b") chunks.pop();
-                    else chunks.push(character);
-                }
-            };
-            onEnd = () => reject(new Error("Credential input ended before submission."));
-            input.on("data", onData);
-            input.once("end", onEnd);
-        });
-    } finally {
-        if (onData) input.off("data", onData);
-        if (onEnd) input.off("end", onEnd);
-        input.setRawMode(false);
-        input.pause();
-        chunks.fill("");
-    }
-}
-
-// File descriptors avoid the Windows sandbox's named-pipe subprocess boundary.
-function runToFile(command: string, args: string[], output: string, cwd: string, env?: NodeJS.ProcessEnv): void {
-    const descriptor = openSync(output, "w");
-    try {
-        const result = spawnSync(command, args, { cwd, env, stdio: ["ignore", descriptor, "ignore"] });
-        if (result.error || result.status !== 0) throw new Error("Isolated subprocess failed; details suppressed.");
-    } finally {
-        closeSync(descriptor);
-    }
-}
-
-export async function exportFrozenSnapshot(root: string): Promise<{
-    schemaPath: string;
-    manifest: Array<{ path: string; sha256: string }>;
-}> {
-    const listing = join(root, "snapshot-paths.txt");
-    runToFile("git", ["ls-tree", "-r", "--name-only", SNAPSHOT_COMMIT, snapshotPath], listing, repositoryRoot);
-    const paths = (await readFile(listing, "utf8")).trim().split(/\r?\n/);
-    if (paths.filter((path) => path.endsWith("/migration.sql")).length !== 42) {
-        throw new Error("Frozen migration count changed.");
-    }
-    const manifest: Array<{ path: string; sha256: string }> = [];
-    for (const path of paths) {
-        if (!path.startsWith(`${snapshotPath}/`) || path.includes("..")) throw new Error("Invalid snapshot path.");
-        const destination = join(root, "schema-snapshot", path);
-        await mkdir(dirname(destination), { recursive: true });
-        runToFile("git", ["show", `${SNAPSHOT_COMMIT}:${path}`], destination, repositoryRoot);
-        manifest.push({ path, sha256: createHash("sha256").update(await readFile(destination)).digest("hex") });
-    }
-    await writeFile(join(root, "snapshot-manifest.json"), JSON.stringify({ commit: SNAPSHOT_COMMIT, files: manifest }, null, 4));
-    return { schemaPath: join(root, "schema-snapshot", snapshotPath, "schema.prisma"), manifest };
-}
+export * from "./connection-smoke-harness.js";
+export * from "./connection-smoke-v2.js";
 
 export function createOfflineClient(): PiAiClient {
     return {
@@ -132,19 +46,77 @@ export function createOfflineClient(): PiAiClient {
     };
 }
 
+/**
+ * `agent.invoke@1` 的连接绑定装配。Worker 已不再注册 `@1`（模型与凭证改由调用时的
+ * Connection 解析），这里保留一份等价装配只为让这次真实验收仍可复现：凭证按次从
+ * SecretStore 读取，连接缺失、非活动、无 SecretRef、provider 不匹配或读取失败都
+ * fail closed。装配留在验收脚本里，不再作为生产注册路径存在。
+ */
+export function createTask39AgentAction(dependencies: {
+    connections: { getConnection(connectionId: string): Promise<ConnectionInstance | null> };
+    secrets: { readonly read: (secretRef: string) => Promise<string | null> };
+    config: { baseUrl: string; connectionId: string };
+    client?: PiAiClient;
+}): RegisteredAction {
+    const credentials: PiAiCredentialResolver = {
+        withCredential: async <T>(
+            invokedProvider: string,
+            context: AgentInvocationContext,
+            use: (credential: string) => Promise<T>,
+        ): Promise<T> => {
+            if (context.signal.aborted) throw cancelled();
+            const connection = await dependencies.connections.getConnection(dependencies.config.connectionId);
+            if (context.signal.aborted) throw cancelled();
+            if (!connection || connection.id !== dependencies.config.connectionId ||
+                connection.status !== "active" || !connection.secretRef) {
+                throw new ActionExecutionError("authentication_required",
+                    "The configured Agent connection is missing, inactive, or has no credential.", false);
+            }
+            if (invokedProvider !== provider) {
+                throw new ActionExecutionError("authentication_required",
+                    "The configured Agent connection does not match this provider invocation.", false);
+            }
+            let credential: string | null;
+            try {
+                credential = await dependencies.secrets.read(connection.secretRef);
+            } catch {
+                if (context.signal.aborted) throw cancelled();
+                throw new ActionExecutionError("authentication_required",
+                    "The configured Agent connection credential could not be loaded.", false);
+            }
+            if (context.signal.aborted) throw cancelled();
+            if (credential === null || credential.trim().length === 0) {
+                throw new ActionExecutionError("authentication_required",
+                    "The configured Agent connection has no stored credential.", false);
+            }
+            try {
+                return await use(credential);
+            } finally {
+                credential = null;
+            }
+        },
+    };
+    return createAgentInvocationAction(new PiAiAgentInvocationAdapter({
+        credentials,
+        model: createPiAiOpenAICompletionsModel({
+            provider, model, name: model, baseUrl: dependencies.config.baseUrl,
+            contextWindow: 262_144, maxTokens: 64,
+        }),
+        client: dependencies.client,
+    }));
+}
+
+function cancelled(): ActionExecutionError {
+    return new ActionExecutionError("cancelled", "Agent invocation was cancelled.", false);
+}
+
 export async function dispatchInvocation(repository: PrismaCosmosRepository, connectionId: string, client?: PiAiClient,
     baseUrl = "https://task39.invalid/v1", credential = SYNTHETIC_CREDENTIAL) {
     let secretReads = 0;
-    const action = createWorkerAgentAction({
-        provider, model, api: "openai-completions", baseUrl,
-        contextWindow: 262_144, maxOutputTokens: 64, connectionId,
-    }, {
+    const action = createTask39AgentAction({
         connections: repository,
-        secrets: {
-            put: (ref, value) => repository.secrets.put(ref, value),
-            delete: (ref) => repository.secrets.delete(ref),
-            read: (ref) => { secretReads += 1; return repository.secrets.read(ref); },
-        },
+        secrets: { read: (ref) => { secretReads += 1; return repository.secrets.read(ref); } },
+        config: { baseUrl, connectionId },
         client,
     });
     const output = agentInvocationOutputSchema.parse(await new ActionRegistry([action]).dispatch("agent.invoke@1", {
@@ -156,29 +128,6 @@ export async function dispatchInvocation(repository: PrismaCosmosRepository, con
         outputMatchesExpected: output.content === "OK", credentialAbsentFromOutput: true, secretReads };
 }
 
-async function prepareDatabase(root: string) {
-    const { schemaPath, manifest } = await exportFrozenSnapshot(root);
-    const databaseUrl = `file:${join(root, "cosmos.sqlite").replaceAll("\\", "/")}`;
-    // No inherited credentials or ambient DATABASE_URL reach the migration process.
-    runToFile(process.execPath, [resolvePrismaCliPath(), "migrate", "deploy", "--schema", schemaPath],
-        join(root, "migration.log"), root, {
-            PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: root, TMP: root,
-            DATABASE_URL: databaseUrl, PRISMA_HIDE_UPDATE_MESSAGE: "1", CHECKPOINT_DISABLE: "1",
-        });
-    const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
-    try {
-        const migrations = await prisma.$queryRawUnsafe<Array<{ migration_name: string }>>(
-            'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name',
-        );
-        const expected = manifest.filter((item) => item.path.endsWith("/migration.sql"))
-            .map((item) => item.path.split("/").at(-2));
-        if (JSON.stringify(migrations.map((item) => item.migration_name)) !== JSON.stringify(expected)) {
-            throw new Error("Deployed migrations do not match the frozen manifest.");
-        }
-        return { databaseUrl, migrationCount: migrations.length };
-    } finally { await prisma.$disconnect(); }
-}
-
 export async function runOfflineSmoke() {
     await mkdir(ISOLATION_PARENT, { recursive: true });
     const root = await mkdtemp(join(ISOLATION_PARENT, ROOT_PREFIX));
@@ -186,13 +135,7 @@ export async function runOfflineSmoke() {
     const { databaseUrl, migrationCount } = await prepareDatabase(root);
     const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
     const logs: unknown[] = [];
-    const logger: LoggerPort = {
-        child: () => logger, withContext: (_context, callback) => callback(),
-        debug: (event, fields) => { logs.push({ event, fields }); },
-        info: (event, fields) => { logs.push({ event, fields }); },
-        warn: (event, fields) => { logs.push({ event, fields }); },
-        error: (event, fields) => { logs.push({ event, fields }); },
-    };
+    const logger = createCountingLogger(logs);
     const repository = new PrismaCosmosRepository({ dataRoot: root, prisma, logger });
     try {
         await repository.initialize();
@@ -220,33 +163,6 @@ export async function runOfflineSmoke() {
     }
 }
 
-// The standalone CLI owns these globals only until its single SDK invocation settles.
-export async function withBoundedProviderTransport<T>(use: () => Promise<T>, transport = globalThis.fetch,
-    onSend: () => void = () => undefined, onResponse: (response: Response) => void = () => undefined): Promise<T> {
-    const previousFetch = globalThis.fetch;
-    const previousLog = process.env.OPENAI_LOG;
-    let sent = false;
-    process.env.OPENAI_LOG = "off";
-    globalThis.fetch = async (input, init) => {
-        const url = input instanceof Request ? input.url : String(input);
-        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-        if (sent || url !== "https://api-slb.jiji.cc/v1/chat/completions" || method.toUpperCase() !== "POST") {
-            throw new Error("Task 39 transport rejected the request.");
-        }
-        sent = true;
-        onSend();
-        const response = await transport(input, { ...init, redirect: "error" });
-        onResponse(response);
-        return response;
-    };
-    try { return await use(); }
-    finally {
-        globalThis.fetch = previousFetch;
-        if (previousLog === undefined) delete process.env.OPENAI_LOG;
-        else process.env.OPENAI_LOG = previousLog;
-    }
-}
-
 export function requestPlan(root: string) {
     return { mode: "real", isolatedRoot: root, snapshotCommit: SNAPSHOT_COMMIT,
         provider, model, api: "openai-completions", baseUrl: "https://api-slb.jiji.cc/v1",
@@ -267,48 +183,14 @@ export async function prepareRealSmoke() {
 export async function validatePreparedRoot(root: string): Promise<string> {
     const resolved = await realpath(root);
     const parent = await realpath(ISOLATION_PARENT);
-    if (dirname(resolved) !== parent || !resolved.startsWith(join(parent, "task39-real-"))) {
+    // `task39-real-` also prefixes the `@2` roots (`task39-real-v2-`), so the narrower prefix
+    // has to be excluded here rather than relying on a missing plan file to fail closed.
+    if (dirname(resolved) !== parent || !/^task39-real-(?!v2-)/.test(basename(resolved))) {
         throw new Error("Only the prepared Task 39 real root is accepted.");
     }
     const plan = JSON.parse(await readFile(join(resolved, "request-plan.json"), "utf8")) as unknown;
     if (JSON.stringify(plan) !== JSON.stringify(requestPlan(resolved))) throw new Error("Request plan changed.");
     return resolved;
-}
-
-type DiagnosticStage = "credential_input" | "database_initialize" | "connection_create" |
-    "secret_write" | "dispatch" | "result_write" | "secret_delete" | "disconnect";
-type SafeFailureCategory = "aborted" | "authentication_required" | "rate_limited" | "timeout" |
-    "dependency_unavailable" | "malformed_payload" | "operation_failed";
-
-function safeFailureCategory(error: unknown): SafeFailureCategory {
-    if (error instanceof Error && error.name === "AbortError") return "aborted";
-    if (typeof error === "object" && error !== null && "code" in error) {
-        const code = error.code;
-        if (code === "authentication_required" || code === "rate_limited" || code === "timeout" ||
-            code === "dependency_unavailable" || code === "malformed_payload") return code;
-    }
-    return "operation_failed";
-}
-
-export function createSafeDiagnostics() {
-    const record = { version: 1, status: "running" as "running" | "completed" | "failed",
-        stage: "credential_input" as DiagnosticStage, transportSends: 0,
-        response: { returned: false, status: null as number | null },
-        firstFailure: null as null | { stage: DiagnosticStage; category: SafeFailureCategory },
-        cleanup: { secretDelete: "not_started", disconnect: "not_started" } };
-    return {
-        record,
-        async step<T>(stage: DiagnosticStage, use: () => Promise<T>): Promise<T> {
-            record.stage = stage;
-            try { return await use(); }
-            catch (error) {
-                // Only fixed categories cross the diagnostic boundary; never serialize the error.
-                record.firstFailure ??= { stage, category: safeFailureCategory(error) };
-                record.status = "failed";
-                throw error;
-            }
-        },
-    };
 }
 
 export async function runRealSmoke(root: string) {
@@ -330,14 +212,12 @@ export async function runRealSmoke(root: string) {
     try {
         credential = await diagnostics.step("credential_input", async () => {
             const value = await readCredentialWithoutEcho(process.stdin, true);
-            if (!value.trim()) throw new Error("Empty credential.");
-            return value;
+            // A stray trailing space or newline makes the Authorization header invalid; the
+            // provider then answers 400 and the diagnostic only shows a status code.
+            return assertUsableCredential(value.trim());
         });
         process.stdout.write("\n");
-        let logEvents = 0;
-        const logger: LoggerPort = { child: () => logger, withContext: (_context, callback) => callback(),
-            debug: () => { logEvents += 1; }, info: () => { logEvents += 1; },
-            warn: () => { logEvents += 1; }, error: () => { logEvents += 1; } };
+        const logger = createCountingLogger();
         repository = await diagnostics.step("database_initialize", async () => {
             prisma = new PrismaClient({ datasources: { db: {
                 url: `file:${join(prepared, "cosmos.sqlite").replaceAll("\\", "/")}`,
@@ -361,7 +241,7 @@ export async function runRealSmoke(root: string) {
                 responseStatus = response.status;
                 diagnostics.record.response = { returned: true, status: response.status };
             }));
-        const result = { status: "completed", mode: "real", isolatedRoot: prepared, ...summary, logEvents,
+        const result = { status: "completed", mode: "real", isolatedRoot: prepared, ...summary, logEvents: logger.count(),
             responseStatus, responseReturned, providerBodyRecorded: false, retained: true };
         await diagnostics.step("result_write", () => writeFile(join(prepared, "result.json"), JSON.stringify(result, null, 4)));
         diagnostics.record.status = "completed";
@@ -394,7 +274,11 @@ export async function runCli(args: readonly string[]) {
     if (args.length === 0) return runOfflineSmoke();
     if (args.length === 1 && args[0] === "prepare-real") return prepareRealSmoke();
     if (args.length === 2 && args[0] === "real") return runRealSmoke(args[1]!);
-    throw new Error("Expected no arguments, prepare-real, or real <prepared-root>; credentials are never arguments.");
+    if (args.length === 1 && args[0] === "offline-v2") return runOfflineV2Smoke();
+    if (args.length === 1 && args[0] === "prepare-real-v2") return prepareRealSmokeV2();
+    if (args.length === 2 && args[0] === "real-v2") return runRealSmokeV2(args[1]!);
+    throw new Error("Expected no arguments, prepare-real, real <prepared-root>, offline-v2, " +
+        "prepare-real-v2, or real-v2 <prepared-root>; credentials are never arguments.");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
