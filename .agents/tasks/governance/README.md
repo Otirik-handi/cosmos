@@ -31,6 +31,9 @@
 
 ## 待治理候选(编号未分配,待维护者裁决)
 
+> 拆分待办台账：[`split-backlog.md`](split-backlog.md)（2026-10-23 实测，含当前阻塞 CI 的 4 个文件、基线内继续增长的 5 个文件与建议接缝）。下方表格是 2026-09-24 的排名，**已被台账取代**，仅保留作历史口径对照。
+
+
 确认时间 2026-09-14,依据 `docs/proposals/code-size-governance-v1.md` §4.1 阈值(源码/测试 >800 行 或 >50 KB;入口文件 >300 行)。脚本门禁当前只按字节/token 判红线,行数越界不拦,故候选含门禁未报的对象。
 
 **实测排名(P 与 N 的完整表格、D 口径问题)见 [`G05-application/README.md`](G05-application/README.md) 的「评分与选型依据」**——同一证据不在两处维护。分配现状:G05 取 `packages/application`;G06 取 `contracts`、`page.tsx`、`story-panel.tsx`。

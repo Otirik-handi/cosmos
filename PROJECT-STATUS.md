@@ -43,7 +43,7 @@ Source 身份/revision 持久化合同仍以「`sourceDefinitionRef + operationI
 
 **Task 38（Agent Invocation 基础接入 v1）已完成**（2026-10-08）：新增版本化 `agent.invoke@1` Workflow Action、JSON-safe Agent Invocation 合同、Invocation Port 与确定性 Fake Adapter；复用现有 Activity Worker 的 Run/Job/Lease、取消、重试和 completion 语义。全量单元测试 139 个文件/798 个测试、全仓 typecheck、共享包构建和 docs:check 均通过。真实 `pi-ai` Adapter 已由 Task 39 承接交付；`neuro-agent-harness`、`nb-memory`、工具执行、Artifact、Workspace、Knowledge/Research 仍未实现，另开后续 Task。
 
-**Task [39](.agents/tasks/39-pi-ai-adapter/README.md)（Pi-ai Adapter 与 Provider/model 配置）合并前验收中**：新增 `@cosmos/agent-pi-ai` 真实 SDK 适配（@1 部署 profile、@2 按连接选模型），以及模型页配置——三个模型与两条 migration、14 条 Product API 路由、本机写入信任门、Provider 独占凭证与清理补偿、模型型 Connection 单选、Worker `@2` 消费。全量 842 用例、typecheck 与 lint 通过；真实 Provider 仅一次隔离最小请求（`jijiapi`/`gpt-6-luna`，`completed`/200）。未完成：模型页与选模型无浏览器验收、`@1` 与旧 profile 退出需真实服务验收、Provider 删除是同步 204 而非 202 收据、受影响连接由界面聚合。偏差见 Task walkthrough。
+**Task [39](.agents/tasks/39-pi-ai-adapter/README.md)（Pi-ai Adapter 与 Provider/model 配置）合并前验收中**：新增 `@cosmos/agent-pi-ai` 真实 SDK 适配，以及模型页配置、Provider 独占凭证与清理补偿、模型型 Connection 单选、Worker `@2` 消费。旧部署 profile 与 `agent.invoke@1` 注册已退出，模型与凭证一律按调用时的 Connection 解析。全量 1134 用例、typecheck 与 lint 通过；浏览器验收在组件实验室（模型页 10 项、连接面板 9 项）。真实 Provider 各一次 HTTP 200。未完成：Provider 删除是同步 204 而非 202 收据、受影响连接由界面聚合、`@1` 契约仍被 Story 生成侧复用但已无执行者。偏差见 Task walkthrough。
 
 Task 36 已完成并通过真人验收；实现、合并与验收证据见 [Task36 完成历史](PROJECT-STATUS/history-2026-10-task36.md)。当前仍保留右栏 240 px 下限与首屏预算约束，分支和 worktree 尚未清理。
 
