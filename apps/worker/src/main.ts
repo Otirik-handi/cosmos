@@ -31,7 +31,6 @@ import { WorkerRuntime } from "./runtime.js";
 import { createProxyFetch, describeProxyConfig } from "./proxy-fetch.js";
 import { createScheduleQueue } from "./scheduling.js";
 import { createWorkflowHost } from "./workflow-host.js";
-import { createWorkerAgentAction } from "./agent-action.js";
 import { createWorkerAgentInvocationV2Action } from "./agent-action-v2.js";
 
 /**
@@ -166,12 +165,8 @@ async function bootstrap(): Promise<void> {
                     createMediaCleanupWorkflowDefinition(),
                 ],
                 actions: [
-                    ...(config.agent ? [createWorkerAgentAction(config.agent, {
-                        connections: repository,
-                        secrets: repository.secrets,
-                    })] : []),
-                    // @2 无条件注册：它没有启动期 Agent 配置，能否调用由调用时那条连接决定。
-                    // @1 暂时与 @2 并存，直到新路径完成真实服务验收（API 0009 第 87 行）。
+                    // Agent 只有连接作用域一个版本：模型、地址与凭证都在调用时按那条连接解析，
+                    // 没有启动期 profile，所以这里无条件注册。
                     createWorkerAgentInvocationV2Action({
                         connections: new PrismaAgentModelConnectionResolver(repository.prisma),
                         secrets: repository.secrets,

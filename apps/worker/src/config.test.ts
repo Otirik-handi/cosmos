@@ -22,29 +22,16 @@ describe("parseWorkerRuntimeConfig", () => {
         });
     });
 
-    it("keeps Agent disabled until complete provider configuration is explicit", () => {
-        expect(parseWorkerRuntimeConfig({}).agent).toBeNull();
-        expect(() => parseWorkerRuntimeConfig({ COSMOS_AGENT_ENABLED: "true" })).toThrow(
-            "COSMOS_AGENT_CONTEXT_WINDOW is required when COSMOS_AGENT_ENABLED=true.",
-        );
-        expect(parseWorkerRuntimeConfig({
+    it("ignores a retired Agent deployment profile instead of refusing to start", () => {
+        // 升级后的部署环境里很可能还留着 COSMOS_AGENT_*；这些变量必须被静默忽略，
+        // 也不能再走旧的「启用但缺项就抛错」路径。
+        const config = parseWorkerRuntimeConfig({
             COSMOS_AGENT_ENABLED: "true",
             COSMOS_AGENT_PROVIDER: "jijiapi",
             COSMOS_AGENT_MODEL: "gpt-6-luna",
-            COSMOS_AGENT_API: "openai-completions",
-            COSMOS_AGENT_BASE_URL: "https://api-slb.jiji.cc/v1",
-            COSMOS_AGENT_CONTEXT_WINDOW: "262144",
-            COSMOS_AGENT_MAX_OUTPUT_TOKENS: "32768",
-            COSMOS_AGENT_CONNECTION_ID: "connection-1",
-        }).agent).toMatchObject({
-            provider: "jijiapi",
-            model: "gpt-6-luna",
-            api: "openai-completions",
-            baseUrl: "https://api-slb.jiji.cc/v1",
-            contextWindow: 262144,
-            maxOutputTokens: 32768,
-            connectionId: "connection-1",
         });
+
+        expect(config).not.toHaveProperty("agent");
     });
 
     it.each([
