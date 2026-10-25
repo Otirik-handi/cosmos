@@ -40,7 +40,7 @@
 
 ## 已接受、部分实现：Provider/model 产品配置
 
-用户已接受 [Provider/model 配置](../proposals/connection-credential-entry-v1.md)。目标所有权为数据库 Provider/model 配置、Provider 独占 SecretStore 引用、模型型 Connection 单选已有模型；可信 Worker 按次解析并执行发现/生成，保存不外呼。详细接口与恢复边界见 [Draft 合同](../api/0009-provider-model-configuration.md)。已落地的部分：Provider/模型创建与编辑、Provider 删除（含引用检查与本地凭证清理）、凭证写入与清理补偿、同步模型发现、模型型 Connection 选择、`agent.invoke@2` 执行链路。编辑 Provider 前的受影响连接查询不新增服务端端点，由界面用连接列表与模型列表自行聚合。这将替代当前单 Worker 部署 profile 与 Connection.secretRef 模型凭证路径；在新实现验证并切换前，下文第 64 项仍描述当前实现，而非新目标已落地。普通非模型连接和 SecretStore 明文文件合同保留。
+用户已接受 [Provider/model 配置](../proposals/connection-credential-entry-v1.md)。目标所有权为数据库 Provider/model 配置、Provider 独占 SecretStore 引用、模型型 Connection 单选已有模型；可信 Worker 按次解析并执行发现/生成，保存不外呼。详细接口与恢复边界见 [Draft 合同](../api/0009-provider-model-configuration.md)。已落地的部分：Provider/模型创建与编辑、Provider 删除（含引用检查与本地凭证清理）、凭证写入与清理补偿、同步模型发现、模型型 Connection 选择、`agent.invoke@2` 执行链路。编辑 Provider 前的受影响连接查询不新增服务端端点，由界面用连接列表与模型列表自行聚合。这已替代原单 Worker 部署 profile 与 Connection.secretRef 模型凭证路径：Worker 不再读取 `COSMOS_AGENT_*`、也不再注册 `agent.invoke@1`，模型与凭证一律按调用时的 Connection 解析。普通非模型连接和 SecretStore 明文文件合同保留。
 
 ## 19. 当前决定
 
@@ -117,7 +117,7 @@
 69. `TaskStore` 是 Job 状态、retry 和 lease 的唯一权威；`WakeupBus` 只负责通知，Redis Streams 是可选 Adapter，不是 Job 或领域终态真相。
 70. Local Durable 默认 SQLite + 自适应 polling；真正多主机目标是 PostgreSQL + S3/MinIO + 可选 Redis，不通过共享 SQLite 网络盘实现。
 71. API 是 manifest-only 控制面，Worker 是 executable 执行面，Migrator 是独立一次性运维单元；当前代码尚需 convergence 才完全满足。
-72. Agent 能力属于可选 `nb-workflow` Extension，映射到 `agent.invoke@1`；Core 不依赖 Harness。真实 Agent Provider Adapter 由可信 Worker 显式装配，并仅在部署配置明确启用时注册。v1 使用单 Worker-local provider/model profile + 显式 Connection ID；profile 与 Secret 不进入 Invocation payload 或 durable state。
+72. Agent 能力属于可选 `nb-workflow` Extension，映射到版本化的 `agent.invoke@1`／`@2`；Core 不依赖 Harness。真实 Agent Provider Adapter 由可信 Worker 装配并**无条件**注册 `agent.invoke@2`：没有启动期 profile、没有部署开关，能否调用由调用时那条 Connection 决定，模型、地址与凭证按 Connection → Model → Provider → SecretStore 每次解析。`agent.invoke@1` 仍作为 Story 生成侧复用的端口与输入输出契约、以及 catalog 条目保留，但没有进程注册它。
 73. Phase 3 第一切片先以 `agent.invoke@1` + Invocation Port + Fake Adapter 验证现有 Workflow/Job durable truth、trusted Worker 执行、取消、重试和预算边界；Task 39 已增加独立 pi-ai Adapter。真实调用仍是可选 Worker 能力；Connection/SecretRef 的消费遵循 ADR-0017 与 Proposal [`agent-provider-connection-credential-v1`](../proposals/agent-provider-connection-credential-v1.md)，不代表默认生产 profile 或外部服务可用性保证。Harness、`nb-memory`、Artifact、Workspace、Knowledge 和 Research 产品能力仍后置（Proposal [`agent-invocation-v1`](../proposals/agent-invocation-v1.md)、ADR [`0030`](../adr/0030-agent-invocation-v1.md)）。
 74. 并发控制分为 Worker slot、多 Worker、Workflow 内并发、资源级限流和 CollectionPlan overlap policy；任一层都不能替代 TaskStore lease/fencing。
 74. 对外边界拆为 Product Service API、Worker Admin API 和 Worker Gateway API；三者使用独立消费者、路径和版本。
@@ -202,5 +202,5 @@
 61. 并发 Gateway claim 必须在 TaskStore 中原子保留 Session/lane capacity；Worker 上报 slot 和进程内 long-poll 都不是容量权威。
 62. `nb-workflow@0.2.0` Kernel API 已用于当前 Cosmos Durable Host 固定 Ingest；后续扩展仍须通过 Kernel/Backend conformance。Task 04 Spike 与 API Draft 只能作为 Host/Worker 边界和历史证据，不能被误报为 Gateway 或其它未实现能力。
 63. 采集计划、采集目标、连接与触发器的归属边界唯一：Run/WorkflowRun 记录计划，Entry/Observation 归目标，计划级 checkpoint 与状态命名空间不出现第二套并行当前状态。
-64. Agent 是默认关闭的可选 Worker Workflow Action；每个 Worker 至多一个本机非秘密 profile，Connection ID 显式选择凭证，不把 connectorId 当模型 Provider；每次调用校验 active Connection 并通过 SecretStore callback 临时把凭证交给 pi-ai，不能承诺内存清零或撤销已发出的外部请求。
+64. Agent 是 Worker 的可选 Workflow Action，可用性由调用时那条 Connection 决定而非部署开关；不把 connectorId 当模型 Provider；每次调用校验 active Connection 并通过 SecretStore callback 临时把凭证交给 pi-ai，不能承诺内存清零或撤销已发出的外部请求。
 
