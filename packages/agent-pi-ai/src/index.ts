@@ -20,6 +20,7 @@ import {
     createPiAiOpenAICompletionsModel,
     createPiAiOpenAIResponsesModel,
     mapPiAiError,
+    mapPiAiResponseFailure,
     type PiModel,
 } from "./pi-models.js";
 
@@ -28,6 +29,7 @@ export {
     createPiAiOpenAICompletionsModel,
     createPiAiOpenAIResponsesModel,
     mapPiAiError,
+    mapPiAiResponseFailure,
     type PiAiOpenAICompletionsModelConfig,
     type PiModel,
 } from "./pi-models.js";
@@ -183,6 +185,10 @@ function toPiContext(input: AgentInvocationInput): Context {
 }
 
 function mapResponse(response: AssistantMessage, input: AgentInvocationInput): AgentInvocationOutput {
+    // 与 @2 同一个边界：pi-ai 把服务商拒绝作为 `stopReason: "error"` 返回，不抛错。
+    const failure = mapPiAiResponseFailure(response, input.provider);
+    if (failure !== null) throw failure;
+
     const content = response.content
         .filter((part): part is { type: "text"; text: string } => part.type === "text")
         .map((part) => part.text)

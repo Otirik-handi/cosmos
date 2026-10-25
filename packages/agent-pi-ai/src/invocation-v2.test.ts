@@ -135,4 +135,31 @@ describe("PiAiAgentInvocationV2Adapter", () => {
             .rejects.toMatchObject({ code: "cancelled" });
         expect(cancelled.complete).not.toHaveBeenCalled();
     });
+
+    it("keeps the provider's rejection reason instead of calling it a malformed response", async () => {
+        // pi-ai 把非 2xx 作为 `stopReason: "error"` 的普通响应返回；400 说明请求本身被拒，
+        // 归类成 malformed_payload 会让诊断失去「是凭证、限流还是参数」的区别。
+        const rejected = adapter({
+            complete: async () => response({
+                content: [], stopReason: "error", errorMessage: "400 Unsupported model: gpt-6-luna",
+            }),
+        });
+        await expect(rejected.instance.invoke(input, context)).rejects.toMatchObject({
+            code: "invalid_configuration", retryable: false,
+        });
+
+        const throttled = adapter({
+            complete: async () => response({ content: [], stopReason: "error", errorMessage: "429 slow down" }),
+        });
+        await expect(throttled.instance.invoke(input, context)).rejects.toMatchObject({
+            code: "rate_limited", retryable: true,
+        });
+
+        const unavailable = adapter({
+            complete: async () => response({ content: [], stopReason: "error", errorMessage: "503 upstream" }),
+        });
+        await expect(unavailable.instance.invoke(input, context)).rejects.toMatchObject({
+            code: "dependency_unavailable", retryable: true,
+        });
+    });
 });

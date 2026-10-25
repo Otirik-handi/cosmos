@@ -274,6 +274,21 @@ describe("PiAiAgentInvocationAdapter", () => {
         });
     });
 
+    it("reads the rejection reason from an error response instead of calling it malformed", async () => {
+        // pi-ai 的流在非 2xx 时走 catch 分支，把状态码与正文拼进 errorMessage 后正常 resolve；
+        // 只按 stopReason 判断会把这次 400 误报成协议错误。
+        const adapter = new PiAiAgentInvocationAdapter({
+            credentials: { withCredential: async (_provider, _context, use) => use("secret-value") },
+            client: client(async () => response({
+                content: [], stopReason: "error", errorMessage: "400 Invalid request: unknown field",
+            })),
+        });
+
+        await expect(adapter.invoke(input, context)).rejects.toMatchObject({
+            code: "invalid_configuration", retryable: false,
+        });
+    });
+
     it("maps an aborted request and deadline separately", async () => {
         const cancelled = new AbortController();
         cancelled.abort();

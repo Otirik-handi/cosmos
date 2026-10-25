@@ -16,6 +16,7 @@ import {
     createPiAiOpenAICompletionsModel,
     createPiAiOpenAIResponsesModel,
     mapPiAiError,
+    mapPiAiResponseFailure,
 } from "./pi-models.js";
 
 /** 只按 secretRef 读一次凭证；实现方通常就是应用的 SecretStore。 */
@@ -174,6 +175,11 @@ function mapResponseV2(
     response: AssistantMessage,
     connection: AgentModelConnectionSnapshot,
 ): AgentInvocationOutput {
+    // 服务商侧的拒绝以 `stopReason: "error"` 返回，而不是抛错；先按状态码归类，
+    // 否则下面「结束原因不认识」的分支会把它误报成协议错误。
+    const failure = mapPiAiResponseFailure(response, connection.providerId);
+    if (failure !== null) throw failure;
+
     const content = response.content
         .filter((part): part is { type: "text"; text: string } => part.type === "text")
         .map((part) => part.text)
