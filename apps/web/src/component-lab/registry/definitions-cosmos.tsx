@@ -140,6 +140,7 @@ export const cosmosComponentDefinitions = [
         scenes: [
             {id: "populated", label: "Populated", props: {state: "populated"}},
             {id: "empty", label: "Empty", props: {state: "empty"}},
+            {id: "model", label: "Model connection", props: {state: "model"}},
         ],
         tokens: sharedTokens,
         render: renderConnectionPanelLab,

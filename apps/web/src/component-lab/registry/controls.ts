@@ -84,7 +84,7 @@ export const runHistoryControls = [
 ] as const satisfies readonly LabControlDefinition[];
 
 export const connectionPanelControls = [
-    control("state", "State", "select", "populated", ["populated", "empty"]),
+    control("state", "State", "select", "populated", ["populated", "empty", "model"]),
 ] as const satisfies readonly LabControlDefinition[];
 
 export const feedBrowserControls = [
