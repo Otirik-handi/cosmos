@@ -2,7 +2,7 @@
 
 > 状态：accepted
 >
-> 目标设计局部取代（部分实现）：已接受的 [Provider/model 产品配置](connection-credential-entry-v1.md) 取代本文单 Worker profile、无 Product API/UI、由 Connection.secretRef 提供模型凭证的范围；目标为 Provider-owned SecretStore 凭证、模型连接选择与 `agent.invoke@2`，详见 [Draft 合同](../api/0009-provider-model-configuration.md)。Provider/模型创建与编辑、Provider 删除、凭证写入、模型连接选择与 `agent.invoke@2` 已落地并有隔离测试；编辑 Provider 前的受影响连接查询端点决定不做（界面自行聚合）。切换前本文记录的旧实现仍在，历史验收不转作新路径证据；普通非模型连接、按次校验、无环境凭证回退与 SecretStore 明文限制保留。
+> 目标设计局部取代（部分实现）：已接受的 [Provider/model 产品配置](connection-credential-entry-v1.md) 取代本文单 Worker profile、无 Product API/UI、由 Connection.secretRef 提供模型凭证的范围；目标为 Provider-owned SecretStore 凭证、模型连接选择与 `agent.invoke@2`，详见 [Draft 合同](../api/0009-provider-model-configuration.md)。Provider/模型创建与编辑、Provider 删除、凭证写入、模型连接选择与 `agent.invoke@2` 已落地并有隔离测试；编辑 Provider 前的受影响连接查询端点决定不做（界面自行聚合）。**旧路径已退出**：Worker 不再读取 `COSMOS_AGENT_*`、也不再注册 `agent.invoke@1`，模型与凭证一律按调用时的 Connection 解析；旧实现只作为历史记录留在下文与验收记录里，历史验收不转作新路径证据。普通非模型连接、按次校验、无环境凭证回退与 SecretStore 明文限制保留。
 >
 > 日期：2026-10-12
 >

@@ -12,7 +12,7 @@
 
 - 需求、PRD、架构图或 ADR 中尚未进入当前实现的目标设计；
 - `Draft`、`Planned`、`Reserved` API、Gateway、远程 Worker、Redis、PostgreSQL/S3 或多主机部署；
-- 已接受但尚未实现的 Agent 后续能力：真实 Harness、产品 Artifact、Workspace、Knowledge 和 Research（`agent.invoke@1`／`@2` 与 fake adapter 已落地，属于当前实现，以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md)、[`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 与 [`Task 39`](../../.agents/tasks/39-pi-ai-adapter/README.md) 为准；`agent.invoke@2` 只用隔离测试验证过，没有真实 Provider 请求）；
+- 已接受但尚未实现的 Agent 后续能力：真实 Harness、产品 Artifact、Workspace、Knowledge 和 Research（`agent.invoke@1`／`@2` 与 fake adapter 已落地，属于当前实现，以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md)、[`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 与 [`Task 39`](../../.agents/tasks/39-pi-ai-adapter/README.md) 为准；两个版本各通过一次真实 Provider 最小请求，多 Provider、OAuth、工具、流式与常驻调度仍未验证）；
 - 历史 Task Spike、dirty worktree、保护区分支、旧草稿或没有在当前实现中重新验证的行为；
 - 只存在于测试替身、fixture 或构建产物中的额外行为。
 

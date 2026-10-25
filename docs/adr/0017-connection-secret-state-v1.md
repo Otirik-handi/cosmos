@@ -4,6 +4,8 @@
 >
 > 部分取代：决定 1 的「Bilibili 的 OpenCLI profile 继续作为外部登录态例外留在 `config.profile`」由 ADR [`0027`](0027-connection-login-lifecycle-v1.md) 取代（2026-09-23，profile 归连接的非秘密配置 `configJson`）；决定 2/4 的 SecretStore 文件格式与 `put/read/delete(ref)` 公共接口不变。Agent provider connection 凭证使用合同由已接受 Proposal [`agent-provider-connection-credential-v1`](../proposals/agent-provider-connection-credential-v1.md) 细化。
 >
+> 部分取代（2026-10-23，Task 39）：凭证所有者从 Connection 移到 Provider——`ModelProvider` 独占指向 SecretStore 的 `secretRef`，模型由 `ConfiguredModel` 归属该 Provider（含上游模型标识与上下文的预算上限），模型型连接只保存所选 `modelId`、不带凭证。`agent.invoke@2` 每次调用按 **Connection → Model → Provider → SecretStore** 解析一致快照，再走调用边界；本文「单 Worker 部署 profile + `Connection.secretRef` 提供模型凭证」这条路已在 F 切片退出——Worker 不再读 `COSMOS_AGENT_*`、不再注册 `agent.invoke@1`，`agent.invoke@1` 只作为 Story 生成侧复用的端口与输入输出契约存在。仍然成立的部分：决定 2 的 SecretStore 文件格式（本机受限权限明文、`put/read/delete(ref)`、路径逃逸校验）、决定 4 的按次在 callback 作用域内读取与 fail closed（取消后不读、读取失败或状态非 `active` 即拒绝）、普通非模型连接继续携带自己的 `secretRef`、`SourceInstance.connectionId` 与 `ConnectorStateStore` 的归属划分。目标合同见已接受的 [Provider/model 产品配置](../proposals/connection-credential-entry-v1.md) 与 [API 0009](../api/0009-provider-model-configuration.md)。
+>
 > 日期：2026-09-10
 >
 > 关联：[`connection-state-store-v1 Proposal`](../proposals/connection-state-store-v1.md)、[`../architecture/0001-cosmos-foundation.md`](../architecture/0001-cosmos-foundation.md) §4.2/§5.2、[`../requirements/0002-product-requirements.md`](../requirements/0002-product-requirements.md) AUT-009/AUT-010/ING-012/OPS-009、ADR [`0001`](0001-durable-workflow-runtime.md)、ADR [`0026`](0026-connector-state-export-v1.md)（`ConnectorState` 的归属登记、导出与导入）
@@ -73,6 +75,6 @@
 
 - 引入多用户、远程 Worker 或云端同步（SecretStore 需加密/OS 凭据库）；
 - CollectionPlan / 多采集计划进入实现（Checkpoint 迁移到按计划的 ConnectorStateStore）；
-- 多 Provider、多 Agent profile 或动态路由需要由产品层管理 Agent profile/Provider-to-Connection 绑定；
+- 多 Provider、多 Agent profile 或动态路由需要由产品层管理 Agent profile/Provider-to-Connection 绑定；（2026-10-23 更新：多 Provider 与「模型 → 连接」的产品层绑定**已由 Task 39 触发**，见本文顶部的部分取代段——凭证归 Provider、模型归 `ConfiguredModel`、`agent.invoke@2` 按 Connection → Model → Provider → SecretStore 解析，旧部署 profile 已随之退出。多 Agent profile 与动态路由仍未实现。）
 - Agent Worker profile / Connection 凭证消费者需要超出当前单 profile、callback-scoped 读取合同的能力；
 - 需要 Secret 轮换、过期、审计或细粒度授权。

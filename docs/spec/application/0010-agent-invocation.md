@@ -40,7 +40,7 @@
 
 `AgentModelConnectionResolver`（端口）返回 `AgentModelConnectionSnapshot | null`：一次读取连接、模型与 Provider，任一不满足就返回 `null`。分三次读会读到三个时刻的状态，用户刚换模型时可能把新模型的预算和旧服务商的地址拼在一起。
 
-与 @1 的选择关系：@1 继续服务显式配置了 Worker profile 的部署，@2 用于用户在模型页里选好的连接。两者在 catalog 与 Action Registry 中并存，`agent.invoke@1` 的退出以真实服务验收为前提（[API 0009](../../api/0009-provider-model-configuration.md)）。
+与 @1 的选择关系：@2 用于用户在模型页里选好的连接，Worker 现在只注册它。`@1` 的 Worker 部署 profile 与注册已随 F 切片退出（前置的真实服务验收已完成，见 [API 0009](../../api/0009-provider-model-configuration.md)）；`agent.invoke@1` 作为端口、输入输出契约与 catalog 条目仍保留，因为 Story 生成侧按这个端口注入，但已没有进程注册它。
 
 ## 输入
 

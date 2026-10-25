@@ -2,11 +2,11 @@
 
 ## 状态
 
-当前实现规格；描述独立 `@cosmos/agent-pi-ai` package 的真实 `pi-ai` Adapter（固定的 `agent.invoke@1` 与按连接解析的 `agent.invoke@2`），以及按已接受 Proposal 显式启用的 Worker Action 组合。Worker 默认仍关闭 @1；profile 是单 Worker 非秘密配置，Connection ID 选择现有凭证。每次调用检查 Connection active/SecretRef 并通过 callback 读取 SecretStore；不把 connectorId 当模型 Provider。凭证回调不是强 lease 或内存擦除保证。@1 已通过一次真实最小 Provider 请求；该 smoke 不覆盖生产可靠性或完整 Provider 行为。@2 尚未做真实 Provider 请求。
+当前实现规格；描述独立 `@cosmos/agent-pi-ai` package 的真实 `pi-ai` Adapter（固定的 `agent.invoke@1` 与按连接解析的 `agent.invoke@2`），以及按已接受 Proposal 显式启用的 Worker Action 组合。Worker 默认仍关闭 @1；profile 是单 Worker 非秘密配置，Connection ID 选择现有凭证。每次调用检查 Connection active/SecretRef 并通过 callback 读取 SecretStore；不把 connectorId 当模型 Provider。凭证回调不是强 lease 或内存擦除保证。@1 与 @2 均已通过真实最小 Provider 请求（HTTP 200，两次都走 Chat Completions）；这些 smoke 只证明单次链路可用，不覆盖生产可靠性或完整 Provider 行为。
 
 ## 最后更新
 
-2026-10-20。
+2026-10-25。
 
 ## 组件定位
 
@@ -82,17 +82,19 @@ Adapter 不生成规则摘要、空成功结果或其它 fallback。未知 SDK �
 
 ## 配置
 
-Worker 默认不启用 Agent。设置 `COSMOS_AGENT_ENABLED=true` 时，必须完整提供 `COSMOS_AGENT_PROVIDER`、`COSMOS_AGENT_MODEL`、`COSMOS_AGENT_API=openai-completions`、`COSMOS_AGENT_BASE_URL`、`COSMOS_AGENT_CONTEXT_WINDOW`、`COSMOS_AGENT_MAX_OUTPUT_TOKENS` 和 `COSMOS_AGENT_CONNECTION_ID`。URL 只允许 HTTP(S)，token 数须为正整数且 max output 不超过 context。非秘密 profile 保存在 Worker 本机运行配置中，不进入 payload 和持久化数据。启用的 Worker 必须依赖应用 SecretStore；不能回退到环境变量/Fake Adapter。
+Worker 没有 Agent 部署 profile：`COSMOS_AGENT_*` 已随 `agent.invoke@1` 退出，Worker 不再读取这些变量，升级后的部署即使还留着它们也照常启动。模型、地址与凭证都来自调用时那条使用 `cosmos.agent` 连接器、已选模型的 Connection；凭证由该连接所属 Provider 的 `secretRef` 指向 SecretStore。Worker 必须依赖应用的 SecretStore，不能回退到环境变量或 Fake Adapter。
 
 ## Worker 接线与受控真实验收
 
-Worker 仅在显式启用且配置完整时，将真实 Adapter 包装为既有 `agent.invoke@1` 注册到 Workflow Host；未启用时默认动作集不变。模型按显式 provider/model/API/baseURL/token limits 构造，不依赖 SDK 全局注册表。每次调用重新读取指定 Connection 与 SecretStore；取消检查、状态非 active、无 SecretRef、读取异常或空值都阻止 SDK 调用。Connection ID 与 profile 的 Provider 由 Worker 部署显式绑定；模型请求必须匹配配置 provider/model，单次 output budget 不得超过 profile maxOutputTokens。
+Worker 无条件把 `agent.invoke@2` 注册到 Workflow Host，因为它的模型与凭证在调用时才解析，没有「启动期配置完整才可注册」的形态。每次调用重新读取指定 Connection 与 SecretStore；取消检查、状态非 active、没有选模型、Provider 非 active、无 SecretRef、读取异常或空值都阻止 SDK 调用。
 
-已执行一次真实文本 smoke：provider `jijiapi`、model `gpt-6-luna`、OpenAI Chat Completions、`https://api-slb.jiji.cc/v1`，提示要求只回复 `READY`，调用 budget 的 `maxOutputTokens=64`。调用成功且输出未含 credential。SDK 返回 usage 报告 input 555、output 5、total 4400；其中 total 不等于 input+output，需视作 provider 计量语义未核实。该 smoke 不覆盖可靠性、生产部署、错误矩阵、工具执行、OAuth 或长时任务；Connection/SecretRef callback 组合的验证记录见本规格上方 Worker 接线章节。
+`agent.invoke@1` 的契约（`AgentInvocationPort`、输入输出 schema、`FakeAgentInvocationAdapter` 与 catalog 条目）仍然保留——Story 生成侧按这个端口注入，但 Worker 不再注册该 Action。那次真实验收用的装配留在 `.agents/tasks/39-pi-ai-adapter/connection-smoke.ts`，只为让证据可复现，不是生产注册路径。
+
+已执行一次真实文本 smoke：provider `jijiapi`、model `gpt-6-luna`、OpenAI Chat Completions、`https://api-slb.jiji.cc/v1`，提示要求只回复 `READY`，调用 budget 的 `maxOutputTokens=64`。调用成功且输出未含 credential。SDK 返回 usage 报告 input 555、output 5、total 4400；其中 total 不等于 input+output，需视作 provider 计量语义未核实。该 smoke 不覆盖可靠性、生产部署、错误矩阵、工具执行、OAuth 或长时任务。它走的是已退役的环境变量凭证链路，只作为历史记录保留；`@1` 与 `@2` 各一次按 Connection/SecretRef 解析的真实请求见 [Task 39 第九册](../../../.agents/tasks/39-pi-ai-adapter/walkthrough-provider-model-09.md)。
 
 ## 连接作用域适配器（`agent.invoke@2`）
 
-`PiAiAgentInvocationV2Adapter`（`packages/agent-pi-ai/src/invocation-v2.ts`）实现 `AgentInvocationV2Port`，与 @1 的差别是模型不再来自启动期配置：
+`PiAiAgentInvocationV2Adapter`（`packages/agent-pi-ai/src/invocation-v2.ts`）实现 `AgentInvocationV2Port`，与 `@1` 端口相比，模型不再由调用方声明、也不来自任何部署 profile：
 
 1. 每次调用先通过注入的 `AgentModelConnectionResolver` 解析 `connectionId`，得到连接、模型与 Provider 的同一次读取快照；
 2. 解析结果为 `null`（连接不存在/已撤销、`connectorId` 不是 `cosmos.agent`、没有选模型、Provider 非 `active` 或没有 SecretRef）时抛出不可重试 `authentication_required`，不读凭证、不调用 SDK；
@@ -124,4 +126,4 @@ Worker 仅在显式启用且配置完整时，将真实 Adapter 包装为既有 
 
 已通过真实 API 最小 smoke；生产 profile + Connection/SecretRef 组合与 mock/集成链路已经实现并本地验证。这不提供 SecretStore 强租约或内存擦除保证。未验证多 Worker/多 profile、OAuth、provider matrix、工具执行、流式输出、长时间 Agent 运行或生产部署。
 
-`agent.invoke@2` 只通过隔离测试验证（合同、连接解析、适配器、Worker 注册），没有任何真实 Provider 请求：连接可用性判定、凭证读取时机与模型构造都有测试覆盖，但真实服务商对两种生成 API 的响应差异未验证。
+`agent.invoke@2` 已通过一次真实 Provider 请求（连接作用域解析：模型、地址与凭证全部由 Connection → Model → Provider → SecretStore 在服务端取得，`secretReads: 1`、凭证未出现在输出中），另有隔离测试覆盖合同、连接解析、适配器与 Worker 注册。仍然是未验证的：真实服务商对 Responses 协议的行为差异（两次 smoke 都走 Chat Completions）、多 Provider、OAuth、工具执行、流式输出、常驻 Worker/Workflow 调度与生产部署。

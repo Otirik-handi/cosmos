@@ -1,8 +1,8 @@
 # Provider/model 配置与调用合同
 
-> 状态：Draft · Task 39 目标合同，部分实现。已实现并通过隔离测试：Provider/模型创建与编辑、Provider 删除、凭证写入与清理补偿、同步发现、Connection 模型选择、`agent.invoke@2` 执行链路；整条产品流程（配置服务商 → 发现模型 → 配置模型 → 连接选模型 → 执行）有一条隔离端到端验收。
+> 状态：Draft · Task 39 目标合同，部分实现。已实现并通过隔离测试：Provider/模型创建与编辑、Provider 删除、凭证写入与清理补偿、同步发现、Connection 模型选择、`agent.invoke@2` 执行链路；整条产品流程（配置服务商 → 发现模型 → 配置模型 → 连接选模型 → 执行）有一条隔离端到端验收，另有一次真实 `agent.invoke@2` 最小请求（HTTP 200）。
 >
-> 不再实现（本文其余部分对它们的描述是历史目标，不是当前行为）：`GET /model-providers/:id/connections`——「编辑 Provider 前提示受影响的连接」改由 Web 用连接列表与模型列表自行聚合，代价是它只是界面提示，不是服务端保证；Provider 删除的实际形态是同步 `DELETE /model-providers/:id`（204），不是本文原设计的 202 OperationSnapshot，改回需要单独决定。真实 Provider 外呼、正式服务验收与浏览器验收未运行，不授权部署或真实外呼。
+> 不再实现（本文其余部分对它们的描述是历史目标，不是当前行为）：`GET /model-providers/:id/connections`——「编辑 Provider 前提示受影响的连接」改由 Web 用连接列表与模型列表自行聚合，代价是它只是界面提示，不是服务端保证；Provider 删除的实际形态是同步 `DELETE /model-providers/:id`（204），不是本文原设计的 202 OperationSnapshot，改回需要单独决定。真实外呼已按住址、单次传输与逐次授权执行过两次（`@1`、`@2` 各一次 HTTP 200），仍不授权部署、批量外呼或其它 Provider。
 >
 > 产品决策：[已接受 Proposal](../proposals/connection-credential-entry-v1.md)；过程和验证：[Task 39](../../.agents/tasks/39-pi-ai-adapter/walkthrough-provider-model.md)。
 
@@ -92,11 +92,11 @@ Connection 端点增量（首个消费者：现有连接面板；错误沿用上
 
 模型连接更新必须至少一个实际字段；status 仅 active/revoked，历史其它状态仍可读取。`{expectedVersion,modelId:null,status:"revoked"}` 原子解除并撤销；当前已 revoked 时可省略 status。`{expectedVersion,status:"active",modelId:"..."}` 原子选择并启用，省略 modelId 时必须已有有效选择。不能通过保存选择重写 lastCheckedAt/lastError。所有模型连接写入递增 version，缺失版本返回 400，过期返回 409 version_conflict；关联失效（模型不存在，或它所属的 Provider 不是 active）返回 409 invalid_model_selection；Provider 的 deleting 态目前不会被写入，但该分支一并覆盖，将来引入异步删除时无需改判定。旧类型禁止修改 connectorId 变成模型类型，不隐式迁移。
 
-上表的连接端点增量已落地（create/list/get/patch/removals 与 `cosmos.agent` 规则）；选模型的下一个消费者是 `agent.invoke@2`。`agent.invoke@2` 已实现并通过隔离测试（合同、Action、catalog、连接解析、pi-ai 适配器、Worker 注册），但还没有通过真实服务验收，因此「模型页里选好的模型」目前只差一次真实调用的验收就能跑通。
+上表的连接端点增量已落地（create/list/get/patch/removals 与 `cosmos.agent` 规则）；选模型的下一个消费者是 `agent.invoke@2`。`agent.invoke@2` 已实现、通过隔离测试（合同、Action、catalog、连接解析、pi-ai 适配器、Worker 注册），并完成一次真实最小调用（HTTP 200，模型、地址与凭证全部按连接解析）。仍未验收的是真实服务商对 Responses 协议的行为、多 Provider 与常驻调度。
 
 新增 `agent.invoke@2`：输入 connectionId/messages/tools/budget/metadata，不再接收 provider/model/API/baseUrl/secretRef/key；输出沿用实际 provider/model 与 usage 结构。Worker 按次读取 active Connection、模型和 Provider 的一致配置快照，再读取该 Provider key，取消后不读 key、不调用 SDK。一次调用固定快照，之后修改影响后续调用；没有强 lease 或撤销已发请求保证。预算不得超模型上限，两种生成 API 独立执行、不回退。实现落在 `packages/application/src/agent-invocation-v2.ts`（Action 定义 + 端口）、`packages/storage-prisma/src/agent-model-resolver.ts`（一次读取连接/模型/Provider）、`packages/agent-pi-ai/src/invocation-v2.ts`（按连接构造模型并调用）与 `apps/worker/src/agent-action-v2.ts`（无条件注册的 Worker Action）。
 
-@1 公共合同与历史证据保留；当前部署旧生产注册在 F 验证新路径后退出，不同时提供回退。生产者/消费者清单：Worker main/config/agent-action，application Action definition/catalog，adapter，Workflow Host 测试，Task39 runner/test。迁移 runner 调用必须新单独验收，不能把历史 QmVMec 改写为 @2 证据。先核对其它生产者；发现未登记消费者则停止退出。@2 首个可信消费者是现有 Workflow Host，不新增任意 HTTP 模型执行入口或第二运行时。
+`@1` 公共合同与历史证据保留；Worker 侧旧生产注册已退出——`COSMOS_AGENT_*` 不再被读取，`agent.invoke@1` 只作为 Story 生成侧复用的端口与输入输出契约存在，不再有进程注册它。不同时提供回退。生产者/消费者清单：application Action definition/catalog、adapter、Workflow Host 测试、Task39 runner/test；`apps/worker/src/main.ts` 现在只注册 `agent.invoke@2`，`apps/worker/src/agent-action.ts` 与 `config.ts` 的 Agent profile 已删除。迁移 runner 调用必须新单独验收，不能把历史 QmVMec 改写为 @2 证据。`@2` 首个可信消费者是现有 Workflow Host，不新增任意 HTTP 模型执行入口或第二运行时。
 
 ## 发现任务与网络边界
 
