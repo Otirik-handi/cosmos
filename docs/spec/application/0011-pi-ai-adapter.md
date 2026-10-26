@@ -124,6 +124,6 @@ Worker 无条件把 `agent.invoke@2` 注册到 Workflow Host，因为它的模�
 
 ## 未验证边界
 
-已通过真实 API 最小 smoke；生产 profile + Connection/SecretRef 组合与 mock/集成链路已经实现并本地验证。这不提供 SecretStore 强租约或内存擦除保证。未验证多 Worker/多 profile、OAuth、provider matrix、工具执行、流式输出、长时间 Agent 运行或生产部署。
+已通过真实 API 最小 smoke；Worker 侧只注册连接作用域的 `agent.invoke@2`，旧的部署 profile 与 `Connection.secretRef` 提供模型凭证的路径已退出，mock/集成链路已经实现并本地验证。这不提供 SecretStore 强租约或内存擦除保证。未验证多 Worker、OAuth、provider matrix、工具执行、流式输出、长时间 Agent 运行或生产部署。
 
 `agent.invoke@2` 已通过一次真实 Provider 请求（连接作用域解析：模型、地址与凭证全部由 Connection → Model → Provider → SecretStore 在服务端取得，`secretReads: 1`、凭证未出现在输出中），另有隔离测试覆盖合同、连接解析、适配器与 Worker 注册。仍然是未验证的：真实服务商对 Responses 协议的行为差异（两次 smoke 都走 Chat Completions）、多 Provider、OAuth、工具执行、流式输出、常驻 Worker/Workflow 调度与生产部署。

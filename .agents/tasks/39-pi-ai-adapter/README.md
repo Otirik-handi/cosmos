@@ -1,6 +1,6 @@
 # Task 39：单独实现真实 pi-ai Adapter
 
-> 状态：保留 Adapter 与默认关闭的 Worker Connection/SecretStore 实现；离线验收与一次隔离根目录中的真实 Connection/SecretStore-backed Provider 验收均已通过。历史真实请求使用旧环境变量凭证路径，不能替代本次新鲜证据。
+> 状态：**已完成（2026-10-26）**。真实 pi-ai Adapter 与 Provider/model 产品配置交付：三条完成条件均已分别取得证据（[walkthrough-provider-model.md](walkthrough-provider-model.md)），`agent.invoke@1` 与 `@2` 各通过一次真实 Provider 请求（HTTP 200），F 切片已让 Worker 只注册 `@2`。未做的边界：默认库升级、生产部署与全仓 `test:browser` 全绿（58/60，两条失败早于本 Task）。
 >
 > 编号 39 由维护者分配；本 Task 承接 Task 38 的 follow-up。
 

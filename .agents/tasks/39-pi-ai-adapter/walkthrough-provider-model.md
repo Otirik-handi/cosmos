@@ -171,6 +171,15 @@ runner 的三个 `@2` 模式、四次真实外呼的取证与结论、以及完�
 
 ## 当前未运行与下一步
 
-A 为目标设计完成，不等于 API 已上线；B2a 隔离迁移 2/2 GREEN，B2b-1 内部组件接入已批准。至本次收口，原本「未运行」的几项已有证据：`bun run test:browser:component-lab` 全量 45 passed（`connection-panel` 9 项含新增模型单选 5 项）、`bun run vitest run apps/web` 21 文件 146 项、全量 `bun run vitest run` **198 文件 1134 项**、`.agents/tasks/39-pi-ai-adapter` 2 文件 40 项（含从已删除的 `agent-action.test.ts` 迁入的 8 项 `@1` fail-closed）、`bun run docs:check` 0 失败、完成条件 ③ 的两半真实请求。F 切片已执行：Worker 不再读 `COSMOS_AGENT_*`、不再注册 `agent.invoke@1`，`apps/worker/src/agent-action.ts` 与其测试已删除。仍**未运行**：`bun run build`、默认数据库升级、生产部署。
+A 为目标设计完成，不等于 API 已上线；B2a 隔离迁移 2/2 GREEN，B2b-1 内部组件接入已批准。至本次收口，原本「未运行」的几项已有证据：`bun run test:browser:component-lab` 全量 45 passed（`connection-panel` 9 项含新增模型单选 5 项）、`bun run vitest run apps/web` 21 文件 146 项、全量 `bun run vitest run` **198 文件 1134 项**、`.agents/tasks/39-pi-ai-adapter` 2 文件 40 项（含从已删除的 `agent-action.test.ts` 迁入的 8 项 `@1` fail-closed）、`bun run docs:check` 0 失败、完成条件 ③ 的两半真实请求。F 切片已执行：Worker 不再读 `COSMOS_AGENT_*`、不再注册 `agent.invoke@1`，`apps/worker/src/agent-action.ts` 与其测试已删除。`bun run build` 在本轮收口时实跑并以 exit 0 通过（Next 13/13 静态页预渲染）。仍**未运行**：默认数据库升级、生产部署。
+
+收口时的全量浏览器套件实跑 `bun run test:browser` → **58 passed / 2 failed（3.7m）**，两条失败都不是本 Task 引入的，故不阻塞完工，但要如实记下它们让仓库整体仍非全绿：
+
+| 失败 | 现象 | 归属 |
+| --- | --- | --- |
+| `e2e/browser/layout-and-budget.spec.ts:295` | 首屏 JS `401433` > 上限 `335974`（超约 65 KB） | Task 36 的预算门禁；本会话未改首页外壳，`d511d79`/`9fccfcb` 均为会话基线 `4e10172` 的祖先 |
+| `e2e/browser/story-reading.spec.ts:63` | 找不到 `article div.whitespace-pre-wrap` | Task 40 把正文改由 `content-block-reader.tsx:62` 渲染成 `<p className="my-4 whitespace-pre-wrap">`，选择器仍找 `div` |
+
+两条都可单独修（前者属 ADR-0029「未达标按实测调整预算，不静默放宽」范畴，后者是选择器跟随表示层），但不能靠放宽断言或删用例消红。
 
 代码体积治理本轮**没有**拆任何文件：`apps/web/src/components/cosmos/connection-panel.tsx`（34.22 KB）、`packages/storage-prisma/src/workflow-host-store/activity-store.ts`（30.71 KB）、`packages/application/src/workflow-host-runtime.test.ts`（32.57 KB / 915 行）已按维护者裁决登记进 [拆账台账](../governance/split-backlog.md)，拆文件需单独开治理 Task；其中第三项在 `origin/master` 上就已 31.44 KB，与本轮无关。
