@@ -44,7 +44,7 @@ Source 按 `sourceDefinitionRef + operationId + config` 创建为停用状态，
 
 **当前状态（2026-11-17）**：Task 35／36／38／39／40／42 均已完成并验收，当前没有活跃产品 Task；各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。仍然有效的约束是：
 
-- 右栏 240 px 下限与首屏预算约束保留；`/automation` 三项交互诉求与组件文案迁移 772 处仍开。
+- 右栏 240 px 下限与首屏预算约束保留；`/automation` 的交互缺口已由 Task 37 闭合（2026-11-17 复核），组件文案迁移仍剩 43 个文件 700 处（`inline-copy-baseline.json`，只减不增）。
 - Provider 删除为同步 204，有子模型则拒绝，默认 ID 不保护模型删除；默认库升级与生产部署未验。
 - Task 40 的独立 Worker 真实 HTTPS 组合、执行中崩溃、长压和部署属范围外补强，未验；未改产品代码或用户库。
 

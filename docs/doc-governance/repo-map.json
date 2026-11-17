@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-10-08",
+  "generated": "2026-11-17",
   "note": "脚本生成（size-governance.py --map）。CI 不校验本文件——结构变化后需手工重新生成并提交，否则它会与实际结构脱节。生成时已排除 .gitignore 忽略的文件，所以本机专属文件不会入图。",
   "categories": [
     "code",
@@ -16,11 +16,12 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 135,
-      "bytes": 1848685,
+      "files": 190,
+      "bytes": 2610728,
       "red": [],
       "warn": [
-        ".agents/tasks/07-deferred-workflow-host/walkthrough.md"
+        ".agents/tasks/07-deferred-workflow-host/walkthrough.md",
+        ".agents/tasks/39-pi-ai-adapter/connection-smoke.test.ts"
       ]
     },
     {
@@ -39,7 +40,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 627,
+      "bytes": 1136,
       "red": [],
       "warn": []
     },
@@ -49,7 +50,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 10,
-      "bytes": 40785,
+      "bytes": 41161,
       "red": [],
       "warn": []
     },
@@ -69,7 +70,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 11842,
+      "bytes": 12359,
       "red": [],
       "warn": []
     },
@@ -79,7 +80,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 38133,
+      "bytes": 38270,
       "red": [],
       "warn": [
         "CONTEXT.md"
@@ -110,8 +111,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 9,
-      "bytes": 117007,
+      "files": 12,
+      "bytes": 125934,
       "red": [],
       "warn": []
     },
@@ -121,7 +122,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 28153,
+      "bytes": 24898,
       "red": [],
       "warn": []
     },
@@ -131,7 +132,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 19509,
+      "bytes": 19510,
       "red": [],
       "warn": []
     },
@@ -140,8 +141,8 @@
       "moduleDoc": "apps/api/MODULE.md",
       "moduleDocBytes": 3077,
       "entry": null,
-      "files": 35,
-      "bytes": 264867,
+      "files": 59,
+      "bytes": 417721,
       "red": [],
       "warn": [
         "apps/api/src/app.controller.sources.test.ts",
@@ -157,8 +158,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 178,
-      "bytes": 1021640,
+      "files": 222,
+      "bytes": 1292265,
       "red": [
         "apps/web/src/component-lab/product-fixtures.tsx"
       ],
@@ -169,6 +170,8 @@
         "apps/web/src/components/cosmos/connection-panel.tsx",
         "apps/web/src/components/cosmos/entity-panel.tsx",
         "apps/web/src/components/cosmos/feed-browser.tsx",
+        "apps/web/src/components/cosmos/model-provider-panel.tsx",
+        "apps/web/src/components/cosmos/provider-models-section.tsx",
         "apps/web/src/components/cosmos/source-form.tsx",
         "apps/web/src/components/cosmos/story-edit-panel.tsx",
         "apps/web/src/components/cosmos/topic-panel.tsx"
@@ -179,8 +182,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 18,
-      "bytes": 110106,
+      "files": 22,
+      "bytes": 141352,
       "red": [],
       "warn": [
         "apps/worker/src/workflow-ingest.parity.test.ts"
@@ -202,7 +205,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 3050,
+      "bytes": 3057,
       "red": [],
       "warn": []
     },
@@ -211,22 +214,13 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 171,
-      "bytes": 2465952,
+      "files": 227,
+      "bytes": 2835060,
       "red": [
-        "docs/requirements/0001-original-requirements.md",
-        "docs/spec/contracts/0001-public-contracts.md",
-        "docs/spec/interfaces/0002-product-api-http.md",
-        "docs/spec/interfaces/0005-web-client.md",
-        "docs/spec/storage/0001-prisma-repository.md"
+        "docs/requirements/0001-original-requirements.md"
       ],
       "warn": [
-        "docs/api/0002-product-service-api.md",
-        "docs/api/0005-worker-gateway-api.md",
-        "docs/proposals/ui-copy-review-v1.md",
-        "docs/proposals/ui-surface-ownership-v1.md",
-        "docs/spec/domain/0001-normalized-content.md",
-        "docs/testing/README.md"
+        "docs/api/0005-worker-gateway-api.md"
       ]
     },
     {
@@ -234,8 +228,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 38,
-      "bytes": 300816,
+      "files": 49,
+      "bytes": 432679,
       "red": [
         "e2e/browser/phase2-organization.spec.ts"
       ],
@@ -257,26 +251,44 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 4927,
+      "bytes": 5295,
       "red": [],
       "warn": []
     },
     {
-      "dir": "packages/application",
-      "moduleDoc": "packages/application/MODULE.md",
-      "moduleDocBytes": 3882,
+      "dir": "packages/agent-pi-ai",
+      "moduleDoc": null,
+      "moduleDocBytes": null,
       "entry": {
-        "path": "packages/application/src/index.ts",
-        "bytes": 5575,
-        "lines": 115,
+        "path": "packages/agent-pi-ai/src/index.ts",
+        "bytes": 8938,
+        "lines": 238,
         "zone": "warn"
       },
-      "files": 50,
-      "bytes": 400134,
+      "files": 8,
+      "bytes": 54626,
+      "red": [],
+      "warn": [
+        "packages/agent-pi-ai/src/index.ts"
+      ]
+    },
+    {
+      "dir": "packages/application",
+      "moduleDoc": "packages/application/MODULE.md",
+      "moduleDocBytes": 4901,
+      "entry": {
+        "path": "packages/application/src/index.ts",
+        "bytes": 9774,
+        "lines": 188,
+        "zone": "warn"
+      },
+      "files": 103,
+      "bytes": 642983,
       "red": [],
       "warn": [
         "packages/application/src/catalog.ts",
         "packages/application/src/connector-probe.test.ts",
+        "packages/application/src/content-normalizer.ts",
         "packages/application/src/index.ts",
         "packages/application/src/ingestion-worker.ts",
         "packages/application/src/media-acquisition.test.ts",
@@ -292,12 +304,12 @@
       "moduleDocBytes": null,
       "entry": {
         "path": "packages/blob-store/src/index.ts",
-        "bytes": 3344,
-        "lines": 121,
+        "bytes": 4452,
+        "lines": 145,
         "zone": "warn"
       },
       "files": 8,
-      "bytes": 12550,
+      "bytes": 14796,
       "red": [],
       "warn": [
         "packages/blob-store/src/index.ts"
@@ -306,15 +318,15 @@
     {
       "dir": "packages/contracts",
       "moduleDoc": "packages/contracts/MODULE.md",
-      "moduleDocBytes": 4129,
+      "moduleDocBytes": 4428,
       "entry": {
         "path": "packages/contracts/src/index.ts",
-        "bytes": 13683,
-        "lines": 208,
+        "bytes": 16570,
+        "lines": 254,
         "zone": "warn"
       },
-      "files": 33,
-      "bytes": 231147,
+      "files": 44,
+      "bytes": 308331,
       "red": [],
       "warn": [
         "packages/contracts/src/base.ts",
@@ -328,12 +340,12 @@
       "moduleDocBytes": 2704,
       "entry": {
         "path": "packages/domain/src/index.ts",
-        "bytes": 458,
-        "lines": 12,
+        "bytes": 503,
+        "lines": 13,
         "zone": "ok"
       },
-      "files": 16,
-      "bytes": 52715,
+      "files": 18,
+      "bytes": 60146,
       "red": [],
       "warn": [
         "packages/domain/src/index.test.ts"
@@ -359,15 +371,15 @@
     {
       "dir": "packages/storage-prisma",
       "moduleDoc": "packages/storage-prisma/MODULE.md",
-      "moduleDocBytes": 2940,
+      "moduleDocBytes": 4005,
       "entry": {
         "path": "packages/storage-prisma/src/index.ts",
-        "bytes": 725,
-        "lines": 12,
+        "bytes": 1894,
+        "lines": 26,
         "zone": "ok"
       },
-      "files": 146,
-      "bytes": 1125631,
+      "files": 206,
+      "bytes": 1469820,
       "red": [],
       "warn": [
         "packages/storage-prisma/prisma/schema.prisma",
@@ -381,29 +393,27 @@
         "packages/storage-prisma/src/repository/media.ts",
         "packages/storage-prisma/src/repository/repository-internals.ts",
         "packages/storage-prisma/src/repository/sources.ts",
-        "packages/storage-prisma/src/repository/stories.ts",
         "packages/storage-prisma/src/repository/topics.ts",
         "packages/storage-prisma/src/store-completion-delivery.test.ts",
         "packages/storage-prisma/src/story-split.test.ts",
         "packages/storage-prisma/src/story-user-state-migration.test.ts",
         "packages/storage-prisma/src/user-organization-domain.test.ts",
         "packages/storage-prisma/src/worker-pipeline.test.ts",
-        "packages/storage-prisma/src/workflow-host-store/activity-store.ts",
         "packages/storage-prisma/src/workflow-host-store/internals-activity.ts"
       ]
     },
     {
       "dir": "packages/transport-http",
       "moduleDoc": "packages/transport-http/MODULE.md",
-      "moduleDocBytes": 3093,
+      "moduleDocBytes": 3719,
       "entry": {
         "path": "packages/transport-http/src/index.ts",
-        "bytes": 479,
+        "bytes": 557,
         "lines": 11,
         "zone": "ok"
       },
-      "files": 22,
-      "bytes": 117456,
+      "files": 28,
+      "bytes": 155109,
       "red": [],
       "warn": [
         "packages/transport-http/src/client-content.ts"
@@ -469,12 +479,12 @@
       "moduleDocBytes": null,
       "entry": {
         "path": "plugins/rss/src/index.ts",
-        "bytes": 21771,
-        "lines": 621,
+        "bytes": 22777,
+        "lines": 636,
         "zone": "red"
       },
       "files": 5,
-      "bytes": 35313,
+      "bytes": 38240,
       "red": [
         "plugins/rss/src/index.ts"
       ],
@@ -485,8 +495,8 @@
       "moduleDoc": null,
       "moduleDocBytes": null,
       "entry": null,
-      "files": 18,
-      "bytes": 126757,
+      "files": 60,
+      "bytes": 292104,
       "red": [],
       "warn": [
         "scripts/e2e/helpers.ts"
@@ -518,7 +528,7 @@
       "moduleDocBytes": null,
       "entry": null,
       "files": 1,
-      "bytes": 2120,
+      "bytes": 2540,
       "red": [],
       "warn": []
     },

@@ -6,17 +6,19 @@
 
 台账本身不消红：登记在这里只表示「已记录、待单独治理」，Docs job 在拆完之前仍会失败。拆文件属于 G 系列治理，需要单独开 Task 并获批准；不得用把文件加进 `code-baseline.json` 的方式绕过（登记值只减不增）。
 
-## 1. 当前阻塞 CI（未登记，门禁判 FAIL）
+## 1. 曾阻塞 CI，2026-11-17 复测已全部消解（未登记，当时门禁判 FAIL）
 
-| 文件 | 行 | 字节 | 与 Task 39 的关系 |
-| --- | --- | --- | --- |
-| `apps/web/src/components/cosmos/connection-panel.tsx` | 700 | 35042 | 本轮新增模型单选 UI（+176 行），从 24.58 KB 越线 |
-| `packages/application/src/workflow-host-runtime.test.ts` | 915 | 33354 | 本轮只 +29 行；**`origin/master` 上已 31.44 KB / 886 行**，从未登记 |
-| `.agents/tasks/40-story-content-representation/walkthrough.md` | 253 | 41737 | 与本轮无关，`d511d79` 提交时即未登记 |
+下表「行」「字节」与「与 Task 39 的关系」保留 2026-10-23 原值，末列是 2026-11-17 复测现状：三项都已回到红线内。
 
-前两个走代码门禁（`-c code tests`），最后一个走文档门禁（`-c docs`）。
+| 文件 | 行 | 字节 | 与 Task 39 的关系 | 2026-11-17 复测 |
+| --- | --- | --- | --- | --- |
+| `apps/web/src/components/cosmos/connection-panel.tsx` | 700 | 35042 | 本轮新增模型单选 UI（+176 行），从 24.58 KB 越线 | 551 行 / 26,298 B，未越线（`5ceef92` 后减小） |
+| `packages/application/src/workflow-host-runtime.test.ts` | 915 | 33354 | 本轮只 +29 行；**`origin/master` 上已 31.44 KB / 886 行**，从未登记 | 696 行 / 26,558 B，未越线（`f29a800` 把共享装置拆到 `workflow-host-runtime.fixtures.ts`） |
+| `.agents/tasks/40-story-content-representation/walkthrough.md` | 253 | 41737 | 与本轮无关，`d511d79` 提交时即未登记 | 259 行 / 22,688 B，未越线（`6a945fc` 迁出 2026-11 部分） |
 
-**master 侧已在红**（2026-10-23 实测）：把 `origin/master` 导出到仓库外目录跑 CI 同一命令，唯一违规就是 `packages/application/src/workflow-host-runtime.test.ts`（`[fail] 新增红线文件 … 31.44 KB / 约 8.0k token`，`结果: FAIL（1 项违规）`）。也就是说 Docs job 在 master 上本来就失败，不是本轮新增的破窗——但它也不是「记进台账就消失」，要等拆分或降字节才恢复。
+前两个走代码门禁（`-c code tests`），最后一个走文档门禁（`-c docs`）。**2026-11-17 复测两条门禁均 PASS**（允许既有 warning），本节三项不再阻塞 CI。
+
+**历史（2026-10-23 实测，已被上面的复测推翻）**：把 `origin/master` 导出到仓库外目录跑 CI 同一命令，唯一违规就是 `packages/application/src/workflow-host-runtime.test.ts`（`[fail] 新增红线文件 … 31.44 KB / 约 8.0k token`，`结果: FAIL（1 项违规）`）。也就是说 Docs job 在 master 上本来就失败，不是本轮新增的破窗——但它也不是「记进台账就消失」，要等拆分或降字节才恢复。
 
 ## 2. 已登记进基线、但本轮继续增长（只报 warning，不阻塞）
 
