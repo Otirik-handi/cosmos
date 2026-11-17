@@ -1,10 +1,25 @@
 import { storyAgentCandidateRecordSchema } from "@cosmos/contracts";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, beforeAll, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readdir, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { repositoryRoot } from "./story-agent-isolation.js";
 import { createOfflineStoryTransport } from "./story-agent-runner.js";
 import { runBodyStoryAcceptance } from "./story-body-runner.js";
+
+// 本文件验收的是构建产物（apps/api/dist）；干净 checkout 上不存在，按验收 CLI 同款命令构建一次。
+beforeAll(() => {
+    const entry = join(repositoryRoot, "apps/api/dist/main.js");
+    if (existsSync(entry)) return;
+    const bun = process.env.BUN_BINARY?.trim();
+    // Windows 下的 bun 是 npm 的 .cmd 垫片，需要 shell 解析；CI/Linux 与显式 BUN_BINARY 直接执行。
+    const result = process.platform === "win32" && !bun
+        ? spawnSync("bun run build:api", { cwd: repositoryRoot, stdio: "ignore", shell: true })
+        : spawnSync(bun || "bun", ["run", "build:api"], { cwd: repositoryRoot, stdio: "ignore" });
+    if (result.status !== 0) throw new Error(`API 构建失败（bun run build:api）：${result.error?.message ?? `退出码 ${result.status}`}`);
+    if (!existsSync(entry)) throw new Error("apps/api/dist/main.js 不存在：先运行 bun run build:api");
+});
 
 
 it("records a rejection only after an external API decision and verifies unchanged formal rows", async () => {

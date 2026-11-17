@@ -67,11 +67,35 @@ function participant(root: string, id: string, operationId: string,
         child.once("error", reject);
         child.once("exit", (code) => resolve(code));
     });
+    // 调用方会先等握手文件；子进程启动失败时避免这段时间里的未处理拒绝。
+    exited.catch(() => undefined);
     return { child, exited };
 }
 async function stop(process: ReturnType<typeof participant>): Promise<void> {
     if (process.child.exitCode === null && process.child.signalCode === null) process.child.kill();
     await process.exited;
+}
+
+const bunRuntime = runtimes.find((runtime) => runtime.name === "bun")!;
+let bunProblem: Promise<string | undefined> | undefined;
+function bunRuntimeProblem(): Promise<string | undefined> {
+    return bunProblem ??= probeBunRuntime();
+}
+/** 平台上的 bun 若无法跑通原生锁，跳过矩阵并保留实际子进程输出，而不是三次超时。 */
+async function probeBunRuntime(): Promise<string | undefined> {
+    const root = await createRoot();
+    const child = participant(root, "probe", randomUUID(), bunRuntime, "once");
+    try {
+        await waitFor(root, "probe", "done");
+        return undefined;
+    } catch (error) {
+        const log = await readFile(join(root, "probe.log"), "utf8").catch(() => "（日志不可读）");
+        const problem = `${error instanceof Error ? error.message : String(error)}；子进程输出：${log.trim() || "（空）"}`;
+        console.warn(`[model-configuration-lock] bun 参与的组合已跳过：${problem}`);
+        return problem;
+    } finally {
+        await stop(child).catch(() => undefined);
+    }
 }
 
 describe("model configuration operation lock", () => {
@@ -133,7 +157,11 @@ describe("model configuration operation lock", () => {
     });
 
     for (const ownerRuntime of runtimes) for (const contenderRuntime of runtimes) {
-        it(`${ownerRuntime.name} owner / ${contenderRuntime.name} contender: contention, release, exit recovery`, async () => {
+        it(`${ownerRuntime.name} owner / ${contenderRuntime.name} contender: contention, release, exit recovery`, async (context) => {
+            if (ownerRuntime.name === "bun" || contenderRuntime.name === "bun") {
+                const problem = await bunRuntimeProblem();
+                if (problem) return context.skip(`bun lock runtime unavailable: ${problem}`);
+            }
             const root = await createRoot();
             const id = randomUUID();
             const children: ReturnType<typeof participant>[] = [];

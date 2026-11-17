@@ -30,6 +30,8 @@
 - 用例级 `testTimeout` 覆盖不得低于 [vitest.config.ts](../../vitest.config.ts) 的全局 60 秒；若「产品必须在 X 秒内完成」本身是合同，写成产品断言，不要用超时预算表达。复发形态与裁定见 [known-unstable-cases.md](known-unstable-cases.md) 第 7、9 条。
 - Story 验收夹具 [story-agent-isolation.ts](../../scripts/acceptance/story-agent-isolation.ts) 读冻结 schema 快照 commit，需要完整 git 历史：CI 的 Quality job 用 `fetch-depth: 0`；浅克隆会得到可执行错误，按提示 `git fetch --unshallow`。
 - [test-artifacts.ts](../../scripts/test-artifacts.ts) 回收 `.agent/tmp` 下刻意保留的测试根：默认只报告，`--apply` 才删除，`--days=N` 默认 7 天。
+- 正文 Story 验收（[story-body-runner.test.ts](../../scripts/acceptance/story-body-runner.test.ts)）跑的是构建后的 API：干净 checkout 上 `apps/api/dist/main.js` 不存在，文件会在 `beforeAll` 按 `bun run build:api` 构建一次（与验收 CLI 同款命令）；本地已有旧 `dist` 时不会重建，改了 API 或包源码要先自己 `bun run build:api`。
+- 原生模型锁矩阵（[model-configuration-lock.test.ts](../../packages/storage-prisma/src/model-configuration-lock.test.ts)）先探测 bun 子进程能否完成一次锁握手；探测失败时跳过 bun 参与的组合，并把探针的子进程输出打到控制台，Node↔Node 组合照常执行。2026-11-17 的 Linux CI 上三组 bun 组合都停在初次握手（原因未定位）；跳过不是通过，换平台仍需重跑确认。
 
 ## 证据边界
 
