@@ -37,7 +37,22 @@ export function baseline(root: string, options: CheckOptions): { ref: string; la
             if (typeof before === "string" && before) candidate = before;
             reason = "push before SHA";
         } else if (options.eventName === "workflow_dispatch") {
-            return { ref: emptyTree(root), label: "empty-tree", reason: "manual dispatch: full HEAD tree" };
+            // 手动触发没有 before SHA；默认对比上一个提交，避免把封口归档整树按新增处理。
+            const requested = field(field(event, "inputs"), "base");
+            const manual = typeof requested === "string" ? requested.trim() : "";
+            if (manual === "full") {
+                return { ref: emptyTree(root), label: "empty-tree", reason: "manual dispatch: full HEAD tree (requested)" };
+            }
+            if (manual) {
+                candidate = manual;
+                reason = "manual dispatch base input";
+            } else {
+                const parent = spawnSync("git", ["rev-parse", "--verify", "--quiet", "HEAD^"], { cwd: root, encoding: "utf8", windowsHide: true });
+                if (parent.status !== 0) {
+                    return { ref: emptyTree(root), label: "empty-tree", reason: "manual dispatch: initial commit" };
+                }
+                return { ref: parent.stdout.trim(), label: parent.stdout.trim(), reason: "manual dispatch: previous commit" };
+            }
         }
         if (!candidate) throw new Error(`CI 比较基线缺失：${options.eventName ?? "unknown event"}；请提供 --base`);
     }

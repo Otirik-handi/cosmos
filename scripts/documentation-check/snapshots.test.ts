@@ -87,24 +87,40 @@ describe("documentation snapshot and CLI boundaries", () => {
         expect(report.baseline).toBe(base);
     });
 
-    it("selects PR base and push before, reports first/manual full-tree fallback", () => {
+    it("selects PR base, push before and the manual dispatch default", () => {
         const root = fixture();
         const base = git(root, "rev-parse", "HEAD");
         put(root, "docs/new.md", "# New\n");
+        commit(root);
+        const previous = git(root, "rev-parse", "HEAD");
+        put(root, "docs/other.md", "# Other\n");
         commit(root);
         const pr = runDocumentationCheck(root, { mode: "ci", eventName: "pull_request", event: { pull_request: { base: { sha: base } } } });
         const push = runDocumentationCheck(root, { mode: "ci", eventName: "push", event: { before: base } });
         expect(pr.baseline).toBe(base);
         expect(push.baseline).toBe(base);
-        for (const options of [
-            { eventName: "workflow_dispatch", event: {} },
-            { eventName: "push", event: { before: "0".repeat(40) } },
-        ]) {
-            const report = runDocumentationCheck(root, { mode: "ci", ...options });
-            expect(report.baseline).toBe("empty-tree");
-            expect(report.baselineReason).toMatch(/manual|first/u);
-            expect(report.addedFiles).toContain("README.md");
-        }
+        const dispatch = runDocumentationCheck(root, { mode: "ci", eventName: "workflow_dispatch", event: {} });
+        expect(dispatch.baseline).toBe(previous);
+        expect(dispatch.baselineReason).toMatch(/previous commit/u);
+        expect(dispatch.changedFiles).toEqual(["docs/other.md"]);
+        const targeted = runDocumentationCheck(root, { mode: "ci", eventName: "workflow_dispatch", event: { inputs: { base } } });
+        expect(targeted.baseline).toBe(base);
+        expect(targeted.baselineReason).toMatch(/base input/u);
+        const firstPush = runDocumentationCheck(root, { mode: "ci", eventName: "push", event: { before: "0".repeat(40) } });
+        expect(firstPush.baseline).toBe("empty-tree");
+        expect(firstPush.baselineReason).toMatch(/first push/u);
+        expect(firstPush.addedFiles).toContain("README.md");
+        const full = runDocumentationCheck(root, { mode: "ci", eventName: "workflow_dispatch", event: { inputs: { base: "full" } } });
+        expect(full.baseline).toBe("empty-tree");
+        expect(full.baselineReason).toMatch(/requested/u);
+        expect(full.addedFiles).toContain("README.md");
+    });
+
+    it("falls back to the full tree when a manual dispatch has no previous commit", () => {
+        const root = fixture();
+        const report = runDocumentationCheck(root, { mode: "ci", eventName: "workflow_dispatch", event: {} });
+        expect(report.baseline).toBe("empty-tree");
+        expect(report.baselineReason).toMatch(/initial commit/u);
     });
 
     it("fails closed on bad or absent required CI baseline and reports CLI errors", () => {
@@ -138,15 +154,18 @@ describe("documentation snapshot and CLI boundaries", () => {
         expect(result.stdout).toContain("锚点");
         expect(result.stdout).toContain("分册元数据");
         expect(result.stdout).toContain("空白");
-        for (const [eventName, event] of [
-            ["push", { before: base }],
-            ["workflow_dispatch", {}],
-            ["push", { before: "0".repeat(40) }],
+        const dispatchBase = git(root, "rev-parse", "HEAD^");
+        for (const [eventName, event, expected] of [
+            ["push", { before: base }, base],
+            ["workflow_dispatch", {}, dispatchBase],
+            ["workflow_dispatch", { inputs: { base } }, base],
+            ["workflow_dispatch", { inputs: { base: "full" } }, "empty-tree"],
+            ["push", { before: "0".repeat(40) }, "empty-tree"],
         ] as const) {
             put(root, "event.json", JSON.stringify(event));
             const eventResult = runCli(root, ["--ci"], { GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: resolve(root, "event.json") });
             expect(eventResult.status).toBe(1);
-            expect(JSON.parse(eventResult.stdout).baseline).toBe(eventName === "push" && "before" in event && event.before === base ? base : "empty-tree");
+            expect(JSON.parse(eventResult.stdout).baseline).toBe(expected);
         }
     });
 
