@@ -75,7 +75,7 @@ test("lost enqueue response replays the same intent and refresh resumes the know
     await expect(preview.getByRole("alert")).toContainText("尚未确认入队结果");
     await expect(generate).toBeDisabled();
     await expect(preview.getByLabel("生成任务数")).toHaveText("1");
-    await preview.getByRole("button", { name: "恢复本次生成", exact: true }).click();
+    await preview.getByRole("button", { name: "重新读取任务状态", exact: true }).click();
     await expect(preview).toContainText("正在生成建议");
     await expect(preview.getByLabel("生成任务数")).toHaveText("1");
     await page.reload();
@@ -93,7 +93,7 @@ test("failed generation has no candidate and permits an explicit new request", a
     await expect(preview.getByLabel("模型连接", { exact: true })).toHaveCount(0);
     const generate = preview.getByRole("button", { name: "生成建议", exact: true });
     await generate.click();
-    await expect(preview).toContainText("生成失败或结果未确认");
+    await expect(preview).toContainText("生成未能完成，请检查设置或稍后重试。");
     await expect(preview.getByRole("button", { name: "接受建议", exact: true })).toHaveCount(0);
     await expect(generate).toBeEnabled();
     await preview.getByLabel("模拟生成失败").uncheck();
@@ -103,8 +103,8 @@ test("failed generation has no candidate and permits an explicit new request", a
 });
 
 for (const {mode, text} of [
-    {mode: "known", text: "实际成本：0.46 USD（输入：0.12，输出：0.34）"},
-    {mode: "zero", text: "实际成本：0 USD（输入：0，输出：0）"},
+    {mode: "known", text: "实际成本：0.46 USD（输入：0.12，输出：0.34，缓存写入：0，缓存读取：0）"},
+    {mode: "zero", text: "实际成本：0 USD（输入：0，输出：0，缓存写入：0，缓存读取：0）"},
     {mode: "missing", text: null},
 ] as const) {
     test(`candidate actual cost displays ${mode} amount`, async ({page}) => {

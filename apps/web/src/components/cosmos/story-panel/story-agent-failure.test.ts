@@ -42,4 +42,17 @@ describe("StoryAgentFailure", () => {
         expect(html).toContain("生成未能完成，请检查设置或稍后重试。");
         expect(html).not.toContain("provider_secret_internal_dump");
     });
+
+    it("shows the caller's recovery message instead of the generic failure copy", () => {
+        const html = renderToStaticMarkup(createElement(StoryAgentFailure, {
+            errorCode: null,
+            message: "尚未确认入队结果。请恢复同一请求；不要新建重复请求。",
+            canRecover: true,
+            recovering: false,
+            onRecover: vi.fn(),
+        }));
+        expect(html).toContain("尚未确认入队结果");
+        expect(html).not.toContain("生成未能完成，请检查设置或稍后重试。");
+        expect(html).toContain("重新读取任务状态");
+    });
 });

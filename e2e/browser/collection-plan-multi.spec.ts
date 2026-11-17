@@ -33,10 +33,10 @@ test("creates two plans under one connection and shows each plan's own schedule 
 
     // 先有一个可复用的连接（ADR-0017）。创建表单在模态框里（Task 37 切片 1），
     // 模态框 portal 到 body，所以从 page 定位。
-    await page.getByRole("button", { name: "新建连接" }).click();
+    await page.getByRole("button", { name: "新建账号" }).click();
     await page.getByLabel("连接名称").fill(connectionName);
     await page.getByLabel("连接 Connector").fill("fixture-rss");
-    await page.getByRole("button", { name: "保存连接" }).click();
+    await page.getByRole("button", { name: "保存账号" }).click();
     await expect(page.getByText(connectionName, { exact: true })).toBeVisible();
 
     await createPlan(page, {
@@ -121,10 +121,10 @@ test("shows a text hint for icon-only plan row buttons on hover and keyboard foc
     await page.goto("/automation");
     await expect(page.getByRole("heading", { name: "自动化", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "新建连接" }).click();
+    await page.getByRole("button", { name: "新建账号" }).click();
     await page.getByLabel("连接名称").fill(connectionName);
     await page.getByLabel("连接 Connector").fill("fixture-rss");
-    await page.getByRole("button", { name: "保存连接" }).click();
+    await page.getByRole("button", { name: "保存账号" }).click();
     await expect(page.getByText(connectionName, { exact: true })).toBeVisible();
 
     await createPlan(page, {

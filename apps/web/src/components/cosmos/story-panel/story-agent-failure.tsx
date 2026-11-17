@@ -30,14 +30,16 @@ export function StoryAgentGenerationNotice({
 
 type StoryAgentFailureProps = {
     errorCode: unknown;
+    /** 调用方已持有面向用户的文案时（如入队结果未知），直接展示它，不再套错误码模板。 */
+    message?: string;
     canRecover: boolean;
     recovering: boolean;
     onRecover: () => void;
 };
 
-export function StoryAgentFailure({ errorCode, canRecover, recovering, onRecover }: StoryAgentFailureProps) {
+export function StoryAgentFailure({ errorCode, message, canRecover, recovering, onRecover }: StoryAgentFailureProps) {
     return <div role="alert" className="space-y-2 text-sm">
-        <p>{storyAgentErrorCopy(errorCode)}</p>
+        <p>{message ?? storyAgentErrorCopy(errorCode)}</p>
         <Link className="underline underline-offset-2" href="/settings#story-agent-settings">{copy.timeoutSettings}</Link>
         {canRecover && <Button variant="outline" size="sm" disabled={recovering} onClick={onRecover}>{copy.recover}</Button>}
     </div>;

@@ -124,6 +124,7 @@ function CandidatesForStory({ story, unsavedEdit, onAccepted, api = client }: Pa
         />}
         {generation.error && <StoryAgentFailure
             errorCode={null}
+            message={generation.error}
             canRecover={generation.recoverable}
             recovering={generation.sending}
             onRecover={generation.retry}
