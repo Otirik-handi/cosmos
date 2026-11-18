@@ -43,7 +43,7 @@ Source 按 `sourceDefinitionRef + operationId + config` 创建为停用状态，
 
 ## 当前下一步
 
-**当前状态（2026-11-17）**：Task 35／36／38／39／40／42 均已完成并验收，当前没有活跃产品 Task；各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。2026-11-17 完成一轮维护：远端 CI 恢复并全绿、4 处过期台账纠正、repo-map 重生成。仍然有效的约束是：
+**当前状态（2026-11-17）**：Task 35／36／38／39／40／41／42 均已完成并验收，当前没有活跃产品 Task；41 交付基础设施（Connection 与模型选择分离、`SystemConfig` 默认模型），用户可见的默认模型设置与 Story 费用由 42 交付。各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。2026-11-17 完成一轮维护：远端 CI 恢复并全绿、4 处过期台账纠正、repo-map 重生成。仍然有效的约束是：
 
 - 右栏 240 px 下限与首屏预算约束保留；`/automation` 的交互缺口已由 Task 37 闭合（2026-11-17 复核），组件文案迁移仍剩 43 个文件 700 处（`inline-copy-baseline.json`，只减不增）。
 - Provider 删除为同步 204，有子模型则拒绝，默认 ID 不保护模型删除；默认库升级与生产部署未验。

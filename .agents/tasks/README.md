@@ -63,6 +63,8 @@ Task 导航：
 
 - [`39-pi-ai-adapter/`](39-pi-ai-adapter/)：真实 pi-ai Adapter，承接 Task 38；编号 39 由维护者分配，当前状态与验证见任务记录。
 - [`40-story-content-representation/`](40-story-content-representation/)：Story 内容表示与多模态阅读——有序内容块、版本化投影、统一 Web/Agent 读取与候选接受；编号 40 由维护者分配。**已关闭（2026-11-05），确认范围内验收全部完成**。四阶段验收及 2026-11-13 补充的真实关系/质量样例、使用本机模型替身的独立 Worker 进程验收均通过。当前状态、证据与范围外边界见 [Task 首页](40-story-content-representation/README.md)及 [walkthrough](40-story-content-representation/walkthrough.md)；新增真实外呼仍须逐次授权。
+- [`41-connection-agent-separation/`](41-connection-agent-separation/)：拆分 Connection 与默认模型配置——Connection 回归外部账号授权并删除 `ConnectionInstance.modelId`，新增 `SystemConfig` 单例承载默认模型，`agent.invoke@2` 改收可选 `modelId`，`ConfiguredModel` 增加价格字段。基础设施已合入 master；用户可见的默认模型设置、费用展示与设置页移交 Task 42 完成，历史数据迁移与生产库迁移未执行。
+- [`42-default-model-ui-api/`](42-default-model-ui-api/)：默认模型配置 UI 与 API——`SystemConfig` GET/PUT、设置页默认模型与价格、Story 费用投影与展示、Story Agent 超时与安全错误码；编号 42 由维护者分配。**已完成并验收（2026-11-12）**，状态与证据见 [Task 首页](42-default-model-ui-api/README.md)及 [walkthrough](42-default-model-ui-api/walkthrough.md)；真实 Provider 结算与生产迁移未验。
 
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 

@@ -1,10 +1,10 @@
 # Story 内容表示 API
 
-> 状态：Task 40 已实现接口与生产接线；隔离产品生成链通过，整体验收进行中，不代表真实 Provider 验收或已部署。
+> 状态：Task 40 已实现接口与生产接线，隔离产品生成链通过，已于 2026-11-05 关闭；本文不代表真实 Provider 验收或已部署。
 >
 > 依据：[已接受目标](../aegis/specs/2026-10-08-story-content-representation-design.md)、[架构](../aegis/specs/2026-10-08-story-content-representation-architecture.md)、[Task 40](../../.agents/tasks/40-story-content-representation/README.md)。
 >
-> **Task 42 更正优先**：本文下方旧表的 connectionId、连接解析模型和“仅返回”字段清单已被[费用合同与模型选择补充](#task-42-费用合同已冻结目标实施与验收进行中)替代；当前可调用形状见 [Product API](../spec/interfaces/0002-product-api-http.md#task-42-当前合同补充)，不能按旧表发送请求。
+> **Task 42 更正优先**：本文下方旧表的 connectionId、连接解析模型和“仅返回”字段清单已被[费用合同与模型选择补充](#task-42-费用合同已冻结并验收)替代；当前可调用形状见 [Product API](../spec/interfaces/0002-product-api-http.md#task-42-当前合同补充)，不能按旧表发送请求。
 
 ## 所有权与首个消费者
 
@@ -53,7 +53,7 @@ Contracts 唯一拥有跨边界 JSON schema；Application ContentQuery 统一提
 
 `story.summarize`、`story.extract-relations`、`story.review-content-quality` 生成候选；用户接受由正式命令处理并记录审计。候选绑定实际输入版本，重复接受不重复正式写入，基线变化必须拒绝或明确要求重新验证，不自动套用。Agent 不可直接改写 Observation、EntryRevision、权限或已接受事实。
 
-## Task 42 费用合同（已冻结目标，实施与验收进行中）
+## Task 42 费用合同（已冻结并验收）
 
 本节替代上文涉及 Connection 选模型的旧说明：生成请求为 strict `{task, sources?, modelId?}`，不再接收 `connectionId`；省略 `modelId` 时由系统默认模型解析，Worker 读取对应模型与 Provider 凭证。当前接口状态以 [Product API 当前补充](../spec/interfaces/0002-product-api-http.md#task-42-当前合同补充)为准。
 

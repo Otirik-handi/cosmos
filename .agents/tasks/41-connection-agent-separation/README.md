@@ -1,6 +1,6 @@
 # Task 41：拆分 Connection 与默认模型配置
 
-> 状态：**进行中**
+> 状态：**基础设施已交付并合入 master；用户可见的默认模型配置、费用展示与设置页由 Task 42 完成并验收（2026-11-12）**
 >
 > 编号 41 由维护者分配；本 Task 基于 Proposal [`connection-agent-profile-separation-v1`](../../../docs/proposals/connection-agent-profile-separation-v1.md)。
 
@@ -323,6 +323,10 @@ function calculateCost(
 
 ## Walkthrough
 
+### 设计决定：`defaultModelId` 存哪里（2026-11-06 前期调研）
+
+调研时仓库没有系统配置表，比较了三个落点：新建键值型 `SystemConfig(key, value)`、新建多用户 `UserPreferences`、塞进 Worker 配置或环境变量。最终选 `SystemConfig` 单例（固定 ID `singleton`）：单用户阶段引入多用户表属于过度设计，而环境变量方案无法从设置页修改。这张表后来也承载 Task 42 的 `storyAgentTimeoutSeconds`。
+
 ### Phase 1: Schema 变更 ✅
 
 **实施日期**: 2026-11-06
@@ -557,18 +561,18 @@ function calculateCost(
 
 ## 文档影响
 
-待更新的技术文档（由文档工程师处理）:
-- [ ] API 文档：反映 `modelId` 替代 `connectionId`
-- [ ] 架构文档：更新模型配置链路
-- [ ] 迁移指南：Connection 模型配置迁移说明
+2026-11-18 核对结果：
+
+- [x] API 文档：[`docs/api/0009`](../../../docs/api/0009-provider-model-configuration.md) 与 [`docs/api/0008`](../../../docs/api/0008-story-content-representation.md) 已补 Task 41 更新：Connection 不再承担模型选择，`agent.invoke@2` 接收可选 `modelId`。
+- [x] 规格文档：[`docs/spec/application/0010`](../../../docs/spec/application/0010-agent-invocation.md)、[`docs/spec/contracts/0001`](../../../docs/spec/contracts/0001-public-contracts.md)、[`docs/spec/storage/0001`](../../../docs/spec/storage/0001-prisma-repository.md) 已写当前合同。
+- [ ] 架构文档：[`docs/architecture/0001`](../../../docs/architecture/0001-cosmos-foundation.md) 未单独记录模型选择链路，当前链路由上述规格与 API 文档承载。
+- [ ] 迁移指南：面向用户的「模型型连接」数据迁移未执行，因此没有迁移指南。
 
 ---
 
-## 下一步
+## 后续与遗留
 
-- [ ] 前端 UI 实现（设置页的默认模型配置）
-- [ ] 数据迁移脚本（识别并删除模型型连接，设置默认模型）
-- [ ] API endpoint 实现（SystemConfig CRUD）
-- [ ] 成本展示 UI（Story 生成页显示成本信息）
-- [ ] E2E 测试覆盖
-- [ ] 生产环境验证
+原「下一步」六项的去向（2026-11-18 核对）：
+
+- 前端 UI、API endpoint、成本展示 UI、E2E 覆盖：由 [Task 42](../42-default-model-ui-api/README.md) 完成并验收（2026-11-12）。
+- 数据迁移脚本、生产环境验证：**未执行**。会改动用户数据库，按[发布与迁移门禁](../../../AGENTS.md#验证)单独排期，不随本 Task 顺带运行。

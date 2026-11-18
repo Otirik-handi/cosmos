@@ -64,7 +64,7 @@ CapabilitiesResponse 和 AttemptSnapshot/AttemptPage。本文件是这些 HTTP �
 | `GET /api/v1/config/default-model` | 旧端点保留，200 `{modelId:string\|null}`。 |
 | `PUT /api/v1/config/default-model` | 旧输入 `{modelId:string\|null}`、200 `{modelId}`；与新端点共用模型存在性与 Provider active 校验，旧入口不升级为新 strict DTO。 |
 | `POST /api/v1/stories/:storyId/agent-candidates` | strict `{task,sources?,modelId?}` 与必需 Idempotency-Key；不再接收 connectionId，省略 modelId 使用系统默认。202 `StoryAgentGeneration`。 |
-| `GET /api/v1/stories/:storyId/agent-generations/:runId` | `runId/storyId/task/status/candidateId/errorCode`，无 connectionId；状态与候选费用补充见 [费用合同](../../../docs/api/0008-story-content-representation.md#task-42-费用合同已冻结目标实施与验收进行中)。 |
+| `GET /api/v1/stories/:storyId/agent-generations/:runId` | `runId/storyId/task/status/candidateId/errorCode`，无 connectionId；状态与候选费用补充见 [费用合同](../../../docs/api/0008-story-content-representation.md#task-42-费用合同已冻结并验收)。 |
 
 配置四条路由均 no-store。新输入非法为 400 `invalid_input`，选中模型不存在为 404 `not_found`，Provider 缺失或非 active 为 409 `invalid_model_selection`，未知依赖异常为 503 `dependency_unavailable`；错误只带安全 code/message，不回显底层异常。非空模型选择、Provider 检查与 singleton upsert 在同一写事务内，删除先完成则后续设置拒绝；设置先完成后仍允许删除，读取保留悬空 ID 并返回 null 模型，不承诺永不失效。清除用 upsert 写 null，不触发生成或外呼。
 
