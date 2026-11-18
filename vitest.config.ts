@@ -29,9 +29,10 @@ export default defineConfig({
             "plugins/**/src/**/*.test.ts",
             "apps/**/src/**/*.test.ts",
             "scripts/**/*.test.ts",
-            ".agents/tasks/39-pi-ai-adapter/**/*.test.ts",
         ],
-        exclude: [...configDefaults.exclude, "**/*.property.test.ts"],
+        // 验收层（scripts/acceptance、.agents/tasks）会现场构建产物、起真实进程或部署迁移，
+        // 由 vitest.acceptance.config.ts 单独执行；留在这一层会让每次改动后的快测都跑重活。
+        exclude: [...configDefaults.exclude, "**/*.property.test.ts", "scripts/acceptance/**", ".agents/**"],
         environment: "node",
         // Prisma/SQLite 用例单条 3~5s,与 vitest 默认 5s 余量过窄,并行时偶发假失败;
         // 与 property/e2e 配置保持一致。

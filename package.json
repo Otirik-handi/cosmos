@@ -51,6 +51,8 @@
         "docs:check:ci": "bun run scripts/check-documentation.ts --ci",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:acceptance": "vitest run --config vitest.acceptance.config.ts",
+        "test:clean": "bun run scripts/test-artifacts.ts --apply",
         "test:property": "vitest run --config vitest.property.config.ts",
         "test:e2e": "bun run build:api && bun run build:worker && vitest run --config vitest.e2e.config.ts",
         "test:browser": "bun run build && playwright test --config playwright.config.ts",

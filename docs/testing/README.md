@@ -16,12 +16,13 @@
 
 | 层级          | 命令                                                                         | 当前覆盖                                                                                                       |
 | ------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 单元          | `bun run test`                                                               | 包内和应用单元行为测试；默认配置排除 `*.property.test.ts`                                                       |
+| 单元          | `bun run test`                                                               | 包内和应用单元行为测试；默认排除 `*.property.test.ts` 与验收层（`scripts/acceptance`、`.agents/tasks`）                                                       |
 | 属性          | `bun run test:property`                                                      | 独立收集 `packages/**` 与 `apps/**` 下的 `*.property.test.ts`，覆盖幂等、租约 fencing 和 Worker recovery priority |
 | 类型/数据库   | `bun run typecheck`、`bun run db:validate`、`bun run db:generate`            | 全仓 TypeScript、Prisma schema 与 Client                                                                       |
 | 构建          | `bun run build`                                                              | packages、API、Worker、Next Web 生产产物                                                                       |
 | Node 进程 E2E | `bun run test:e2e`                                                           | 构建后的真实 API/Worker、隔离 SQLite、HTTP、SSE、结构化日志；包含 ingest、Admin、跨进程 recovery、调度失败隔离 |
 | 浏览器 E2E    | `bun run test:browser`、`bun run test:browser:component-lab` | 真实 Next/API/Worker Stack 产品流与首页主题偏好持久化/明暗跟随；开发态组件实验室交互、props、提交阻断、token、全局外观切换与隔离验收 |
+| 验收 | `bun run test:acceptance` | `scripts/acceptance` 与 `.agents/tasks` 的构建型/真实进程验收；串行执行，干净检出会先构建 API |
 | Windows smoke | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-node.ps1` | Windows Node API/Worker、迁移、受控 HTTP RSS、Feed/Search/Story、SSE、requestId 和脱敏日志                    |
 
 ## 夹具与临时根
@@ -29,7 +30,7 @@
 - 仓储层夹具用 schema 模板库：[schema-template.ts](../../packages/storage-prisma/src/schema-template.ts) 提供 `materializeDatabase`；两份 `withRepository`（[index.fixtures.ts](../../packages/storage-prisma/src/index.fixtures.ts)、[workflow-ingest.fixtures.ts](../../apps/worker/src/workflow-ingest.fixtures.ts)）现在都按**测试文件**只部署一次 schema（当前 45 个迁移），每条用例只拷贝部署好的模板库（约 4 毫秒），模板在 `afterAll` 删除。改造前每条仓储用例 8.2~9.9 秒。本机全量用例累计耗时 2524.06s→1287.88s（改造前后各取一轮空闲机器运行，collect 均约 100~105 秒）。`withTestDatabase.deploy` 仍逐用例分步部署（升级/迁移用例要先部署旧 schema，语义没变）。
 - 用例级 `testTimeout` 覆盖不得低于 [vitest.config.ts](../../vitest.config.ts) 的全局 60 秒；若「产品必须在 X 秒内完成」本身是合同，写成产品断言，不要用超时预算表达。复发形态与裁定见 [known-unstable-cases.md](known-unstable-cases.md) 第 7、9 条。
 - Story 验收夹具 [story-agent-isolation.ts](../../scripts/acceptance/story-agent-isolation.ts) 读冻结 schema 快照 commit，需要完整 git 历史：CI 的 Quality job 用 `fetch-depth: 0`；浅克隆会得到可执行错误，按提示 `git fetch --unshallow`。
-- [test-artifacts.ts](../../scripts/test-artifacts.ts) 回收 `.agent/tmp` 下刻意保留的测试根：默认只报告，`--apply` 才删除，`--days=N` 默认 7 天。
+- [test-artifacts.ts](../../scripts/test-artifacts.ts) 回收 `.agent/tmp` 下刻意保留的测试根：默认只报告，`--apply` 才删除，`--days=N` 默认 7 天。日常用 `bun run test:clean`；跑完 `test:e2e` 或 `test:acceptance` 这类大批量验证后跑一次，单轮就会留下上百个隔离根。
 - 正文 Story 验收（[story-body-runner.test.ts](../../scripts/acceptance/story-body-runner.test.ts)）跑的是构建后的 API：干净 checkout 上 `apps/api/dist/main.js` 不存在，文件会在 `beforeAll` 按 `bun run build:api` 构建一次（与验收 CLI 同款命令）；本地已有旧 `dist` 时不会重建，改了 API 或包源码要先自己 `bun run build:api`。
 - 原生模型锁矩阵（[model-configuration-lock.test.ts](../../packages/storage-prisma/src/model-configuration-lock.test.ts)）先探测 bun 子进程能否完成一次锁握手；探测失败时跳过 bun 参与的组合，并把探针的子进程输出打到控制台，Node↔Node 组合照常执行。2026-11-17 的 Linux CI 上三组 bun 组合都停在初次握手（原因未定位）；跳过不是通过，换平台仍需重跑确认。
 

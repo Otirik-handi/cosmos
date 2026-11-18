@@ -23,7 +23,7 @@
 | [`api/`](api/) | Product API、Worker Admin、Gateway 和 DTO 的接口目标草案 | API 设计者、客户端/服务端实现者 | Draft；当前路径和字段以代码、spec、测试为准 |
 | [`requirements/`](requirements/) | 用户原话、产品范围、阶段目标和验收意图；原始需求保持追加 | 产品负责人、架构决策人、Task 负责人 | 需求真相源，不是实现合同 |
 | [`proposals/`](proposals/) | 尚未生效或待评审的产品、工程和界面方案及分册 | 提案作者、评审者、决策人 | 生命周期材料；accepted 仍需落到架构/ADR/Task/代码 |
-| [`standards/`](standards/) | 仓库协作、开发生命周期和跨功能工程流程；含 [`frontend-design-process.md`](standards/frontend-design-process.md) | 所有贡献者、开发 Agent、前端负责人 | 执行规则；根 [`AGENTS.md`](../AGENTS.md) 仍是 Agent 长期约定 |
+| [`standards/`](standards/) | 仓库协作、开发生命周期和跨功能工程流程；含 [`code-conventions.md`](standards/code-conventions.md) 与 [`frontend-design-process.md`](standards/frontend-design-process.md) | 所有贡献者、开发 Agent、前端负责人 | 执行规则；根 [`AGENTS.md`](../AGENTS.md) 仍是 Agent 长期约定 |
 | [`testing/`](testing/) | 测试层级、fixture、验收、临时数据、验证证据和已知不稳定用例 | 测试者、实现者、验收者 | 验证证据边界；不能以局部测试替代其它验收层 |
 | [`doc-governance/`](doc-governance/) | 文档大小治理、基线、扫描和文档质量检查 | 文档负责人、Task Leader、评审者 | 治理规则与扫描依据，不是产品架构合同 |
 | [`research/`](research/) | 外部项目、数据源、算法和技术验证材料 | 调研者、架构决策人 | 非合同；结论须经 Proposal/架构/ADR 接受后才生效 |

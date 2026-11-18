@@ -59,9 +59,7 @@ jobs:
         steps:
             - uses: actions/checkout@v4
               with:
-                  # scripts/acceptance 的 Story 验收夹具要读冻结的 schema 快照 commit
-                  #（scripts/acceptance/story-agent-isolation.ts），默认的 fetch-depth: 1
-                  # 拿不到它，单测会在 git ls-tree 上失败。
+                  # 部分检查要读 Git 历史，默认的 fetch-depth: 1 会拿到空历史。
                   fetch-depth: 0
             - uses: oven-sh/setup-bun@v2
               with:
@@ -74,6 +72,24 @@ jobs:
             - run: bun run test:property
             - run: bun run lint:web
             - run: bun run build
+
+    acceptance:
+        name: Acceptance
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        needs: quality
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  # scripts/acceptance 的 Story 验收夹具要读冻结的 schema 快照 commit
+                  #（scripts/acceptance/story-agent-isolation.ts），浅克隆会失败。
+                  fetch-depth: 0
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: ${{ env.BUN_VERSION }}
+            - run: bun install --frozen-lockfile
+            - run: bun run db:generate
+            - run: bun run test:acceptance
 
     node-e2e:
         name: Node process E2E

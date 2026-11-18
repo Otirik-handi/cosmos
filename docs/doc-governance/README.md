@@ -26,7 +26,7 @@
 
 CI 对 PR 使用事件的 base SHA，对 push 使用 before SHA，覆盖该事件的多次提交，不只检查末次提交。首次 push（before 全零）回退为空树对比整个 HEAD；手动触发默认与上一个提交比较，可用 `base` 输入指定其它基线，传 `full` 才回退为空树对比整个 HEAD。事件基线缺失或指定提交不可访问时失败，不静默退成零变更；可获取所需历史或显式提供有效 `--base`。
 
-[CI 配置](../../.github/workflows/ci.yml)使用独立 docs job，以完整历史 checkout（`fetch-depth: 0`）运行 CI 命令及大小门禁，无需 `bun install`。Quality、Node E2E、浏览器和 Windows smoke 保持各自证据边界；静态通过不代表这些层已运行。
+[CI 配置](../../.github/workflows/ci.yml)使用独立 docs job，以完整历史 checkout（`fetch-depth: 0`）运行 CI 命令及大小门禁，无需 `bun install`。Quality、Acceptance、Node E2E、浏览器和 Windows smoke 保持各自证据边界；静态通过不代表这些层已运行。
 
 ### 各检查的范围
 
