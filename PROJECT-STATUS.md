@@ -36,19 +36,20 @@ Source 按 `sourceDefinitionRef + operationId + config` 创建为停用状态，
 - `SIGINT`、`SIGTERM` 和 Admin drain 共用 WorkerRuntime shutdown 状态机；正常退出码为 0，force/failed shutdown 为 1。
 - WorkflowRun 的 `sourceInstanceId`、`errorMessage` 是 durable projection 字段；来源查询同时考虑 legacy Run 和 WorkflowRun，不从 Kernel stateJson 猜错误文本。
 - 旧 IngestionWorker 路径保留；显式 `COSMOS_WORKFLOW_HOST_ENABLED=false` 才回退旧路径。Gateway、Redis、多主机和远程 Worker 不属于当前实现。
+- 远端 CI 在 2026-10-08 至 2026-11-17 之间未对 `master` 推送产生运行（原因未记录）；2026-11-17 起恢复，`9f11697` 的 push 运行 5 个 job 全绿。
 - 远端 `master` 当前**没有分支保护或 ruleset**（2026-09-17 用 GitHub API 核实，`branches/master/protection` 返回 404、rulesets 为空）：CI 只是事后信号，不阻止直接推送或合并；是否启用 required checks 待维护者决定。
 - 产品当前 **PC 优先、不做移动端适配**（维护者 2026-09-17：移动端等 PC 端做好后再适配）：390px 页面级横向溢出检查**暂停执行**，PC/平板宽度（768/1024/1440px）继续断言；恢复条件写在 `e2e/support/viewports.ts`，恢复前先给两处溢出断言补失败现场打印（见已知不稳定用例表第 2、3 条）。
 - 工具链与依赖源按 Task29 固定：Bun 1.4.2 在 packageManager、CI 与 Docker 一致；依赖源 npmmirror，不改写既有锁地址。Docker 基础镜像 tag 已核实，容器实跑未验。
 
 ## 当前下一步
 
-**当前状态（2026-11-17）**：Task 35／36／38／39／40／42 均已完成并验收，当前没有活跃产品 Task；各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。仍然有效的约束是：
+**当前状态（2026-11-17）**：Task 35／36／38／39／40／42 均已完成并验收，当前没有活跃产品 Task；各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。2026-11-17 完成一轮维护：远端 CI 恢复并全绿、4 处过期台账纠正、repo-map 重生成。仍然有效的约束是：
 
 - 右栏 240 px 下限与首屏预算约束保留；`/automation` 的交互缺口已由 Task 37 闭合（2026-11-17 复核），组件文案迁移仍剩 43 个文件 700 处（`inline-copy-baseline.json`，只减不增）。
 - Provider 删除为同步 204，有子模型则拒绝，默认 ID 不保护模型删除；默认库升级与生产部署未验。
 - Task 40 的独立 Worker 真实 HTTPS 组合、执行中崩溃、长压和部署属范围外补强，未验；未改产品代码或用户库。
 
-下一步由维护者决定 Phase 3 排期，或授权补做真实 Provider 外呼、部署迁移与远端 CI 这些仍未验证的运行层。
+下一步由维护者决定 Phase 3 排期，或授权补做真实 Provider 外呼、部署迁移这些仍未验证的运行层；远端 CI 已于 2026-11-17 恢复并通过（push 运行 5 个 job 全绿）。
 
 **2026-09-18 复核与决定（文档口径、公开投影安全项、Phase 1 缺口收口）**：完整记录移入 [`PROJECT-STATUS/history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)；仍然有效的结论是 PRD §7／§12 表内无未闭合项、两项修复均已推送。
 **Phase 2 收口与尾巴的完成记录（2026-09-15/16/23/24）**：完整记录已移入

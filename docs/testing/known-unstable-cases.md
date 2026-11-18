@@ -167,7 +167,7 @@
 | 删除覆盖后 `bunx vitest run`（上述 3 个文件） | 24 passed；该用例 12870ms |
 | 空闲机器复跑 `bun run test`（同日 23:50，CPU 负载 4%） | **exit 0**；`Test Files 236 passed (236)`、`Tests 1496 passed (1496)`，整轮 166.85s（用例累计 1287.88s） |
 
-**判断**：与第 7 条同一形态：15 秒预算比全局 60 秒紧 4 倍，单跑只剩约 1.5 倍余量，并行负载下必然越过。G16 已裁定「删掉小于全局的覆盖，回到 60 秒，不新增数字」；本轮却在三个测试文件里复发 9 处（`story-agent-runner.test.ts` 1 处 `15_000`、`story-body-runner.test.ts` 6 处 `30_000`、`store-idempotency-activity.test.ts` 2 处 `30_000`），已全部删除。修复后该文件 9 条用例与全量两轮均通过（1496/1496）；两轮退出码为 1（vitest-worker `Timeout calling "onTaskUpdate"`）；同日 23:50 空闲机器（游戏已退出、CPU 4%）复跑 `bun run test` exit 0，236 文件 / 1496 用例通过、整轮 166.85s，故属环境负载而非缺陷，远端 CI 仍未复跑。
+**判断**：与第 7 条同一形态：15 秒预算比全局 60 秒紧 4 倍，单跑只剩约 1.5 倍余量，并行负载下必然越过。G16 已裁定「删掉小于全局的覆盖，回到 60 秒，不新增数字」；本轮却在三个测试文件里复发 9 处（`story-agent-runner.test.ts` 1 处 `15_000`、`story-body-runner.test.ts` 6 处 `30_000`、`store-idempotency-activity.test.ts` 2 处 `30_000`），已全部删除。修复后该文件 9 条用例与全量两轮均通过（1496/1496）；两轮退出码为 1（vitest-worker `Timeout calling "onTaskUpdate"`）；同日 23:50 空闲机器（游戏已退出、CPU 4%）复跑 `bun run test` exit 0，236 文件 / 1496 用例通过、整轮 166.85s，故属环境负载而非缺陷；2026-11-17 远端 CI 复跑通过（Quality job，运行 44113863870）。
 
 **建议**：若「产品必须在 X 秒内 abort」是合同，写成产品断言；不要再引入小于全局的用例级覆盖。
 
