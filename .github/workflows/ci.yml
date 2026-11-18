@@ -120,6 +120,16 @@ jobs:
             - run: bunx playwright install --with-deps chromium
             - run: bun run test:browser
             - run: bun run test:browser:component-lab
+            # 失败现场只在 runner 上生成一次；没有这一步，只能从日志反推页面状态。
+            - uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: playwright-failure-artifacts
+                  path: |
+                      test-results/
+                      playwright-report/
+                  retention-days: 7
+                  if-no-files-found: ignore
 
     windows-smoke:
         name: Windows Node smoke

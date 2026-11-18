@@ -14,8 +14,24 @@ import { planRowOf, planSectionOf } from "../support/story-flow";
  * 连接与计划都在 `/automation` 建（ADR-0029 决策 1：创建去对象页，首页只看）。三条用例
  * 都不启用计划，所以不用 `story-flow.ts` 的 `ingestFeed`。
  */
+/**
+ * 临时诊断（排查 CI 上表单元素等不到）：记录 source-definitions 响应与控制台错误。
+ * 定位完成后与 createBilibiliPlan 里的 waitFor 探针一起删除。
+ */
+function logDefinitionDiagnostics(page: import("@playwright/test").Page): void {
+    page.on("response", (response) => {
+        if (response.url().includes("source-definition")) {
+            console.log(`[diag] source-definitions response ${response.status()} ${response.url()}`);
+        }
+    });
+    page.on("console", (message) => {
+        if (message.type() === "error") console.log(`[diag] console.error ${message.text()}`);
+    });
+}
+
 test("builds two Bilibili plans under one connection from the manifest-driven form", async ({ page }) => {
     test.setTimeout(180_000);
+    logDefinitionDiagnostics(page);
     const suffix = randomUUID().slice(0, 8);
     const connectionName = `B站账号-${suffix}`;
     const hotName = `热门-${suffix}`;
@@ -87,6 +103,14 @@ async function createBilibiliPlan(
     },
 ): Promise<void> {
     await openSourceForm(page);
+    // 临时诊断：元素缺失时把页面正文打进日志，再按原路径失败。
+    try {
+        await page.locator("#source-definition").waitFor({ state: "attached", timeout: 15_000 });
+    } catch (error) {
+        const body = await page.locator("body").innerText().catch(() => "<unreadable>");
+        console.log(`[diag] #source-definition missing after 15s; body=${body.slice(0, 1200)}`);
+        throw error;
+    }
     await page.locator("#source-definition").selectOption("source.bilibili@1");
 
     // 认证提示按 manifest 的 auth 声明展示，凭证不在表单里填。
