@@ -66,16 +66,15 @@ test("builds two Bilibili plans under one connection from the manifest-driven fo
 /**
  * 展开来源表单。
  *
- * 保存成功后产品会关闭表单（`use-source-workspace.ts` 的 `setShowSourceForm(false)`），
- * 第二个计划要重新打开。必须等对话框关闭动画结束再点触发按钮：关闭过程中点击会被
- * Base UI 的焦点还原吞掉，表单不再打开，后续元素永远等不到（CI 上 180 秒超时的成因）。
+ * 保存成功后产品会关闭表单（`use-source-workspace.ts` 的 `setShowSourceForm(false)`）。
+ * 关闭动画进行中对话框仍然可见、表单元素却已卸载，此时返回或点击都会错过表单；所以先等
+ * 对话框彻底隐藏，再点触发按钮，最后等表单元素真正就绪——只等对话框外壳不够。
  */
 async function openSourceForm(page: import("@playwright/test").Page): Promise<void> {
     const dialog = page.locator('[data-slot="dialog-content"]');
-    if (await dialog.isVisible()) return;
     await expect(dialog).toBeHidden();
     await page.getByRole("button", { name: "新建来源" }).click();
-    await expect(dialog).toBeVisible();
+    await expect(page.locator("#source-definition")).toBeVisible();
 }
 
 /** 走 manifest 驱动的表单：先选来源定义，再按它声明的字段填配置。 */
