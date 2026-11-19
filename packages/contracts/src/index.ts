@@ -4,6 +4,21 @@
  */
 
 export {
+    deepReadLimits, deepReadGenerationRequestSchema, deepReadGenerationSchema, deepReadErrorCodeSchema,
+    artifactReadSchema, artifactSnapshotSchema, revisionSummarySchema,
+    revisionDetailSchema as storyDeepReadRevisionDetailSchema,
+    reportSectionSchema, reportBlockSchema, reportInlineInputSchema, reportBlockInputSchema,
+    reportSectionInputSchema, reportInputSchema, normalizeReportInput,
+    inputProjectionSchema, sourceStatusSchema, deepReadRequestHashInputSchema,
+    type DeepReadGenerationRequest, type DeepReadGeneration, type DeepReadErrorCode,
+    type ArtifactRead, type ArtifactSnapshot, type RevisionSummary,
+    type RevisionDetail as StoryDeepReadRevisionDetail,
+    type ReportSection, type ReportBlock, type ReportInlineInput, type ReportBlockInput,
+    type ReportSectionInput, type ReportInput, type NormalizeReportResult,
+    type InputProjection, type SourceStatus, type DeepReadRequestHashInput,
+} from "./story-deep-read.js";
+
+export {
     systemConfigDtoSchema, updateSystemConfigCommandSchema,
     type SystemConfigDto, type UpdateSystemConfigCommand,
 } from "./system-config.js";

@@ -66,6 +66,8 @@ Task 导航：
 - [`41-connection-agent-separation/`](41-connection-agent-separation/)：拆分 Connection 与默认模型配置——Connection 回归外部账号授权并删除 `ConnectionInstance.modelId`，新增 `SystemConfig` 单例承载默认模型，`agent.invoke@2` 改收可选 `modelId`，`ConfiguredModel` 增加价格字段。基础设施已合入 master；用户可见的默认模型设置、费用展示与设置页移交 Task 42 完成，历史数据迁移与生产库迁移未执行。
 - [`42-default-model-ui-api/`](42-default-model-ui-api/)：默认模型配置 UI 与 API——`SystemConfig` GET/PUT、设置页默认模型与价格、Story 费用投影与展示、Story Agent 超时与安全错误码；编号 42 由维护者分配。**已完成并验收（2026-11-12）**，状态与证据见 [Task 首页](42-default-model-ui-api/README.md)及 [walkthrough](42-default-model-ui-api/walkthrough.md)；真实 Provider 结算与生产迁移未验。
 
+- [`43-story-deep-read/`](43-story-deep-read/)：Story 深入阅读 + Artifact v1——独立不可变报告、三表原子入队与 host 发布、精简冻结、四路由及 Story 左栏/精确证据抽屉；active，范围与门禁见 [Task 首页](43-story-deep-read/README.md)。
+
 当前提交基线、验证结果和未完成边界只在 [`../../PROJECT-STATUS.md`](../../PROJECT-STATUS.md) 维护。
 
 实现规格入口：[`../../docs/spec/README.md`](../../docs/spec/README.md)。先读 spec 索引与公共合同，再按组件读取

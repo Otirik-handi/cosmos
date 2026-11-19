@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
+import { DeepReadPanel } from "@/components/cosmos/deep-read-panel";
 import { StorySourceReader } from "@/components/cosmos/story-source-reader";
 import { StoryAgentCandidatesPanel } from "@/components/cosmos/story-panel/agent-candidates";
 import Link from "next/link";
@@ -289,6 +290,8 @@ export function StoryReading({ storyId }: { storyId: string }) {
                             <StoryKeyFactsBlock entryOptions={keyFactEntryOptions} story={story} />
                         </div>
                     </article>
+
+                    <DeepReadPanel storyId={story.story.id} />
 
                     <StoryAgentCandidatesPanel
                         key={story.story.id}

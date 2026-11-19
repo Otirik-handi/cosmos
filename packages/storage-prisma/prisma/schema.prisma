@@ -477,6 +477,8 @@ model Story {
   successors        StoryReplacement[]    @relation("StoryReplacementShell")
   splitFrom         StoryReplacement[]    @relation("StoryReplacementSuccessor")
   candidates        StoryAgentCandidate[]
+  artifacts         Artifact[]
+  deepReadRequests  DeepReadRequest[]
 }
 
 model StoryRevision {
@@ -911,10 +913,64 @@ model WorkflowRun {
   jobs                 Job[]
   completions          WorkflowCompletion[]
   events               DomainEvent[]        @relation("WorkflowRunEvents")
+  activeArtifacts      Artifact[]           @relation("ArtifactActiveRun")
+  artifactRevision     ArtifactRevision?
+  deepReadRequest      DeepReadRequest?
 
   @@index([status, updatedAt])
   @@index([sourceInstanceId, createdAt])
   @@index([planId, createdAt])
+}
+
+model Artifact {
+  id              String             @id @default(cuid())
+  storyId         String
+  kind            String
+  activeRunId     String?
+  activeStartedAt DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  story           Story              @relation(fields: [storyId], references: [id], onDelete: Restrict)
+  activeRun       WorkflowRun?       @relation("ArtifactActiveRun", fields: [activeRunId], references: [id], onDelete: Restrict)
+  revisions       ArtifactRevision[]
+
+  @@unique([storyId, kind])
+  @@index([activeRunId])
+}
+
+model ArtifactRevision {
+  id              String      @id @default(cuid())
+  artifactId      String
+  revision        Int
+  headline        String
+  sectionsJson    String
+  inputJson       String
+  contentHash     String
+  producer        String
+  producerVersion String
+  provider        String
+  model           String
+  usageJson       String?
+  costJson        String?
+  workflowRunId   String      @unique
+  createdAt       DateTime    @default(now())
+  artifact        Artifact    @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+  workflowRun     WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Restrict)
+
+  @@unique([artifactId, revision])
+}
+
+model DeepReadRequest {
+  id             String      @id @default(cuid())
+  idempotencyKey String      @unique
+  requestHash    String
+  storyId        String
+  workflowRunId  String      @unique
+  createdAt      DateTime    @default(now())
+  story          Story       @relation(fields: [storyId], references: [id], onDelete: Restrict)
+  workflowRun    WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Restrict)
+
+  @@index([storyId])
 }
 
 model WorkflowCompletion {

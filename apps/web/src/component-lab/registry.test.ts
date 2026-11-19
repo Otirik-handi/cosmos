@@ -26,6 +26,7 @@ const expectedPublicModules = [
     "components/ui/textarea.tsx",
     "components/ui/toast.tsx",
     "components/ui/tooltip.tsx",
+    "components/cosmos/deep-read-panel.tsx",
     "components/cosmos/content-block-reader.tsx",
     "components/cosmos/model-provider-panel.tsx",
     "components/cosmos/provider-models-section.tsx",
@@ -70,6 +71,11 @@ describe("component lab registry", () => {
 
         expect(new Set(modulePaths).size).toBe(modulePaths.length);
         expect(modulePaths.toSorted()).toEqual(expectedPublicModules.toSorted());
+    });
+
+    it("keeps deep read recovery, evidence and keyboard scenarios registered", () => {
+        const definition = labComponentDefinitions.find((item) => item.id === "story-deep-read")!;
+        expect(definition.scenes.map((scene) => scene.id)).toEqual(["idle", "generating", "failed", "conflict", "success", "long", "versions", "missing-evidence", "missing-block", "keyboard"]);
     });
 
     it("keeps model selection out of connection panel scenes and controls", () => {

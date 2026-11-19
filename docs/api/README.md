@@ -85,6 +85,8 @@ Product Service 与 Worker Gateway 初期可以由同一个 NestJS 进程承载�
 
 - [`0009-provider-model-configuration.md`](0009-provider-model-configuration.md)：Task 39 Provider/model 配置、凭证协调、模型连接与 invocation v2 目标合同；部分实现（创建/编辑/删除、凭证写入、同步发现、模型选择与 `agent.invoke@2` 已落地，编辑前受影响连接查询与几处路径形状仍是目标合同，逐条状态见文内路由表）。
 
+- [`0010-story-deep-read.md`](0010-story-deep-read.md)：Story 深入阅读 + Artifact v1 四路由、严格DTO、请求键/活动槽与精确证据合同；Draft、未实现，实施见 Task 43。
+
 ## 4. 成熟度标记
 
 | 标记 | 含义 |

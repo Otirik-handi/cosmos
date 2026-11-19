@@ -21,6 +21,8 @@ import {
     withModelConfigurationLock,
 } from "@cosmos/storage-prisma";
 
+import { StoryDeepReadWorkflowControl } from "@cosmos/application";
+import { StoryDeepReadController } from "./story-deep-read.controller.js";
 import { AppController } from "./app.controller.js";
 import { HookController } from "./hook.controller.js";
 import { SourceProbeService } from "./source-probe.service.js";
@@ -67,6 +69,20 @@ export const cosmosStoryAgentControl = new StoryAgentWorkflowControl({
             entryRevisionIds: [...new Set(entries.flatMap((entry) => entry.revisions.map((revision) => revision.id)))] };
     } },
 });
+export const cosmosStoryDeepReadControl = new StoryDeepReadWorkflowControl({
+    store: cosmosRepository,
+    workflows: cosmosWorkflowStore,
+    content: cosmosContentQuery,
+    systemConfig: cosmosSystemConfigRepository,
+    failureCodes: new PrismaStoryAgentFailureCodeReader(cosmosRepository.prisma),
+    stories: { readStory: async (storyId) => {
+        const detail = await cosmosRepository.story(storyId);
+        if (!detail) return null;
+        return { storyId: detail.story.id, storyRevisionId: detail.story.revisionId,
+            sources: detail.entries.flatMap((entry) => entry.currentRevisionId
+                ? [{ entryId: entry.id, entryRevisionId: entry.currentRevisionId }] : []) };
+    } },
+});
 export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService({
     store: cosmosWorkflowStore,
 });
@@ -102,8 +118,9 @@ export const cosmosMediaCleanupControl = new MediaCleanupWorkflowControlService(
             clock: { now: () => new Date() },
         }),
     })],
-    controllers: [AppController, HookController, SystemConfigController],
+    controllers: [AppController, HookController, SystemConfigController, StoryDeepReadController],
     providers: [
+        { provide: "COSMOS_STORY_DEEP_READ_CONTROL", useValue: cosmosStoryDeepReadControl },
         {
             provide: "COSMOS_SYSTEM_CONFIG",
             useValue: cosmosSystemConfig,

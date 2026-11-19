@@ -28,6 +28,8 @@ tokens_est: 5500
 | AGT-016 | Phase 3 | 知识管理者可以有多个聊天、ingest、研究或其它专业分身，并共享 `nb-memory` 维护的长期记忆与知识库。 | 分身不各自复制一套长期记忆；不同入口可以读取同一知识边界，并保留各自 Run/操作上下文。 |
 | AGT-017 | Phase 3 | ingest、research 和其它 Workflow 可以调用知识管理者进行知识点细究、补充研究或生成 Proposal。 | 需要外部搜索或后续处理时，通过持久子 Run/Activity/Job 创建任务；知识管理者不能在进程内私自派发不可恢复任务。 |
 
+**Task 43 切片注记（2026-11-19）**：本期只交付 AGT-003 的“深入阅读结果/观点标记”与 AGT-005 的文本 Artifact 子集——独立 Artifact/Revision、来源证据引用、provenance、失败不覆盖旧版；不新增需求行、不改写上表。批注（Annotation 形态）、HTML/图片/附件/可视化页面文件夹、Workspace 与自动刷新仍后置；AGT-009 的来源/Agent 观点区分在本期报告中按 section kind 落地。目标合同见[Proposal](../../proposals/story-deep-read-artifact-v1.md)、[ADR-0034](../../adr/0034-artifact-revision-v1.md) 与[实现规格](../../spec/application/0012-story-deep-read.md)。
+
 当前个性化配置草案为：
 
 ```text

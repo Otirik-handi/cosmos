@@ -45,8 +45,8 @@ it("verifies safe Provider queries against an isolated generated Prisma client",
     await writeFile(join(root, "schema/schema.prisma"), isolatedSchema);
     const names = (await readdir(join(source, "migrations"), { withFileTypes: true }))
         .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-    expect(names).toHaveLength(45);
-    expect(names.at(-1)).toBe("20261112090000_task_42_story_agent_timeout");
+    expect(names).toHaveLength(46);
+    expect(names.at(-1)).toBe("20261119150000_story_deep_read_artifact");
     const manifest = [
         { path: "source-schema.prisma", sha256: createHash("sha256").update(schema).digest("hex") },
         { path: "schema/schema.prisma", sha256: createHash("sha256").update(isolatedSchema).digest("hex") },

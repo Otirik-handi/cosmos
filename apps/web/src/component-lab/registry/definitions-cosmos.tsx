@@ -1,3 +1,4 @@
+import { deepReadScenes, renderDeepReadLab } from "../deep-read-fixtures";
 import {renderSystemOutput, systemOutputControls} from "../primitive-fixtures";
 import {
     renderDefaultModelPanelLab,
@@ -42,6 +43,13 @@ import { AgentCandidateFixture } from "../agent-candidate-fixtures";
 
 /** components/cosmos 顶层产品组件的登记表。 */
 export const cosmosComponentDefinitions = [
+    {
+        id: "story-deep-read", label: "Story Deep Read", category: "Cosmos",
+        modulePath: "components/cosmos/deep-read-panel.tsx", defaultSceneId: "idle",
+        controls: [control("state", "State", "select", "idle", [...deepReadScenes])],
+        scenes: deepReadScenes.map((state) => ({ id: state, label: state, props: { state } })),
+        tokens: sharedTokens, render: renderDeepReadLab,
+    },
     {
         id: "story-agent-candidates", label: "Story Agent Candidates", category: "Cosmos",
         modulePath: "components/cosmos/story-agent-candidates.tsx", defaultSceneId: "interactive",

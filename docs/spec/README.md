@@ -18,7 +18,7 @@ Story 调用费用的已接受目标与 conformance 留在 [API Draft](../api/00
 
 - 需求、PRD、架构图或 ADR 中尚未进入当前实现的目标设计；
 - `Draft`、`Planned`、`Reserved` API、Gateway、远程 Worker、Redis、PostgreSQL/S3 或多主机部署；
-- 已接受但尚未实现的 Agent 后续能力：真实 Harness、产品 Artifact、Workspace、Knowledge 和 Research（`agent.invoke@1`／`@2` 与 fake adapter 已落地，属于当前实现，以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md)、[`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 与 [`Task 39`](../../.agents/tasks/39-pi-ai-adapter/README.md) 为准；两个版本各通过一次真实 Provider 最小请求，多 Provider、OAuth、工具、流式与常驻调度仍未验证）；
+- 已实现 Story 深入阅读的文本 Artifact v1（见 [Story 深入阅读](application/0012-story-deep-read.md)）；仍未实现：真实 Harness、文件包/HTML Artifact、Workspace、Knowledge 和 Research（`agent.invoke@1`／`@2` 与 fake adapter 已落地，属于当前实现，以 [`ADR-0030`](../adr/0030-agent-invocation-v1.md)、[`Task 38`](../../.agents/tasks/38-agent-invocation/README.md) 与 [`Task 39`](../../.agents/tasks/39-pi-ai-adapter/README.md) 为准；两个版本各通过一次真实 Provider 最小请求，多 Provider、OAuth、工具、流式与常驻调度仍未验证）；
 - 历史 Task Spike、dirty worktree、保护区分支、旧草稿或没有在当前实现中重新验证的行为；
 - 只存在于测试替身、fixture 或构建产物中的额外行为。
 
@@ -128,8 +128,9 @@ Story 调用费用的已接受目标与 conformance 留在 [API Draft](../api/00
 | Drain | 停止新 poll、等待已登记资源并按 deadline 给出终态的运维操作 | [`runtime/0003-worker-admin.md`](runtime/0003-worker-admin.md) |
 | Manifest | 不含 executable 的可序列化 Definition/Action/Source 描述及稳定 hash | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |
 | Capability | Manifest/Worker 可公开声明的能力布尔值或 capability 名称 | [`application/0004-manifest-catalog.md`](application/0004-manifest-catalog.md) |
-| Agent Invocation | `agent.invoke@1` 的 Action/Port/Fake Adapter 行为，以及 `agent.invoke@2` 按连接选模型的作用域链路；真实 Harness、长期记忆和产品 Artifact 能力后置 | [`application/0010-agent-invocation.md`](application/0010-agent-invocation.md) |
+| Agent Invocation | `agent.invoke@1` 的 Action/Port/Fake Adapter 行为，以及 `agent.invoke@2` 按连接选模型的作用域链路；真实 Harness、长期记忆和完整产品 Artifact（文件包/Workspace）后置 | [`application/0010-agent-invocation.md`](application/0010-agent-invocation.md) |
 | Pi-ai Adapter | 真实 `pi-ai` SDK 适配：@1 的部署 profile 解析与 @2 的按次读取快照、错误映射、预算收紧；Harness/长期记忆不在范围 | [`application/0011-pi-ai-adapter.md`](application/0011-pi-ai-adapter.md) |
+| Story Deep Read / Artifact v1 | 手动生成带引用的深入阅读报告；独立 Artifact/Revision、原子入队/发布、四路由/Transport/Web 入口；文件包/HTML/Workspace 后置 | [`application/0012-story-deep-read.md`](application/0012-story-deep-read.md) |
 | Model Provider 配置 | 服务商与模型的写入信任门、凭证协调、同步发现、模型型连接与删除引用检查；合同逐条实现状态见 API Draft | [`interfaces/0002-product-api-http.md`](interfaces/0002-product-api-http.md)、[`interfaces/0004-http-client.md`](interfaces/0004-http-client.md)、[`storage/0001-prisma-repository.md`](storage/0001-prisma-repository.md) |
 
 ### 2.1 Wire shape 与 semantic owner 分工

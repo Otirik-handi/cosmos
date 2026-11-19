@@ -1,4 +1,4 @@
-import { PrismaCosmosRepositoryConnectorStateExport } from "./repository/connector-state-export.js";
+import { PrismaCosmosRepositoryStoryDeepRead as PrismaCosmosRepositoryConnectorStateExport } from "./repository/story-deep-read.js";
 import type { CosmosRepository } from "@cosmos/application";
 
 export class PrismaCosmosRepository extends PrismaCosmosRepositoryConnectorStateExport implements CosmosRepository {}
