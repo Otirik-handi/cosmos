@@ -34,13 +34,17 @@ function watchQueries(prisma: PrismaClient): {
 
 function countQueries(prisma: PrismaClient): {
     measure: (operation: () => Promise<unknown>) => Promise<number>;
+    lastEvents: () => readonly QueryEventRecord[];
 } {
     const watcher = watchQueries(prisma);
+    let last: readonly QueryEventRecord[] = [];
     return {
+        lastEvents: () => last,
         async measure(operation) {
             watcher.reset();
             await operation();
-            return watcher.events.length;
+            last = [...watcher.events];
+            return last.length;
         },
     };
 }
@@ -65,11 +69,21 @@ it("lists plans with a query count that does not grow with the number of plans",
         const counter = countQueries(prisma);
         await createFixtureSource(repository, { name: "第一个计划", config: {} });
         const single = await counter.measure(() => repository.listCollectionPlans());
+        const singleEvents = counter.lastEvents();
 
         for (const name of ["第二个", "第三个", "第四个", "第五个"]) {
             await createFixtureSource(repository, { name, config: {} });
         }
         const many = await counter.measure(() => repository.listCollectionPlans());
+        const manyEvents = counter.lastEvents();
+
+        // 临时诊断：计数不一致时打印两轮实际 SQL，定位多出来的那一条。
+        if (many !== single) {
+            const summarize = (events: readonly QueryEventRecord[]): readonly string[] =>
+                events.map((event) => event.query.replace(/\s+/g, " ").trim().slice(0, 120));
+            console.log(`[diag-count] single=${single} ${JSON.stringify(summarize(singleEvents))}`);
+            console.log(`[diag-count] many=${many} ${JSON.stringify(summarize(manyEvents))}`);
+        }
 
         // 结论：查询次数只与读的表有关，与计划数无关。
         expect(many).toBe(single);
