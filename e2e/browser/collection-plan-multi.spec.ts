@@ -192,14 +192,16 @@ async function tabTo(page: import("@playwright/test").Page, target: import("@pla
 /**
  * 展开来源表单。
  *
- * `/automation` 保存成功后表单**不会**自动收起（页头按钮停在「关闭表单」），所以第二个计划
- * 是在同一张还开着的表单上接着填。按当前态决定要不要点开，不赌它是否已经收起。
+ * 保存成功后产品会关闭表单（`use-source-workspace.ts` 的 `setShowSourceForm(false)`），
+ * 第二个计划要重新打开。必须等对话框关闭动画结束再点触发按钮：关闭过程中点击会被
+ * Base UI 的焦点还原吞掉，表单不再打开，后续元素永远等不到。
  */
 async function openSourceForm(page: import("@playwright/test").Page): Promise<void> {
-    if (await page.getByRole("button", { name: "保存计划" }).isVisible()) {
-        return;
-    }
+    const dialog = page.locator('[data-slot="dialog-content"]');
+    if (await dialog.isVisible()) return;
+    await expect(dialog).toBeHidden();
     await page.getByRole("button", { name: "新建来源" }).click();
+    await expect(dialog).toBeVisible();
 }
 
 /** 走「新建来源」表单：目标配置 + 频率 + 连接一次填完（创建与绑定同一步）。 */
