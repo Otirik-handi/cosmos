@@ -109,3 +109,10 @@
 - 完整 browser 套件（正常 checkout `D:\Otirik\Workstation\cosmos-browser-gate`，commit `3a3d85d`）：**72 passed / 2 skipped / 0 failed（4.6m）**。此前 55 条通过后 6 条阅读页用例在共享栈上约 3.1 分钟超时，根因是深读 spec 的测试隔离缺陷：fixture 的 `-hold` 永不释放，spec 在 409/刷新断言后立即删除 Provider/model，挂起的 Run 长时间占用 Worker，后续 ingest 排队超时。修复（`3a3d85d`）：hold 改为有界 20s，清理前轮询该 Run 到 `completed|failed|cancelled`；组合验证 `story-deep-read` + `story-live-refresh` 3/3（1.2m），随后正常 checkout 完整套件 72/2/0。2 skipped 为既有的 `story-reading-degradation` 用例。
 - 文档门禁：`docs:check=0`、`git diff --check=0`、size（含既有 CONTEXT warning）=0。
 - 未验证：真实 Provider 外呼/结算、部署迁移、Kernel 值阈值、失败调用费用、文件包/HTML/Workspace/Knowledge/Research/编辑/批注/导出/定时刷新。
+
+## 2026-11-20：合并到 master
+
+- 维护者确认“执行合并”。`feat/story-artifact-v1` 以 `--no-ff` 合入 `master`，合并提交 `126a501`；无冲突。
+- 合并后主工作区先 `bun run db:generate` 更新 Prisma client，再以**默认环境**跑全仓 `test`：**240 files / 1598 tests 全过**。此前 1595/1598 的 3 条 `prisma-cli` 失败是注入 `TEMP/COSMOS_DATA_ROOT/BUN_BINARY` 后路径测试解析环境变化所致；默认环境同一套件全绿。
+- 正常 checkout 完整 browser 套件 **72 passed / 2 skipped / 0 failed（4.6m）**。
+- 未 push；`master` 合并前为 `1492f63`。真实 Provider、部署、文件包/Workspace/HTML 仍未验证。

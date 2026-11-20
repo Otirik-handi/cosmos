@@ -7,7 +7,7 @@
 - branch：`feat/story-artifact-v1`
 - worktree：`.worktree/story-artifact-v1`
 - base SHA：`9b35d60`
-- 当前生命周期：slice 1a/1b/2a/2b/3 已交付；完整代码门禁已跑（全仓 1595/1598，3 条 prisma-cli 为 fresh bun install 的 hoisted 布局环境差异（worktree/正常 checkout 均复现），主工作区 7/7 通过）；acceptance/e2e/组件实验室与正常 checkout 完整 browser（72 passed / 2 skipped / 0 failed）通过；已本地 commit `34f03b7` + `3a3d85d`，合并待维护者确认。唯一过程/验证记录：[walkthrough](walkthrough.md)。
+- 当前生命周期：slice 1a/1b/2a/2b/3 已交付；完整代码门禁已跑（全仓 1595/1598，3 条 prisma-cli 为 fresh bun install 的 hoisted 布局环境差异（worktree/正常 checkout 均复现），主工作区 7/7 通过）；acceptance/e2e/组件实验室与正常 checkout 完整 browser（72 passed / 2 skipped / 0 failed）通过；已合并 master（`126a501`）；合并后默认环境全仓 test **1598/1598**；未 push。唯一过程/验证记录：[walkthrough](walkthrough.md)。
 
 ## User Request / Topic
 
@@ -36,7 +36,7 @@ Workspace、文件包/Artifact Root、HTML/可执行页、图片、定时刷新�
 
 ## Current State / Next Step
 
-slice 1a/1b/2a/2b/3 已交付。2b 的 validation_failed 末项已修；Web unit/copy/registry 68/68、component lab 8/8、真实 browser deep-read 1/1（35s，生成/费用/证据/版本 N+1/失败保旧版/刷新/双页 202+409）通过。完整代码门禁：db:validate/typecheck/lint:web/build 通过；全仓 test 1595/1598，唯一 3 条 prisma-cli 为 worktree 本地 install 布局环境差异，主工作区同一文件 7/7 通过；迁移边界夹具已按新增迁移更新。acceptance 90/90、Node E2E 13/13、组件实验室 64/64、正常 checkout 完整 browser **72 passed / 2 skipped / 0 failed（4.6m）** 通过；此前 6 条阅读页超时由深读 spec 的 hold/清理隔离缺陷导致，已在 `3a3d85d` 修复（hold 有界 + 清理前等 Run 终态）。spec/API/架构/PROJECT-STATUS/Task 文档已收敛。已本地 commit `34f03b7` + `3a3d85d`；下一步合并前取得维护者确认。
+slice 1a/1b/2a/2b/3 已交付。2b 的 validation_failed 末项已修；Web unit/copy/registry 68/68、component lab 8/8、真实 browser deep-read 1/1（35s，生成/费用/证据/版本 N+1/失败保旧版/刷新/双页 202+409）通过。完整代码门禁：db:validate/typecheck/lint:web/build 通过；全仓 test 1595/1598，唯一 3 条 prisma-cli 为 worktree 本地 install 布局环境差异，主工作区同一文件 7/7 通过；迁移边界夹具已按新增迁移更新。acceptance 90/90、Node E2E 13/13、组件实验室 64/64、正常 checkout 完整 browser **72 passed / 2 skipped / 0 failed（4.6m）** 通过；此前 6 条阅读页超时由深读 spec 的 hold/清理隔离缺陷导致，已在 `3a3d85d` 修复（hold 有界 + 清理前等 Run 终态）。spec/API/架构/PROJECT-STATUS/Task 文档已收敛。已合并 master（`126a501`）；合并后默认环境全仓 test **1598/1598**；未 push。
 
 ## 分片计划
 
