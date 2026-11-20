@@ -73,6 +73,21 @@ export function requestContextMiddleware(
     };
 }
 
+// Body-parser failures precede controller filters, so this POST needs its Draft envelope at the middleware boundary.
+export function storyDeepReadBodyParserError(
+    error: unknown, request: HttpRequestLike, response: HttpResponseLike, next: (error: unknown) => void,
+): void {
+    const type = isRecord(error) ? error.type : undefined;
+    if (request.method !== "POST" || !/^\/api\/v1\/stories\/[^/]+\/deep-reads\/?$/.test(requestPath(request))
+        || (type !== "entity.parse.failed" && type !== "entity.too.large")) {
+        next(error);
+        return;
+    }
+    response.status(type === "entity.too.large" ? 413 : 400).json({
+        code: "validation_failed", message: "深入阅读请求正文无效。", retryable: false,
+    });
+}
+
 export function createRequestId(value: unknown): string {
     if (typeof value === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(value)) {
         return value;

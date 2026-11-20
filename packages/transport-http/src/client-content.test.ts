@@ -94,6 +94,83 @@ describe("HttpCosmosClient structured reading", () => {
     });
 });
 
+describe("HttpCosmosClient deep reads", () => {
+    const generation = { runId: "run/1", storyId: "story/1", status: "queued", modelId: "model-1",
+        provider: null, model: null, createdAt: "2026-11-19T00:00:00.000Z", publishedRevision: null, errorCode: null };
+    const revision = { artifactId: "a1", storyId: "story/1", workflowRunId: "run/1", revision: 1, headline: "Report",
+        producer: "agent", producerVersion: "1", provider: "fake", model: "fixture", createdAt: generation.createdAt,
+        contentHash: "a".repeat(64), sourceStatus: "current", sections: [{ id: "s1", heading: "Opinion", kind: "opinion", evidence: [],
+            blocks: [{ id: "s1-b1", type: "paragraph", data: { inlines: [{ type: "text", text: "Report" }] } }] }],
+        input: { storyRevisionId: "sr1", sources: [{ entryId: "e1", entryRevisionId: "er1", representationVersion: 1,
+            blockIds: ["b1"], includedCharacterCount: 6, truncated: false, omitted: false, reason: null }], omittedSourceCount: 0 } };
+    it("encodes all four URLs, sends a normalized key/model and parses each response", async () => {
+        const requests: { url: string; method: string | undefined; body: unknown; key: string | null }[] = [];
+        const client = new HttpCosmosClient({ baseUrl: "http://localhost:4310", fetch: async (url, init) => {
+            requests.push({ url: String(url), method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : null,
+                key: new Headers(init?.headers).get("Idempotency-Key") });
+            return Response.json(String(url).includes("/revisions/") ? revision : String(url).includes("/generations/") || init?.method === "POST"
+                ? generation : { artifact: null }, { status: init?.method === "POST" ? 202 : 200 });
+        } });
+        expect(await client.createStoryDeepRead("story/1", { modelId: " selected " }, " stable ")).toEqual(generation);
+        expect(await client.storyDeepReadGeneration("story/1", "run/1")).toEqual(generation);
+        expect(await client.storyDeepReadArtifact("story/1")).toEqual({ artifact: null });
+        expect(await client.storyDeepReadRevision("story/1", 1)).toEqual(revision);
+        expect(requests).toEqual([
+            { url: "http://localhost:4310/api/v1/stories/story%2F1/deep-reads", method: "POST", body: { modelId: "selected" }, key: "stable" },
+            { url: "http://localhost:4310/api/v1/stories/story%2F1/deep-reads/generations/run%2F1", method: "GET", body: null, key: null },
+            { url: "http://localhost:4310/api/v1/stories/story%2F1/deep-reads", method: "GET", body: null, key: null },
+            { url: "http://localhost:4310/api/v1/stories/story%2F1/deep-reads/revisions/1", method: "GET", body: null, key: null },
+        ]);
+    });
+    it("allows default model selection and rejects invalid requests before fetch", async () => {
+        let calls = 0;
+        const client = new HttpCosmosClient({ baseUrl: "http://localhost:4310", fetch: async (_url, init) => {
+            calls++;
+            expect(JSON.parse(String(init?.body))).toEqual({});
+            return Response.json(generation, { status: 202 });
+        } });
+        await client.createStoryDeepRead("s1", {}, "k1");
+        for (const key of ["", " ", "x".repeat(201)]) await expect(client.createStoryDeepRead("s1", {}, key)).rejects.toThrow();
+        await expect(client.createStoryDeepRead("s1", { modelId: " " }, "k1")).rejects.toThrow();
+        const invalid = { modelId: "model", connectionId: "private" };
+        await expect(client.createStoryDeepRead("s1", invalid, "k1")).rejects.toThrow();
+        for (const value of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) await expect(client.storyDeepReadRevision("s1", value)).rejects.toThrow();
+        expect(calls).toBe(1);
+    });
+    it("strictly parses each otherwise valid success payload including nested current/input", async () => {
+        const { sections: _sections, input: _input, ...summary } = revision;
+        const artifact = { artifact: { id: "a1", storyId: "story/1", kind: "story-deep-read", generation,
+            revisions: [summary], current: revision } };
+        let payload: unknown = generation;
+        const client = new HttpCosmosClient({ baseUrl: "http://localhost:4310", fetch: async () => Response.json(payload) });
+        expect(await client.createStoryDeepRead("s1", {}, "k1")).toEqual(generation);
+        payload = { ...generation, lease: "private" };
+        await expect(client.createStoryDeepRead("s1", {}, "k1")).rejects.toThrow();
+        payload = generation;
+        expect(await client.storyDeepReadGeneration("s1", "r1")).toEqual(generation);
+        payload = { ...generation, prompt: "private" };
+        await expect(client.storyDeepReadGeneration("s1", "r1")).rejects.toThrow();
+        payload = artifact;
+        expect(await client.storyDeepReadArtifact("s1")).toEqual(artifact);
+        payload = { ...artifact, lease: "private" };
+        await expect(client.storyDeepReadArtifact("s1")).rejects.toThrow();
+        payload = { artifact: { ...artifact.artifact, current: { ...revision, sourceBody: "private" } } };
+        await expect(client.storyDeepReadArtifact("s1")).rejects.toThrow();
+        payload = revision;
+        expect(await client.storyDeepReadRevision("s1", 1)).toEqual(revision);
+        payload = { ...revision, lease: "private" };
+        await expect(client.storyDeepReadRevision("s1", 1)).rejects.toThrow();
+        payload = { ...revision, input: { ...revision.input, sourceBody: "private" } };
+        await expect(client.storyDeepReadRevision("s1", 1)).rejects.toThrow();
+    });
+    it.each([[400, "invalid_configuration"], [404, "not_found"], [409, "conflict"], [503, "dependency_unavailable"]])(
+        "preserves HTTP %s and %s", async (status, code) => {
+            const body = { code, message: "Safe message", retryable: status === 503 };
+            const client = new HttpCosmosClient({ baseUrl: "http://localhost:4310", fetch: async () => Response.json(body, { status: Number(status) }) });
+            await expect(client.createStoryDeepRead("s1", {}, "k1")).rejects.toMatchObject({ status, code, body });
+        });
+});
+
 describe("HttpCosmosClient search filters", () => {
     it("sends author, media type and ingest status as query parameters", async () => {
         const requests: string[] = [];

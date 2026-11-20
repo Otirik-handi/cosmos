@@ -1,4 +1,5 @@
-export type { CosmosEventSource, HttpCosmosClientOptions } from "./types.js";
+export type { CosmosEventSource, HttpCosmosClientOptions, StoryDeepReadClient,
+    ArtifactRead, DeepReadGeneration, DeepReadGenerationRequest, StoryDeepReadRevisionDetail } from "./types.js";
 export { CosmosTransportError } from "./types.js";
 
 import { SystemConfigClient } from "./client-system-config.js";

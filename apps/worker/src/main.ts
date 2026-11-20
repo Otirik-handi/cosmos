@@ -11,6 +11,8 @@ import {
     SourceConfigProbeService,
     createStoryAgentWorkflowDefinition,
     createStoryAgentSaveAction,
+    createStoryDeepReadWorkflowDefinition,
+    createStoryDeepReadPublishAction,
 } from "@cosmos/application";
 import {
     createIngestActions,
@@ -166,6 +168,7 @@ async function bootstrap(): Promise<void> {
                     createIngestWorkflowDefinition(),
                     createMediaCleanupWorkflowDefinition(),
                     createStoryAgentWorkflowDefinition(),
+                    createStoryDeepReadWorkflowDefinition(),
                 ],
                 actions: [
                     // Agent Action 始终注册；模型、地址与凭证都在调用时按 modelId 解析，
@@ -191,6 +194,7 @@ async function bootstrap(): Promise<void> {
                     }),
                     ...createMediaCleanupActions({ domain: repository, logger }),
                     createStoryAgentSaveAction(new PrismaStoryAgentCandidateRepository(repository.prisma)),
+                    createStoryDeepReadPublishAction(repository),
                 ],
                 owner: instanceId,
                 workerId: config.workerId,

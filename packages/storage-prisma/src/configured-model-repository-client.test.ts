@@ -49,7 +49,7 @@ async function snapshot(root: string): Promise<string> {
     await writeFile(join(destination, "schema.prisma"), schema);
     await copyFile(join(source, "migrations/migration_lock.toml"), join(migrations, "migration_lock.toml"));
     const names = (await readdir(join(source, "migrations"), { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-    if (names.length !== 45 || names.at(-1) !== "20261112090000_task_42_story_agent_timeout") throw new Error("Re-audit the frozen migration boundary.");
+    if (names.length !== 46 || names.at(-1) !== "20261119150000_story_deep_read_artifact") throw new Error("Re-audit the frozen migration boundary.");
     const manifest: { path: string; sha256: string }[] = [];
     for (const name of names) {
         const relative = `migrations/${name}/migration.sql`;
@@ -105,7 +105,7 @@ try {
 `;
 
 describe("isolated ConfiguredModel Prisma repository", () => {
-    it("runs the actual adapter against a generated client and isolated 44-migration database", async () => {
+    it("runs the actual adapter against a generated client and isolated migration database", async () => {
         if (process.release.name !== "node" || process.versions.bun !== undefined) throw new Error("Run with Node-hosted Vitest.");
         await mkdir(temporaryParent, { recursive: true });
         const root = join(temporaryParent, randomUUID());

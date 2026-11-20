@@ -27,6 +27,21 @@ afterEach(async () => {
 });
 
 describe("PrismaStoryAgentFailureCodeReader", () => {
+    it("reads a deep-read failure only when the caller selects its definition", async () => {
+        await prisma.$executeRawUnsafe(
+            'INSERT INTO "WorkflowRun" ("id", "stateJson", "status", "definitionKey", "definitionVersion", "manifestHash", "createdAt", "updatedAt") VALUES (?, "{}", "failed", ?, "1", "test", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+            "deep-read-run", "cosmos.story-deep-read",
+        );
+        await prisma.$executeRawUnsafe(
+            'INSERT INTO "Job" ("id", "workflowRunId", "kind", "status", "errorCode", "idempotencyKey") VALUES (?, ?, "workflow-activity", "failed_terminal", ?, ?)',
+            "deep-read-job", "deep-read-run", "rate_limited", "deep-read-job",
+        );
+        const reader = new PrismaStoryAgentFailureCodeReader(prisma);
+        await expect(reader.getStoryAgentFailureCode("deep-read-run")).resolves.toBeNull();
+        await expect(reader.getStoryAgentFailureCode("deep-read-run", "cosmos.story-deep-read")).resolves.toBe("rate_limited");
+        await expect(reader.getStoryAgentFailureCode("deep-read-run", "cosmos.unknown")).resolves.toBeNull();
+    });
+
     it("projects only a whitelisted terminal Story activity code", async () => {
         const run = async (id: string, definitionKey: string) => prisma.$executeRawUnsafe(
             'INSERT INTO "WorkflowRun" ("id", "stateJson", "status", "definitionKey", "definitionVersion", "manifestHash", "createdAt", "updatedAt") VALUES (?, "{}", "failed", ?, "1", "test", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',

@@ -8,10 +8,10 @@ const publicFailureCodes = new Set([
 export class PrismaStoryAgentFailureCodeReader {
     constructor(private readonly prisma: PrismaClient) {}
 
-    async getStoryAgentFailureCode(runId: string): Promise<string | null> {
+    async getStoryAgentFailureCode(runId: string, definitionKey = "cosmos.story-agent"): Promise<string | null> {
         const job = await this.prisma.job.findFirst({
             where: { workflowRunId: runId, kind: "workflow-activity", status: "failed_terminal",
-                workflowRun: { definitionKey: "cosmos.story-agent" } },
+                workflowRun: { definitionKey } },
             select: { errorCode: true },
             orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         });

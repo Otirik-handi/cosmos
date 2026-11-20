@@ -1,4 +1,6 @@
 import {
+    artifactReadSchema, deepReadGenerationSchema, deepReadGenerationRequestSchema, storyDeepReadRevisionDetailSchema,
+    type ArtifactRead, type DeepReadGeneration, type DeepReadGenerationRequest, type StoryDeepReadRevisionDetail,
     feedPageSchema,
     mergeStoriesCommandSchema,
     migrateStoryUserStateCommandSchema,
@@ -95,6 +97,32 @@ import type {
 } from "./types.js";
 import { CosmosTransportError } from "./types.js";
 export class ContentClient extends SourcesClient {
+    async createStoryDeepRead(storyId: string, request: DeepReadGenerationRequest, idempotencyKey: string): Promise<DeepReadGeneration> {
+        const key = idempotencyKey.trim();
+        if (!key || key.length > 200) throw new RangeError("A valid Idempotency-Key is required.");
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/deep-reads`, {
+            method: "POST", headers: { "Idempotency-Key": key },
+            body: deepReadGenerationRequestSchema.parse(request), schema: deepReadGenerationSchema,
+        });
+    }
+
+    async storyDeepReadGeneration(storyId: string, runId: string): Promise<DeepReadGeneration> {
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/deep-reads/generations/${encodeURIComponent(runId)}`, {
+            schema: deepReadGenerationSchema,
+        });
+    }
+
+    async storyDeepReadArtifact(storyId: string): Promise<ArtifactRead> {
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/deep-reads`, { schema: artifactReadSchema });
+    }
+
+    async storyDeepReadRevision(storyId: string, revision: number): Promise<StoryDeepReadRevisionDetail> {
+        if (!Number.isSafeInteger(revision) || revision < 1) throw new RangeError("revision must be a positive safe integer.");
+        return this.request(`/api/v1/stories/${encodeURIComponent(storyId)}/deep-reads/revisions/${encodeURIComponent(String(revision))}`, {
+            schema: storyDeepReadRevisionDetailSchema,
+        });
+    }
+
     async revisionContent(revisionId: string, representationVersion?: number): Promise<StructuredContentViewContract> {
         if (representationVersion !== undefined && (!Number.isSafeInteger(representationVersion) || representationVersion < 1)) {
             throw new RangeError("representationVersion must be a positive safe integer.");

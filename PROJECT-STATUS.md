@@ -1,5 +1,7 @@
 # Cosmos Project Status
 
+> Task43（2026-11-19）：Story 深入阅读 + Artifact v1 已在分支 `feat/story-artifact-v1` 实现，切片/聚焦测试、application/worker/api/transport/web 类型检查与真实 browser deep-read 用例通过；全仓 `test` 为 **1595/1598**，唯一 3 条失败是 fresh `bun install` 的 hoisted 布局导致 `prisma-cli` 路径测试；worktree 与正常 checkout 均复现，主工作区 **7/7 通过**，与功能无关；db:validate/typecheck/lint:web/build 通过；acceptance **7 文件/90 用例**、Node E2E **7/13**（设置 `BUN_BINARY` 后）、组件实验室 **64/64** 通过。正常 checkout 完整 browser 套件 **72 passed / 2 skipped / 0 failed（4.6m）**；此前 55 条通过后 6 条阅读页超时是深读 spec 的测试隔离缺陷（fixture 的 `-hold` 永不释放 + 清理提前删 Provider，挂起的 Run 占用 Worker），已在提交 `3a3d85d` 修复（hold 有界 20s + 清理前等 Run 终态）。commit/合并待收尾；真实 Provider、部署、文件包/Workspace/HTML 未验。本次功能实施由子 Agent 完成；后段子 Agent 通道系统性失败，完整门禁与 spec/状态/Task 收尾由 Leader 兜底，详见 [Task 43 walkthrough](.agents/tasks/43-story-deep-read/walkthrough.md)。
+
 > 当前补记（2026-11-13）：Task40 确认范围内验收全部完成并保持关闭；22 处历史断链已修复，当前工作树文档检查通过，见 [收口记录](.agents/tasks/40-story-content-representation/walkthrough.md#2026-11-13验收完成后的文档收口)。下方 Task42 中的断链表述保留当时快照；全局大小债务与未验证的运行层仍独立保留，本次文档修复不宣称所有仓库门禁通过。
 
 > Task42（2026-11-11）：模型缓存四价、USD/CNY 与两档整次计费已在分支 `feat/t42-cache-tiered-pricing` 实现并通过本轮隔离验收；全仓 230 files / 1446 tests、浏览器 6/6、组件实验室 12/12 通过。当前合同见[定价 Proposal](docs/proposals/model-cache-tiered-pricing-v1.md)，分层证据和过程见 [Task42 walkthrough](.agents/tasks/42-default-model-ui-api/walkthrough.md)。文档门禁仍有 Task40 既有断链与全局大小债务，不能据本轮通过宣称全部仓库门禁通过；真实 Provider、来源、账号登录、部署和远端 CI 未验。Phase 1 已收口，Phase 2 十四切片及平台面四块已交付，LIB-004 延后 Phase 3；后置债保持原界线。
@@ -43,13 +45,13 @@ Source 按 `sourceDefinitionRef + operationId + config` 创建为停用状态，
 
 ## 当前下一步
 
-**当前状态（2026-11-17）**：Task 35／36／38／39／40／41／42 均已完成并验收，当前没有活跃产品 Task；41 交付基础设施（Connection 与模型选择分离、`SystemConfig` 默认模型），用户可见的默认模型设置与 Story 费用由 42 交付。各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。2026-11-17 完成一轮维护：远端 CI 恢复并全绿、4 处过期台账纠正、repo-map 重生成。仍然有效的约束是：
+**当前状态（2026-11-19）**：Task 35／36／38／39／40／41／42 均已完成并验收；当前活跃产品 Task 为 **Task 43**（Story 深入阅读 + Artifact v1，分支 `feat/story-artifact-v1` 已实现，未合并）。41 交付基础设施（Connection 与模型选择分离、`SystemConfig` 默认模型），用户可见的默认模型设置与 Story 费用由 42 交付；43 交付文本 Artifact v1 与来源证据阅读。各轮完成补记、命令与未验边界的历史原文移入 [history-2026-11-completed-tasks.md](PROJECT-STATUS/history-2026-11-completed-tasks.md)。2026-11-17 完成一轮维护：远端 CI 恢复并全绿、4 处过期台账纠正、repo-map 重生成。仍然有效的约束是：
 
 - 右栏 240 px 下限与首屏预算约束保留；`/automation` 的交互缺口已由 Task 37 闭合（2026-11-17 复核），组件文案迁移仍剩 43 个文件 700 处（`inline-copy-baseline.json`，只减不增）。
 - Provider 删除为同步 204，有子模型则拒绝，默认 ID 不保护模型删除；默认库升级与生产部署未验。
 - Task 40 的独立 Worker 真实 HTTPS 组合、执行中崩溃、长压和部署属范围外补强，未验；未改产品代码或用户库。
 
-下一步由维护者决定 Phase 3 排期，或授权补做真实 Provider 外呼、部署迁移这些仍未验证的运行层；远端 CI 已于 2026-11-17 恢复并通过（push 运行 5 个 job 全绿）。
+下一步收尾 Task 43：补齐 acceptance/e2e/全量 browser/组件实验室门禁、完成本地 commit，并在合并前取得维护者确认；之后由维护者决定 Phase 3 后续排期，或授权补做真实 Provider 外呼、部署迁移这些仍未验证的运行层。远端 CI 已于 2026-11-17 恢复并通过（push 运行 5 个 job 全绿）。
 
 **2026-09-18 复核与决定（文档口径、公开投影安全项、Phase 1 缺口收口）**：完整记录移入 [`PROJECT-STATUS/history-2026-09-5.md`](PROJECT-STATUS/history-2026-09-5.md)；仍然有效的结论是 PRD §7／§12 表内无未闭合项、两项修复均已推送。
 **Phase 2 收口与尾巴的完成记录（2026-09-15/16/23/24）**：完整记录已移入

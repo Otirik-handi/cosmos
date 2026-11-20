@@ -15,6 +15,7 @@ import {
     RequestExceptionFilter,
     requestContextMiddleware,
     RequestLoggingInterceptor,
+    storyDeepReadBodyParserError,
 } from "./request-logging.js";
 
 interface ProbeResponse {
@@ -36,6 +37,7 @@ async function bootstrap(): Promise<void> {
         await cosmosRepository.initialize();
         const expressApp = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
         configureModelConfigurationBodyParsers(expressApp);
+        expressApp.use(storyDeepReadBodyParserError);
         app = expressApp;
 
         app.use(requestContextMiddleware(cosmosLogger));

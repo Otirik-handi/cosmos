@@ -19,6 +19,8 @@ type	AiHotSourceConfig
 type	Annotation
 type	AnnotationList
 type	AnnotationTargetQuery
+type	ArtifactRead
+type	ArtifactSnapshot
 type	AssetErrorCode
 type	AssetSnapshot
 type	AssetStatus
@@ -79,6 +81,10 @@ type	CreateSavedViewCommand
 type	CreateSectionCommand
 type	CreateSourceCommand
 type	CreateTopicCommand
+type	DeepReadErrorCode
+type	DeepReadGeneration
+type	DeepReadGenerationRequest
+type	DeepReadRequestHashInput
 type	DeleteSourceCommand
 type	DiscoveryChannel
 type	Entity
@@ -118,6 +124,7 @@ type	IngestCommand
 type	IngestResult
 type	IngestTriggerEvidence
 type	IngestTriggerKind
+type	InputProjection
 type	JobKind
 type	JobSnapshot
 type	JobStatus
@@ -154,6 +161,7 @@ type	ModelProviderPage
 type	ModelProviderSnapshot
 type	MoveBlockCommand
 type	MoveEntryToStoryCommand
+type	NormalizeReportResult
 type	NormalizedAssetInputContract
 type	NormalizedIngestItemContract
 type	ObservationSnapshot
@@ -170,10 +178,17 @@ type	RecoverRunCommand
 type	RemoveEntityAliasCommand
 type	RemoveEntityRelationCommand
 type	RemoveTopicMemberCommand
+type	ReportBlock
+type	ReportBlockInput
+type	ReportInlineInput
+type	ReportInput
+type	ReportSection
+type	ReportSectionInput
 type	RerunRunCommand
 type	RestoreTopicMemberCommand
 type	RetryPolicy
 type	RevisionDetail
+type	RevisionSummary
 type	RssSourceConfig
 type	RunControlAction
 type	RunControlResult
@@ -213,6 +228,7 @@ type	SourceOperationManifest
 type	SourceProbeResult
 type	SourceRevisionId
 type	SourceSnapshot
+type	SourceStatus
 type	SourceTestResult
 type	SplitStoryCommand
 type	SpotlightBlockConfig
@@ -228,6 +244,7 @@ type	StoryAgentGenerationRequest
 type	StoryAgentProposal
 type	StoryAgentSourceBinding
 type	StoryAgentTask
+type	StoryDeepReadRevisionDetail
 type	StoryDetail
 type	StoryEntitySummary
 type	StoryEvidence
@@ -303,6 +320,8 @@ value	aiHotSourceConfigSchema
 value	annotationListSchema
 value	annotationSchema
 value	annotationTargetQuerySchema
+value	artifactReadSchema
+value	artifactSnapshotSchema
 value	assetErrorCodeSchema
 value	assetErrorCodes
 value	assetSnapshotSchema
@@ -372,6 +391,11 @@ value	createSavedViewCommandSchema
 value	createSectionCommandSchema
 value	createSourceCommandSchema
 value	createTopicCommandSchema
+value	deepReadErrorCodeSchema
+value	deepReadGenerationRequestSchema
+value	deepReadGenerationSchema
+value	deepReadLimits
+value	deepReadRequestHashInputSchema
 value	deleteSourceCommandSchema
 value	discoveryChannelSchema
 value	entityDetailSchema
@@ -412,6 +436,7 @@ value	ingestCommandSchema
 value	ingestResultSchema
 value	ingestTriggerEvidenceSchema
 value	ingestTriggerKindSchema
+value	inputProjectionSchema
 value	jobKindSchema
 value	jobListSchema
 value	jobSnapshotSchema
@@ -450,6 +475,7 @@ value	modelProviderPageSchema
 value	modelProviderSnapshotSchema
 value	moveBlockCommandSchema
 value	moveEntryToStoryCommandSchema
+value	normalizeReportInput
 value	normalizedAssetInputSchema
 value	normalizedIngestItemSchema
 value	observationSnapshotSchema
@@ -468,11 +494,18 @@ value	recoverRunCommandSchema
 value	removeEntityAliasCommandSchema
 value	removeEntityRelationCommandSchema
 value	removeTopicMemberCommandSchema
+value	reportBlockInputSchema
+value	reportBlockSchema
+value	reportInlineInputSchema
+value	reportInputSchema
+value	reportSectionInputSchema
+value	reportSectionSchema
 value	rerunRunCommandSchema
 value	restoreTopicMemberCommandSchema
 value	retryPolicySchema
 value	retryableAssetErrorCodes
 value	revisionDetailSchema
+value	revisionSummarySchema
 value	rssSourceConfigSchema
 value	runControlActionSchema
 value	runControlResultSchema
@@ -512,6 +545,7 @@ value	sourceOperationManifestSchema
 value	sourceProbeResultSchema
 value	sourceRevisionIdSchema
 value	sourceSnapshotSchema
+value	sourceStatusSchema
 value	sourceTestResultSchema
 value	splitStoryCommandSchema
 value	spotlightPlacementListSchema
@@ -529,6 +563,7 @@ value	storyAgentProposalSchema
 value	storyAgentRequestSchema
 value	storyAgentSourceBindingSchema
 value	storyAgentTaskSchema
+value	storyDeepReadRevisionDetailSchema
 value	storyDetailSchema
 value	storyEntitySummarySchema
 value	storyEvidenceSchema

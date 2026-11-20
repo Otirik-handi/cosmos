@@ -11,6 +11,7 @@ import { MetadataScanner } from "@nestjs/core";
 import { describe, expect, it } from "vitest";
 
 import { AppController } from "./app.controller.js";
+import { StoryDeepReadController } from "./story-deep-read.controller.js";
 
 /**
  * 路由表零变化守卫。
@@ -82,6 +83,18 @@ describe("AppController route table", () => {
         expect([...actual].map((r) => r.handler).sort()).toEqual(
             [...expected].map((r) => r.handler).sort(),
         );
+    });
+
+    it("registers four deep-read routes without colliding with the existing API", () => {
+        const deepReads = routesOf(StoryDeepReadController);
+        expect(deepReads).toEqual([
+            { verb: "POST", path: "/stories/:storyId/deep-reads", handler: "createStoryDeepRead" },
+            { verb: "GET", path: "/stories/:storyId/deep-reads/generations/:runId", handler: "storyDeepReadGeneration" },
+            { verb: "GET", path: "/stories/:storyId/deep-reads", handler: "storyDeepReadArtifact" },
+            { verb: "GET", path: "/stories/:storyId/deep-reads/revisions/:revision", handler: "storyDeepReadRevision" },
+        ]);
+        const keys = [...actual, ...deepReads].map(key);
+        expect(new Set(keys).size).toBe(keys.length);
     });
 
     it("has no duplicate method+path pair", () => {
