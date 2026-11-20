@@ -176,6 +176,12 @@ test("deep read generation, precise evidence, revision history and refresh recov
         expect(consoleErrors.filter((message) => message === expectedConflictConsole)).toHaveLength(1);
         expect(consoleErrors.filter((message) => message !== expectedConflictConsole)).toEqual([]);
         expect(errors).toEqual([]);
+        const accepted = firstResponse.status() === 202 ? firstResponse : secondResponse;
+        const acceptedBody = await accepted.json() as { runId: string };
+        await expect.poll(async () => {
+            const response = await page.request.get(`/api/v1/stories/${encodeURIComponent(activeStoryId)}/deep-reads/generations/${encodeURIComponent(acceptedBody.runId)}`);
+            return (await response.json() as { status: string }).status;
+        }, { timeout: 60_000, intervals: [500, 1000, 2000] }).toMatch(/completed|failed|cancelled/);
     } finally {
         if (conflictPage) await conflictPage.close();
         expect((await page.request.put("/api/v1/system/config", { data: { defaultModelId: previous.defaultModelId } })).status()).toBe(200);

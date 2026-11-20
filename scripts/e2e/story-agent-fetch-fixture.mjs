@@ -25,7 +25,7 @@ globalThis.fetch = async (input, init) => {
     let responseText;
     if (system.includes('"headline"') && system.includes('Only cite supplied source identities')) {
         const mode = body.model.endsWith("-hold") ? "hold" : body.model.endsWith("-fail") ? "fail" : "normal";
-        if (mode === "hold") await new Promise(() => {});
+        if (mode === "hold") await new Promise((resolve) => setTimeout(resolve, 20_000));
         if (mode === "fail") throw new Error("Synthetic deep-read failure");
         const data = z.object({ sources: z.array(z.object({ entryId: z.string(), entryRevisionId: z.string(), representationVersion: z.number(), blocks: z.array(z.object({ id: z.string(), text: z.string() })) })) }).passthrough().parse(parsed);
         const source = data.sources.find((item) => item.blocks.length > 0);
